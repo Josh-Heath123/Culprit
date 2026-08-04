@@ -52,14 +52,26 @@ class MetricScorer:
     """EWMA-based rolling z-score for one (service_name, metric_name) series.
 
     Not thread-safe and holds no I/O — a plain in-memory object that
-    Phase 4's Redis-persistence layer (app/anomaly/state.py) pickles
-    between arq runs.
+    Phase 4's Redis-persistence layer (app/anomaly/state.py) serializes
+    between arq runs via to_dict()/from_dict(), not pickle.
+
+    Tracks variance as E[x^2] - E[x]^2 via two River EWMeans (`_mean` for
+    x, `_sq_mean` for x^2) rather than river.stats.EWVar directly. Same
+    formula EWVar itself uses internally (verified against it directly:
+    identical output to the last float digit) — the difference is that
+    EWMean's own state is round-trippable through its public API (a
+    freshly constructed EWMean's *first* update() call sets its .get()
+    to exactly that value, no blending with an initial 0), so to_dict()/
+    from_dict() can persist and exactly restore this scorer as plain
+    JSON floats. EWVar has no equivalent public seam — restoring it
+    to an arbitrary target variance isn't achievable through its API,
+    which is what made pickling the only option before this change.
     """
 
     def __init__(self, fading_factor: float = DEFAULT_FADING_FACTOR) -> None:
         self.fading_factor = fading_factor
         self._mean = stats.EWMean(fading_factor=fading_factor)
-        self._var = stats.EWVar(fading_factor=fading_factor)
+        self._sq_mean = stats.EWMean(fading_factor=fading_factor)
         self.n = 0
 
     def update(self, x: float) -> float | None:
@@ -75,15 +87,41 @@ class MetricScorer:
         score = None
         if self.n >= MIN_OBSERVATIONS:
             mean = self._mean.get()
-            std = _safe_std(self._var.get(), mean)
+            variance = max(self._sq_mean.get() - mean * mean, 0.0)
+            std = _safe_std(variance, mean)
             score = _safe_z(x, mean, std)
         # River's update() is typed as numbers.Number; float is a registered
         # virtual subclass at runtime but typeshed doesn't expose that
         # relationship, so pyright flags this as a mismatch. It isn't one.
         self._mean.update(x)  # pyright: ignore[reportArgumentType]
-        self._var.update(x)  # pyright: ignore[reportArgumentType]
+        self._sq_mean.update(x * x)  # pyright: ignore[reportArgumentType]
         self.n += 1
         return score
+
+    def to_dict(self) -> dict:
+        """JSON-safe snapshot — plain floats/int only, no pickle. `mean`/
+        `sq_mean` are None before the first update() (nothing to persist
+        yet); from_dict() leaves a fresh scorer's EWMeans un-seeded in
+        that case, which is exactly what __init__ already does."""
+        return {
+            "fading_factor": self.fading_factor,
+            "n": self.n,
+            "mean": self._mean.get() if self.n > 0 else None,
+            "sq_mean": self._sq_mean.get() if self.n > 0 else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "MetricScorer":
+        scorer = cls(fading_factor=data["fading_factor"])
+        scorer.n = data["n"]
+        if data["mean"] is not None:
+            # A freshly constructed EWMean's first update() sets .get()
+            # to exactly that value (no blending with an unset initial
+            # state) — this is a seed, not a real observation, and
+            # doesn't count toward `n` (already restored above).
+            scorer._mean.update(data["mean"])  # pyright: ignore[reportArgumentType]
+            scorer._sq_mean.update(data["sq_mean"])  # pyright: ignore[reportArgumentType]
+        return scorer
 
 
 def _safe_std(variance: float, mean: float) -> float:

@@ -18,6 +18,11 @@ __pycache__/
 node_modules/
 dist/
 
+# Generated from api's live OpenAPI schema (`just generate-types`) —
+# regenerated on every frontend dev/build, never hand-edited or committed.
+frontend/openapi.schema.json
+frontend/src/lib/api-types.generated.ts
+
 # Editors / OS
 .vscode/
 .idea/

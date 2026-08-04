@@ -39,6 +39,11 @@ jobs:
       # The RAG/anomaly-detection module-isolation contract (CLAUDE.md) —
       # enforced here, not just documented, same as `just lint-imports`.
       - run: cd worker && uv run lint-imports
+      # worker/app/db.py hand-mirrors a subset of api/app/db/models.py's
+      # columns (CLAUDE.md: worker and api are separate uv projects, no
+      # shared ORM) — this catches the two drifting silently instead of
+      # relying on someone remembering to update both by hand.
+      - run: uv run --project api python scripts/check_schema_drift.py
 
   test:
     needs: typecheck

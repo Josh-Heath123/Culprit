@@ -1,46 +1,19 @@
-// Mirrors api/app/incidents/schemas.py exactly — keep these two in sync
-// by hand; Phase 7 is intentionally minimal and doesn't generate this.
+// Derived from api-types.generated.ts (openapi-typescript, run via `npm
+// run generate-types` — see package.json and justfile's `generate-types`
+// recipe), which is itself generated from api/app/incidents/schemas.py's
+// actual Pydantic models. This file used to hand-declare these shapes by
+// hand as a second, driftable copy of that contract; now there's exactly
+// one source of truth (the Python schemas) and this file just names the
+// pieces the rest of the app imports.
 
-export type IncidentStatus = "open" | "investigating" | "resolved";
-export type RootCauseStatus = "pending" | "ready";
-export type Confidence = "High" | "Medium" | "Low";
+import type { components } from "@/lib/api-types.generated";
 
-export interface AnomalyOut {
-  id: string;
-  service_name: string;
-  metric_name: string;
-  score: number;
-  detected_at: string;
-}
+export type IncidentSummary = components["schemas"]["IncidentSummary"];
+export type IncidentDetail = components["schemas"]["IncidentDetail"];
+export type AnomalyOut = components["schemas"]["AnomalyOut"];
+export type CitedEvidenceOut = components["schemas"]["CitedEvidenceOut"];
+export type PaginatedIncidents = components["schemas"]["PaginatedIncidents"];
 
-export interface CitedEvidenceOut {
-  postmortem_id: string | null;
-  postmortem_title: string;
-  passage: string;
-}
-
-export interface IncidentSummary {
-  id: string;
-  status: IncidentStatus;
-  opened_at: string;
-  closed_at: string | null;
-  last_anomaly_at: string;
-  services: string[];
-  anomalies: AnomalyOut[];
-  root_cause_status: RootCauseStatus;
-  root_cause_hypothesis: string | null;
-  root_cause_confidence: Confidence | null;
-}
-
-export interface IncidentDetail extends IncidentSummary {
-  root_cause_confidence_reason: string | null;
-  root_cause_evidence: CitedEvidenceOut[];
-  root_cause_generated_at: string | null;
-}
-
-export interface PaginatedIncidents {
-  items: IncidentSummary[];
-  limit: number;
-  offset: number;
-  total: number;
-}
+export type IncidentStatus = IncidentSummary["status"];
+export type RootCauseStatus = IncidentSummary["root_cause_status"];
+export type Confidence = NonNullable<IncidentSummary["root_cause_confidence"]>;

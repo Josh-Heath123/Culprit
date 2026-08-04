@@ -1,16 +1,6 @@
-from datetime import datetime
-from typing import Literal
+# Re-exported from shared/culprit_shared — see that package's docstring.
+# Kept here so existing `from app.ingest_gateway.schemas import RawEventIn`
+# call sites (otlp_decode.py, streams.py) don't need to change.
+from culprit_shared.raw_event import RawEventIn
 
-from pydantic import BaseModel, Field
-
-
-class RawEventIn(BaseModel):
-    """The raw_events row shape (Phase 1 schema), normalized from OTLP."""
-
-    time: datetime
-    service_name: str
-    event_type: Literal["metric", "log"]
-    metric_name: str | None = None
-    value: float | None = None
-    message: str | None = None
-    attributes: dict = Field(default_factory=dict)
+__all__ = ["RawEventIn"]

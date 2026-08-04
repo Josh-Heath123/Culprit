@@ -14,22 +14,12 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 import networkx as nx
+from culprit_shared.services import SERVICE_ADJACENCY
 
 #: How close in time two anomalies must be to even be considered
 #: possibly related. A named config value, not a literal buried in the
 #: edge-building loop.
 CORRELATION_WINDOW = timedelta(minutes=5)
-
-#: The Phase 2 demo topology, hardcoded per the project's
-#: hardcoded-services scope rule — not general service-topology
-#: discovery. order-service calls both inventory-service and
-#: payments-service directly; inventory-service and payments-service
-#: have no direct relationship to each other (only via order-service).
-SERVICE_ADJACENCY: dict[str, frozenset[str]] = {
-    "order-service": frozenset({"inventory-service", "payments-service"}),
-    "inventory-service": frozenset({"order-service"}),
-    "payments-service": frozenset({"order-service"}),
-}
 
 
 @dataclass(frozen=True)

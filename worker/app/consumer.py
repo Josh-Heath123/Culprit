@@ -12,9 +12,9 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
 
 import redis.asyncio as redis
+from culprit_shared.raw_event import RawEventIn
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -50,16 +50,12 @@ async def ensure_consumer_groups(client: redis.Redis) -> None:
 
 
 def _parse_entry(fields: dict) -> dict:
+    # Validates against the exact same model api/app/ingest_gateway used
+    # to serialize this entry onto the stream (see shared/culprit_shared)
+    # instead of a hand-reimplemented dict of .get()s that could silently
+    # drift from that contract.
     payload = json.loads(fields["data"])
-    return {
-        "time": datetime.fromisoformat(payload["time"]),
-        "service_name": payload["service_name"],
-        "event_type": payload["event_type"],
-        "metric_name": payload.get("metric_name"),
-        "value": payload.get("value"),
-        "message": payload.get("message"),
-        "attributes": payload.get("attributes") or {},
-    }
+    return RawEventIn.model_validate(payload).model_dump()
 
 
 async def _drain_one(client: redis.Redis, engine: AsyncEngine, stream: str, start_id: str) -> int:

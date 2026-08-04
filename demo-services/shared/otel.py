@@ -1,6 +1,7 @@
 import logging
 import os
 
+from culprit_shared.services import SERVICE_API_KEY_ENV_VARS
 from dotenv import load_dotenv
 from opentelemetry import _logs as logs_api
 from opentelemetry import metrics, trace
@@ -30,11 +31,6 @@ load_dotenv()
 # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT at infra/docker-compose.yml's Tempo
 # for local viewing; that's a separate data stream from SignalStack's own
 # self-observability in Phase 10).
-_API_KEY_ENV_VARS = {
-    "order-service": "ORDER_SERVICE_API_KEY",
-    "inventory-service": "INVENTORY_SERVICE_API_KEY",
-    "payments-service": "PAYMENTS_SERVICE_API_KEY",
-}
 
 
 def _resolve_endpoint(signal: str) -> str | None:
@@ -46,7 +42,7 @@ def _resolve_endpoint(signal: str) -> str | None:
 
 
 def _auth_headers(service_name: str) -> dict[str, str] | None:
-    env_var = _API_KEY_ENV_VARS.get(service_name)
+    env_var = SERVICE_API_KEY_ENV_VARS.get(service_name)
     api_key = os.environ.get(env_var) if env_var else None
     return {"Authorization": f"Bearer {api_key}"} if api_key else None
 

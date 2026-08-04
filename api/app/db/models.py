@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Float, ForeignKey, Index, text
 from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,7 +23,11 @@ class RawEvent(Base):
     __tablename__ = "raw_events"
 
     time: Mapped[datetime] = mapped_column(timestamptz, primary_key=True)
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # BigInteger explicitly: migration 0001 declares this BIGINT + IDENTITY
+    # (see api/migrations/versions/e3f8d40026c9_create_core_schema.py) —
+    # bare `Mapped[int]` alone would default to INTEGER, which drifted
+    # from the real column until scripts/check_schema_drift.py caught it.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     service_name: Mapped[str] = mapped_column(index=True)
     event_type: Mapped[str]
     metric_name: Mapped[str | None]
@@ -61,7 +65,13 @@ class Anomaly(Base):
     threshold: Mapped[float] = mapped_column(Float)
     detected_at: Mapped[datetime] = mapped_column(timestamptz)
     time_window = mapped_column(TSTZRANGE, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    # datetime | None, not datetime: the migrations declare this column
+    # with only a server_default, no explicit NOT NULL — it's nullable at
+    # the DB level (server_default fills it on insert, but doesn't change
+    # the column's own nullability). Mapped[datetime] here used to claim
+    # non-null and drifted from worker/app/db.py's Core definition until
+    # scripts/check_schema_drift.py caught it.
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
 
     incidents: Mapped[list["IncidentCandidate"]] = relationship(
         secondary="incident_anomalies", back_populates="anomalies"
@@ -90,7 +100,13 @@ class IncidentCandidate(Base):
     #: landing, regardless of when it was first opened.
     last_anomaly_at: Mapped[datetime] = mapped_column(timestamptz)
     status: Mapped[str] = mapped_column(server_default=text("'open'"))
-    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    # datetime | None, not datetime: the migrations declare this column
+    # with only a server_default, no explicit NOT NULL — it's nullable at
+    # the DB level (server_default fills it on insert, but doesn't change
+    # the column's own nullability). Mapped[datetime] here used to claim
+    # non-null and drifted from worker/app/db.py's Core definition until
+    # scripts/check_schema_drift.py caught it.
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
 
     #: Root-cause narrative (Phase 6), written once by the RAG/LLM job
     #: triggered when this row is first created — see
@@ -154,7 +170,13 @@ class ApiKey(Base):
     )
     service_name: Mapped[str] = mapped_column(unique=True)
     key_hash: Mapped[str] = mapped_column(unique=True)
-    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    # datetime | None, not datetime: the migrations declare this column
+    # with only a server_default, no explicit NOT NULL — it's nullable at
+    # the DB level (server_default fills it on insert, but doesn't change
+    # the column's own nullability). Mapped[datetime] here used to claim
+    # non-null and drifted from worker/app/db.py's Core definition until
+    # scripts/check_schema_drift.py caught it.
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
 
 
 class Postmortem(Base):
@@ -179,7 +201,13 @@ class Postmortem(Base):
     incident_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("incident_candidates.id", ondelete="SET NULL")
     )
-    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    # datetime | None, not datetime: the migrations declare this column
+    # with only a server_default, no explicit NOT NULL — it's nullable at
+    # the DB level (server_default fills it on insert, but doesn't change
+    # the column's own nullability). Mapped[datetime] here used to claim
+    # non-null and drifted from worker/app/db.py's Core definition until
+    # scripts/check_schema_drift.py caught it.
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
 
     incident_candidate: Mapped["IncidentCandidate | None"] = relationship(
         back_populates="postmortems"

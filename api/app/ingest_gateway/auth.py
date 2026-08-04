@@ -21,6 +21,13 @@ _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 def _hash_key(plaintext: str) -> str:
+    # Plain SHA-256, not a slow/salted KDF (argon2, bcrypt) — deliberate,
+    # not an oversight: these are high-entropy generated tokens (see
+    # infra/.env.prod.example), not user-chosen passwords, so there's no
+    # low-entropy-guessing risk a slow hash would defend against. Compared
+    # via secrets.compare_digest below, not ==, so this doesn't leak
+    # timing info either. OPERATOR_PASSWORD_HASH (app/auth/), which *is*
+    # a real password, uses argon2 — see that module.
     return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
 
 

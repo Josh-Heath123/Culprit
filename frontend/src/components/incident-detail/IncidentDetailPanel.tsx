@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ErrorState";
 import { useIncident } from "@/hooks/useIncident";
 import { useRegenerateRootCause } from "@/hooks/useRegenerateRootCause";
 import { severityColorVar, severityFor } from "@/lib/severity";
@@ -17,7 +18,7 @@ interface IncidentDetailPanelProps {
 }
 
 export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanelProps) {
-  const { data: incident, isPending, isError, error } = useIncident(incidentId);
+  const { data: incident, isPending, isError, error, refetch } = useIncident(incidentId);
   const regenerate = useRegenerateRootCause(incidentId);
 
   return (
@@ -36,9 +37,11 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
         {isPending ? <DetailSkeleton /> : null}
 
         {isError ? (
-          <p className="font-mono text-xs text-destructive">
-            {error instanceof Error ? error.message : "Failed to load incident."}
-          </p>
+          <ErrorState
+            heading="Couldn't load this incident."
+            message={error instanceof Error ? error.message : "Failed to load incident."}
+            onRetry={() => refetch()}
+          />
         ) : null}
 
         {incident ? (
@@ -76,6 +79,13 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
                   {incident.root_cause_status === "ready" ? "Regenerate" : "Generate now"}
                 </Button>
               </div>
+
+              {regenerate.isError ? (
+                <p className="text-xs text-destructive">
+                  Couldn't regenerate the narrative —{" "}
+                  {regenerate.error instanceof Error ? regenerate.error.message : "try again."}
+                </p>
+              ) : null}
 
               {incident.root_cause_status === "pending" ? (
                 <PendingRootCause justRegenerated={regenerate.isSuccess} />

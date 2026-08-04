@@ -62,6 +62,14 @@ class FaultState:
 
 
 def build_fault_router(fault_state: FaultState) -> APIRouter:
+    # No auth on these endpoints — deliberate, not an oversight. This
+    # router only exists on the three demo services (order/inventory/
+    # payments), and none of them are part of infra/docker-compose.prod.yml
+    # — they never run anywhere but a developer's own machine, where the
+    # thing being modeled is "inject a fault into my own local demo," not
+    # a real production control plane. If a demo service is ever deployed
+    # somewhere reachable by anyone but its own operator, this needs auth
+    # first.
     router = APIRouter()
 
     @router.get("")

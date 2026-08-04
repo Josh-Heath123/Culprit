@@ -1,15 +1,28 @@
 """Redis persistence for anomaly-scorer state.
 
 Keeps the pure scoring math (scorer.py) free of I/O. This is the only
-module in app.anomaly that talks to Redis, and it knows nothing about
-River's internals beyond pickling/unpickling a whole MetricScorer.
+module in app.anomaly that talks to Redis.
 
-Uses its own Redis client in bytes mode (no decode_responses) — pickled
-data isn't valid UTF-8, so it can't share a decode_responses=True client
-with Phase 3's stream-consumer code.
+Serializes MetricScorer via to_dict()/from_dict() (plain floats/int) as
+JSON, not pickle.loads/dumps — this used to pickle the whole scorer,
+including river.stats objects with no public deserialization contract,
+which meant an attacker who could write to this Redis key could get
+arbitrary code execution via a crafted pickle on the next load_scorer()
+call. Redis isn't network-exposed in this deployment today, so that was
+a latent risk rather than an active one, but pickle.loads on anything
+network-adjacent is worth removing on principle rather than relying on
+network topology to stay this way forever. See scorer.py's MetricScorer
+docstring for how to_dict()/from_dict() reconstructs state exactly
+without pickle.
+
+Uses its own Redis client (see app/main.py's ctx["anomaly_redis"]),
+separate from the stream-consumer's — not because JSON needs bytes mode
+(it doesn't; JSON is valid UTF-8, unlike the pickle blobs this used to
+store), just because there's no reason to share a connection across two
+otherwise-unrelated jobs.
 """
 
-import pickle
+import json
 
 import redis.asyncio as redis
 
@@ -27,10 +40,7 @@ async def load_scorer(client: redis.Redis, service_name: str, metric_name: str) 
     raw = await client.get(_scorer_key(service_name, metric_name))
     if raw is None:
         return MetricScorer()
-    scorer = pickle.loads(raw)
-    if not isinstance(scorer, MetricScorer):
-        raise TypeError(f"expected MetricScorer, got {type(scorer)!r}")
-    return scorer
+    return MetricScorer.from_dict(json.loads(raw))
 
 
 async def load_watermark(client: redis.Redis) -> int:
@@ -53,6 +63,6 @@ async def save_progress(
     """
     pipe = client.pipeline(transaction=True)
     for (service_name, metric_name), scorer in scorers.items():
-        pipe.set(_scorer_key(service_name, metric_name), pickle.dumps(scorer))
+        pipe.set(_scorer_key(service_name, metric_name), json.dumps(scorer.to_dict()))
     pipe.set(_WATERMARK_KEY, str(watermark).encode())
     await pipe.execute()

@@ -125,6 +125,17 @@ wheels = [
 ]
 
 [[package]]
+name = "culprit-shared"
+version = "0.1.0"
+source = { editable = "../shared" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
+
+[[package]]
 name = "fastapi"
 version = "0.141.1"
 source = { registry = "https://pypi.org/simple" }
@@ -542,6 +553,7 @@ name = "signalstack-demo-services"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "culprit-shared" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "opentelemetry-api" },
@@ -559,6 +571,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "culprit-shared", editable = "../shared" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "opentelemetry-api", specifier = ">=1.27" },

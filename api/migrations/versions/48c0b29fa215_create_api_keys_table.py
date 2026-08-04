@@ -26,6 +26,13 @@ down_revision: str | None = "cc323b6c7779"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# Deliberately a literal copy of shared/culprit_shared/services.py's
+# SERVICE_API_KEY_ENV_VARS, not an import of it: migrations are historical
+# snapshots, and importing live/mutable application code here would mean
+# a later change to that shared constant silently changes what this
+# already-applied migration is understood to have done. If the service
+# list ever changes, that's a new migration, not an edit to this one —
+# keep both in sync by hand until then.
 SERVICE_KEY_ENV_VARS = {
     "order-service": "ORDER_SERVICE_API_KEY",
     "inventory-service": "INVENTORY_SERVICE_API_KEY",

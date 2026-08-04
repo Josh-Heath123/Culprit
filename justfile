@@ -34,6 +34,13 @@ lint:
 lint-imports:
     cd worker && uv run lint-imports
 
+# Fail if worker/app/db.py's Core tables drift from api/app/db/models.py's
+# ORM columns. Run via api's own venv (not a bare `python`/`python3` off
+# PATH, which isn't reliably named the same across dev machines and CI) —
+# the script only needs a working interpreter, api's is as good as any.
+check-schema-drift:
+    uv run --project api python scripts/check_schema_drift.py
+
 # Type-check both projects
 typecheck:
     (cd api && uv run pyright)
@@ -71,10 +78,20 @@ consumer:
 seed-postmortems:
     cd worker && uv run python -m scripts.seed_postmortems
 
+# Regenerate frontend/src/lib/api-types.generated.ts from api's live
+# OpenAPI schema (openapi-typescript) — the single source of truth is
+# api/app/incidents/schemas.py; frontend/src/lib/types.ts just re-exports
+# pieces of the generated file instead of hand-duplicating it (Phase 11
+# P1 fix). Needs api's venv (to introspect the schema, no server/DB
+# required) and frontend's node_modules (openapi-typescript itself).
+generate-types:
+    cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd frontend && npm run generate-types
+
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`
 # (Phase 7, port 8000 by default), configurable via frontend/.env's VITE_API_URL.
-frontend:
+frontend: generate-types
     cd frontend && npm run dev
 
-frontend-build:
+frontend-build: generate-types
     cd frontend && npm run build
