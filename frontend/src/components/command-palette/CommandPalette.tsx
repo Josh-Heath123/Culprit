@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   CommandDialog,
@@ -12,7 +13,6 @@ import type { IncidentSummary } from "@/lib/types";
 
 interface CommandPaletteProps {
   incidents: IncidentSummary[];
-  onSelectIncident: (id: string) => void;
 }
 
 /** Client-side only — fuzzy match over already-loaded incidents (id,
@@ -21,8 +21,9 @@ interface CommandPaletteProps {
  * one, and this dataset (a demo's worth of incidents) never approaches
  * the scale where client-side filtering would stop being "genuinely
  * sufficient." */
-export function CommandPalette({ incidents, onSelectIncident }: CommandPaletteProps) {
+export function CommandPalette({ incidents }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -36,7 +37,7 @@ export function CommandPalette({ incidents, onSelectIncident }: CommandPalettePr
   }, []);
 
   function select(id: string) {
-    onSelectIncident(id);
+    navigate(`/incidents/${id}`);
     setOpen(false);
   }
 

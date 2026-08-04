@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { BrowserRouter } from "react-router-dom";
 
-import { LoginScreen } from "@/components/auth/LoginScreen";
-import { Dashboard } from "@/components/Dashboard";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthToken } from "@/hooks/useAuth";
+import { AppRoutes } from "@/routes/AppRoutes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,7 +33,11 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={200}>{token ? <Dashboard /> : <LoginScreen />}</TooltipProvider>
+      <TooltipProvider delayDuration={200}>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </TooltipProvider>
       {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
     </QueryClientProvider>
   );

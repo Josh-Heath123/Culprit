@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { EmptyState } from "@/components/EmptyState";
@@ -10,7 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useIncidents } from "@/hooks/useIncidents";
 
 export function Dashboard() {
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  // Selection lives in the URL (see routes/AppRoutes.tsx's "/" and
+  // "/incidents/:incidentId" both rendering this component), not local
+  // state — that's what makes an incident deep-linkable and what makes
+  // browser back/forward move between the timeline and an open incident.
+  const { incidentId } = useParams<{ incidentId?: string }>();
+  const selectedIncidentId = incidentId ?? null;
+  const navigate = useNavigate();
   const { incidents, total, isPending, isError, error, refetch } = useIncidents();
 
   return (
@@ -31,17 +37,14 @@ export function Dashboard() {
             <Timeline
               incidents={incidents}
               selectedIncidentId={selectedIncidentId}
-              onSelectIncident={setSelectedIncidentId}
+              onSelectIncident={(id) => navigate(`/incidents/${id}`)}
             />
           ) : null}
         </main>
 
         <aside className="w-96 shrink-0">
           {selectedIncidentId ? (
-            <IncidentDetailPanel
-              incidentId={selectedIncidentId}
-              onClose={() => setSelectedIncidentId(null)}
-            />
+            <IncidentDetailPanel incidentId={selectedIncidentId} onClose={() => navigate("/")} />
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center">
               <p className="text-xs text-muted-foreground">
@@ -52,7 +55,7 @@ export function Dashboard() {
         </aside>
       </div>
 
-      <CommandPalette incidents={incidents} onSelectIncident={setSelectedIncidentId} />
+      <CommandPalette incidents={incidents} />
     </div>
   );
 }
