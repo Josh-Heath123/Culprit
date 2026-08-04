@@ -1,0 +1,14 @@
+# .env holds real secrets locally — must never be baked into a built
+# image that gets pushed to a (public) registry. This is the actual
+# enforcement of that rule, not just a convention.
+.env
+.env.*
+!.env.example
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.git/
+tests/

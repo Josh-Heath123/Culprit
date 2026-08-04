@@ -1,0 +1,122 @@
+# Production deployment (Phase 11) — distinct from docker-compose.yml
+# (local dev infra only). References built ghcr.io images by tag, never
+# local Dockerfiles or bind mounts. All app secrets come from ONE
+# infra/.env.prod file, created once by hand on the VM from
+# infra/.env.prod.example — never from GitHub Actions secrets, never
+# baked into an image. Named .env.prod, not .env: this directory already
+# has a dev infra/.env (docker-compose.yml's own secrets) — env_file
+# resolves relative to this file's directory, so reusing the bare .env
+# name here would silently pick up dev credentials instead of prod ones
+# if this repo checkout ever sits next to a dev .env, which is exactly
+# what local verification of this file surfaced.
+#
+# Deployed via infra/deploy.sh, run over SSH by .github/workflows/ci-cd.yml
+# on pushes to main only. Not started with `just up` — that's local-dev-only.
+#
+# Always invoke with --env-file .env.prod explicitly (deploy.sh does):
+# env_file: (above) controls what's injected into each container, but
+# the ${DASHBOARD_DATABASE_URL} / ${WORKER_INGESTION_DATABASE_URL}
+# interpolation *inside this YAML* (the DATABASE_URL remaps below) is a
+# separate Compose mechanism that reads from --env-file / a bare ./.env
+# — omitting the flag leaves those two blank instead of erroring, which
+# is worse than a missing-file error, not just cosmetically different.
+
+name: culprit
+
+services:
+  postgres:
+    image: timescale/timescaledb-ha:pg16
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/home/postgres/pgdata/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Dashboard API (Phase 7/9) — the same built image as ingest-gateway
+  # below, distinguished only by `command`. Not published directly; the
+  # frontend/Caddy container reverse-proxies to it over the compose
+  # network (service name "api" resolves via Docker's internal DNS).
+  api:
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/api:${IMAGE_TAG:-latest}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      # api/migrations/env.py reads DATABASE_URL as the *superuser*
+      # connection (for `alembic upgrade head`, run via infra/deploy.sh)
+      # — a different meaning than worker's DATABASE_URL below. Both
+      # app codebases happen to use the same env var name for different
+      # roles; .env can't define DATABASE_URL twice, so it's stored
+      # under a unique name (DASHBOARD_DATABASE_URL) and remapped here,
+      # per-container, instead of renaming anything in application code.
+      DATABASE_URL: ${DASHBOARD_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ingest-gateway:
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/api:${IMAGE_TAG:-latest}
+    command: uvicorn app.ingest_gateway.main:app --host 0.0.0.0 --port 8010
+    restart: unless-stopped
+    env_file: .env.prod
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      # worker/app/main.py reads DATABASE_URL as the ingestion-writer
+      # role (used by the stream-drain consumer) — see the api service's
+      # comment above for why this is remapped from a uniquely-named var
+      # rather than colliding with api's own DATABASE_URL.
+      DATABASE_URL: ${WORKER_INGESTION_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Reverse proxy + TLS (automatic Let's Encrypt via $DOMAIN) + the
+  # frontend's static build, all in one container — see frontend/Caddyfile.
+  frontend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:

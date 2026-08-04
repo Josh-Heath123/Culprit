@@ -1,0 +1,22 @@
+# Shared Ruff config for api/ and worker/ — Ruff discovers this file by
+# walking up from whichever directory it's invoked in, so both projects
+# lint/format against identical rules without duplicating config.
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+# B008 (function-call-in-default-argument) only auto-exempts calls whose
+# parameter has an immutable type annotation — FastAPI's own DI pattern
+# (`x: SomeService = Depends(get_some_service)`) doesn't qualify once the
+# annotation is a non-stdlib type, which is most of the time. Extending
+# the exemption to FastAPI's own dependency-declaration callables is the
+# documented fix, not a rule suppression — B008 still catches genuine
+# mutable-default bugs everywhere else.
+[lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

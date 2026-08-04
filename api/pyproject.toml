@@ -1,0 +1,41 @@
+[project]
+name = "signalstack-api"
+version = "0.1.0"
+description = "SignalStack API service (FastAPI)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13",
+    "asyncpg>=0.30",
+    "pgvector>=0.3.6",
+    "python-dotenv>=1.0",
+    "structlog>=24.4",
+    "pyjwt>=2.9",
+    "argon2-cffi>=23.1",
+    "slowapi>=0.1.9",
+    "opentelemetry-proto>=1.27",
+    "redis>=5.1",
+    "arq>=0.28.0",
+    "opentelemetry-api>=1.44.0",
+    "opentelemetry-sdk>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "testcontainers[postgres]>=4.8",
+    "hypothesis>=6.115",
+    "ruff>=0.7",
+    "pyright>=1.1.383",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

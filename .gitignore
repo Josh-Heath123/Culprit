@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# uv
+.python-version
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Node / frontend
+node_modules/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

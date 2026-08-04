@@ -1,0 +1,15 @@
+{
+  "include": [
+    "shared",
+    "order_service",
+    "inventory_service",
+    "payments_service",
+    "load_generator.py",
+    "fault_cli.py"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true
+}

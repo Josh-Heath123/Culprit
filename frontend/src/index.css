@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Self-hosted — no external font CDN calls from an ops tool that should
+   work the same regardless of network conditions. Weights chosen to
+   cover UI chrome (400/500/600) and data/mono (400/500) without
+   shipping the full variable-weight range. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
+/*
+ * Culprit — dark-mode only (see docs/IMPLEMENTATION_PLAN.md Section 3).
+ * No light theme, no .dark toggle class, no prefers-color-scheme branch:
+ * :root IS the (only) theme. This is a tool for staring at during an
+ * incident at 2am, and it should look like it knows that, not hedge
+ * with a mode nobody uses.
+ *
+ * Variable names below follow shadcn/ui's convention (--background,
+ * --foreground, --card, --primary, etc.) so hand-written components in
+ * src/components/ui/ compose the same way generated shadcn components
+ * would. --primary is deliberately the one confident accent color
+ * ("this is the answer" moments); shadcn's own --accent stays a neutral
+ * hover-surface token, a different, narrower meaning — see the comment
+ * above it below.
+ */
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Severity only — anomaly magnitude on the timeline, an open
+     incident's status dot, a low-confidence root-cause warning. Never
+     decoration, never a stand-in for the brand color. --color-destructive
+     (red) already covers the "critical" end; this adds the amber one. */
+  --color-severity-warning: var(--severity-warning);
+  --color-severity-warning-foreground: var(--severity-warning-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: #0a0b0f;
+  --foreground: #e6e7eb;
+
+  /* Elevation, not borders, is the primary way surfaces separate from
+     the page — a faint blue-gray tint one step up from --background. */
+  --card: #111319;
+  --card-foreground: var(--foreground);
+  --popover: #14161d;
+  --popover-foreground: var(--foreground);
+
+  /* The one confident accent — cyan, deliberately not Tailwind's
+     default blue. Used for a high-confidence hypothesis, the active
+     command-palette row, focus rings, an incident's highlighted band. */
+  --primary: #22d3ee;
+  --primary-foreground: #06141a;
+
+  --secondary: #171a22;
+  --secondary-foreground: var(--foreground);
+  --muted: #171a22;
+  --muted-foreground: #9096a3;
+
+  /* Neutral hover/highlight surface (menu items, selected-but-not-active
+     rows) — distinct from --primary's brand meaning above. */
+  --accent: #1b1e27;
+  --accent-foreground: var(--foreground);
+
+  --destructive: #f43f5e;
+  --destructive-foreground: #1a0509;
+  --severity-warning: #f59e0b;
+  --severity-warning-foreground: #1a1002;
+
+  --border: #23262f;
+  --input: #23262f;
+  --ring: #22d3ee;
+
+  --radius: 0.5rem;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 25%, transparent);
+  color: var(--primary);
+}

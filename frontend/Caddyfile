@@ -1,0 +1,29 @@
+# This container is the whole "frontend" deployment unit — it serves the
+# built SPA AND acts as the reverse proxy/TLS terminator for the api
+# container. Deliberately not a separate nginx-for-statics plus
+# caddy-for-TLS: Caddy already does both jobs, so a second container
+# would be redundant (see docs/IMPLEMENTATION_PLAN.md Phase 11/Section 7).
+#
+# {$DOMAIN} must be a real domain name with a DNS A record pointing at
+# the VM's IP for Caddy's automatic Let's Encrypt to succeed — it can't
+# issue a certificate for a bare IP. Defaults to localhost (which Caddy
+# serves over plain HTTP with a locally-trusted cert, not a real one) so
+# this Caddyfile is still usable for a local `docker compose` smoke test
+# without a domain.
+{$DOMAIN:localhost} {
+	encode gzip
+
+	# Stripped, not forwarded: the api container's routers are mounted at
+	# root (/incidents, /auth/login, ...), not under /api — handle_path
+	# removes the /api prefix before proxying, so the app code needs no
+	# change for this routing choice.
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		root * /srv
+		file_server
+		try_files {path} /index.html
+	}
+}
