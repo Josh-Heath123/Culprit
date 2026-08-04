@@ -118,6 +118,16 @@ jobs:
           enable-cache: true
       - name: Dump api's OpenAPI schema
         if: matrix.image == 'frontend'
+        # Same dummy, CI-only values as the pytest (api) step above —
+        # app.main imports app.auth.config, which reads these from the
+        # environment with no defaults (real values only ever live in
+        # infra/.env.prod on the VM). dump_openapi_schema.py never
+        # actually touches auth logic; this only exists to satisfy the
+        # import-time read.
+        env:
+          JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
+          OPERATOR_USERNAME: ci-test-operator
+          OPERATOR_PASSWORD_HASH: not-a-real-argon2-hash-ci-only
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'
