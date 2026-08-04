@@ -1,0 +1,21 @@
+# Vulnerabilities accepted, not fixed — reviewed 2026-08-04.
+#
+# All five below are compiled into the `caddy` binary itself (Go stdlib,
+# golang.org/x/text, and grpc-go), inside the official caddy:2-alpine
+# Docker image (frontend/Dockerfile). They are not Alpine apk packages, so
+# `apk upgrade` can't touch them — fixing them requires the Caddy
+# maintainers to rebuild their published image against patched Go module
+# versions. Confirmed against Docker Hub on 2026-08-04 that caddy:2-alpine
+# already points at their newest build (2.11.3, pushed 18 days prior) —
+# there is currently no newer upstream image that fixes these.
+#
+# Re-check this file next time frontend/Dockerfile's base image is
+# touched, or periodically: if caddy:2-alpine has been rebuilt since
+# 2026-08-04, remove the corresponding line(s) below and let Trivy catch
+# anything still unfixed for real.
+
+CVE-2026-56852       # golang.org/x/text — norm.Iter infinite loop
+GHSA-hrxh-6v49-42gf   # google.golang.org/grpc — xDS RBAC / HTTP/2 issues
+CVE-2026-27145        # Go stdlib crypto/x509 — DoS via excessive DNS name processing
+CVE-2026-39822        # Go stdlib os.Root — symlink-following directory traversal
+CVE-2026-42504        # Go stdlib mime — DoS via malicious MIME header
