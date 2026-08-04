@@ -84,7 +84,21 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [api, worker, frontend]
+        # api/ and worker/ both depend on shared/ (culprit-shared, a
+        # path dependency — see api/Dockerfile's comment), which is
+        # outside their own directory, so they build from the repo root
+        # instead of `context: ${{ matrix.image }}`. frontend/ has no
+        # such dependency and keeps its own directory as context.
+        include:
+          - image: api
+            context: .
+            dockerfile: api/Dockerfile
+          - image: worker
+            context: .
+            dockerfile: worker/Dockerfile
+          - image: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -92,7 +106,8 @@ jobs:
       - name: Build (local, for scanning)
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.image }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: false
           load: true
           tags: local/${{ matrix.image }}:ci

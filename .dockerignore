@@ -1,0 +1,34 @@
+# Used by api/Dockerfile and worker/Dockerfile — both build with the
+# repo root as context (not their own subdirectory) so the build can
+# also see shared/, which culprit-shared's path dependency needs (see
+# api/Dockerfile's and worker/Dockerfile's comments). frontend/Dockerfile
+# still uses frontend/ as its own context and reads frontend/.dockerignore
+# instead — untouched by this file.
+#
+# Consolidates what used to be api/.dockerignore and worker/.dockerignore
+# (removed — they went dead the moment their build context changed and
+# stopped being read; keeping them around would have been misleading).
+
+# .env holds real secrets locally — must never be baked into a built
+# image that gets pushed to a (public) registry. This is the actual
+# enforcement of that rule, not just a convention.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.prod.example
+
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.hypothesis/
+**/.import_linter_cache/
+**/tests/
+.git/
+
+# Not needed inside api/worker images and large enough to slow the
+# build context upload for no reason.
+frontend/node_modules/
+frontend/dist/
+demo-services/.venv/

@@ -1,4 +1,6 @@
-# Same uv+Docker pattern as api/Dockerfile — see that file's comments.
+# Same uv+Docker pattern as api/Dockerfile — see that file's comments,
+# including why the build context is the repo root rather than this
+# directory (culprit-shared's path dependency needs shared/ visible).
 # Unlike api/, worker/ only ever runs one process (the arq worker), so
 # this image does set a default CMD.
 
@@ -12,11 +14,13 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=worker/uv.lock,target=uv.lock \
+    --mount=type=bind,source=worker/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=shared,target=/shared \
     uv sync --frozen --no-install-project --no-dev
 
-COPY . /app
+COPY worker/ /app/
+COPY shared/ /shared/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
@@ -28,6 +32,7 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system app && useradd --system --gid app app
 WORKDIR /app
 COPY --from=builder --chown=app:app /app /app
+COPY --from=builder --chown=app:app /shared /shared
 ENV PATH="/app/.venv/bin:$PATH"
 USER app
 
