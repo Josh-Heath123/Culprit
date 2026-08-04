@@ -25,9 +25,6 @@ echo "==> Running database migrations"
 echo "==> Restarting containers"
 "${COMPOSE[@]}" up -d --remove-orphans
 
-echo "==> Waiting for the API to come up"
-sleep 5
-
 # Extracted with grep/cut, not `source .env.prod` — dotenv values (e.g.
 # OPERATOR_PASSWORD_HASH's argon2 hash) legitimately contain literal `$`
 # characters that a bash `source` would try to expand as variables.
@@ -39,7 +36,25 @@ echo "==> Health check: https://${DOMAIN}/api/incidents"
 # dependency, and DB connection are all up and routing correctly) both
 # count as healthy. Anything else (connection refused, 5xx, timeout)
 # means the deploy is broken.
-STATUS=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 10 "https://${DOMAIN}/api/incidents" || echo "000")
+#
+# Polled, not a single flat sleep+curl: on the very first deploy for a
+# given domain, Caddy has to complete a live Let's Encrypt handshake
+# (tls-alpn-01) before it can serve anything on 443 at all — observed
+# taking ~10s in practice (2026-08-04 first deploy), which a single
+# `sleep 5` + 10s curl timeout doesn't reliably cover. Later deploys
+# reuse the cached cert in the caddy-data volume and pass on the first
+# attempt; this loop just means a slow cold cert doesn't fail an
+# otherwise-successful deploy.
+STATUS="000"
+for i in $(seq 1 12); do
+  STATUS=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 10 "https://${DOMAIN}/api/incidents" || echo "000")
+  if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ]; then
+    break
+  fi
+  echo "  attempt $i/12: HTTP $STATUS, retrying in 5s..."
+  sleep 5
+done
+
 if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ]; then
   echo "Health check passed (HTTP $STATUS)"
 else
