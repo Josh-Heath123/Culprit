@@ -101,6 +101,28 @@ jobs:
             dockerfile: frontend/Dockerfile
     steps:
       - uses: actions/checkout@v4
+
+      # frontend/src/lib/api-types.generated.ts is gitignored — it's
+      # regenerated from api's live OpenAPI schema, same as local dev's
+      # `just generate-types` (which `just frontend`/`frontend-build`
+      # both depend on). frontend/Dockerfile's own build can't reach
+      # api's Python at all (see its comments), so this has to happen
+      # here, on the runner, before the Docker build step even starts —
+      # otherwise `COPY . .` inside that build has nothing to copy and
+      # `tsc -b` fails on the missing module. Only frontend needs any
+      # of this; api and worker skip these three steps entirely.
+      - name: Set up uv (frontend type generation only)
+        if: matrix.image == 'frontend'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Dump api's OpenAPI schema
+        if: matrix.image == 'frontend'
+        run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+      - name: Generate frontend types from schema
+        if: matrix.image == 'frontend'
+        run: cd frontend && npm ci && npm run generate-types
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Build (local, for scanning)
