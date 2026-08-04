@@ -11,6 +11,18 @@ PAYMENTS_SERVICE_API_KEY in the environment; only their SHA-256 hashes are
 ever written here. ingest-gateway hashes the presented key the same way
 and compares hash-to-hash with secrets.compare_digest — the plaintext
 never touches the database.
+
+LOOSENED 2026-08-04 (Phase 14, the one deliberate exception to "never edit
+an applied migration" — see docs/SELF_HOSTED_PLAN.md's Invariants #4 and
+Phase 14's Trap 1 for the full reasoning): the upgrade() loop below used to
+raise RuntimeError if any of the three env vars was unset, which made a
+fresh third-party install demand three secrets for demo services it will
+never run. It now skips a service whose env var is absent instead. This is
+safe specifically because Alembic never re-runs an applied revision, so no
+existing database is affected, and because the change can only ever make
+this migration insert *fewer* rows than before — never different ones. It
+is not a precedent for editing migration logic that would change rows a
+database has already had written into it.
 """
 import hashlib
 import os
@@ -67,9 +79,10 @@ def upgrade() -> None:
     for service_name, env_var in SERVICE_KEY_ENV_VARS.items():
         plaintext = os.environ.get(env_var)
         if not plaintext:
-            raise RuntimeError(f"{env_var} must be set in the environment to run this migration")
+            continue
         rows.append({"service_name": service_name, "key_hash": _hash_key(plaintext)})
-    op.bulk_insert(api_keys_table, rows)
+    if rows:
+        op.bulk_insert(api_keys_table, rows)
 
 
 def downgrade() -> None:
