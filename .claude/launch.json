@@ -10,13 +10,13 @@
     },
     {
       "name": "api",
-      "runtimeExecutable": "C:\\View\\api\\.venv2\\Scripts\\python.exe",
+      "runtimeExecutable": "C:\\View\\api\\.venv3\\Scripts\\python.exe",
       "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--app-dir", "api", "--port", "8020"],
       "port": 8020
     },
     {
       "name": "ingest-gateway",
-      "runtimeExecutable": "C:\\View\\api\\.venv2\\Scripts\\python.exe",
+      "runtimeExecutable": "C:\\View\\api\\.venv3\\Scripts\\python.exe",
       "runtimeArgs": [
         "-m", "uvicorn", "app.ingest_gateway.main:app", "--app-dir", "api", "--port", "8030"
       ],

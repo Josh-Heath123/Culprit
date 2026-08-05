@@ -114,6 +114,10 @@ services:
       - caddy-config:/config
     depends_on:
       - api
+      # Phase 15: Caddy proxies /ingest/* to this container now
+      # (frontend/Caddyfile) — it never published its own host port and
+      # is reachable only through here.
+      - ingest-gateway
 
 volumes:
   postgres-data:

@@ -145,11 +145,24 @@ async def _update_last_used_at(key_id: UUID) -> None:
 api_key_store = ApiKeyStore()
 
 
+#: How much of a rejected key gets logged — enough to correlate a
+#: specific rejected request with a specific key/service while looking
+#: it up in the registry, never enough to be usable as a credential
+#: itself (see docs/SELF_HOSTED_PLAN.md Phase 15's hardening steps).
+_LOGGED_KEY_PREFIX_LENGTH = 12
+
+
 async def authenticated_service_name(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
+        logger.warning("ingest_auth_rejected", reason="missing or malformed Authorization header")
         raise HTTPException(status_code=401, detail="missing or malformed Authorization header")
     presented_key = authorization.removeprefix("Bearer ").strip()
     service_name = await api_key_store.authenticate(presented_key)
     if service_name is None:
+        logger.warning(
+            "ingest_auth_rejected",
+            reason="invalid API key",
+            key_prefix=presented_key[:_LOGGED_KEY_PREFIX_LENGTH],
+        )
         raise HTTPException(status_code=401, detail="invalid API key")
     return service_name

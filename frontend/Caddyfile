@@ -21,6 +21,25 @@
 		reverse_proxy api:8000
 	}
 
+	# Phase 15: the public ingest path — a third party's own services,
+	# running elsewhere, point OTEL_EXPORTER_OTLP_ENDPOINT at
+	# https://{$DOMAIN}/ingest and land here. Stripped the same way /api/*
+	# is: a client configured with .../ingest sends to /ingest/v1/metrics,
+	# ingest-gateway sees /v1/metrics, no application change. max_size is
+	# deliberately inside this route block, not at the site level (Known
+	# Trap 2, docs/SELF_HOSTED_PLAN.md Phase 15) — putting it outside
+	# would cap the dashboard's own requests to the same limit. This is
+	# the *raw*, possibly-still-gzipped body Caddy itself ever sees; the
+	# gateway's own defensive check (app/ingest_gateway/main.py's
+	# _maybe_decompress) is what actually bounds the decompressed size —
+	# a small gzip bomb would sail under this cap entirely.
+	handle_path /ingest/* {
+		request_body {
+			max_size {$INGEST_MAX_BODY_BYTES:5MB}
+		}
+		reverse_proxy ingest-gateway:8010
+	}
+
 	handle {
 		root * /srv
 		file_server

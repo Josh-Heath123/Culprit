@@ -1,0 +1,48 @@
+# Example otlphttp exporter block for teams already running their own
+# OpenTelemetry Collector, pointing it at a Culprit instance instead of
+# (or alongside) instrumenting each service directly — see
+# docs/INSTRUMENTATION.md. Culprit's own ingest-gateway is a small custom
+# service, not a Collector itself (CLAUDE.md's Architecture section) —
+# this config is what lets a *real* Collector hand telemetry off to it.
+#
+# Fill in <your-domain> and <api-key>, then merge the `exporters` and
+# `service.pipelines` blocks below into your existing collector config
+# rather than replacing it wholesale — this file only shows the parts
+# relevant to reaching Culprit.
+#
+# Traces are NOT accepted yet (docs/INSTRUMENTATION.md) — a traces
+# pipeline pointed at this exporter will not error, it will just go
+# nowhere. Don't wire one up until Culprit accepts /v1/traces (Phase 19).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  otlphttp/culprit:
+    # {base} from docs/INSTRUMENTATION.md — the Collector's otlphttp
+    # exporter appends /v1/metrics and /v1/logs itself, matching the two
+    # paths ingest-gateway actually serves.
+    endpoint: https://<your-domain>/ingest
+    headers:
+      Authorization: "Bearer <api-key>"
+    encoding: proto
+
+processors:
+  batch: {}
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/culprit]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/culprit]
+    # No traces pipeline to otlphttp/culprit — see the note above.
