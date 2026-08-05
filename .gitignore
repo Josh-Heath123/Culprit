@@ -5,6 +5,7 @@ __pycache__/
 .venv2/
 .pytest_cache/
 .ruff_cache/
+.venv2/
 
 # uv
 .python-version
