@@ -84,6 +84,11 @@ seed-postmortems:
 apply-services *ARGS:
     cd api && uv run python -m scripts.apply_services {{ARGS}}
 
+# Create a user (Phase 16) — the only way to create the *first* admin;
+# prompts for the password. e.g.: just create-user operator --role admin
+create-user *ARGS:
+    cd api && uv run python -m scripts.create_user {{ARGS}}
+
 # Regenerate frontend/src/lib/api-types.generated.ts from api's live
 # OpenAPI schema (openapi-typescript) — the single source of truth is
 # api/app/incidents/schemas.py; frontend/src/lib/types.ts just re-exports

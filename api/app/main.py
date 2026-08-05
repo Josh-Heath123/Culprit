@@ -25,8 +25,10 @@ from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 from starlette.responses import JSONResponse, Response  # noqa: E402
 
-from app.auth.dependencies import require_auth  # noqa: E402
+from app.auth.config import AUTH_SERVICE_DATABASE_URL  # noqa: E402
+from app.auth.dependencies import require_admin, require_auth  # noqa: E402
 from app.auth.router import router as auth_router  # noqa: E402
+from app.auth.users_router import router as users_router  # noqa: E402
 from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E402
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
@@ -55,6 +57,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # GET /services still uses — see app/registry/router.py.
     registry_engine = create_async_engine(REGISTRY_ADMIN_DATABASE_URL)
     app.state.registry_session_factory = async_sessionmaker(registry_engine, expire_on_commit=False)
+    # Phase 16: a third engine, under auth-service, for /auth/login,
+    # /auth/change-password, and every /users write. app.state.session_factory
+    # (api-reader, above) stays read-only and is what require_auth's own
+    # disabled-user check uses (app/auth/dependencies.py) — only writes
+    # need this one.
+    auth_engine = create_async_engine(AUTH_SERVICE_DATABASE_URL)
+    app.state.auth_session_factory = async_sessionmaker(auth_engine, expire_on_commit=False)
     # For POST /incidents/{id}/regenerate-root-cause to enqueue Phase 6's
     # arq job by name — this API process never runs arq jobs itself.
     app.state.arq_pool = await create_pool(RedisSettings.from_dsn(REDIS_URL))
@@ -62,6 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await app.state.arq_pool.aclose()
     await engine.dispose()
     await registry_engine.dispose()
+    await auth_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -133,4 +143,9 @@ async def observability_middleware(
 
 app.include_router(auth_router)
 app.include_router(incidents_router, dependencies=[Depends(require_auth)])
-app.include_router(registry_router, dependencies=[Depends(require_auth)])
+# Phase 16: registry and user-management writes now require the admin
+# role, not just any authenticated session — require_admin is a thin
+# wrapper over require_auth (app/auth/dependencies.py), so this is the
+# only line either router needed to change.
+app.include_router(registry_router, dependencies=[Depends(require_admin)])
+app.include_router(users_router, dependencies=[Depends(require_admin)])

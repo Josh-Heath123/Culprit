@@ -4,11 +4,13 @@ FastAPI's TestClient against a real, migrated Postgres container
 (see api/tests/conftest.py), not mocks.
 
 Deliberately builds a minimal test app (registry_router mounted
-directly, behind the same require_auth dependency app/main.py uses)
-instead of importing app.main's own `app` — app.main's lifespan also
-stands up an arq/Redis connection pool for the root-cause-regeneration
-endpoint, which has nothing to do with the registry and would make every
-test in this file depend on a Redis container too, for no benefit.
+directly, behind the same require_admin dependency app/main.py uses —
+Phase 16 moved this router off the plain require_auth every other
+router still less-strictly-gated router used) instead of importing
+app.main's own `app` — app.main's lifespan also stands up an arq/Redis
+connection pool for the root-cause-regeneration endpoint, which has
+nothing to do with the registry and would make every test in this file
+depend on a Redis container too, for no benefit.
 
 Every import from app.* below is deferred into the `client` fixture
 rather than sitting at module level: app.registry.router transitively
@@ -37,26 +39,46 @@ async def client(
 ) -> AsyncIterator[TestClient]:
     async with db_engine.begin() as conn:
         await conn.execute(text("TRUNCATE services, service_dependencies, api_keys CASCADE"))
+        await conn.execute(text("TRUNCATE users CASCADE"))
 
     api_reader_url = role_database_url("api-reader", "API_READER_PASSWORD")
     registry_admin_url = role_database_url("registry-admin", "REGISTRY_ADMIN_DB_PASSWORD")
+    auth_service_url = role_database_url("auth-service", "AUTH_SERVICE_DB_PASSWORD")
     os.environ["API_READER_DATABASE_URL"] = api_reader_url
     os.environ["REGISTRY_ADMIN_DATABASE_URL"] = registry_admin_url
+    os.environ["AUTH_SERVICE_DATABASE_URL"] = auth_service_url
 
-    from app.auth.dependencies import require_auth
-    from app.auth.security import create_access_token
+    from app.auth.dependencies import require_admin
+    from app.auth.repository import create_user
+    from app.auth.security import create_access_token, hash_password
     from app.registry.router import router as registry_router
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     read_engine = create_async_engine(api_reader_url)
     write_engine = create_async_engine(registry_admin_url)
+    auth_engine = create_async_engine(auth_service_url)
 
     app = FastAPI()
     app.state.session_factory = async_sessionmaker(read_engine, expire_on_commit=False)
     app.state.registry_session_factory = async_sessionmaker(write_engine, expire_on_commit=False)
-    app.include_router(registry_router, dependencies=[Depends(require_auth)])
+    app.include_router(registry_router, dependencies=[Depends(require_admin)])
 
-    token = create_access_token("test-operator")
+    # require_admin needs a real users row (require_auth's own DB-backed
+    # disabled-check reads it via api-reader) -- created directly via
+    # the auth-service role rather than going through an HTTP endpoint,
+    # same as test_users_api.py's _bootstrap_admin and for the same
+    # reason (nothing can call POST /users before an admin exists yet).
+    auth_session_factory = async_sessionmaker(auth_engine, expire_on_commit=False)
+    async with auth_session_factory() as session:
+        admin = await create_user(
+            session,
+            username="test-operator",
+            password_hash=hash_password("unused-test-password"),
+            role="admin",
+        )
+    await auth_engine.dispose()
+
+    token = create_access_token(admin)
     with TestClient(app, headers={"Authorization": f"Bearer {token}"}) as test_client:
         yield test_client
 

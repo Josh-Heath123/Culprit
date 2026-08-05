@@ -225,6 +225,34 @@ class ServiceDependency(Base):
     )
 
 
+class User(Base):
+    """A dashboard login (Phase 16) — replaces the single hardcoded
+    operator (OPERATOR_USERNAME/OPERATOR_PASSWORD_HASH env vars) with a
+    real table. Only `password_hash` (argon2) is ever stored; the
+    plaintext password never reaches this model.
+
+    `disabled_at` is read on every authenticated request, not just at
+    login — see app/auth/dependencies.py's require_auth, which re-checks
+    it (with a short in-process cache) so a disabled account's existing
+    token stops working within that cache's TTL rather than being valid
+    for its full remaining lifetime.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    username: Mapped[str] = mapped_column(unique=True)
+    password_hash: Mapped[str]
+    role: Mapped[str] = mapped_column(server_default=text("'member'"))
+    disabled_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    last_login_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+
+    __table_args__ = (CheckConstraint("role IN ('admin', 'member')", name="ck_users_role"),)
+
+
 class ApiKey(Base):
     """A scoped API key authenticating one service to ingest-gateway.
 

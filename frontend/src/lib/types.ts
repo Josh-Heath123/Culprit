@@ -26,3 +26,9 @@ export type ServiceCreateResponse = components["schemas"]["ServiceCreateResponse
 export type ServicePatch = components["schemas"]["ServicePatch"];
 export type KeyOut = components["schemas"]["KeyOut"];
 export type KeyCreateResponse = components["schemas"]["KeyCreateResponse"];
+
+// Phase 16: multi-user auth.
+export type UserOut = components["schemas"]["UserOut"];
+export type UsersOut = components["schemas"]["UsersOut"];
+export type LoginResponse = components["schemas"]["LoginResponse"];
+export type UserRole = UserOut["role"];

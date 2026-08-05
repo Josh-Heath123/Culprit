@@ -1,67 +1,132 @@
-"""Unit tests for app/auth/security.py — no HTTP layer, no DB, pure
-credential/token logic. app/auth/dependencies.py and router.py are thin
-FastAPI wiring around this and aren't separately unit-tested, same
-convention as the rest of this codebase (e.g. worker/app/anomaly/job.py's
-I/O wiring isn't unit-tested, only the pure logic it calls).
-
-Credential tests use a locally-generated username/password/hash, not the
-real operator credential from .env — otherwise these tests would be
-coupled to a real secret and break the moment it's ever rotated.
+"""Tests for app/auth/security.py against a real, migrated Postgres
+container (see api/tests/conftest.py) — Phase 16 rewrote verify_credentials
+to look a user up in the database, so a mocked/substituted hash (the old
+approach) can no longer exercise the real path. Truncates `users` before
+each test rather than relying on a specific starting state: local runs
+always have api/.env's real OPERATOR_USERNAME/OPERATOR_PASSWORD_HASH
+backfilled by the migration, CI runs (which no longer set those, per
+Phase 16 step 10) don't — this file's tests must pass either way.
 """
 
 import time
+import uuid
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
-import app.auth.security as auth_security
 import jwt
 import pytest
+import pytest_asyncio
 from app.auth.config import JWT_ALGORITHM, JWT_SECRET_KEY
+from app.auth.repository import create_user
 from app.auth.security import (
+    MIN_PASSWORD_LENGTH,
     InvalidCredentials,
+    WeakPassword,
     create_access_token,
     decode_access_token,
+    hash_password,
+    validate_password,
     verify_credentials,
 )
-from argon2 import PasswordHasher
+from app.db.models import User
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-_TEST_USERNAME = "test-operator"
-_TEST_PASSWORD = "correct-horse-battery-staple"
-_TEST_PASSWORD_HASH = PasswordHasher().hash(_TEST_PASSWORD)
-
-
-@pytest.fixture(autouse=True)
-def _fake_operator_credential(monkeypatch: pytest.MonkeyPatch) -> None:
-    # security.py does `from app.auth.config import OPERATOR_USERNAME, ...`,
-    # which binds its own local names at import time — patching
-    # app.auth.config's attributes afterward wouldn't touch those already-
-    # bound names, so the patch has to target app.auth.security directly.
-    monkeypatch.setattr(auth_security, "OPERATOR_USERNAME", _TEST_USERNAME)
-    monkeypatch.setattr(auth_security, "OPERATOR_PASSWORD_HASH", _TEST_PASSWORD_HASH)
+_PASSWORD = "correct-horse-battery-staple"
 
 
-def test_verify_credentials_accepts_the_real_password() -> None:
-    verify_credentials(_TEST_USERNAME, _TEST_PASSWORD)
+@pytest_asyncio.fixture
+async def session(migrated_database_url: str, db_engine: AsyncEngine, role_database_url):
+    async with db_engine.begin() as conn:
+        await conn.execute(text("TRUNCATE users CASCADE"))
+
+    auth_url = role_database_url("auth-service", "AUTH_SERVICE_DB_PASSWORD")
+    engine = create_async_engine(auth_url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        yield session
+    await engine.dispose()
 
 
-def test_verify_credentials_rejects_wrong_password() -> None:
+@pytest_asyncio.fixture
+async def active_user(session: AsyncSession) -> User:
+    return await create_user(
+        session, username="test-operator", password_hash=hash_password(_PASSWORD), role="admin"
+    )
+
+
+async def test_verify_credentials_accepts_the_real_password(
+    session: AsyncSession, active_user: User
+) -> None:
+    user = await verify_credentials(session, active_user.username, _PASSWORD)
+    assert user.id == active_user.id
+
+
+async def test_verify_credentials_rejects_wrong_password(
+    session: AsyncSession, active_user: User
+) -> None:
     with pytest.raises(InvalidCredentials, match="wrong password"):
-        verify_credentials(_TEST_USERNAME, "not-the-password")
+        await verify_credentials(session, active_user.username, "not-the-password")
 
 
-def test_verify_credentials_rejects_unknown_username() -> None:
+async def test_verify_credentials_rejects_unknown_username(session: AsyncSession) -> None:
     with pytest.raises(InvalidCredentials, match="unknown username"):
-        verify_credentials("someone-else", _TEST_PASSWORD)
+        await verify_credentials(session, "someone-else", _PASSWORD)
+
+
+async def test_verify_credentials_rejects_disabled_user_even_with_correct_password(
+    session: AsyncSession,
+) -> None:
+    user = await create_user(
+        session, username="disabled-user", password_hash=hash_password(_PASSWORD), role="member"
+    )
+    user.disabled_at = datetime.now(UTC)
+    await session.commit()
+
+    with pytest.raises(InvalidCredentials, match="disabled"):
+        await verify_credentials(session, user.username, _PASSWORD)
+
+
+async def test_unknown_username_path_still_calls_the_hasher(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Structural test of the timing-attack defence, not a statistical
+    one (a real timing-parity test would be flaky in CI) — asserts that
+    an unknown username still exercises the password hasher exactly like
+    a real verify would, rather than short-circuiting before it."""
+    import app.auth.security as security_module
+
+    spy = MagicMock(wraps=security_module._hasher)
+    monkeypatch.setattr(security_module, "_hasher", spy)
+
+    with pytest.raises(InvalidCredentials, match="unknown username"):
+        await verify_credentials(session, "nobody-by-this-name", _PASSWORD)
+
+    spy.verify.assert_called_once()
 
 
 def test_access_token_round_trips() -> None:
-    token = create_access_token(_TEST_USERNAME)
-    assert decode_access_token(token) == _TEST_USERNAME
+    user = User(id=uuid.uuid4(), username="test-operator", password_hash="unused", role="admin")
+    token = create_access_token(user)
+    payload = decode_access_token(token)
+    assert payload.sub == "test-operator"
+    assert payload.uid == user.id
+    assert payload.role == "admin"
 
 
 def test_expired_token_is_rejected() -> None:
-    # A token minted with exp in the past, signed with the real secret —
-    # exercises decode_access_token's own expiry check, not a mock.
     expired = jwt.encode(
-        {"sub": _TEST_USERNAME, "exp": time.time() - 60},
+        {
+            "sub": "test-operator",
+            "uid": str(uuid.uuid4()),
+            "role": "admin",
+            "exp": time.time() - 60,
+        },
         JWT_SECRET_KEY,
         algorithm=JWT_ALGORITHM,
     )
@@ -71,7 +136,28 @@ def test_expired_token_is_rejected() -> None:
 
 def test_token_signed_with_a_different_secret_is_rejected() -> None:
     forged = jwt.encode(
-        {"sub": _TEST_USERNAME, "exp": time.time() + 3600}, "wrong-secret", algorithm="HS256"
+        {
+            "sub": "test-operator",
+            "uid": str(uuid.uuid4()),
+            "role": "admin",
+            "exp": time.time() + 3600,
+        },
+        "wrong-secret",
+        algorithm="HS256",
     )
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(forged)
+
+
+def test_validate_password_rejects_too_short() -> None:
+    with pytest.raises(WeakPassword, match="at least"):
+        validate_password("short1", "someuser")
+
+
+def test_validate_password_rejects_matching_username() -> None:
+    with pytest.raises(WeakPassword, match="username"):
+        validate_password("same-as-username", "same-as-username")
+
+
+def test_validate_password_accepts_a_reasonable_password() -> None:
+    validate_password("a" * MIN_PASSWORD_LENGTH, "someuser")
