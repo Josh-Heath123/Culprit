@@ -40,6 +40,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "CORRELATION_ENGINE_DB_PASSWORD": "test-correlation-engine-password",
     "ROOT_CAUSE_WRITER_DB_PASSWORD": "test-root-cause-writer-password",
     "REGISTRY_ADMIN_DB_PASSWORD": "test-registry-admin-password",
+    "AUTH_SERVICE_DB_PASSWORD": "test-auth-service-password",
 }
 
 

@@ -7,6 +7,7 @@ import { useAuthToken } from "@/hooks/useAuth";
 import { NotFound } from "./NotFound";
 import { RequireAuth } from "./RequireAuth";
 import { SettingsServices } from "./SettingsServices";
+import { SettingsUsers } from "./SettingsUsers";
 
 /** Only ever a same-origin relative path, never wherever `?next=`
  * literally says — react-router's own changelog is full of open-redirect
@@ -47,6 +48,7 @@ export function AppRoutes() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/incidents/:incidentId" element={<Dashboard />} />
         <Route path="/settings/services" element={<SettingsServices />} />
+        <Route path="/settings/users" element={<SettingsUsers />} />
       </Route>
 
       <Route path="*" element={<NotFound />} />

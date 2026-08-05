@@ -4,11 +4,22 @@ JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_MINUTES = int(os.environ.get("JWT_EXPIRY_MINUTES", "60"))
 
-#: A single hardcoded operator credential, not a users table — this is a
-#: small-team internal tool (CLAUDE.md's own framing: "on-call engineers
-#: who are also the founders"), not a multi-tenant product. Same "fixed,
-#: not a general onboarding flow" scope decision Phase 3 already made for
-#: the demo-service API keys. Only the argon2 hash is ever stored here,
-#: never the plaintext password.
-OPERATOR_USERNAME = os.environ["OPERATOR_USERNAME"]
-OPERATOR_PASSWORD_HASH = os.environ["OPERATOR_PASSWORD_HASH"]
+#: auth-service role (Phase 16) — SELECT/INSERT/UPDATE on `users` only.
+#: api-reader (app/incidents/config.py) also gets SELECT, for
+#: app/auth/dependencies.py's require_auth to resolve a token's subject
+#: to a live role/disabled status without needing this write-capable
+#: engine on every request.
+AUTH_SERVICE_DATABASE_URL = os.environ.get(
+    "AUTH_SERVICE_DATABASE_URL",
+    "postgresql+asyncpg://auth-service:auth-service-dev-password@localhost:5432/signalstack",
+)
+
+#: NOTE: OPERATOR_USERNAME/OPERATOR_PASSWORD_HASH used to live here.
+#: Phase 16 replaced the single hardcoded operator with the `users`
+#: table above -- those two env vars are now migration-time-only inputs
+#: (api/migrations/versions/fbf4cb16570a_create_users_table.py's
+#: backfill), read once by that migration and never again by
+#: application code. Deliberately not read here even as optional
+#: fallbacks: keeping them out of this module's import-time surface is
+#: what let .github/workflows/ci-cd.yml drop its dummy values for this
+#: job (docs/SELF_HOSTED_PLAN.md Phase 16, step 10).

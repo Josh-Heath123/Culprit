@@ -6,12 +6,15 @@ import { getToken, setToken } from "@/lib/auth";
 import type {
   IncidentDetail,
   KeyCreateResponse,
+  LoginResponse,
   PaginatedIncidents,
   ServiceCreate,
   ServiceCreateResponse,
   ServiceOut,
   ServicePatch,
   ServicesOut,
+  UserOut,
+  UsersOut,
 } from "@/lib/types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -63,8 +66,59 @@ export async function login(username: string, password: string): Promise<void> {
     const body = await response.text();
     throw new ApiError(body || response.statusText, response.status);
   }
-  const data = (await response.json()) as { access_token: string };
+  const data = (await response.json()) as LoginResponse;
   setToken(data.access_token);
+}
+
+/** logout() only ever needs to clear the local token — there's no
+ * server-side session/refresh-token store to revoke (short-lived JWTs,
+ * see lib/auth.ts's own comment on why a refresh already means logging
+ * in again). */
+export function logout(): void {
+  setToken(null);
+}
+
+// Phase 16: multi-user auth.
+export function fetchCurrentUser(): Promise<UserOut> {
+  return request<UserOut>("/auth/me");
+}
+
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return request<void>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
+export function fetchUsers(): Promise<UsersOut> {
+  return request<UsersOut>("/users");
+}
+
+export function createUser(username: string, password: string, role: string): Promise<UserOut> {
+  return request<UserOut>("/users", {
+    method: "POST",
+    body: JSON.stringify({ username, password, role }),
+  });
+}
+
+export function patchUser(
+  id: string,
+  body: { role?: string; disabled?: boolean },
+): Promise<UserOut> {
+  return request<UserOut>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function resetUserPassword(id: string, newPassword: string): Promise<void> {
+  return request<void>(`/users/${id}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+}
+
+/** Soft delete (disabled_at) — same semantics as deleteService, never
+ * deletes the row (api/app/auth/users_router.py::delete_user_endpoint). */
+export function deleteUser(id: string): Promise<void> {
+  return request<void>(`/users/${id}`, { method: "DELETE" });
 }
 
 export function fetchIncidents(limit: number, offset: number): Promise<PaginatedIncidents> {
@@ -79,10 +133,9 @@ export function regenerateRootCause(id: string): Promise<{ status: string; incid
   return request(`/incidents/${id}/regenerate-root-cause`, { method: "POST" });
 }
 
-// Phase 14: service registry — GET /services may be used by anyone
-// authenticated (see api/app/registry/router.py); writes are the same
-// require_auth gate today and will move to require_admin without any
-// path change once Phase 16 lands (docs/SELF_HOSTED_PLAN.md).
+// Phase 14 (registry) — Phase 16 moved every /services endpoint,
+// including GET, onto require_admin (api/app/main.py) — a member's
+// token gets 403 here now, not just from writes.
 export function fetchServices(): Promise<ServicesOut> {
   return request<ServicesOut>("/services");
 }
