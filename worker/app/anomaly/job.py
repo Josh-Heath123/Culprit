@@ -8,6 +8,7 @@ correlation, no RAG, no API exposure — see Phase 5/6/7.
 """
 
 import logging
+import time
 from datetime import timedelta
 
 import redis.asyncio as redis
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.anomaly.scorer import ANOMALY_THRESHOLD, MetricScorer, is_anomalous
 from app.anomaly.state import load_scorer, load_watermark, save_progress
-from app.db import raw_events
+from app.db import raw_events, services
 from app.observability import instrument_job
 
 logger = logging.getLogger("anomaly")
@@ -38,6 +39,42 @@ _INSERT_ANOMALY_SQL = text(
     "VALUES (:service_name, :metric_name, :score, :threshold, :detected_at, "
     "tstzrange(:window_start, :window_end))"
 )
+
+#: How long a loaded monitored_metrics map stays cached in-process before
+#: re-querying `services`. Phase 14: a real third-party service can export
+#: hundreds of metrics, and without this allowlist every single one gets
+#: its own persistent EWMA scorer in Redis forever. Same reasoning as
+#: worker/app/correlation/job.py's adjacency cache -- a service's
+#: monitored_metrics changing mid-minute is picked up one tick late,
+#: which is fine for a setting nobody expects to take effect instantly.
+_METRICS_CACHE_TTL_S = 60.0
+_monitored_metrics_cache: dict[str, list[str]] | None = None
+_monitored_metrics_cached_at: float = 0.0
+
+
+async def _load_monitored_metrics(engine: AsyncEngine) -> dict[str, list[str]]:
+    global _monitored_metrics_cache, _monitored_metrics_cached_at
+    now = time.monotonic()
+    if (
+        _monitored_metrics_cache is not None
+        and now - _monitored_metrics_cached_at < _METRICS_CACHE_TTL_S
+    ):
+        return _monitored_metrics_cache
+
+    async with engine.connect() as conn:
+        rows = (await conn.execute(select(services.c.name, services.c.monitored_metrics))).all()
+
+    _monitored_metrics_cache = {row.name: row.monitored_metrics for row in rows}
+    _monitored_metrics_cached_at = now
+    return _monitored_metrics_cache
+
+
+def _metric_allowed(metric_name: str, allowlist: list[str]) -> bool:
+    """An empty allowlist means "score every metric seen for this
+    service" -- the pre-Phase-14 behaviour, and also what a service with
+    no registry row (registration lagging ingestion, or a fresh install
+    still backfilling) gets by falling back to `[]` at the call site."""
+    return not allowlist or metric_name in allowlist
 
 
 @instrument_job("score_new_metrics")
@@ -66,6 +103,8 @@ async def score_new_metrics(ctx: dict) -> dict:
     if not rows:
         return {"scored": 0, "anomalies": 0}
 
+    monitored_metrics = await _load_monitored_metrics(engine)
+
     scorers: dict[tuple[str, str], MetricScorer] = {}
     anomaly_rows: list[dict] = []
     max_id = watermark
@@ -73,6 +112,8 @@ async def score_new_metrics(ctx: dict) -> dict:
     for row in rows:
         max_id = max(max_id, row.id)
         if row.metric_name is None or row.value is None:
+            continue
+        if not _metric_allowed(row.metric_name, monitored_metrics.get(row.service_name, [])):
             continue
 
         key = (row.service_name, row.metric_name)

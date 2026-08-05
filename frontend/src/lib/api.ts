@@ -3,7 +3,16 @@
 // reimplemented here.
 
 import { getToken, setToken } from "@/lib/auth";
-import type { IncidentDetail, PaginatedIncidents } from "@/lib/types";
+import type {
+  IncidentDetail,
+  KeyCreateResponse,
+  PaginatedIncidents,
+  ServiceCreate,
+  ServiceCreateResponse,
+  ServiceOut,
+  ServicePatch,
+  ServicesOut,
+} from "@/lib/types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -68,4 +77,38 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
 
 export function regenerateRootCause(id: string): Promise<{ status: string; incident_id: string }> {
   return request(`/incidents/${id}/regenerate-root-cause`, { method: "POST" });
+}
+
+// Phase 14: service registry — GET /services may be used by anyone
+// authenticated (see api/app/registry/router.py); writes are the same
+// require_auth gate today and will move to require_admin without any
+// path change once Phase 16 lands (docs/SELF_HOSTED_PLAN.md).
+export function fetchServices(): Promise<ServicesOut> {
+  return request<ServicesOut>("/services");
+}
+
+export function createService(body: ServiceCreate): Promise<ServiceCreateResponse> {
+  return request<ServiceCreateResponse>("/services", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function patchService(id: string, body: ServicePatch): Promise<ServiceOut> {
+  return request<ServiceOut>(`/services/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/** Soft delete (default) or, with `purge`, a hard delete of the
+ * registration + its keys — never of telemetry history either way (see
+ * api/app/registry/service.py::delete_service). */
+export function deleteService(id: string, purge = false): Promise<void> {
+  return request<void>(`/services/${id}${purge ? "?purge=true" : ""}`, { method: "DELETE" });
+}
+
+export function createKey(serviceId: string, label: string | null): Promise<KeyCreateResponse> {
+  return request<KeyCreateResponse>(`/services/${serviceId}/keys`, {
+    method: "POST",
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function revokeKey(serviceId: string, keyId: string): Promise<void> {
+  return request<void>(`/services/${serviceId}/keys/${keyId}`, { method: "DELETE" });
 }

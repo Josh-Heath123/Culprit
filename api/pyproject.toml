@@ -23,6 +23,7 @@ dependencies = [
     "opentelemetry-sdk>=1.44.0",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "culprit-shared",
+    "pyyaml>=6.0",
 ]
 
 [tool.uv]
@@ -39,7 +40,21 @@ dev = [
     "hypothesis>=6.115",
     "ruff>=0.7",
     "pyright>=1.1.383",
+    # Phase 14: the first real HTTP-level integration tests
+    # (test_registry_api.py) drive the registry router through FastAPI's
+    # TestClient, which needs httpx installed even though app code never
+    # imports it directly.
+    "httpx>=0.27",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+asyncio_mode = "auto"
+# Phase 14's integration tests share session-scoped async fixtures
+# (api/tests/conftest.py's db_engine, migrated_database_url) — asyncpg
+# connections are bound to the event loop they were created on, so a
+# fresh per-test loop (pytest-asyncio's default) breaks any pooled
+# connection the moment a second test reuses it. One event loop for the
+# whole session avoids that entirely.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

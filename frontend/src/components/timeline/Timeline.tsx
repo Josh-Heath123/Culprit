@@ -5,14 +5,20 @@ import { Group } from "@visx/group";
 import { scaleBand, scaleTime } from "@visx/scale";
 
 import { useElementSize } from "@/hooks/useElementSize";
-import { SERVICES } from "@/lib/services";
+import { useServices } from "@/hooks/useServices";
 import { markRadiusFor, severityColorVar, severityFor } from "@/lib/severity";
-import type { IncidentSummary } from "@/lib/types";
+import type { IncidentSummary, ServiceOut } from "@/lib/types";
 
 interface TimelineProps {
   incidents: IncidentSummary[];
   selectedIncidentId: string | null;
   onSelectIncident: (id: string) => void;
+}
+
+interface TimelineChartProps extends TimelineProps {
+  services: ServiceOut[];
+  width: number;
+  height: number;
 }
 
 const MARGIN = { top: 12, right: 24, bottom: 28, left: 140 };
@@ -25,9 +31,12 @@ const LANE_PADDING = 0.35;
  * dimensions. */
 export function Timeline(props: TimelineProps) {
   const { ref, width, height } = useElementSize<HTMLDivElement>();
+  const { services } = useServices();
   return (
     <div ref={ref} className="h-full w-full min-h-64">
-      {width > 0 && height > 0 ? <TimelineChart {...props} width={width} height={height} /> : null}
+      {width > 0 && height > 0 ? (
+        <TimelineChart {...props} services={services} width={width} height={height} />
+      ) : null}
     </div>
   );
 }
@@ -36,11 +45,26 @@ function TimelineChart({
   incidents,
   selectedIncidentId,
   onSelectIncident,
+  services,
   width,
   height,
-}: TimelineProps & { width: number; height: number }) {
+}: TimelineChartProps) {
   const innerWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
   const innerHeight = Math.max(0, height - MARGIN.top - MARGIN.bottom);
+
+  // Lanes are only active (non-disabled) services, in the order the
+  // registry API already returns them (sort_order, then name) — a
+  // disabled service stops showing a lane (docs/SELF_HOSTED_PLAN.md
+  // Phase 14, step 9), even though its historical incidents remain
+  // fully visible. `knownServices` below deliberately stays built from
+  // the FULL fetched list, disabled included: an anomaly can legitimately
+  // arrive from a service that was disabled a second ago, and the guard
+  // it feeds is about dropping anomalies from services this install has
+  // never heard of at all, not ones mid-disablement.
+  const laneServiceNames = useMemo(
+    () => services.filter((s) => !s.disabled).map((s) => s.name),
+    [services],
+  );
 
   const { xScale, yScale, bands, marks } = useMemo(() => {
     const now = Date.now();
@@ -58,12 +82,12 @@ function TimelineChart({
       range: [0, innerWidth],
     });
     const yScale = scaleBand<string>({
-      domain: [...SERVICES],
+      domain: laneServiceNames,
       range: [0, innerHeight],
       padding: LANE_PADDING,
     });
 
-    const knownServices = new Set<string>(SERVICES);
+    const knownServices = new Set<string>(services.map((s) => s.name));
 
     const bands = incidents
       .map((incident) => {
@@ -90,7 +114,7 @@ function TimelineChart({
     );
 
     return { xScale, yScale, bands, marks };
-  }, [incidents, innerWidth, innerHeight]);
+  }, [incidents, services, laneServiceNames, innerWidth, innerHeight]);
 
   return (
     <svg width={width} height={height} role="img" aria-label="Incident timeline by service">
@@ -103,7 +127,7 @@ function TimelineChart({
           numTicks={8}
         />
 
-        {SERVICES.map((service) => {
+        {laneServiceNames.map((service) => {
           const y = yScale(service) ?? 0;
           return (
             <g key={service}>

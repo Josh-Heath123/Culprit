@@ -156,11 +156,87 @@ class IncidentAnomaly(Base):
     )
 
 
+class Service(Base):
+    """A registered service (Phase 14) — the source of truth for topology
+    and monitored metrics, replacing the old hardcoded
+    shared/culprit_shared/services.py dict (still present, but demo-only
+    fixture data now — see that file's own docstring).
+
+    `name` must match the OTel `service.name` resource attribute
+    byte-for-byte (enforced at the API layer, not here — see
+    api/app/registry/schemas.py). `monitored_metrics` empty ([]) means
+    "score every metric seen for this service," not "score nothing" —
+    see worker/app/anomaly/job.py.
+    """
+
+    __tablename__ = "services"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    name: Mapped[str] = mapped_column(unique=True)
+    display_name: Mapped[str | None]
+    sort_order: Mapped[int] = mapped_column(server_default=text("0"))
+    monitored_metrics: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    #: Soft delete: ingest starts rejecting this service's keys and the
+    #: timeline stops showing it, but every historical raw_events/
+    #: anomalies/incident_candidates row survives — see
+    #: api/app/registry/service.py's delete().
+    disabled_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+
+    # passive_deletes=True: on a purge (app/registry/service.py's
+    # delete_service with purge=True), let the FK's own
+    # ON DELETE CASCADE (below, on ApiKey.service_id) remove the rows —
+    # without this, SQLAlchemy's default cascade tries to UPDATE each
+    # child's service_id to NULL before the parent delete, which violates
+    # service_id's NOT NULL constraint instead of actually cascading.
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        back_populates="service", passive_deletes=True
+    )
+
+    __table_args__ = (Index("ix_services_sort_order", "sort_order", "name"),)
+
+
+class ServiceDependency(Base):
+    """A directed service-calls-service edge, user-declared (Phase 14) —
+    not inferred from trace data yet (that's Phase 19). Stored as one row
+    per direction even though worker/app/correlation/graph.py currently
+    treats the relation as symmetric, matching what real trace-derived
+    inference will eventually produce anyway.
+    """
+
+    __tablename__ = "service_dependencies"
+
+    from_service_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), primary_key=True
+    )
+    to_service_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+
+    __table_args__ = (
+        CheckConstraint(
+            "from_service_id <> to_service_id", name="ck_service_dependencies_no_self_edge"
+        ),
+    )
+
+
 class ApiKey(Base):
-    """A scoped API key authenticating one demo service to ingest-gateway
-    (Phase 3). Only the SHA-256 hash is stored; ingest-gateway hashes the
-    presented key the same way and compares with secrets.compare_digest —
-    the plaintext key never touches the database.
+    """A scoped API key authenticating one service to ingest-gateway.
+
+    Only the SHA-256 hash is stored; ingest-gateway hashes the presented
+    key the same way and compares with secrets.compare_digest — the
+    plaintext key never touches the database. `service_name` stays
+    (ingest_gateway/auth.py returns it, and it's the value written to
+    raw_events.service_name — removing it is a much larger change for no
+    benefit) but is no longer unique on its own: `service_id` is the real
+    FK, and dropping the old uniqueness is what makes key rotation
+    possible (two live keys for one service during a cutover, one
+    `revoked_at` and one not).
     """
 
     __tablename__ = "api_keys"
@@ -168,8 +244,14 @@ class ApiKey(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    service_name: Mapped[str] = mapped_column(unique=True)
+    service_name: Mapped[str]
+    service_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE")
+    )
     key_hash: Mapped[str] = mapped_column(unique=True)
+    label: Mapped[str | None]
+    revoked_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    last_used_at: Mapped[datetime | None] = mapped_column(timestamptz)
     # datetime | None, not datetime: the migrations declare this column
     # with only a server_default, no explicit NOT NULL — it's nullable at
     # the DB level (server_default fills it on insert, but doesn't change
@@ -177,6 +259,8 @@ class ApiKey(Base):
     # non-null and drifted from worker/app/db.py's Core definition until
     # scripts/check_schema_drift.py caught it.
     created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+
+    service: Mapped["Service"] = relationship(back_populates="api_keys")
 
 
 class Postmortem(Base):

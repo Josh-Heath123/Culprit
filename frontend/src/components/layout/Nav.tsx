@@ -16,9 +16,14 @@ export function Nav({ totalIncidents }: NavProps) {
           {totalIncidents} incident{totalIncidents === 1 ? "" : "s"}
         </span>
       </div>
-      <kbd className="rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-        ⌘K to jump
-      </kbd>
+      <div className="flex items-center gap-3">
+        <Link to="/settings/services" className="text-xs text-muted-foreground hover:text-foreground">
+          Services
+        </Link>
+        <kbd className="rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+          ⌘K to jump
+        </kbd>
+      </div>
     </header>
   );
 }

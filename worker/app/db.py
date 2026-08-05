@@ -82,3 +82,27 @@ postmortems = sa.Table(
     sa.Column("incident_candidate_id", UUID(as_uuid=True), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
+
+# Phase 14: worker/app/correlation/job.py queries these two for adjacency
+# (services.disabled_at, service_dependencies) — api_keys isn't mirrored
+# here since nothing in worker ever queries it, per this file's own
+# "only enough shape to SELECT/INSERT/UPDATE" principle above.
+services = sa.Table(
+    "services",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("name", sa.String(), nullable=False),
+    sa.Column("display_name", sa.String(), nullable=True),
+    sa.Column("sort_order", sa.Integer(), nullable=False),
+    sa.Column("monitored_metrics", JSONB(), nullable=False),
+    sa.Column("disabled_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+service_dependencies = sa.Table(
+    "service_dependencies",
+    metadata,
+    sa.Column("from_service_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("to_service_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
