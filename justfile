@@ -78,6 +78,12 @@ consumer:
 seed-postmortems:
     cd worker && uv run python -m scripts.seed_postmortems
 
+# Apply a declarative service list (Phase 14) — e.g.:
+#   just apply-services demo-services.yaml
+#   just apply-services demo-services.yaml --prune
+apply-services *ARGS:
+    cd api && uv run python -m scripts.apply_services {{ARGS}}
+
 # Regenerate frontend/src/lib/api-types.generated.ts from api's live
 # OpenAPI schema (openapi-typescript) — the single source of truth is
 # api/app/incidents/schemas.py; frontend/src/lib/types.ts just re-exports

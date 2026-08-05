@@ -31,6 +31,8 @@ from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E40
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
+from app.registry.config import REGISTRY_ADMIN_DATABASE_URL  # noqa: E402
+from app.registry.router import router as registry_router  # noqa: E402
 
 configure_observability("culprit-api")
 
@@ -47,12 +49,19 @@ CORS_ALLOW_ORIGINS = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:5173
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine(API_READER_DATABASE_URL)
     app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    # Phase 14: a second engine, under registry-admin, only for the
+    # registry router's writes (POST/PATCH/DELETE /services and its keys
+    # sub-routes). api-reader (above) stays read-only and is what
+    # GET /services still uses — see app/registry/router.py.
+    registry_engine = create_async_engine(REGISTRY_ADMIN_DATABASE_URL)
+    app.state.registry_session_factory = async_sessionmaker(registry_engine, expire_on_commit=False)
     # For POST /incidents/{id}/regenerate-root-cause to enqueue Phase 6's
     # arq job by name — this API process never runs arq jobs itself.
     app.state.arq_pool = await create_pool(RedisSettings.from_dsn(REDIS_URL))
     yield
     await app.state.arq_pool.aclose()
     await engine.dispose()
+    await registry_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -81,7 +90,13 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOW_ORIGINS,
-    allow_methods=["GET", "POST"],
+    # Phase 14: the registry router (app/registry/router.py) is the
+    # first thing in this API to use PATCH/DELETE at all — every route
+    # before it was GET/POST only, so this list was never exercised
+    # against them. Without this, the frontend's Settings > Services
+    # page would 405 on every disable/enable, revoke, or update, purely
+    # from the browser's own CORS preflight, not from FastAPI routing.
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -118,3 +133,4 @@ async def observability_middleware(
 
 app.include_router(auth_router)
 app.include_router(incidents_router, dependencies=[Depends(require_auth)])
+app.include_router(registry_router, dependencies=[Depends(require_auth)])

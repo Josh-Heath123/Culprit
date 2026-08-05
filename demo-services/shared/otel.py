@@ -1,7 +1,7 @@
 import logging
 import os
 
-from culprit_shared.services import SERVICE_API_KEY_ENV_VARS
+from culprit_shared.services import DEMO_SERVICE_API_KEY_ENV_VARS
 from dotenv import load_dotenv
 from opentelemetry import _logs as logs_api
 from opentelemetry import metrics, trace
@@ -42,7 +42,7 @@ def _resolve_endpoint(signal: str) -> str | None:
 
 
 def _auth_headers(service_name: str) -> dict[str, str] | None:
-    env_var = SERVICE_API_KEY_ENV_VARS.get(service_name)
+    env_var = DEMO_SERVICE_API_KEY_ENV_VARS.get(service_name)
     api_key = os.environ.get(env_var) if env_var else None
     return {"Authorization": f"Bearer {api_key}"} if api_key else None
 

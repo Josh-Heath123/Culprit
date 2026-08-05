@@ -17,3 +17,12 @@ export type PaginatedIncidents = components["schemas"]["PaginatedIncidents"];
 export type IncidentStatus = IncidentSummary["status"];
 export type RootCauseStatus = IncidentSummary["root_cause_status"];
 export type Confidence = NonNullable<IncidentSummary["root_cause_confidence"]>;
+
+// Phase 14: service registry.
+export type ServiceOut = components["schemas"]["ServiceOut"];
+export type ServicesOut = components["schemas"]["ServicesOut"];
+export type ServiceCreate = components["schemas"]["ServiceCreate"];
+export type ServiceCreateResponse = components["schemas"]["ServiceCreateResponse"];
+export type ServicePatch = components["schemas"]["ServicePatch"];
+export type KeyOut = components["schemas"]["KeyOut"];
+export type KeyCreateResponse = components["schemas"]["KeyCreateResponse"];

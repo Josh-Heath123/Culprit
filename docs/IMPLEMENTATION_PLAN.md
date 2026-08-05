@@ -61,6 +61,8 @@ Build the `ingest-gateway` FastAPI service: receives OTLP/HTTP payloads from the
 *Performance:* batch writes into TimescaleDB rather than one `INSERT` per event — this is the pipeline's actual throughput bottleneck if done naively.
 *Security:* the ingest-gateway authenticates the demo services via scoped API keys, not an open endpoint — even in a demo, model this like a real multi-tenant boundary.
 
+*Superseded (Phase 14, `docs/SELF_HOSTED_PLAN.md`):* this originally meant three fixed, manually-provisioned keys (one per demo service, hashed into `api_keys` by a migration). A service is a row in a `services` table now, created through an authenticated admin API with its own key issued at creation time — onboarding a new service no longer means writing a migration. The three demo services still exist and still authenticate the same way; they're just no longer the only way a service can exist.
+
 ### Phase 4 — Anomaly detection engine
 Implement rolling z-score/EWMA scoring per service/metric using River, running as a scheduled arq job. Keep this module's internals completely separate from the RAG/LLM module (per `CLAUDE.md`) — no shared imports, no shared state. Property-test the scoring math with Hypothesis before wiring it to real data, so you're not debugging statistics and plumbing at the same time.
 

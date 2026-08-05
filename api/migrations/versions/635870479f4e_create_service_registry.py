@@ -173,7 +173,15 @@ def upgrade() -> None:
         )
 
     op.execute('GRANT SELECT ON services, service_dependencies TO "correlation-engine"')
-    op.execute('GRANT SELECT ON services, service_dependencies TO "api-reader"')
+    # api_keys too, not just services/service_dependencies: ServiceOut
+    # (app/registry/schemas.py) includes each service's key metadata
+    # (id/label/created_at/last_used_at/revoked, never key_hash), and
+    # GET /services deliberately runs under api-reader, not
+    # registry-admin (docs/SELF_HOSTED_PLAN.md Phase 14 step 4: "Registry
+    # reads... may use api-reader; only writes need registry-admin") —
+    # so api-reader needs read access to every table that response shape
+    # touches.
+    op.execute('GRANT SELECT ON services, service_dependencies, api_keys TO "api-reader"')
     op.execute('GRANT SELECT ON services TO "anomaly-detector"')
     op.execute('GRANT SELECT ON services TO "ingest-gateway"')
 
@@ -198,7 +206,7 @@ def downgrade() -> None:
     # SELECT on api_keys came from 5df76487a02f and stays untouched.
     op.execute('REVOKE SELECT ON services FROM "ingest-gateway"')
     op.execute('REVOKE SELECT ON services FROM "anomaly-detector"')
-    op.execute('REVOKE SELECT ON services, service_dependencies FROM "api-reader"')
+    op.execute('REVOKE SELECT ON services, service_dependencies, api_keys FROM "api-reader"')
     op.execute('REVOKE SELECT ON services, service_dependencies FROM "correlation-engine"')
 
     op.drop_constraint("fk_api_keys_service_id_services", "api_keys", type_="foreignkey")
