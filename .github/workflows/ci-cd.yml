@@ -130,14 +130,19 @@ jobs:
           enable-cache: true
       - name: Dump api's OpenAPI schema
         if: matrix.image == 'frontend'
-        # Same dummy, CI-only value as the pytest (api) step above —
-        # app.main imports app.auth.config, which reads this from the
-        # environment with no default (the real value only ever lives in
-        # infra/.env.prod on the VM). dump_openapi_schema.py never
-        # actually touches auth logic; this only exists to satisfy the
-        # import-time read.
+        # Same dummy, CI-only values as the pytest (api) step above —
+        # app.main imports app.auth.config (JWT_SECRET_KEY, no default)
+        # and, transitively via app.registry.router ->
+        # app.registry.service -> app.registry.keys ->
+        # app.ingest_gateway.auth, app.ingest_gateway.config's
+        # INGEST_GATEWAY_DATABASE_URL (also no default) — missing here
+        # the same way it was missing from the pytest (api) step (see
+        # that step's comment). dump_openapi_schema.py never actually
+        # touches auth or ingest-gateway logic; this only exists to
+        # satisfy both import-time reads.
         env:
           JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
+          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'
