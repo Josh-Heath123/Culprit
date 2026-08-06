@@ -10,7 +10,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ ! -f .env.prod ]; then
-  echo "infra/.env.prod not found — create it from .env.prod.example first (once, by hand, on this VM)." >&2
+  echo "infra/.env.prod not found on this VM. Generate it once, by hand, with:" >&2
+  echo "  MSYS_NO_PATHCONV=1 docker run --rm -it -v \"\$(pwd)/..:/repo\" -w /repo python:3.12-slim python scripts/bootstrap_env.py --domain <your-domain>" >&2
+  echo "(or 'just bootstrap-env --domain <your-domain>' from the repo root) — see docs/INSTALL.md." >&2
   exit 1
 fi
 
