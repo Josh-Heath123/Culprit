@@ -61,19 +61,29 @@ jobs:
         with:
           enable-cache: true
       - name: pytest (api)
-        # Dummy, CI-only value — not a real secret, and not a GitHub
-        # Actions secret either (see Phase 11's security requirement:
+        # Dummy, CI-only values — not real secrets, and not GitHub
+        # Actions secrets either (see Phase 11's security requirement:
         # the only real secret CI needs anywhere in this workflow is the
-        # SSH deploy key, used only in the deploy job below). Exists
-        # purely to satisfy app/auth/config.py's required env var at
-        # import time. OPERATOR_USERNAME/OPERATOR_PASSWORD_HASH used to
-        # need dummy values here too (Phase 9) — Phase 16 moved them to
-        # being migration-time-only inputs (see
+        # SSH deploy key, used only in the deploy job below). Exist
+        # purely to satisfy required-env-var reads at import time.
+        # OPERATOR_USERNAME/OPERATOR_PASSWORD_HASH used to need dummy
+        # values here too (Phase 9) — Phase 16 moved them to being
+        # migration-time-only inputs (see
         # api/migrations/versions/fbf4cb16570a_create_users_table.py),
         # no longer read anywhere at import time, so this job no longer
-        # needs them at all.
+        # needs them at all. INGEST_GATEWAY_DATABASE_URL was missing here
+        # since Phase 14 introduced api/app/ingest_gateway/config.py's
+        # required os.environ["INGEST_GATEWAY_DATABASE_URL"] read — any
+        # test collecting app.ingest_gateway.auth (imported by
+        # test_ingest_gateway_key_refresh.py directly and by
+        # test_ingest_gateway_limits.py via app.ingest_gateway.main) has
+        # been failing to even collect in CI since then; this job's own
+        # run history shows every push to main failing from Phase 14's
+        # merge onward. Never a real connection string here — nothing in
+        # this job actually connects to a database.
         env:
           JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
+          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run pytest
       - name: pytest (worker)
         run: cd worker && uv run pytest
@@ -120,14 +130,19 @@ jobs:
           enable-cache: true
       - name: Dump api's OpenAPI schema
         if: matrix.image == 'frontend'
-        # Same dummy, CI-only value as the pytest (api) step above —
-        # app.main imports app.auth.config, which reads this from the
-        # environment with no default (the real value only ever lives in
-        # infra/.env.prod on the VM). dump_openapi_schema.py never
-        # actually touches auth logic; this only exists to satisfy the
-        # import-time read.
+        # Same dummy, CI-only values as the pytest (api) step above —
+        # app.main imports app.auth.config (JWT_SECRET_KEY, no default)
+        # and, transitively via app.registry.router ->
+        # app.registry.service -> app.registry.keys ->
+        # app.ingest_gateway.auth, app.ingest_gateway.config's
+        # INGEST_GATEWAY_DATABASE_URL (also no default) — missing here
+        # the same way it was missing from the pytest (api) step (see
+        # that step's comment). dump_openapi_schema.py never actually
+        # touches auth or ingest-gateway logic; this only exists to
+        # satisfy both import-time reads.
         env:
           JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
+          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'

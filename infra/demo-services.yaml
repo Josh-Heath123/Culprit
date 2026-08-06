@@ -1,0 +1,25 @@
+# Applied by docker-compose.quickstart.yml's one-shot `bootstrap` service
+# via `apply_services.py` (Phase 14) -- registers the same three demo
+# services and reproduces the exact four-edge adjacency that
+# api/migrations/versions/635870479f4e_create_service_registry.py's
+# DEMO_ADJACENCY_PAIRS backfills on the live database (order-service is
+# adjacent to both inventory-service and payments-service; the latter two
+# are not adjacent to each other). See docs/SELF_HOSTED_PLAN.md Phase 14's
+# schema section for why edges are directed and stored both ways.
+#
+# monitored_metrics is left empty on all three -- "[] means score every
+# metric seen" (Phase 14 step 7) is already the right behavior for the
+# demo services' small, known metric set.
+services:
+  - name: order-service
+    display_name: Order Service
+    depends_on: [inventory-service, payments-service]
+    monitored_metrics: []
+  - name: inventory-service
+    display_name: Inventory Service
+    depends_on: [order-service]
+    monitored_metrics: []
+  - name: payments-service
+    display_name: Payments Service
+    depends_on: [order-service]
+    monitored_metrics: []
