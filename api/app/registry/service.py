@@ -12,11 +12,19 @@ from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
-from app.db.models import ApiKey, Service, ServiceDependency
+from app.db.models import ApiKey, ObservedServiceEdge, Service, ServiceDependency
 from app.registry.keys import generate_api_key, hash_api_key
-from app.registry.schemas import KeyCreate, KeyOut, ServiceCreate, ServiceOut, ServicePatch
+from app.registry.schemas import (
+    KeyCreate,
+    KeyOut,
+    ServiceCreate,
+    ServiceOut,
+    ServicePatch,
+    TopologyEdgeRef,
+    TopologySuggestionOut,
+)
 
 
 class ServiceNameTaken(Exception):
@@ -29,6 +37,29 @@ class UnknownDependency(Exception):
     def __init__(self, names: list[str]) -> None:
         self.names = names
         super().__init__(f"unknown service name(s) in depends_on: {', '.join(sorted(names))}")
+
+
+class UnknownEdge(Exception):
+    """No observed_service_edges row for this (from_service, to_service)
+    pair — the admin is acting on a suggestion that either never existed
+    or has already been dismissed/accepted."""
+
+    def __init__(self, from_service: str, to_service: str) -> None:
+        self.from_service = from_service
+        self.to_service = to_service
+        super().__init__(f"no observed edge {from_service!r} -> {to_service!r}")
+
+
+class UnregisteredEndpoint(Exception):
+    """Raised by accept_topology_suggestion when either endpoint of the
+    edge isn't a registered service — docs/SELF_HOSTED_PLAN.md Phase 19,
+    Known Trap 2: refuse clearly rather than silently half-registering a
+    service with no API key, which is explicitly called out as the worst
+    of the available options."""
+
+    def __init__(self, names: list[str]) -> None:
+        self.names = names
+        super().__init__(f"not a registered service: {', '.join(sorted(names))}")
 
 
 def _key_out(key: ApiKey) -> KeyOut:
@@ -257,5 +288,130 @@ async def revoke_key(session: AsyncSession, service_id: UUID, key_id: UUID) -> b
     if key is None:
         return False
     key.revoked_at = datetime.now(UTC)
+    await session.commit()
+    return True
+
+
+async def _already_declared_pairs(session: AsyncSession) -> set[tuple[str, str]]:
+    """Every (from_name, to_name) already in service_dependencies, by
+    name — observed_service_edges stores names, not FKs (an edge can
+    legitimately point at a service Culprit hasn't registered), so
+    comparing against declared dependencies has to go through Service
+    twice, once per side of the directed edge."""
+    from_service = aliased(Service)
+    to_service = aliased(Service)
+    rows = (
+        await session.execute(
+            select(from_service.name, to_service.name)
+            .select_from(ServiceDependency)
+            .join(from_service, from_service.id == ServiceDependency.from_service_id)
+            .join(to_service, to_service.id == ServiceDependency.to_service_id)
+        )
+    ).all()
+    return {(row[0], row[1]) for row in rows}
+
+
+async def list_topology_suggestions(session: AsyncSession) -> list[TopologySuggestionOut]:
+    """Observed edges that are neither dismissed nor already declared,
+    ordered by observation count descending — docs/SELF_HOSTED_PLAN.md
+    Phase 19 step 3. Nothing here changes correlation; that only happens
+    on accept_topology_suggestion below."""
+    edges = (
+        (
+            await session.execute(
+                select(ObservedServiceEdge)
+                .where(ObservedServiceEdge.dismissed_at.is_(None))
+                .order_by(ObservedServiceEdge.observations.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not edges:
+        return []
+
+    declared = await _already_declared_pairs(session)
+    edges = [e for e in edges if (e.from_service, e.to_service) not in declared]
+    if not edges:
+        return []
+
+    service_names = {name for edge in edges for name in (edge.from_service, edge.to_service)}
+    registered = set(
+        (await session.execute(select(Service.name).where(Service.name.in_(service_names))))
+        .scalars()
+        .all()
+    )
+
+    return [
+        TopologySuggestionOut(
+            from_service=edge.from_service,
+            to_service=edge.to_service,
+            observations=edge.observations,
+            first_seen_at=edge.first_seen_at,
+            last_seen_at=edge.last_seen_at,
+            from_service_registered=edge.from_service in registered,
+            to_service_registered=edge.to_service in registered,
+        )
+        for edge in edges
+    ]
+
+
+async def _get_observed_edge(
+    session: AsyncSession, edge: TopologyEdgeRef
+) -> ObservedServiceEdge | None:
+    return (
+        await session.execute(
+            select(ObservedServiceEdge).where(
+                ObservedServiceEdge.from_service == edge.from_service,
+                ObservedServiceEdge.to_service == edge.to_service,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def accept_topology_suggestion(session: AsyncSession, edge: TopologyEdgeRef) -> None:
+    """Inserts into service_dependencies — the only thing that actually
+    changes correlation behaviour; observed_service_edges itself is left
+    alone (no "accepted" flag exists or is needed: once declared, the
+    pair is filtered out of list_topology_suggestions by
+    _already_declared_pairs on the next call)."""
+    if await _get_observed_edge(session, edge) is None:
+        raise UnknownEdge(edge.from_service, edge.to_service)
+
+    rows = (
+        await session.execute(
+            select(Service.id, Service.name).where(
+                Service.name.in_([edge.from_service, edge.to_service])
+            )
+        )
+    ).all()
+    id_by_name = {name: id_ for id_, name in rows}
+    missing = [name for name in (edge.from_service, edge.to_service) if name not in id_by_name]
+    if missing:
+        raise UnregisteredEndpoint(missing)
+
+    existing = (
+        await session.execute(
+            select(ServiceDependency).where(
+                ServiceDependency.from_service_id == id_by_name[edge.from_service],
+                ServiceDependency.to_service_id == id_by_name[edge.to_service],
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        session.add(
+            ServiceDependency(
+                from_service_id=id_by_name[edge.from_service],
+                to_service_id=id_by_name[edge.to_service],
+            )
+        )
+    await session.commit()
+
+
+async def dismiss_topology_suggestion(session: AsyncSession, edge: TopologyEdgeRef) -> bool:
+    observed = await _get_observed_edge(session, edge)
+    if observed is None:
+        return False
+    observed.dismissed_at = datetime.now(UTC)
     await session.commit()
     return True

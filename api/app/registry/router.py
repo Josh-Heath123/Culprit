@@ -23,15 +23,22 @@ from app.registry.schemas import (
     ServiceOut,
     ServicePatch,
     ServicesOut,
+    TopologyEdgeRef,
+    TopologySuggestionsOut,
 )
 from app.registry.service import (
     ServiceNameTaken,
     UnknownDependency,
+    UnknownEdge,
+    UnregisteredEndpoint,
+    accept_topology_suggestion,
     create_key,
     create_service,
     delete_service,
+    dismiss_topology_suggestion,
     get_service,
     list_services,
+    list_topology_suggestions,
     patch_service,
     revoke_key,
 )
@@ -122,4 +129,34 @@ async def revoke_key_endpoint(
     revoked = await revoke_key(session, service_id, key_id)
     if not revoked:
         raise HTTPException(status_code=404, detail="key not found")
+    return Response(status_code=204)
+
+
+@router.get("/topology/suggestions", response_model=TopologySuggestionsOut)
+async def list_topology_suggestions_endpoint(
+    session: AsyncSession = Depends(get_read_session),
+) -> TopologySuggestionsOut:
+    return TopologySuggestionsOut(items=await list_topology_suggestions(session))
+
+
+@router.post("/topology/suggestions/accept", status_code=204)
+async def accept_topology_suggestion_endpoint(
+    body: TopologyEdgeRef, session: AsyncSession = Depends(get_write_session)
+) -> Response:
+    try:
+        await accept_topology_suggestion(session, body)
+    except UnknownEdge as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except UnregisteredEndpoint as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/topology/suggestions/dismiss", status_code=204)
+async def dismiss_topology_suggestion_endpoint(
+    body: TopologyEdgeRef, session: AsyncSession = Depends(get_write_session)
+) -> Response:
+    dismissed = await dismiss_topology_suggestion(session, body)
+    if not dismissed:
+        raise HTTPException(status_code=404, detail="no observed edge for that pair")
     return Response(status_code=204)

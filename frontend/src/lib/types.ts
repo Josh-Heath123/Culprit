@@ -24,6 +24,9 @@ export type ServicesOut = components["schemas"]["ServicesOut"];
 export type ServiceCreate = components["schemas"]["ServiceCreate"];
 export type ServiceCreateResponse = components["schemas"]["ServiceCreateResponse"];
 export type ServicePatch = components["schemas"]["ServicePatch"];
+export type TopologySuggestionOut = components["schemas"]["TopologySuggestionOut"];
+export type TopologySuggestionsOut = components["schemas"]["TopologySuggestionsOut"];
+export type TopologyEdgeRef = components["schemas"]["TopologyEdgeRef"];
 export type KeyOut = components["schemas"]["KeyOut"];
 export type KeyCreateResponse = components["schemas"]["KeyCreateResponse"];
 

@@ -337,3 +337,27 @@ class Postmortem(Base):
     incident_candidate: Mapped["IncidentCandidate | None"] = relationship(
         back_populates="postmortems"
     )
+
+
+class ObservedServiceEdge(Base):
+    """A directed service-calls-service edge inferred from real trace data
+    (Phase 19, Option A) — distinct from `ServiceDependency`, which is
+    user-declared. `from_service`/`to_service` are plain strings, not FKs
+    to `services.id`: an edge can legitimately point at a service Culprit
+    hasn't registered yet, and that's useful information to surface, not
+    an error to reject at insert time (see
+    api/app/ingest_gateway/otlp_decode.py's decode_traces_request).
+
+    Inference only *proposes* — accepting a suggestion is what actually
+    inserts a `ServiceDependency` row (api/app/registry/service.py);
+    nothing here ever changes correlation behaviour by itself.
+    """
+
+    __tablename__ = "observed_service_edges"
+
+    from_service: Mapped[str] = mapped_column(primary_key=True)
+    to_service: Mapped[str] = mapped_column(primary_key=True)
+    observations: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
+    first_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    last_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    dismissed_at: Mapped[datetime | None] = mapped_column(timestamptz)

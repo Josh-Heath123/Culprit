@@ -16,7 +16,7 @@ from app.observability import configure_observability  # noqa: E402
 configure_observability("culprit-worker")
 
 from app.anomaly.job import score_new_metrics  # noqa: E402
-from app.consumer import drain_streams, ensure_consumer_groups  # noqa: E402
+from app.consumer import drain_edges, drain_streams, ensure_consumer_groups  # noqa: E402
 from app.correlation.job import correlate_recent_anomalies  # noqa: E402
 from app.rag.embed_job import embed_postmortem  # noqa: E402
 from app.rag.job import generate_root_cause_narrative  # noqa: E402
@@ -96,10 +96,13 @@ class WorkerSettings:
         # __qualname__ at runtime (functools.wraps copies it) and is a
         # real async callable arq can run.
         cron(drain_streams, second=set(range(0, 60, 5))),  # pyright: ignore[reportArgumentType]
-        # Staggered 2s apart so the three jobs don't contend for the same
+        # Staggered 1s apart so the four jobs don't contend for the same
         # instant every cycle, and so correlation naturally runs after
         # anomaly detection has had a chance to write new anomalies from
-        # the same tick.
+        # the same tick. drain_edges has its own consumer group/lock
+        # (app/consumer.py), so the 1s offset from drain_streams is purely
+        # to spread DB load, not to avoid a real Redis-key collision.
+        cron(drain_edges, second=set(range(1, 60, 5))),  # pyright: ignore[reportArgumentType]
         cron(score_new_metrics, second=set(range(2, 60, 5))),  # pyright: ignore[reportArgumentType]
         cron(
             correlate_recent_anomalies,  # pyright: ignore[reportArgumentType]

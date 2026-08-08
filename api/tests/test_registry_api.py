@@ -38,7 +38,12 @@ async def client(
     db_engine: AsyncEngine,
 ) -> AsyncIterator[TestClient]:
     async with db_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE services, service_dependencies, api_keys CASCADE"))
+        await conn.execute(
+            text(
+                "TRUNCATE services, service_dependencies, api_keys, "
+                "observed_service_edges CASCADE"
+            )
+        )
         await conn.execute(text("TRUNCATE users CASCADE"))
 
     api_reader_url = role_database_url("api-reader", "API_READER_PASSWORD")
@@ -210,3 +215,130 @@ def test_no_key_material_ever_appears_in_a_response(client: TestClient) -> None:
         # field name itself, not a specific hash, is what catches that.
         assert "key_hash" not in response.text
         assert plaintext_key not in response.text
+
+
+# --- Phase 19: topology suggestions ---------------------------------------
+
+
+async def _seed_edge(
+    db_engine: AsyncEngine, from_service: str, to_service: str, observations: int = 1
+) -> None:
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO observed_service_edges (from_service, to_service, observations) "
+                "VALUES (:f, :t, :o)"
+            ),
+            {"f": from_service, "t": to_service, "o": observations},
+        )
+
+
+async def test_suggestions_lists_observed_edge_flagged_unregistered(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    await _seed_edge(db_engine, "order-service", "inventory-service", observations=42)
+
+    response = client.get("/services/topology/suggestions")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["from_service"] == "order-service"
+    assert items[0]["to_service"] == "inventory-service"
+    assert items[0]["observations"] == 42
+    assert items[0]["from_service_registered"] is False
+    assert items[0]["to_service_registered"] is False
+
+
+async def test_suggestions_omits_already_declared_dependency(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    order = _create(client, "order-service")["service"]
+    _create(client, "inventory-service")
+    client.patch(f"/services/{order['id']}", json={"depends_on": ["inventory-service"]})
+    await _seed_edge(db_engine, "order-service", "inventory-service")
+
+    response = client.get("/services/topology/suggestions")
+    assert response.json()["items"] == []
+
+
+async def test_suggestions_omits_dismissed_edge(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    await _seed_edge(db_engine, "order-service", "inventory-service")
+    dismiss = client.post(
+        "/services/topology/suggestions/dismiss",
+        json={"from_service": "order-service", "to_service": "inventory-service"},
+    )
+    assert dismiss.status_code == 204
+
+    response = client.get("/services/topology/suggestions")
+    assert response.json()["items"] == []
+
+
+async def test_suggestions_ordered_by_observations_descending(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    await _seed_edge(db_engine, "order-service", "inventory-service", observations=5)
+    await _seed_edge(db_engine, "order-service", "payments-service", observations=50)
+
+    response = client.get("/services/topology/suggestions")
+    pairs = [(item["from_service"], item["to_service"]) for item in response.json()["items"]]
+    assert pairs == [
+        ("order-service", "payments-service"),
+        ("order-service", "inventory-service"),
+    ]
+
+
+async def test_accept_creates_service_dependency_and_removes_the_suggestion(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    _create(client, "order-service")
+    _create(client, "inventory-service")
+    await _seed_edge(db_engine, "order-service", "inventory-service")
+
+    response = client.post(
+        "/services/topology/suggestions/accept",
+        json={"from_service": "order-service", "to_service": "inventory-service"},
+    )
+    assert response.status_code == 204
+
+    services = client.get("/services").json()["items"]
+    order_service = next(s for s in services if s["name"] == "order-service")
+    assert order_service["depends_on"] == ["inventory-service"]
+
+    assert client.get("/services/topology/suggestions").json()["items"] == []
+
+
+async def test_accept_refuses_clearly_when_target_not_registered(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Known Trap 2 (docs/SELF_HOSTED_PLAN.md Phase 19): accepting an
+    edge whose target isn't registered must refuse clearly, not silently
+    half-register a service with no API key."""
+    _create(client, "order-service")
+    await _seed_edge(db_engine, "order-service", "inventory-service")
+
+    response = client.post(
+        "/services/topology/suggestions/accept",
+        json={"from_service": "order-service", "to_service": "inventory-service"},
+    )
+    assert response.status_code == 400
+    assert client.get("/services").json()["items"][0]["name"] == "order-service"
+    # No half-registered inventory-service was created as a side effect.
+    assert len(client.get("/services").json()["items"]) == 1
+
+
+async def test_accept_unknown_edge_404s(client: TestClient) -> None:
+    response = client.post(
+        "/services/topology/suggestions/accept",
+        json={"from_service": "ghost", "to_service": "phantom"},
+    )
+    assert response.status_code == 404
+
+
+def test_dismiss_unknown_edge_404s(client: TestClient) -> None:
+    response = client.post(
+        "/services/topology/suggestions/dismiss",
+        json={"from_service": "ghost", "to_service": "phantom"},
+    )
+    assert response.status_code == 404

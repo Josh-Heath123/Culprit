@@ -17,6 +17,8 @@ import type {
   ServiceOut,
   ServicePatch,
   ServicesOut,
+  TopologyEdgeRef,
+  TopologySuggestionsOut,
   UserOut,
   UsersOut,
 } from "@/lib/types";
@@ -168,6 +170,27 @@ export function createKey(serviceId: string, label: string | null): Promise<KeyC
 
 export function revokeKey(serviceId: string, keyId: string): Promise<void> {
   return request<void>(`/services/${serviceId}/keys/${keyId}`, { method: "DELETE" });
+}
+
+// Phase 19: topology inference — suggestions only, never applied
+// automatically; accept/dismiss are the only things that change what
+// correlation actually does (api/app/registry/service.py).
+export function fetchTopologySuggestions(): Promise<TopologySuggestionsOut> {
+  return request<TopologySuggestionsOut>("/services/topology/suggestions");
+}
+
+export function acceptTopologySuggestion(edge: TopologyEdgeRef): Promise<void> {
+  return request<void>("/services/topology/suggestions/accept", {
+    method: "POST",
+    body: JSON.stringify(edge),
+  });
+}
+
+export function dismissTopologySuggestion(edge: TopologyEdgeRef): Promise<void> {
+  return request<void>("/services/topology/suggestions/dismiss", {
+    method: "POST",
+    body: JSON.stringify(edge),
+  });
 }
 
 // Phase 18: postmortem write path.

@@ -60,7 +60,16 @@ def configure_otel(service_name: str) -> None:
     traces_endpoint = _resolve_endpoint("TRACES")
     tracer_provider = TracerProvider(resource=resource)
     if traces_endpoint:
-        span_exporter = OTLPSpanExporter(endpoint=f"{traces_endpoint.rstrip('/')}/v1/traces")
+        # headers=auth_headers -- matches the metric/log exporters below.
+        # Missing here until Phase 19: /v1/traces didn't exist as a real,
+        # authenticated ingest-gateway endpoint before, so this exporter
+        # was only ever written for the unauthenticated Tempo-viewing
+        # path (traces_endpoint pointing at a local collector, not
+        # ingest-gateway) -- pointing it at ingest-gateway without this
+        # 401s on every export.
+        span_exporter = OTLPSpanExporter(
+            endpoint=f"{traces_endpoint.rstrip('/')}/v1/traces", headers=auth_headers
+        )
         tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
     else:
         tracer_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
