@@ -1,12 +1,19 @@
 name: CI/CD
 
 # PRs: lint -> typecheck -> test -> build+scan (no push, no deploy).
-# Pushes to main: the same, then push to ghcr.io and deploy to the VM.
+# Pushes to main: the same, then push to ghcr.io (:sha + :latest) and
+# deploy to the VM. Pushes of a `vX.Y.Z` tag (Phase 20, docs/UPGRADING.md):
+# the same, then push to ghcr.io (:vX.Y.Z only — never :latest, so cutting
+# a release tag against an older commit than main's current tip can't move
+# :latest backward) but never deploy — a tag push doesn't necessarily
+# happen from the VM's actual current commit, only `main` pushes trigger
+# deploy.
 # Each job only starts if the one before it succeeded (`needs:`) — a
 # broken lint stops everything downstream, including any deploy.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -169,11 +176,12 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
 
-      # Only pushes to ghcr.io on main — PRs stop here, image scanned but
-      # not published. GITHUB_TOKEN (built-in, scoped to this repo) is
-      # all ghcr.io needs; no separate registry credential.
+      # Only pushes to ghcr.io on a push to main or a vX.Y.Z tag — PRs
+      # stop here, image scanned but not published. GITHUB_TOKEN
+      # (built-in, scoped to this repo) is all ghcr.io needs; no separate
+      # registry credential.
       - name: Log in to ghcr.io
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -181,16 +189,26 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute lowercase image repository
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push'
         run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
-      - name: Tag and push
+      # main push: :sha + :latest, the existing continuous-deployment
+      # behaviour deploy.sh/docker-compose.prod.yml's default IMAGE_TAG
+      # depend on. Version tag push: :vX.Y.Z only — see the `on:` block
+      # above for why :latest never moves from a tag build.
+      - name: Tag and push (main)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.sha }}
           docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:latest
           docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.sha }}
           docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:latest
+
+      - name: Tag and push (version tag)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
+          docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
 
   deploy:
     needs: build

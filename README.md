@@ -1,8 +1,5 @@
 # Culprit
 
-*(Repo name is `View`; product name is `Culprit` — that's intentional
-inertia, not a mistake. See "Why is the repo called View?" below.)*
-
 Culprit is an incident-correlation copilot for small engineering teams
 running a handful of services without a dedicated SRE/observability
 function. Point your services' telemetry at it; it flags statistical
@@ -28,7 +25,7 @@ Needs only [Docker](https://docs.docker.com/get-docker/) and
 required on your machine, even to generate secrets.
 
 ```bash
-git clone https://github.com/Josh-Heath123/View.git culprit
+git clone https://github.com/Josh-Heath123/Culprit.git culprit
 cd culprit
 just quickstart
 ```
@@ -58,15 +55,15 @@ services you actually run:
   copy-pasteable Python example that doesn't depend on anything in this
   repo.
 
-## Why is the repo called View?
+## A note on naming
 
-The product is named Culprit; this GitHub repository is still named
-`View`, its original working name. That's left as-is deliberately, not
-fixed to match — but it looks like a mistake to anyone landing here for
-the first time, which is a different problem from looking like a mistake
-to whoever already knows the history, so it's worth saying plainly here.
+This repository was originally named `View` — Culprit's working title
+before the product name was decided — and stayed that way for a while
+after, which confused more first-time visitors than it was worth. It's
+since been renamed to match. If a `.../View` link brought you here,
+GitHub's redirect did its job.
 
 ## License
 
-No license has been chosen for this repository yet — until one is added,
-default copyright applies and no reuse is granted.
+MIT — see [`LICENSE`](LICENSE). Use it, fork it, run it against your own
+services, no strings attached.

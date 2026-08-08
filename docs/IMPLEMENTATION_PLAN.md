@@ -1,4 +1,10 @@
-# SignalStack — Implementation Plan
+# Culprit — Implementation Plan
+
+*(Written under the working title "SignalStack" — see `CLAUDE.md` for
+when and why the product was renamed to Culprit. Left as "Implementation
+Plan" rather than renamed throughout, since every phase reference below
+predates that decision and rewriting them would edit history for no
+benefit.)*
 
 Companion to `CLAUDE.md` and `docs/SPEC.md`. Those files say *what* this is and *why*; this file says *exactly what to build, in what order, with what technology, and why each choice earns its place*. No dates or time estimates — sequencing here is dependency order, not calendar order. Skip ahead to whatever phase you're actually touching; you don't need the whole document loaded to work on one layer.
 
@@ -72,6 +78,8 @@ Group anomalies within a configurable time window into incident candidates using
 ### Phase 6 — RAG + root-cause narrative
 Embed past postmortems with Voyage AI into the pgvector column. On a new incident candidate, retrieve the most similar past postmortems, then call Claude with a strict system prompt (see Section 3's voice charter) and structured tool-use output so the response is a typed object: hypothesis, confidence level, cited evidence, not a paragraph you parse with regex.
 *Security:* treat retrieved postmortem text and raw log content as untrusted input to the prompt — sanitize/truncate before it reaches the LLM, and never let ingested log content itself trigger tool calls. Prompt injection via log lines an attacker controls is a real, not theoretical, risk for a tool that ingests arbitrary service output.
+
+*Superseded (Phase 18, `docs/SELF_HOSTED_PLAN.md`):* this originally meant the corpus was eight fixture postmortems loaded once by `seed_postmortems.py`, with no way for a real team to add its own. A team can now write a postmortem — from scratch or attached to a real incident — through `/postmortems` in the dashboard, and it becomes retrievable context for future incidents once embedded. The fixture seeding script still exists and still runs the same way; it's just no longer the only way the corpus grows.
 
 ### Phase 7 — API layer
 Expose incident candidates, their correlated evidence, and root-cause suggestions via FastAPI, with pagination on every list endpoint (the dashboard should never be able to accidentally request "all events ever"). Rate-limit the endpoints that trigger new LLM calls specifically — that's where a bug or an abusive client turns into a real cost, not just a slow response.

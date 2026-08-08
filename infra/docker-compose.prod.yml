@@ -56,7 +56,7 @@ services:
   # frontend/Caddy container reverse-proxies to it over the compose
   # network (service name "api" resolves via Docker's internal DNS).
   api:
-    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/culprit}/api:${IMAGE_TAG:-latest}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     env_file: .env.prod
@@ -76,7 +76,7 @@ services:
         condition: service_healthy
 
   ingest-gateway:
-    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/culprit}/api:${IMAGE_TAG:-latest}
     command: uvicorn app.ingest_gateway.main:app --host 0.0.0.0 --port 8010
     restart: unless-stopped
     env_file: .env.prod
@@ -85,7 +85,7 @@ services:
         condition: service_healthy
 
   worker:
-    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/worker:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/culprit}/worker:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env.prod
     environment:
@@ -103,7 +103,7 @@ services:
   # Reverse proxy + TLS (automatic Let's Encrypt via $DOMAIN) + the
   # frontend's static build, all in one container — see frontend/Caddyfile.
   frontend:
-    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/view}/frontend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/culprit}/frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env.prod
     ports:
