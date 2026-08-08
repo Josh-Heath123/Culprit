@@ -17,6 +17,7 @@ import asyncio
 import logging
 import os
 import uuid
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
@@ -75,6 +76,7 @@ async def main() -> None:
             await asyncio.sleep(MIN_SECONDS_BETWEEN_EMBED_CALLS)
 
             embedding = await embed_document(seed.body)
+            embedded_at = datetime.now(UTC)
 
             async with engine.begin() as conn:
                 if existing is None:
@@ -84,6 +86,7 @@ async def main() -> None:
                             title=seed.title,
                             body=seed.body,
                             embedding=embedding,
+                            embedded_at=embedded_at,
                         )
                     )
                     logger.info("inserted %r (%d-dim embedding)", seed.title, len(embedding))
@@ -92,7 +95,7 @@ async def main() -> None:
                     await conn.execute(
                         update(postmortems)
                         .where(postmortems.c.id == existing.id)
-                        .values(embedding=embedding)
+                        .values(embedding=embedding, embedded_at=embedded_at, embedding_error=None)
                     )
                     logger.info("backfilled embedding for %r (%d-dim)", seed.title, len(embedding))
                     backfilled += 1

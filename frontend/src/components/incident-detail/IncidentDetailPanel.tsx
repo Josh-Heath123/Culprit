@@ -1,4 +1,5 @@
-import { RefreshCwIcon, XIcon } from "lucide-react";
+import { FileTextIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,9 +29,17 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
           <span className="text-xs font-medium text-muted-foreground">Incident</span>
           <span className="font-mono text-xs text-foreground">{incidentId}</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close incident detail">
-          <XIcon className="size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button asChild variant="ghost" size="sm">
+            <Link to={`/incidents/${incidentId}/postmortem`}>
+              <FileTextIcon className="size-3.5" />
+              Write postmortem
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close incident detail">
+            <XIcon className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">

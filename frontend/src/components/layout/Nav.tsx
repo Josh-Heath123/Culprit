@@ -27,6 +27,12 @@ export function Nav({ totalIncidents }: NavProps) {
         </span>
       </div>
       <div className="flex items-center gap-3">
+        {/* Not admin-gated, unlike Services/Users below — any
+         * authenticated team member may read and write postmortems
+         * (docs/SELF_HOSTED_PLAN.md Phase 18). */}
+        <Link to="/postmortems" className="text-xs text-muted-foreground hover:text-foreground">
+          Postmortems
+        </Link>
         {/* Hiding is UX only (docs/SELF_HOSTED_PLAN.md Phase 16) — every
          * admin route is enforced server-side (require_admin), a member
          * who guesses the URL gets a real 403, not just a missing link. */}

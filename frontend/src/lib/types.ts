@@ -32,3 +32,10 @@ export type UserOut = components["schemas"]["UserOut"];
 export type UsersOut = components["schemas"]["UsersOut"];
 export type LoginResponse = components["schemas"]["LoginResponse"];
 export type UserRole = UserOut["role"];
+
+// Phase 18: postmortem write path.
+export type PostmortemOut = components["schemas"]["PostmortemOut"];
+export type PaginatedPostmortems = components["schemas"]["PaginatedPostmortems"];
+export type PostmortemCreate = components["schemas"]["PostmortemCreate"];
+export type PostmortemPatch = components["schemas"]["PostmortemPatch"];
+export type EmbeddingStatus = PostmortemOut["embedding_status"];

@@ -50,6 +50,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("ROOT_CAUSE_WRITER_DB_PASSWORD", "root-cause-writer role"),
     ("REGISTRY_ADMIN_DB_PASSWORD", "registry-admin role"),
     ("AUTH_SERVICE_DB_PASSWORD", "auth-service role"),
+    ("POSTMORTEM_WRITER_DB_PASSWORD", "postmortem-writer role"),
     ("JWT_SECRET_KEY", "JWT signing key"),
 ]
 
@@ -181,6 +182,16 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["AUTH_SERVICE_DB_PASSWORD"] = passwords["AUTH_SERVICE_DB_PASSWORD"]
     env["AUTH_SERVICE_DATABASE_URL"] = _db_url(
         "auth-service", passwords["AUTH_SERVICE_DB_PASSWORD"], "postgres"
+    )
+
+    # Phase 18: postmortem-writer role. Required by
+    # api/migrations/versions/35b434e21f5c_postmortem_write_path.py's
+    # _require_env -- without this, `alembic upgrade head` in the
+    # quickstart bootstrap service (infra/docker-compose.quickstart.yml)
+    # raises RuntimeError and the whole quickstart flow fails.
+    env["POSTMORTEM_WRITER_DB_PASSWORD"] = passwords["POSTMORTEM_WRITER_DB_PASSWORD"]
+    env["POSTMORTEM_WRITER_DATABASE_URL"] = _db_url(
+        "postmortem-writer", passwords["POSTMORTEM_WRITER_DB_PASSWORD"], "postgres"
     )
 
     env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = ""

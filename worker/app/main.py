@@ -3,7 +3,7 @@ import os
 from typing import ClassVar
 
 import redis.asyncio as redis
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings, create_pool
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -18,6 +18,7 @@ configure_observability("culprit-worker")
 from app.anomaly.job import score_new_metrics  # noqa: E402
 from app.consumer import drain_streams, ensure_consumer_groups  # noqa: E402
 from app.correlation.job import correlate_recent_anomalies  # noqa: E402
+from app.rag.embed_job import embed_postmortem  # noqa: E402
 from app.rag.job import generate_root_cause_narrative  # noqa: E402
 
 DATABASE_URL = os.environ.get(
@@ -76,7 +77,16 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list] = [generate_root_cause_narrative]
+    functions: ClassVar[list] = [
+        generate_root_cause_narrative,
+        # Higher max_tries than the Worker-wide default (5): a burst of
+        # postmortem writes against Voyage's 3 requests/minute free-tier
+        # limit needs more headroom than one-off jobs like root-cause
+        # generation do, since app/rag/embed_job.py's own backoff can
+        # legitimately spend a try every 20-60s under sustained rate
+        # limiting (docs/SELF_HOSTED_PLAN.md Phase 18).
+        func(embed_postmortem, max_tries=10),  # pyright: ignore[reportArgumentType]
+    ]
     cron_jobs: ClassVar[list] = [
         # app.observability.instrument_job wraps each of these in a plain
         # Callable[...] (for the generic ParamSpec/TypeVar signature),

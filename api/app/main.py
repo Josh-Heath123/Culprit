@@ -33,6 +33,8 @@ from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E40
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
+from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
+from app.postmortems.router import router as postmortems_router  # noqa: E402
 from app.registry.config import REGISTRY_ADMIN_DATABASE_URL  # noqa: E402
 from app.registry.router import router as registry_router  # noqa: E402
 
@@ -64,14 +66,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # need this one.
     auth_engine = create_async_engine(AUTH_SERVICE_DATABASE_URL)
     app.state.auth_session_factory = async_sessionmaker(auth_engine, expire_on_commit=False)
-    # For POST /incidents/{id}/regenerate-root-cause to enqueue Phase 6's
-    # arq job by name — this API process never runs arq jobs itself.
+    # Phase 18: a fourth engine, under postmortem-writer, for every
+    # /postmortems write. GET /postmortems stays on api-reader (above),
+    # which already has SELECT on postmortems. Explicitly capped (unlike
+    # the three engines above, which predate this being called out) —
+    # docs/SELF_HOSTED_PLAN.md Phase 18 Known Trap 4: this VM is an
+    # Always Free shape and Postgres's default max_connections isn't
+    # generous, and this is now the fourth connection pool in one
+    # process, not the third the plan was written against.
+    postmortem_engine = create_async_engine(
+        POSTMORTEM_WRITER_DATABASE_URL, pool_size=5, max_overflow=5
+    )
+    app.state.postmortem_session_factory = async_sessionmaker(
+        postmortem_engine, expire_on_commit=False
+    )
+    # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
+    # /postmortems to enqueue arq jobs by name — this API process never
+    # runs arq jobs itself.
     app.state.arq_pool = await create_pool(RedisSettings.from_dsn(REDIS_URL))
     yield
     await app.state.arq_pool.aclose()
     await engine.dispose()
     await registry_engine.dispose()
     await auth_engine.dispose()
+    await postmortem_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -149,3 +167,6 @@ app.include_router(incidents_router, dependencies=[Depends(require_auth)])
 # only line either router needed to change.
 app.include_router(registry_router, dependencies=[Depends(require_admin)])
 app.include_router(users_router, dependencies=[Depends(require_admin)])
+# Phase 18: not admin-only, unlike registry/users above — any
+# authenticated team member may read and write postmortems.
+app.include_router(postmortems_router, dependencies=[Depends(require_auth)])
