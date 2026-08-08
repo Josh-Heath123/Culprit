@@ -300,6 +300,13 @@ class Postmortem(Base):
     it's embedded. `incident_candidate_id` is nullable so seed postmortems
     (written before this system existed) can be loaded without a
     fabricated incident.
+
+    Phase 18 adds `author_user_id` (who wrote it; ON DELETE SET NULL — a
+    deleted user's postmortems survive), `updated_at` (set on every PATCH),
+    and `embedded_at`/`embedding_error`, which together let the API/UI
+    distinguish "queued" (both NULL) from "embedded" from "failed with
+    this reason" — `embedding IS NULL` alone can't tell "never tried" from
+    "tried and failed."
     """
 
     __tablename__ = "postmortems"
@@ -313,6 +320,9 @@ class Postmortem(Base):
     incident_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("incident_candidates.id", ondelete="SET NULL")
     )
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     # datetime | None, not datetime: the migrations declare this column
     # with only a server_default, no explicit NOT NULL — it's nullable at
     # the DB level (server_default fills it on insert, but doesn't change
@@ -320,6 +330,9 @@ class Postmortem(Base):
     # non-null and drifted from worker/app/db.py's Core definition until
     # scripts/check_schema_drift.py caught it.
     created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+    updated_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    embedded_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    embedding_error: Mapped[str | None]
 
     incident_candidate: Mapped["IncidentCandidate | None"] = relationship(
         back_populates="postmortems"

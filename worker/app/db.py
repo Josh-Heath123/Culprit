@@ -81,6 +81,12 @@ postmortems = sa.Table(
     sa.Column("embedding", Vector(1024), nullable=True),
     sa.Column("incident_candidate_id", UUID(as_uuid=True), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True)),
+    # Phase 18: only the two columns worker/app/rag/embed_job.py actually
+    # writes are mirrored here — author_user_id/updated_at are API-only
+    # concerns the worker never touches, per this file's own "only enough
+    # shape to SELECT/INSERT/UPDATE" principle above.
+    sa.Column("embedded_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("embedding_error", sa.String(), nullable=True),
 )
 
 # Phase 14: worker/app/correlation/job.py queries these two for adjacency

@@ -5,6 +5,8 @@ import { Dashboard } from "@/components/Dashboard";
 import { useAuthToken } from "@/hooks/useAuth";
 
 import { NotFound } from "./NotFound";
+import { PostmortemEditor } from "./PostmortemEditor";
+import { PostmortemList } from "./PostmortemList";
 import { RequireAuth } from "./RequireAuth";
 import { SettingsServices } from "./SettingsServices";
 import { SettingsUsers } from "./SettingsUsers";
@@ -47,6 +49,10 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/incidents/:incidentId" element={<Dashboard />} />
+        <Route path="/incidents/:incidentId/postmortem" element={<PostmortemEditor />} />
+        <Route path="/postmortems" element={<PostmortemList />} />
+        <Route path="/postmortems/new" element={<PostmortemEditor />} />
+        <Route path="/postmortems/:postmortemId" element={<PostmortemEditor />} />
         <Route path="/settings/services" element={<SettingsServices />} />
         <Route path="/settings/users" element={<SettingsUsers />} />
       </Route>

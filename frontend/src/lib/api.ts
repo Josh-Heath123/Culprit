@@ -8,6 +8,10 @@ import type {
   KeyCreateResponse,
   LoginResponse,
   PaginatedIncidents,
+  PaginatedPostmortems,
+  PostmortemCreate,
+  PostmortemOut,
+  PostmortemPatch,
   ServiceCreate,
   ServiceCreateResponse,
   ServiceOut,
@@ -164,4 +168,35 @@ export function createKey(serviceId: string, label: string | null): Promise<KeyC
 
 export function revokeKey(serviceId: string, keyId: string): Promise<void> {
   return request<void>(`/services/${serviceId}/keys/${keyId}`, { method: "DELETE" });
+}
+
+// Phase 18: postmortem write path.
+export function fetchPostmortems(limit: number, offset: number): Promise<PaginatedPostmortems> {
+  return request<PaginatedPostmortems>(`/postmortems?limit=${limit}&offset=${offset}`);
+}
+
+export function fetchPostmortem(id: string): Promise<PostmortemOut> {
+  return request<PostmortemOut>(`/postmortems/${id}`);
+}
+
+export function createPostmortem(body: PostmortemCreate): Promise<PostmortemOut> {
+  return request<PostmortemOut>("/postmortems", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function patchPostmortem(id: string, body: PostmortemPatch): Promise<PostmortemOut> {
+  return request<PostmortemOut>(`/postmortems/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Sends an empty patch — that's how a "retry" re-enqueues embedding on a
+ * failed postmortem without changing any content (see
+ * api/app/postmortems/service.py::patch_postmortem). */
+export function retryPostmortemEmbedding(id: string): Promise<PostmortemOut> {
+  return patchPostmortem(id, {});
+}
+
+export function deletePostmortem(id: string): Promise<void> {
+  return request<void>(`/postmortems/${id}`, { method: "DELETE" });
 }

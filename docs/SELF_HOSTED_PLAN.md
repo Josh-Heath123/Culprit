@@ -1290,10 +1290,14 @@ after an image revert, which is acceptable and now renders a real 404 page
 - **Trap 3.** `retrieve_similar_postmortems` filters `embedding IS NOT NULL`,
   so a pending postmortem correctly can't be retrieved. Don't "fix" that by
   relaxing the filter.
-- **Trap 4.** Adding a third engine to `api/app/main.py`'s lifespan means three
-  connection pools in one process. Cap pool sizes explicitly
-  (`create_async_engine(..., pool_size=5, max_overflow=5)`) — the VM is an
-  Always Free shape and Postgres's default `max_connections` is not generous.
+- **Trap 4.** By the time this phase lands, `api/app/main.py`'s lifespan already
+  has three engines (`api-reader`, `registry-admin` from Phase 14, `auth-service`
+  from Phase 16) — this phase's `postmortem-writer` engine is the fourth, not
+  the third this note originally assumed when first drafted. Cap its pool size
+  explicitly (`create_async_engine(..., pool_size=5, max_overflow=5)`) — the VM
+  is an Always Free shape and Postgres's default `max_connections` is not
+  generous, and four pools in one process is meaningfully more headroom used
+  than the two this project started with.
 
 ---
 

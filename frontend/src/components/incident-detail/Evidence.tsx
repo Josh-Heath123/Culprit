@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import type { CitedEvidenceOut } from "@/lib/types";
 
 /** Displayed visibly as footnotes, per Section 3's voice charter: "cite
@@ -15,7 +17,24 @@ export function Evidence({ evidence }: { evidence: CitedEvidenceOut[] }) {
         <li key={`${item.postmortem_title}-${index}`} className="border-l-2 border-border pl-3">
           <div className="flex items-baseline gap-1.5">
             <span className="font-mono text-xs text-muted-foreground">[{index + 1}]</span>
-            <span className="text-xs font-medium text-foreground">{item.postmortem_title}</span>
+            {/* root_cause_evidence is a JSONB snapshot (api/app/db/models.py's
+             * IncidentCandidate docstring), so the title/passage text survives
+             * a deleted postmortem regardless — only this link can go stale,
+             * and PostmortemEditor's own 404 state (existing.isError) is what
+             * "degrade gracefully" means here, not anything special on this
+             * side. postmortem_id can also be null if the narrative cited a
+             * title that didn't match any retrieved postmortem at generation
+             * time (worker/app/rag/job.py) — plain text in that case. */}
+            {item.postmortem_id ? (
+              <Link
+                to={`/postmortems/${item.postmortem_id}`}
+                className="text-xs font-medium text-foreground underline hover:text-primary"
+              >
+                {item.postmortem_title}
+              </Link>
+            ) : (
+              <span className="text-xs font-medium text-foreground">{item.postmortem_title}</span>
+            )}
           </div>
           <blockquote className="mt-1 text-xs text-muted-foreground italic">
             &ldquo;{item.passage}&rdquo;
