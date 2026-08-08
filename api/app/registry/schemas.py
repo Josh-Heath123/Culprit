@@ -75,3 +75,27 @@ class KeyCreateResponse(BaseModel):
     api_key: str
     key_id: UUID
     label: str | None
+
+
+class TopologySuggestionOut(BaseModel):
+    """A machine-observed edge (Phase 19, Option A) not yet declared in
+    service_dependencies and not dismissed. `*_registered` lets the UI
+    show which endpoint(s) would block acceptance — see
+    app/registry/service.py's UnregisteredEndpoint."""
+
+    from_service: str
+    to_service: str
+    observations: int
+    first_seen_at: datetime
+    last_seen_at: datetime
+    from_service_registered: bool
+    to_service_registered: bool
+
+
+class TopologySuggestionsOut(BaseModel):
+    items: list[TopologySuggestionOut]
+
+
+class TopologyEdgeRef(BaseModel):
+    from_service: str
+    to_service: str

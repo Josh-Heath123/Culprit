@@ -17,6 +17,9 @@ from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import (  # noqa: E4
 from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import (  # noqa: E402
     ExportMetricsServiceResponse,
 )
+from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (  # noqa: E402
+    ExportTraceServiceResponse,
+)
 from opentelemetry.trace import Status, StatusCode  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
 from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
@@ -29,8 +32,18 @@ from app.ingest_gateway.config import (  # noqa: E402
     REDIS_URL,
 )
 from app.ingest_gateway.limiter import limiter  # noqa: E402
-from app.ingest_gateway.otlp_decode import decode_logs_request, decode_metrics_request  # noqa: E402
-from app.ingest_gateway.streams import LOGS_STREAM, METRICS_STREAM, push_events  # noqa: E402
+from app.ingest_gateway.otlp_decode import (  # noqa: E402
+    decode_logs_request,
+    decode_metrics_request,
+    decode_traces_request,
+)
+from app.ingest_gateway.schemas import ServiceEdgeObservation  # noqa: E402
+from app.ingest_gateway.streams import (  # noqa: E402
+    LOGS_STREAM,
+    METRICS_STREAM,
+    TRACES_STREAM,
+    push_events,
+)
 from app.observability import configure_observability  # noqa: E402
 
 configure_observability("culprit-ingest-gateway")
@@ -173,5 +186,30 @@ async def export_logs(
     await push_events(_state["redis"], LOGS_STREAM, events)
     return Response(
         content=ExportLogsServiceResponse().SerializeToString(),
+        media_type="application/x-protobuf",
+    )
+
+
+@app.post("/v1/traces")
+@limiter.limit(INGEST_RATE_LIMIT)
+async def export_traces(
+    request: Request,
+    service_name: str = Depends(authenticated_service_name),
+) -> Response:
+    """Phase 19: accepted for topology inference only — decoded straight
+    into edge observations (never spans, never raw_events) by
+    decode_traces_request, same rate limit and body-size handling as
+    /v1/metrics and /v1/logs above. Traces are not stored anywhere in
+    this project; only the (from_service, to_service) pairs survive past
+    this function."""
+    body = _maybe_decompress(await request.body(), request.headers.get("content-encoding"))
+    edges = decode_traces_request(body, service_name)
+    observations = [
+        ServiceEdgeObservation(from_service=from_service, to_service=to_service)
+        for from_service, to_service in edges
+    ]
+    await push_events(_state["redis"], TRACES_STREAM, observations)
+    return Response(
+        content=ExportTraceServiceResponse().SerializeToString(),
         media_type="application/x-protobuf",
     )

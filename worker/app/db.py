@@ -112,3 +112,17 @@ service_dependencies = sa.Table(
     sa.Column("to_service_id", UUID(as_uuid=True), primary_key=True),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
+
+# Phase 19: app/consumer.py's drain_edges upserts into this. Only the
+# columns that upsert actually touches are mirrored — first_seen_at
+# (insert-only, via the column's own server_default) and dismissed_at
+# (only ever written by the api/app/registry/ suggestion-dismiss
+# endpoint) aren't, per this file's own "only enough shape" principle.
+observed_service_edges = sa.Table(
+    "observed_service_edges",
+    metadata,
+    sa.Column("from_service", sa.String(), primary_key=True),
+    sa.Column("to_service", sa.String(), primary_key=True),
+    sa.Column("observations", sa.BigInteger(), nullable=False),
+    sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
+)

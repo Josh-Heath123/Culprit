@@ -29,10 +29,9 @@ credential; Culprit only ever stores its hash.
   (`application/x-protobuf`), optionally gzip-compressed
   (`Content-Encoding: gzip`).
 - `POST {base}/v1/logs` — same encoding.
-- **Traces are not accepted yet.** Pointing an OTLP trace exporter at
-  Culprit today will not error — it will just silently go nowhere. If
-  you configure traces and see nothing in the dashboard, that's why, not
-  a bug.
+- `POST {base}/v1/traces` — same encoding, but see the next section:
+  traces are used differently from metrics and logs, and nowhere near as
+  much of what you send actually gets kept.
 
 Every request needs `Authorization: Bearer <api key>`.
 
@@ -58,6 +57,34 @@ boundary, the payload's own claim about itself is not trusted. Practical
 effect: a mismatched `service.name` means your data quietly lands under
 the wrong service's timeline lane instead of its own, which is a
 confusing thing to debug if you don't know to check for it.
+
+### Traces are for topology inference only — Culprit is not a tracing backend
+
+Culprit never stores a span. A trace export is decoded into edge
+*observations* — which service called which, nothing else — the moment
+it arrives, and only that pair of names survives. No span IDs, no
+attributes, no timing, no trace ID. If you're expecting to search or
+visualize traces here, you won't be able to: point Tempo, Jaeger, or
+whatever you already use at your real tracing backend for that, and
+point Culprit at it in parallel if you also want topology inference.
+
+What those edge observations are *for*: today, the services one incident
+correlates across are declared by hand (Settings → Services, or the
+registry API). Sending traces lets Culprit propose dependencies it
+actually observed instead — a "Suggested dependencies" panel under
+Settings → Services shows each one with how many times it's been seen,
+with Accept and Dismiss buttons. Nothing changes correlation until you
+accept a suggestion; an unaccepted suggestion sitting there does nothing.
+
+For this to produce anything, your own instrumentation needs to create a
+`CLIENT`-kind span around each outbound call, with a `peer.service`
+attribute set to the callee's registered name — the OTel auto-
+instrumentation packages for most HTTP clients do this for you. Context
+propagation alone (an inbound span that happens to nest under an
+upstream caller's span) is not enough; Culprit reads the `CLIENT` span's
+own attributes, not the parent/child relationship. If a peer can't be
+resolved from `peer.service` or a `server.address` attribute, that span
+just doesn't produce an edge.
 
 ## 3. Which metrics are worth sending
 

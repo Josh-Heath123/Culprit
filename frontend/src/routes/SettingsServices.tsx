@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useServices } from "@/hooks/useServices";
+import {
+  useAcceptTopologySuggestion,
+  useDismissTopologySuggestion,
+  useTopologySuggestions,
+} from "@/hooks/useTopologySuggestions";
 import { createKey, createService, patchService, revokeKey } from "@/lib/api";
-import type { ServiceOut } from "@/lib/types";
+import type { ServiceOut, TopologySuggestionOut } from "@/lib/types";
 
 const SERVICE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/;
 
@@ -282,6 +287,79 @@ function ServiceRow({ service }: { service: ServiceOut }) {
   );
 }
 
+function TopologySuggestionRow({ suggestion }: { suggestion: TopologySuggestionOut }) {
+  const accept = useAcceptTopologySuggestion();
+  const dismiss = useDismissTopologySuggestion();
+  const edge = { from_service: suggestion.from_service, to_service: suggestion.to_service };
+  const bothRegistered = suggestion.from_service_registered && suggestion.to_service_registered;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-sm text-foreground">
+          {suggestion.from_service} <span className="text-muted-foreground">&rarr;</span>{" "}
+          {suggestion.to_service}
+        </p>
+        <span className="text-xs text-muted-foreground">
+          seen {suggestion.observations.toLocaleString()} time
+          {suggestion.observations === 1 ? "" : "s"} since{" "}
+          {new Date(suggestion.first_seen_at).toLocaleDateString()}
+        </span>
+      </div>
+
+      {!bothRegistered ? (
+        <p className="text-xs text-muted-foreground">
+          {!suggestion.from_service_registered ? suggestion.from_service : suggestion.to_service}{" "}
+          isn't a registered service yet — register it above before accepting this dependency.
+        </p>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!bothRegistered || accept.isPending}
+          onClick={() => accept.mutate(edge)}
+        >
+          {accept.isPending ? "Accepting…" : "Accept"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={dismiss.isPending}
+          onClick={() => dismiss.mutate(edge)}
+        >
+          {dismiss.isPending ? "Dismissing…" : "Dismiss"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TopologySuggestions() {
+  const { suggestions, isPending, isError } = useTopologySuggestions();
+
+  if (isPending || isError || suggestions.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <p className="text-sm font-semibold text-foreground">Suggested dependencies</p>
+        <p className="text-xs text-muted-foreground">
+          Observed from real trace data, not applied automatically — accepting one changes
+          correlation on the next tick; dismissing hides it without affecting anything.
+        </p>
+      </div>
+      {suggestions.map((suggestion) => (
+        <TopologySuggestionRow
+          key={`${suggestion.from_service}->${suggestion.to_service}`}
+          suggestion={suggestion}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function SettingsServices() {
   const { services, isPending, isError } = useServices();
 
@@ -306,6 +384,8 @@ export function SettingsServices() {
             <ServiceRow key={service.id} service={service} />
           ))}
         </div>
+
+        <TopologySuggestions />
       </main>
     </div>
   );
