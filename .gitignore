@@ -29,3 +29,6 @@ frontend/src/lib/api-types.generated.ts
 .vscode/
 .idea/
 .DS_Store
+
+# scripts/backup.sh's default output — database dumps, never committed.
+/backups/

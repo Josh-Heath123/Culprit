@@ -47,7 +47,7 @@ the repo somewhere on the VM to run the generator from (this does **not**
 need to be the same directory CI deploys into — see step 6):
 
 ```bash
-git clone https://github.com/Josh-Heath123/View.git ~/culprit-repo
+git clone https://github.com/Josh-Heath123/Culprit.git ~/culprit-repo
 cd ~/culprit-repo
 just bootstrap-env --domain your-domain.com
 ```
@@ -90,7 +90,7 @@ VM (flattened — they land as `~/culprit/docker-compose.prod.yml` and
 `~/culprit/deploy.sh`, not under an `infra/` subdirectory) before running
 `deploy.sh` there over SSH. It never touches `.env.prod`.
 
-Published images are pulled from `ghcr.io/<your-github-username>/view/*`
+Published images are pulled from `ghcr.io/<your-github-username>/culprit/*`
 — if your fork's GitHub Packages default to private, either flip them to
 public (Packages → visibility) or `docker login ghcr.io` on the VM once
 with a **classic** PAT that has `read:packages` scope (fine-grained PATs
