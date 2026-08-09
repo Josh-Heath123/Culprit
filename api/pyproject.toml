@@ -48,6 +48,14 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+# Phase 22 (docs/AI_NATIVE_PLAN.md): scripts/tests/ has no pyproject.toml
+# or venv of its own -- its two check scripts already run via api's venv
+# (`uv run --project api python scripts/check_*.py`, see
+# scripts/check_schema_drift.py's own established precedent), so their
+# tests ride along on api's pytest run rather than needing a third test
+# entry point. "tests" must stay listed explicitly once testpaths is
+# set, or api/tests/ itself stops being discovered.
+testpaths = ["tests", "../scripts/tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 # Phase 14's integration tests share session-scoped async fixtures

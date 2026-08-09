@@ -1,0 +1,9 @@
+# Phase 22 (docs/AI_NATIVE_PLAN.md): files declared "must change
+# together" -- checked by scripts/check_coupled_files.py, wired into
+# .claude/hooks/check_invariants.sh (real-time) and CI (the actual
+# gate). Seeded with exactly the one pairing scripts/check_schema_drift.py
+# already encodes as a hardcoded case; this file's job is to make that
+# relationship declarable for future pairs, not to invent new pairs
+# speculatively (see that phase's own Out of scope).
+pairs:
+  - [worker/app/db.py, api/app/db/models.py]

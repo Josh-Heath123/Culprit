@@ -41,6 +41,14 @@ lint-imports:
 check-schema-drift:
     uv run --project api python scripts/check_schema_drift.py
 
+# Fail on a declared "must change together" pair (scripts/coupled_files.yaml)
+# changing on only one side, or a migration whose upgrade()/downgrade() aren't
+# structurally symmetric (Phase 22). Same reasoning as check-schema-drift
+# above for running via api's own venv rather than a bare python/python3.
+check-invariants:
+    uv run --project api python scripts/check_coupled_files.py
+    uv run --project api python scripts/check_migration_symmetry.py
+
 # Type-check both projects
 typecheck:
     (cd api && uv run pyright)
