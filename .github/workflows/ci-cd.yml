@@ -91,6 +91,11 @@ jobs:
         env:
           JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
           INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          # Phase 21: test_memory_api.py's require_auth_or_agent tests
+          # POST as the automation caller, matching this literal value
+          # (see that file's own AGENT_TOKEN constant). Dummy, CI-only,
+          # not a real secret -- same reasoning as JWT_SECRET_KEY above.
+          AGENT_AUTOMATION_TOKEN: dev-agent-automation-token
         run: cd api && uv run pytest
       - name: pytest (worker)
         run: cd worker && uv run pytest
