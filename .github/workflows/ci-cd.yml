@@ -37,6 +37,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Phase 22's two invariant checks below diff against
+          # origin/main...HEAD -- the default shallow (depth-1) checkout
+          # has no local `main`/`origin/main` history at all, only the
+          # exact commit under test, so that diff would silently compare
+          # against nothing. Full history costs more checkout time but
+          # is what a correct diff needs.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -51,6 +59,31 @@ jobs:
       # shared ORM) — this catches the two drifting silently instead of
       # relying on someone remembering to update both by hand.
       - run: uv run --project api python scripts/check_schema_drift.py
+      # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
+      # together" pair (scripts/coupled_files.yaml) that changed on only
+      # one side. Checked against the PR's committed diff, not a working
+      # tree (a CI checkout has no uncommitted edits to look at) — the
+      # real-time version of this same check runs via
+      # .claude/hooks/check_invariants.sh mid-session; this is the
+      # actual gate for a commit that happened outside a hook-covered
+      # session (a human editing directly, or a hook that failed to
+      # fire).
+      - run: uv run --project api python scripts/check_coupled_files.py --base origin/main
+      # A migration whose upgrade()/downgrade() aren't structurally
+      # symmetric (same phase). Computes the changed-migration file list
+      # itself against origin/main...HEAD instead of relying on the
+      # script's own no-argument default (which diffs against a local
+      # `main` ref that doesn't exist on a CI runner and would silently
+      # check zero files, not fail loudly) — an empty list here is a
+      # real "no migrations changed," not a silently-skipped check.
+      - name: Check migration symmetry
+        run: |
+          FILES=$(git diff --name-only origin/main...HEAD -- api/migrations/versions/)
+          if [ -n "$FILES" ]; then
+            uv run --project api python scripts/check_migration_symmetry.py $FILES
+          else
+            echo "No migration files changed."
+          fi
 
   test:
     needs: typecheck
