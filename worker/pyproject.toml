@@ -33,7 +33,7 @@ culprit-shared = { path = "../shared", editable = true }
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
-    "testcontainers[postgres,redis]>=4.8",
+    "testcontainers[postgres]>=4.15",
     "hypothesis>=6.115",
     "ruff>=0.7",
     "pyright>=1.1.383",

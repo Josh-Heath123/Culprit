@@ -361,3 +361,62 @@ class ObservedServiceEdge(Base):
     first_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
     last_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
     dismissed_at: Mapped[datetime | None] = mapped_column(timestamptz)
+
+
+class ArchitectureDecision(Base):
+    """A human-written engineering decision (Phase 21,
+    docs/AI_NATIVE_PLAN.md) — same shape as `Postmortem` (title, body,
+    embedding, author, timestamps) minus the incident linkage, since a
+    decision isn't tied to any one incident. Deliberately a sibling table,
+    not a merge into `postmortems` — see AI_NATIVE_PLAN.md Phase 21 Known
+    Trap 1.
+    """
+
+    __tablename__ = "architecture_decisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    title: Mapped[str]
+    body: Mapped[str]
+    embedding = mapped_column(Vector(1024), nullable=True)
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+    updated_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    embedded_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    embedding_error: Mapped[str | None]
+
+
+class AiChangeRecord(Base):
+    """One row per commit made inside a Claude Code session (Phase 21,
+    docs/AI_NATIVE_PLAN.md) — written automatically by
+    `.claude/hooks/capture_ai_change.sh`, never by hand. `commit_sha` is
+    unique so a hook re-fire or retry is a safe no-op, not a duplicate
+    (see api/app/memory/service.py's create_ai_change_record). `author_
+    user_id` stays NULL for hook-created rows — there's no reliable way to
+    resolve a git identity to a Culprit user account automatically (see
+    AI_NATIVE_PLAN.md Phase 21 Out of scope); `git_author` is the raw git
+    identity string, always present since every commit has one.
+    """
+
+    __tablename__ = "ai_change_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    commit_sha: Mapped[str] = mapped_column(unique=True)
+    summary: Mapped[str]
+    files_changed: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    git_author: Mapped[str | None]
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    embedding = mapped_column(Vector(1024), nullable=True)
+    committed_at: Mapped[datetime] = mapped_column(timestamptz)
+    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+    embedded_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    embedding_error: Mapped[str | None]

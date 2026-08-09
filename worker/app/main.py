@@ -18,7 +18,11 @@ configure_observability("culprit-worker")
 from app.anomaly.job import score_new_metrics  # noqa: E402
 from app.consumer import drain_edges, drain_streams, ensure_consumer_groups  # noqa: E402
 from app.correlation.job import correlate_recent_anomalies  # noqa: E402
-from app.rag.embed_job import embed_postmortem  # noqa: E402
+from app.rag.embed_job import (  # noqa: E402
+    embed_ai_change_record,
+    embed_architecture_decision,
+    embed_postmortem,
+)
 from app.rag.job import generate_root_cause_narrative  # noqa: E402
 
 DATABASE_URL = os.environ.get(
@@ -80,12 +84,16 @@ class WorkerSettings:
     functions: ClassVar[list] = [
         generate_root_cause_narrative,
         # Higher max_tries than the Worker-wide default (5): a burst of
-        # postmortem writes against Voyage's 3 requests/minute free-tier
-        # limit needs more headroom than one-off jobs like root-cause
-        # generation do, since app/rag/embed_job.py's own backoff can
-        # legitimately spend a try every 20-60s under sustained rate
-        # limiting (docs/SELF_HOSTED_PLAN.md Phase 18).
+        # writes against Voyage's 3 requests/minute free-tier limit needs
+        # more headroom than one-off jobs like root-cause generation do,
+        # since app/rag/embed_job.py's own backoff can legitimately spend
+        # a try every 20-60s under sustained rate limiting
+        # (docs/SELF_HOSTED_PLAN.md Phase 18). Same reasoning applies to
+        # the Phase 21 (docs/AI_NATIVE_PLAN.md) jobs below — all three
+        # share embed_job.py's one rate-limit/retry implementation.
         func(embed_postmortem, max_tries=10),  # pyright: ignore[reportArgumentType]
+        func(embed_architecture_decision, max_tries=10),  # pyright: ignore[reportArgumentType]
+        func(embed_ai_change_record, max_tries=10),  # pyright: ignore[reportArgumentType]
     ]
     cron_jobs: ClassVar[list] = [
         # app.observability.instrument_job wraps each of these in a plain

@@ -32,6 +32,7 @@ from app.auth.users_router import router as users_router  # noqa: E402
 from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E402
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
+from app.memory.router import router as memory_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
 from app.postmortems.router import router as postmortems_router  # noqa: E402
@@ -170,3 +171,9 @@ app.include_router(users_router, dependencies=[Depends(require_admin)])
 # Phase 18: not admin-only, unlike registry/users above — any
 # authenticated team member may read and write postmortems.
 app.include_router(postmortems_router, dependencies=[Depends(require_auth)])
+# Phase 21 (docs/AI_NATIVE_PLAN.md): no router-level dependency here,
+# unlike every router above — app/memory/router.py gates each endpoint
+# individually, since POST /ai-change-records needs require_auth_or_agent
+# instead of require_auth and a router-level dependency can't be opted
+# out of per-route. See that module's own docstring.
+app.include_router(memory_router)
