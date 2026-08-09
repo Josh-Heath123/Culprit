@@ -52,6 +52,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("AUTH_SERVICE_DB_PASSWORD", "auth-service role"),
     ("POSTMORTEM_WRITER_DB_PASSWORD", "postmortem-writer role"),
     ("JWT_SECRET_KEY", "JWT signing key"),
+    ("AGENT_AUTOMATION_TOKEN", "AI change-capture hook (Phase 21)"),
 ]
 
 #: DB name/user for a fresh install. Deliberately "culprit", not
@@ -193,6 +194,16 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["POSTMORTEM_WRITER_DATABASE_URL"] = _db_url(
         "postmortem-writer", passwords["POSTMORTEM_WRITER_DB_PASSWORD"], "postgres"
     )
+
+    # Phase 21 (docs/AI_NATIVE_PLAN.md): not a DB role password, like
+    # JWT_SECRET_KEY above -- the shared bearer credential
+    # .claude/hooks/capture_ai_change.sh authenticates POST
+    # /ai-change-records with. Optional at the application layer
+    # (api/app/auth/config.py reads it with a blank default, not
+    # os.environ[...]), but generated here unconditionally anyway so the
+    # hook works out of the box on a fresh install rather than silently
+    # doing nothing until someone notices and sets it by hand.
+    env["AGENT_AUTOMATION_TOKEN"] = passwords["AGENT_AUTOMATION_TOKEN"]
 
     env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = ""
 

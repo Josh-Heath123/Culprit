@@ -1,4 +1,8 @@
-"""Unit tests for app.rag.embed_job.embed_postmortem (Phase 18).
+"""Unit tests for app.rag.embed_job.embed_postmortem (Phase 18) and its
+two Phase 21 siblings, embed_architecture_decision/embed_ai_change_record
+(docs/AI_NATIVE_PLAN.md) — all three share the _embed_record helper this
+file's fake engine exercises identically regardless of which table a
+given test targets.
 
 No testcontainers here (worker/tests/ has no DB-container fixture at
 all — every existing test in this directory is a pure unit test, per
@@ -21,7 +25,7 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from app.rag.embed_job import embed_postmortem
+from app.rag.embed_job import embed_ai_change_record, embed_architecture_decision, embed_postmortem
 from arq import Retry
 from sqlalchemy import Select, Update
 from voyageai.error import RateLimitError
@@ -168,3 +172,54 @@ async def test_unexpected_error_writes_error_and_reraises_unchanged(monkeypatch)
         await embed_postmortem(_ctx(engine), str(uuid4()))
 
     assert engine.updates == [{"embedding_error": "something else broke"}]
+
+
+# --- Phase 21 (docs/AI_NATIVE_PLAN.md) siblings -----------------------------
+# Not a full re-test of every branch _embed_record has (rate limiting,
+# unexpected errors, etc.) -- those are already covered above against
+# embed_postmortem and _embed_record doesn't branch differently per
+# table. These confirm each wrapper reads the *right* column and returns
+# the *right* keyed dict for its own kind, which is the one thing that
+# does differ between the three.
+
+
+async def test_embed_architecture_decision_success(monkeypatch) -> None:
+    async def fake_embed_document(text: str) -> list[float]:
+        assert text == "the decision body"
+        return [0.4, 0.5]
+
+    monkeypatch.setattr("app.rag.embed_job.embed_document", fake_embed_document)
+
+    engine = _FakeEngine(body="the decision body")
+    result = await embed_architecture_decision(_ctx(engine), str(uuid4()))
+
+    assert result["status"] == "embedded"
+    assert "architecture_decision_id" in result
+    assert engine.updates[0]["embedding"] == [0.4, 0.5]
+
+
+async def test_embed_architecture_decision_not_found_is_skipped(monkeypatch) -> None:
+    engine = _FakeEngine(body=None)
+    result = await embed_architecture_decision(_ctx(engine), str(uuid4()))
+    assert result == {"status": "skipped", "reason": "architecture_decision_not_found"}
+
+
+async def test_embed_ai_change_record_success(monkeypatch) -> None:
+    async def fake_embed_document(text: str) -> list[float]:
+        assert text == "fix the flaky test"
+        return [0.6, 0.7]
+
+    monkeypatch.setattr("app.rag.embed_job.embed_document", fake_embed_document)
+
+    engine = _FakeEngine(body="fix the flaky test")
+    result = await embed_ai_change_record(_ctx(engine), str(uuid4()))
+
+    assert result["status"] == "embedded"
+    assert "ai_change_record_id" in result
+    assert engine.updates[0]["embedding"] == [0.6, 0.7]
+
+
+async def test_embed_ai_change_record_not_found_is_skipped(monkeypatch) -> None:
+    engine = _FakeEngine(body=None)
+    result = await embed_ai_change_record(_ctx(engine), str(uuid4()))
+    assert result == {"status": "skipped", "reason": "ai_change_record_not_found"}

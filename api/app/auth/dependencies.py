@@ -8,6 +8,7 @@ is still active. See _resolve_user's docstring for the caching
 rationale (Known Trap 3, docs/SELF_HOSTED_PLAN.md Phase 16).
 """
 
+import hmac
 import time
 from uuid import UUID
 
@@ -16,6 +17,7 @@ import structlog
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.auth.config import AGENT_AUTOMATION_TOKEN
 from app.auth.repository import get_user_by_id
 from app.auth.security import AuthenticatedUser, decode_access_token
 
@@ -99,3 +101,31 @@ async def require_admin(user: AuthenticatedUser = Depends(require_auth)) -> Auth
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="admin role required")
     return user
+
+
+async def require_auth_or_agent(
+    request: Request, authorization: str | None = Header(default=None)
+) -> AuthenticatedUser | None:
+    """Phase 21 (docs/AI_NATIVE_PLAN.md): gates POST /ai-change-records,
+    which a commit-time hook calls with no user JWT to present. Returns
+    the authenticated user on the normal JWT path, or None on the
+    automation-token path — callers treat None as "no human author,"
+    matching AiChangeRecord.author_user_id's own nullable-for-hook-
+    created-rows design.
+
+    Tries the token first specifically because it's cheap and local (one
+    constant-time string compare, no DB round trip) — the hook fires on
+    every commit, and the JWT path's own _resolve_user does a cached but
+    real DB read, work this common case shouldn't have to pay for.
+
+    `AGENT_AUTOMATION_TOKEN` empty (unset) means the comparison can never
+    succeed regardless of what's presented -- an empty presented value
+    would otherwise trivially match an empty configured one, so the empty
+    case is guarded explicitly rather than left to fall out of
+    `hmac.compare_digest`'s own behaviour on two empty strings.
+    """
+    if authorization is not None and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ")
+        if AGENT_AUTOMATION_TOKEN and hmac.compare_digest(token, AGENT_AUTOMATION_TOKEN):
+            return None
+    return await require_auth(request, authorization)

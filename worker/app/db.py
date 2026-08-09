@@ -126,3 +126,33 @@ observed_service_edges = sa.Table(
     sa.Column("observations", sa.BigInteger(), nullable=False),
     sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
 )
+
+# Phase 21: same "only enough shape" principle as postmortems above —
+# title/body(/summary), embedding, and the embedding-status columns are
+# what worker/app/rag/embed_job.py and retrieval.py actually touch.
+architecture_decisions = sa.Table(
+    "architecture_decisions",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("title", sa.String(), nullable=False),
+    sa.Column("body", sa.String(), nullable=False),
+    sa.Column("embedding", Vector(1024), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("embedded_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("embedding_error", sa.String(), nullable=True),
+)
+
+# `summary` is the text embed_job.py embeds (there's no `body` column on
+# this table); `commit_sha` stands in as this table's "title" for
+# retrieval.py's generalized UNION ALL (worker/app/rag/retrieval.py).
+ai_change_records = sa.Table(
+    "ai_change_records",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("commit_sha", sa.String(), nullable=False),
+    sa.Column("summary", sa.String(), nullable=False),
+    sa.Column("embedding", Vector(1024), nullable=True),
+    sa.Column("committed_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("embedded_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("embedding_error", sa.String(), nullable=True),
+)
