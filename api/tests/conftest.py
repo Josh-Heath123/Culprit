@@ -42,6 +42,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "REGISTRY_ADMIN_DB_PASSWORD": "test-registry-admin-password",
     "AUTH_SERVICE_DB_PASSWORD": "test-auth-service-password",
     "POSTMORTEM_WRITER_DB_PASSWORD": "test-postmortem-writer-password",
+    "MCP_READER_DB_PASSWORD": "test-mcp-reader-password",
 }
 
 
