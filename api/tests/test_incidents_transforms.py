@@ -7,8 +7,9 @@ pure-logic tests (e.g. worker/tests/test_correlation_graph.py).
 import uuid
 from datetime import UTC, datetime
 
-from app.db.models import Anomaly, IncidentCandidate
+from app.db.models import AiChangeRecord, Anomaly, IncidentCandidate
 from app.incidents.transforms import (
+    ai_change_record_summary,
     anomaly_out,
     incident_detail,
     incident_summary,
@@ -111,7 +112,7 @@ def test_incident_detail_includes_cited_evidence() -> None:
             }
         ],
     )
-    detail = incident_detail(incident)
+    detail = incident_detail(incident, [])
     assert detail.root_cause_status == "ready"
     assert detail.root_cause_confidence == "High"
     assert len(detail.root_cause_evidence) == 1
@@ -119,6 +120,40 @@ def test_incident_detail_includes_cited_evidence() -> None:
 
 
 def test_incident_detail_handles_no_evidence_yet() -> None:
-    detail = incident_detail(_incident())
+    detail = incident_detail(_incident(), [])
     assert detail.root_cause_evidence == []
     assert detail.root_cause_status == "pending"
+
+
+def test_incident_detail_includes_linked_ai_change_records() -> None:
+    record = AiChangeRecord(
+        id=uuid.uuid4(),
+        commit_sha="a" * 40,
+        summary="Fix the retry loop",
+        files_changed=["demo-services/order_service/main.py"],
+        committed_at=T0,
+    )
+    detail = incident_detail(_incident(), [record])
+    assert len(detail.linked_ai_change_records) == 1
+    linked = detail.linked_ai_change_records[0]
+    assert linked.commit_sha == "a" * 40
+    assert linked.summary == "Fix the retry loop"
+
+
+def test_incident_detail_handles_no_linked_records() -> None:
+    detail = incident_detail(_incident(), [])
+    assert detail.linked_ai_change_records == []
+
+
+def test_ai_change_record_summary_maps_fields() -> None:
+    record = AiChangeRecord(
+        id=uuid.uuid4(),
+        commit_sha="b" * 40,
+        summary="Add a missing index",
+        files_changed=[],
+        committed_at=T0,
+    )
+    summary = ai_change_record_summary(record)
+    assert summary.commit_sha == "b" * 40
+    assert summary.summary == "Add a missing index"
+    assert summary.committed_at == T0

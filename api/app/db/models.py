@@ -420,3 +420,69 @@ class AiChangeRecord(Base):
     created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
     embedded_at: Mapped[datetime | None] = mapped_column(timestamptz)
     embedding_error: Mapped[str | None]
+
+
+class InvariantViolation(Base):
+    """One row per Phase 22 hook-time invariant violation (Phase 23,
+    docs/AI_NATIVE_PLAN.md) — written by `.claude/hooks/check_invariants.sh`
+    as a side effect of blocking (exit 2), never a replacement for it.
+    `ai_change_record_id` stays NULL for every hook-time write: no commit
+    exists yet at hook-fire time (Known Trap 1), so there's nothing to
+    link to. A violation that never gets a linked commit — because the
+    agent fixed it and the fixed version is what actually got committed —
+    is the expected, correct outcome for most rows here, not a gap.
+    """
+
+    __tablename__ = "invariant_violations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    invariant_name: Mapped[str]
+    file_paths: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    message: Mapped[str]
+    detected_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+    ai_change_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ai_change_records.id", ondelete="SET NULL")
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "invariant_name IN ('migration_symmetry', 'coupled_files')",
+            name="ck_invariant_violations_invariant_name",
+        ),
+    )
+
+
+class IncidentChangeLink(Base):
+    """Links an incident to an AI change record the worker's
+    `link_recent_changes` cron job (Phase 23, docs/AI_NATIVE_PLAN.md)
+    judged related — a fixed 30-minute lookback before the incident
+    opened plus a deliberately crude service-name/file-path substring
+    match (Known Trap 2). This only *annotates* an incident that already
+    exists; it never changes which anomalies get grouped into which
+    incident (worker/app/correlation/'s own concern, untouched).
+
+    The composite primary key doubles as the idempotency guard
+    `link_recent_changes`'s own `ON CONFLICT DO NOTHING` relies on (Known
+    Trap 3) — the job re-scans recently-opened incidents every tick, so a
+    duplicate insert attempt for the same (incident, change) pair is the
+    normal case, not an error.
+    """
+
+    __tablename__ = "incident_change_links"
+
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("incident_candidates.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    ai_change_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ai_change_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    linked_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+    link_reason: Mapped[str]

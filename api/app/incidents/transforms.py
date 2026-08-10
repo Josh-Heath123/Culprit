@@ -6,8 +6,9 @@ vs app/anomaly/job.py).
 
 from typing import Literal, cast
 
-from app.db.models import Anomaly, IncidentCandidate
+from app.db.models import AiChangeRecord, Anomaly, IncidentCandidate
 from app.incidents.schemas import (
+    AiChangeRecordSummary,
     AnomalyOut,
     CitedEvidenceOut,
     IncidentDetail,
@@ -69,7 +70,18 @@ def incident_summary(incident: IncidentCandidate) -> IncidentSummary:
     )
 
 
-def incident_detail(incident: IncidentCandidate) -> IncidentDetail:
+def ai_change_record_summary(record: AiChangeRecord) -> AiChangeRecordSummary:
+    return AiChangeRecordSummary(
+        id=record.id,
+        commit_sha=record.commit_sha,
+        summary=record.summary,
+        committed_at=record.committed_at,
+    )
+
+
+def incident_detail(
+    incident: IncidentCandidate, linked_records: list[AiChangeRecord]
+) -> IncidentDetail:
     anomalies = list(incident.anomalies)
     evidence_rows = incident.root_cause_evidence or []
     return IncidentDetail(
@@ -86,4 +98,5 @@ def incident_detail(incident: IncidentCandidate) -> IncidentDetail:
         root_cause_confidence_reason=incident.root_cause_confidence_reason,
         root_cause_evidence=[CitedEvidenceOut(**row) for row in evidence_rows],
         root_cause_generated_at=incident.root_cause_generated_at,
+        linked_ai_change_records=[ai_change_record_summary(r) for r in linked_records],
     )

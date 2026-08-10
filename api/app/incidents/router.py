@@ -16,7 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.incidents.limiter import limiter
 from app.incidents.schemas import IncidentDetail, PaginatedIncidents
-from app.incidents.service import DEFAULT_LIMIT, MAX_LIMIT, get_incident, list_incidents
+from app.incidents.service import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    get_incident,
+    get_linked_ai_change_records,
+    list_incidents,
+)
 from app.incidents.transforms import incident_detail, incident_summary
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -51,7 +57,8 @@ async def get_incident_endpoint(
     incident = await get_incident(session, incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="incident not found")
-    return incident_detail(incident)
+    linked_records = await get_linked_ai_change_records(session, incident_id)
+    return incident_detail(incident, linked_records)
 
 
 @router.post("/{incident_id}/regenerate-root-cause", status_code=202)

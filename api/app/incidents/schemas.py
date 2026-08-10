@@ -19,6 +19,20 @@ class CitedEvidenceOut(BaseModel):
     passage: str
 
 
+class AiChangeRecordSummary(BaseModel):
+    """A small citation-like shape (Phase 23, docs/AI_NATIVE_PLAN.md) —
+    same minimalism as CitedEvidenceOut above, not a full
+    AiChangeRecordOut duplicate. `worker/app/memory/link_job.py`'s own
+    `link_reason` isn't included here; it describes the (service, file)
+    pair that triggered one specific link, not a property of the change
+    record itself."""
+
+    id: UUID
+    commit_sha: str
+    summary: str
+    committed_at: datetime
+
+
 class IncidentSummary(BaseModel):
     """List-item shape (GET /incidents). Includes anomalies and the
     lightweight root-cause fields — the timeline (dense per-service marks
@@ -49,6 +63,10 @@ class IncidentDetail(IncidentSummary):
     root_cause_confidence_reason: str | None
     root_cause_evidence: list[CitedEvidenceOut]
     root_cause_generated_at: datetime | None
+    #: Phase 23: AI change records worker/app/memory/link_job.py judged
+    #: related to this incident. Detail-only, same reasoning as every
+    #: other field in this class — the list endpoint doesn't pay for it.
+    linked_ai_change_records: list[AiChangeRecordSummary]
 
 
 class PaginatedIncidents(BaseModel):

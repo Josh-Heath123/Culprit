@@ -42,6 +42,15 @@ assert_contains() {
   esac
 }
 
+assert_file_exists() {
+  [ -f "$1" ] || fail "$2 -- expected file to exist: $1"
+}
+
+assert_file_absent() {
+  [ -f "$1" ] && fail "$2 -- expected file NOT to exist: $1"
+  return 0
+}
+
 # --- fake uv -----------------------------------------------------------
 FAKE_BIN_DIR="$WORKDIR/fakebin"
 mkdir -p "$FAKE_BIN_DIR"
@@ -51,7 +60,11 @@ printf '%s\n' "$*" >> "$UV_CALLS_FILE"
 case "$*" in
   *check_coupled_files.py*)
     if [ "${FAKE_COUPLED_EXIT:-0}" -ne 0 ]; then
-      echo "FAKE COUPLED VIOLATION" >&2
+      # Realistic shape (matches check_coupled_files.py's own format
+      # exactly) -- Test 6 below relies on the quoted paths being
+      # extractable the same way the real hook extracts them.
+      echo 'Coupled-file violations (see scripts/coupled_files.yaml):' >&2
+      echo '  - "a" changed but its declared pair "b" did not' >&2
       exit "${FAKE_COUPLED_EXIT}"
     fi
     echo "No coupled-file violations across 1 declared pair(s)."
@@ -71,6 +84,27 @@ case "$*" in
 esac
 EOF
 chmod +x "$FAKE_BIN_DIR/uv"
+
+# --- fake curl (Phase 23: the violation-persistence POST) --------------
+# Records the -d payload to $CURL_PAYLOAD_FILE and honors -o <file> (so
+# the hook's own `rm -f "$response_file"` has something real to remove) --
+# same pattern as .claude/hooks/tests/test_capture_ai_change.sh's own
+# fake curl.
+cat >"$FAKE_BIN_DIR/curl" <<'EOF'
+#!/usr/bin/env bash
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "-d" ]; then
+    printf '%s' "$arg" >> "$CURL_PAYLOAD_FILE"
+  fi
+  if [ "$prev" = "-o" ]; then
+    : > "$arg"
+  fi
+  prev="$arg"
+done
+exit 0
+EOF
+chmod +x "$FAKE_BIN_DIR/curl"
 
 # --- throwaway git repo (just needs to exist for `git rev-parse
 # --show-toplevel` to succeed -- the hook never reads its content) -----
@@ -116,7 +150,7 @@ export FAKE_COUPLED_EXIT=1
 STDERR_OUTPUT="$(run_hook "$REPO/some/file.py" 2>&1 1>/dev/null)"
 HOOK_EXIT=$?
 [ "$HOOK_EXIT" -eq 2 ] || fail "Test 2: expected exit 2, got $HOOK_EXIT"
-assert_contains "$STDERR_OUTPUT" "FAKE COUPLED VIOLATION" "Test 2: stderr"
+assert_contains "$STDERR_OUTPUT" "declared pair" "Test 2: stderr"
 CALL_COUNT="$(wc -l < "$UV_CALLS_FILE" | tr -d ' ')"
 [ "$CALL_COUNT" = "1" ] || fail "Test 2: expected exactly 1 uv call, got $CALL_COUNT"
 unset FAKE_COUPLED_EXIT
@@ -155,6 +189,55 @@ HOOK_EXIT=$?
 [ "$HOOK_EXIT" -eq 0 ] || fail "Test 5: expected exit 0, got $HOOK_EXIT"
 CALL_COUNT="$(wc -l < "$UV_CALLS_FILE" | tr -d ' ')"
 [ "$CALL_COUNT" = "2" ] || fail "Test 5: expected exactly 2 uv calls (backslash path), got $CALL_COUNT"
+
+# --- Test 6: a coupled_files violation, AGENT_AUTOMATION_TOKEN set ->
+# curl POSTs invariant_name=coupled_files with file_paths extracted from
+# the violation message's own quoted substrings (Phase 23)
+UV_CALLS_FILE="$WORKDIR/calls_6.txt"
+CURL_PAYLOAD_FILE="$WORKDIR/curl_payload_6.txt"
+export UV_CALLS_FILE CURL_PAYLOAD_FILE
+export AGENT_AUTOMATION_TOKEN="test-token-123"
+export FAKE_COUPLED_EXIT=1
+run_hook "$REPO/some/file.py" >/dev/null 2>&1
+assert_file_exists "$CURL_PAYLOAD_FILE" "Test 6"
+if [ -f "$CURL_PAYLOAD_FILE" ]; then
+  PAYLOAD="$(cat "$CURL_PAYLOAD_FILE")"
+  assert_contains "$PAYLOAD" '"invariant_name": "coupled_files"' "Test 6: invariant_name"
+  assert_contains "$PAYLOAD" '"a"' "Test 6: file_paths includes a"
+  assert_contains "$PAYLOAD" '"b"' "Test 6: file_paths includes b"
+  assert_contains "$PAYLOAD" "declared pair" "Test 6: message"
+fi
+unset FAKE_COUPLED_EXIT
+
+# --- Test 7: a migration_symmetry violation, AGENT_AUTOMATION_TOKEN set
+# -> curl POSTs invariant_name=migration_symmetry with file_paths=[the
+# migration file itself] (never quote-extracted -- that message quotes
+# table/role names, not paths)
+UV_CALLS_FILE="$WORKDIR/calls_7.txt"
+CURL_PAYLOAD_FILE="$WORKDIR/curl_payload_7.txt"
+export UV_CALLS_FILE CURL_PAYLOAD_FILE
+export FAKE_SYMMETRY_EXIT=1
+run_hook "$REPO/api/migrations/versions/some_migration.py" >/dev/null 2>&1
+assert_file_exists "$CURL_PAYLOAD_FILE" "Test 7"
+if [ -f "$CURL_PAYLOAD_FILE" ]; then
+  PAYLOAD="$(cat "$CURL_PAYLOAD_FILE")"
+  assert_contains "$PAYLOAD" '"invariant_name": "migration_symmetry"' "Test 7: invariant_name"
+  assert_contains "$PAYLOAD" "some_migration.py" "Test 7: file_paths"
+  assert_contains "$PAYLOAD" "FAKE SYMMETRY VIOLATION" "Test 7: message"
+fi
+unset FAKE_SYMMETRY_EXIT
+unset AGENT_AUTOMATION_TOKEN
+
+# --- Test 8: a violation occurs but AGENT_AUTOMATION_TOKEN is unset ->
+# curl must never be called (persistence silently no-ops, exit 2 still
+# happens -- see Test 2/4 above for the exit-code side of this)
+UV_CALLS_FILE="$WORKDIR/calls_8.txt"
+CURL_PAYLOAD_FILE="$WORKDIR/curl_payload_8.txt"
+export UV_CALLS_FILE CURL_PAYLOAD_FILE
+export FAKE_COUPLED_EXIT=1
+run_hook "$REPO/some/file.py" >/dev/null 2>&1
+assert_file_absent "$CURL_PAYLOAD_FILE" "Test 8: no token must not call curl"
+unset FAKE_COUPLED_EXIT
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "All check_invariants.sh tests passed."

@@ -30,10 +30,13 @@ from app.auth.dependencies import require_auth, require_auth_or_agent
 from app.auth.security import AuthenticatedUser
 from app.memory.schemas import (
     AiChangeRecordCreate,
+    AiChangeRecordDetail,
     AiChangeRecordOut,
     ArchitectureDecisionCreate,
     ArchitectureDecisionOut,
     ArchitectureDecisionPatch,
+    InvariantViolationCreate,
+    InvariantViolationOut,
     PaginatedAiChangeRecords,
     PaginatedArchitectureDecisions,
 )
@@ -42,8 +45,9 @@ from app.memory.service import (
     MAX_LIMIT,
     create_ai_change_record,
     create_architecture_decision,
+    create_invariant_violation,
     delete_architecture_decision,
-    get_ai_change_record,
+    get_ai_change_record_detail,
     get_architecture_decision,
     list_ai_change_records,
     list_architecture_decisions,
@@ -175,13 +179,16 @@ async def list_ai_change_records_endpoint(
 
 @router.get(
     "/ai-change-records/{record_id}",
-    response_model=AiChangeRecordOut,
+    response_model=AiChangeRecordDetail,
     dependencies=[Depends(require_auth)],
 )
 async def get_ai_change_record_endpoint(
     record_id: UUID, session: AsyncSession = Depends(get_read_session)
-) -> AiChangeRecordOut:
-    record = await get_ai_change_record(session, record_id)
+) -> AiChangeRecordDetail:
+    """Detail shape (Phase 23, docs/AI_NATIVE_PLAN.md): also carries
+    linked_incident_ids and violations — a read-side addition over the
+    base AiChangeRecordOut every other endpoint here still returns."""
+    record = await get_ai_change_record_detail(session, record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="AI change record not found")
     return record
@@ -208,3 +215,28 @@ async def create_ai_change_record_endpoint(
     if created:
         await arq_pool.enqueue_job("embed_ai_change_record", str(record.id))
     return record
+
+
+# --- Invariant violations ----------------------------------------------
+
+
+@router.post(
+    "/invariant-violations",
+    response_model=InvariantViolationOut,
+    status_code=201,
+)
+async def create_invariant_violation_endpoint(
+    body: InvariantViolationCreate,
+    session: AsyncSession = Depends(get_write_session),
+    _agent_or_user: AuthenticatedUser | None = Depends(require_auth_or_agent),
+) -> InvariantViolationOut:
+    """Phase 23 (docs/AI_NATIVE_PLAN.md): `.claude/hooks/check_invariants.sh`
+    (Phase 22) calls this as a side effect of blocking an Edit/Write, not a
+    replacement for it — the hook's own exit 2 happens either way,
+    regardless of whether this call succeeds. `require_auth_or_agent`
+    reused unchanged from Phase 21 (the same automation-token path
+    .claude/hooks/capture_ai_change.sh already uses); no idempotency key
+    here, unlike POST /ai-change-records's commit_sha — a violation is a
+    point-in-time detection event, not a resource with a natural identity
+    to dedupe against."""
+    return await create_invariant_violation(session, body)

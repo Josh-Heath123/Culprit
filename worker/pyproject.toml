@@ -57,3 +57,16 @@ name = "RAG/LLM stays isolated from anomaly detection"
 type = "forbidden"
 source_modules = ["app.rag"]
 forbidden_modules = ["app.anomaly"]
+
+# Phase 23 (docs/AI_NATIVE_PLAN.md, invariant 8): app.memory reads
+# correlation's *output* (incident_candidates/anomalies rows), never an
+# LLM. Deliberately one-directional, unlike the pair above -- nothing in
+# Phases 21-25 needs app.rag -> app.memory forbidden too (Known Trap 4),
+# and adding it preemptively would be exactly the kind of speculative
+# rule invariant 8's own "don't build a more elaborate rules engine than
+# justified" reasoning warns against.
+[[tool.importlinter.contracts]]
+name = "engineering memory stays isolated from RAG/LLM"
+type = "forbidden"
+source_modules = ["app.memory"]
+forbidden_modules = ["app.rag"]

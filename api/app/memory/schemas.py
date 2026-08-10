@@ -72,3 +72,34 @@ class PaginatedAiChangeRecords(BaseModel):
     limit: int
     offset: int
     total: int
+
+
+class InvariantViolationCreate(BaseModel):
+    """The shape `.claude/hooks/check_invariants.sh` POSTs (Phase 23,
+    docs/AI_NATIVE_PLAN.md) — every field comes straight from one of
+    Phase 22's two check scripts' own output, never typed by a human."""
+
+    invariant_name: Literal["migration_symmetry", "coupled_files"]
+    file_paths: list[str] = Field(default_factory=list)
+    message: str = Field(min_length=1)
+
+
+class InvariantViolationOut(BaseModel):
+    id: UUID
+    invariant_name: Literal["migration_symmetry", "coupled_files"]
+    file_paths: list[str]
+    message: str
+    detected_at: datetime | None
+
+
+class AiChangeRecordDetail(AiChangeRecordOut):
+    """Detail shape (GET /ai-change-records/{id}): everything in the base
+    shape plus the two Phase 23 links — which incidents this change was
+    judged related to, and which Phase 22 violations (if any) preceded
+    it. Not part of AiChangeRecordOut itself, same reasoning as
+    app/incidents/schemas.py's IncidentSummary/IncidentDetail split: the
+    paginated list endpoint would otherwise pay for a join per row it
+    never displays."""
+
+    linked_incident_ids: list[UUID]
+    violations: list[InvariantViolationOut]
