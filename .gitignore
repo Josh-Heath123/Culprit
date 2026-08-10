@@ -16,6 +16,13 @@ __pycache__/
 !.env.example
 !.env.prod.example
 
+# Phase 24 (docs/AI_NATIVE_PLAN.md): a local Claude Code MCP registration
+# for mcp_server/ can embed MCP_READER_DATABASE_URL/VOYAGE_API_KEY
+# directly in its own `env` block (see
+# docs/AI_NATIVE_INSTRUMENTATION.md) — never committed, same reasoning
+# as .env above.
+.mcp.json
+
 # Node / frontend
 node_modules/
 dist/

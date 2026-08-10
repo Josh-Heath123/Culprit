@@ -15,20 +15,22 @@ down:
 dev: up
     cd api && uv run uvicorn app.main:app --reload
 
-# Run the test suite for both api and worker
+# Run the test suite for api, worker, and mcp_server
 test:
     (cd api && uv run pytest)
     (cd worker && uv run pytest)
+    (cd mcp_server && uv run pytest)
 
 # Apply database migrations
 migrate: up
     cd api && uv run alembic upgrade head
 
-# Lint both projects
+# Lint all projects
 lint:
     (cd api && uv run ruff check .)
     (cd worker && uv run ruff check .)
     (cd demo-services && uv run ruff check .)
+    (cd mcp_server && uv run ruff check .)
 
 # Enforce module-isolation contracts (e.g. anomaly detection vs RAG/LLM)
 lint-imports:
@@ -49,11 +51,12 @@ check-invariants:
     uv run --project api python scripts/check_coupled_files.py
     uv run --project api python scripts/check_migration_symmetry.py
 
-# Type-check both projects
+# Type-check all projects
 typecheck:
     (cd api && uv run pyright)
     (cd worker && uv run pyright)
     (cd demo-services && uv run pyright)
+    (cd mcp_server && uv run pyright)
 
 # Demo services (Phase 2) — run each in its own terminal
 demo-inventory:
@@ -79,6 +82,15 @@ ingest-gateway:
 
 consumer:
     cd worker && uv run arq app.main.WorkerSettings
+
+# Culprit MCP server (Phase 24) -- stdio transport, register it in a
+# Claude Code session's own MCP config (docs/AI_NATIVE_INSTRUMENTATION.md).
+# Run from the repo root, not `cd mcp_server &&`: mcp_server/ is a *flat*
+# package (pyproject.toml beside __init__.py, not one level above it),
+# so `python -m mcp_server` needs a cwd *above* the package directory to
+# resolve `import mcp_server` at all.
+mcp-server:
+    uv run --project mcp_server python -m mcp_server
 
 # RAG + root-cause narrative (Phase 6) — embed and store the seed
 # postmortem fixtures. Idempotent; safe to re-run after editing

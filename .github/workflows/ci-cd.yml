@@ -31,6 +31,7 @@ jobs:
       - run: cd api && uv run ruff check .
       - run: cd worker && uv run ruff check .
       - run: cd demo-services && uv run ruff check .
+      - run: cd mcp_server && uv run ruff check .
 
   typecheck:
     needs: lint
@@ -51,6 +52,7 @@ jobs:
       - run: cd api && uv run pyright
       - run: cd worker && uv run pyright
       - run: cd demo-services && uv run pyright
+      - run: cd mcp_server && uv run pyright
       # The RAG/anomaly-detection module-isolation contract (CLAUDE.md) —
       # enforced here, not just documented, same as `just lint-imports`.
       - run: cd worker && uv run lint-imports
@@ -132,6 +134,8 @@ jobs:
         run: cd api && uv run pytest
       - name: pytest (worker)
         run: cd worker && uv run pytest
+      - name: pytest (mcp_server)
+        run: cd mcp_server && uv run pytest
 
   build:
     needs: test
@@ -156,6 +160,16 @@ jobs:
           - image: frontend
             context: frontend
             dockerfile: frontend/Dockerfile
+          # Phase 24 (docs/AI_NATIVE_PLAN.md): mcp_server has no
+          # culprit-shared dependency (unlike api/worker), so its own
+          # directory is a sufficient build context — see its own
+          # Dockerfile's comment. Built, scanned, and pushed like every
+          # other image here, but never wired into
+          # docker-compose.prod.yml/deploy.sh (Out of scope) — a team
+          # runs this themselves.
+          - image: mcp_server
+            context: mcp_server
+            dockerfile: mcp_server/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

@@ -53,6 +53,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("POSTMORTEM_WRITER_DB_PASSWORD", "postmortem-writer role"),
     ("JWT_SECRET_KEY", "JWT signing key"),
     ("AGENT_AUTOMATION_TOKEN", "AI change-capture hook (Phase 21)"),
+    ("MCP_READER_DB_PASSWORD", "mcp-reader role (Phase 24)"),
 ]
 
 #: DB name/user for a fresh install. Deliberately "culprit", not
@@ -204,6 +205,15 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     # hook works out of the box on a fresh install rather than silently
     # doing nothing until someone notices and sets it by hand.
     env["AGENT_AUTOMATION_TOKEN"] = passwords["AGENT_AUTOMATION_TOKEN"]
+
+    # Phase 24 (docs/AI_NATIVE_PLAN.md): mcp-reader role -- read-only for
+    # mcp_server/, the local stdio MCP server. Required at migration time
+    # (that phase's own migration's _require_env), same reasoning as
+    # POSTMORTEM_WRITER_DB_PASSWORD above.
+    env["MCP_READER_DB_PASSWORD"] = passwords["MCP_READER_DB_PASSWORD"]
+    env["MCP_READER_DATABASE_URL"] = _db_url(
+        "mcp-reader", passwords["MCP_READER_DB_PASSWORD"], "postgres"
+    )
 
     env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = ""
 
