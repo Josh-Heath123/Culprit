@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import IncidentCandidate
+from app.db.models import AiChangeRecord, IncidentCandidate, IncidentChangeLink
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
@@ -49,3 +49,25 @@ async def get_incident(session: AsyncSession, incident_id: UUID) -> IncidentCand
             .where(IncidentCandidate.id == incident_id)
         )
     ).scalar_one_or_none()
+
+
+async def get_linked_ai_change_records(
+    session: AsyncSession, incident_id: UUID
+) -> list[AiChangeRecord]:
+    """Phase 23 (docs/AI_NATIVE_PLAN.md): a plain join against
+    incident_change_links, not an ORM relationship — IncidentCandidate/
+    AiChangeRecord have no `relationship()` wired between them (Phase 21's
+    AiChangeRecord predates this table entirely), and one isn't needed
+    for a single read-only lookup like this."""
+    rows = (
+        await session.execute(
+            select(AiChangeRecord)
+            .join(
+                IncidentChangeLink,
+                IncidentChangeLink.ai_change_record_id == AiChangeRecord.id,
+            )
+            .where(IncidentChangeLink.incident_id == incident_id)
+            .order_by(AiChangeRecord.committed_at.desc())
+        )
+    ).scalars()
+    return list(rows)

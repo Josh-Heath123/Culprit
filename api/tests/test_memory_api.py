@@ -49,7 +49,12 @@ async def client(
     db_engine: AsyncEngine,
 ) -> AsyncIterator[TestClient]:
     async with db_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE architecture_decisions, ai_change_records CASCADE"))
+        await conn.execute(
+            text(
+                "TRUNCATE architecture_decisions, ai_change_records, "
+                "invariant_violations, incident_change_links, incident_candidates CASCADE"
+            )
+        )
         await conn.execute(text("TRUNCATE users CASCADE"))
 
     api_reader_url = role_database_url("api-reader", "API_READER_PASSWORD")
@@ -321,6 +326,149 @@ def test_no_embedding_vector_in_change_record_responses(client: TestClient) -> N
         assert '"embedding"' not in r.text
 
 
+def test_change_record_detail_starts_with_no_links_or_violations(client: TestClient) -> None:
+    created = client.post(
+        "/ai-change-records",
+        json=_change_payload("d" * 40),
+        headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
+    ).json()
+    detail = client.get(f"/ai-change-records/{created['id']}").json()
+    assert detail["linked_incident_ids"] == []
+    assert detail["violations"] == []
+
+
+async def test_change_record_detail_shows_persisted_violation(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Phase 23 (docs/AI_NATIVE_PLAN.md): a violation with
+    ai_change_record_id set can only happen via a direct DB write today
+    (Known Trap 1 -- the hook-time write path this phase actually builds
+    always leaves it NULL) — inserted directly here via the superuser
+    engine, not through the API, to prove the *read* side works."""
+    created = client.post(
+        "/ai-change-records",
+        json=_change_payload("v" * 40),
+        headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
+    ).json()
+    record_id = created["id"]
+
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO invariant_violations "
+                "(invariant_name, file_paths, message, ai_change_record_id) "
+                "VALUES ('coupled_files', '[\"a\", \"b\"]'::jsonb, "
+                "'\"a\" changed but its declared pair \"b\" did not', :record_id)"
+            ),
+            {"record_id": record_id},
+        )
+
+    detail = client.get(f"/ai-change-records/{record_id}").json()
+    assert len(detail["violations"]) == 1
+    violation = detail["violations"][0]
+    assert violation["invariant_name"] == "coupled_files"
+    assert violation["file_paths"] == ["a", "b"]
+
+
+async def test_change_record_detail_shows_linked_incident(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Same reasoning as the violation test above — worker/app/memory/
+    link_job.py is what actually creates incident_change_links rows in
+    production; inserted directly here to prove the API's read side."""
+    created = client.post(
+        "/ai-change-records",
+        json=_change_payload("l" * 40),
+        headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
+    ).json()
+    record_id = created["id"]
+    incident_id = str(uuid4())
+
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO incident_candidates (id, opened_at, last_anomaly_at, status) "
+                "VALUES (:incident_id, now(), now(), 'open')"
+            ),
+            {"incident_id": incident_id},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO incident_change_links "
+                "(incident_id, ai_change_record_id, link_reason) "
+                "VALUES (:incident_id, :record_id, 'order-service anomaly 14m after this change')"
+            ),
+            {"incident_id": incident_id, "record_id": record_id},
+        )
+
+    detail = client.get(f"/ai-change-records/{record_id}").json()
+    assert detail["linked_incident_ids"] == [incident_id]
+
+
+# --- Invariant violations ---------------------------------------------------
+
+
+def _violation_payload(**kwargs) -> dict:
+    return {
+        "invariant_name": "coupled_files",
+        "file_paths": ["worker/app/db.py", "api/app/db/models.py"],
+        "message": '"worker/app/db.py" changed but its declared pair '
+        '"api/app/db/models.py" did not',
+        **kwargs,
+    }
+
+
+def test_create_violation_via_agent_token(client: TestClient) -> None:
+    response = client.post(
+        "/invariant-violations",
+        json=_violation_payload(),
+        headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["invariant_name"] == "coupled_files"
+    assert body["file_paths"] == ["worker/app/db.py", "api/app/db/models.py"]
+
+
+def test_create_violation_via_user_jwt(client: TestClient) -> None:
+    # No explicit Authorization override -- the client fixture's default
+    # header is a real user's JWT, same as ai-change-records' own test.
+    response = client.post("/invariant-violations", json=_violation_payload())
+    assert response.status_code == 201, response.text
+
+
+def test_create_violation_rejects_missing_or_wrong_credential(client: TestClient) -> None:
+    no_auth = client.post(
+        "/invariant-violations", json=_violation_payload(), headers={"Authorization": ""}
+    )
+    assert no_auth.status_code == 401
+
+    wrong_token = client.post(
+        "/invariant-violations",
+        json=_violation_payload(),
+        headers={"Authorization": "Bearer not-the-right-token"},
+    )
+    assert wrong_token.status_code == 401
+
+
+def test_create_violation_rejects_unknown_invariant_name(client: TestClient) -> None:
+    response = client.post(
+        "/invariant-violations",
+        json=_violation_payload(invariant_name="something_else"),
+        headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
+    )
+    assert response.status_code == 422
+
+
+def test_create_violation_rejects_empty_message(client: TestClient) -> None:
+    response = client.post(
+        "/invariant-violations",
+        json=_violation_payload(message=""),
+        headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
+    )
+    assert response.status_code == 422
+
+
 # --- Least privilege ---------------------------------------------------------
 
 
@@ -349,5 +497,89 @@ async def test_api_reader_cannot_write_to_ai_change_records(role_database_url) -
                         "VALUES ('deadbeef', 'x', now())"
                     )
                 )
+    finally:
+        await engine.dispose()
+
+
+async def test_api_reader_cannot_write_to_invariant_violations(role_database_url) -> None:
+    api_reader_url = role_database_url("api-reader", "API_READER_PASSWORD")
+    engine = create_async_engine(api_reader_url)
+    try:
+        with pytest.raises(DBAPIError):
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        "INSERT INTO invariant_violations (invariant_name, message) "
+                        "VALUES ('coupled_files', 'x')"
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
+async def test_api_reader_cannot_write_to_incident_change_links(role_database_url) -> None:
+    api_reader_url = role_database_url("api-reader", "API_READER_PASSWORD")
+    engine = create_async_engine(api_reader_url)
+    try:
+        with pytest.raises(DBAPIError):
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        "INSERT INTO incident_change_links "
+                        "(incident_id, ai_change_record_id, link_reason) "
+                        "VALUES (gen_random_uuid(), gen_random_uuid(), 'x')"
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
+async def test_correlation_engine_can_read_ai_change_records_and_write_links(
+    role_database_url, db_engine: AsyncEngine
+) -> None:
+    """Phase 23: worker/app/memory/link_job.py runs under exactly this
+    role -- a real, migrated-role proof that its grants (added by this
+    phase's own migration, not shown in the plan's own illustrative SQL
+    block -- see that migration's module docstring) actually work.
+    worker/tests/test_link_job.py never touches real Postgres roles at
+    all (it bypasses Alembic entirely, per that file's own docstring),
+    so this is the only place either grant is actually exercised."""
+    correlation_engine_url = role_database_url(
+        "correlation-engine", "CORRELATION_ENGINE_DB_PASSWORD"
+    )
+    engine = create_async_engine(correlation_engine_url)
+    try:
+        record_id, incident_id = str(uuid4()), str(uuid4())
+        async with db_engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO ai_change_records (id, commit_sha, summary, committed_at) "
+                    "VALUES (:id, 'deadbeefcafe', 'x', now())"
+                ),
+                {"id": record_id},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO incident_candidates (id, opened_at, last_anomaly_at, status) "
+                    "VALUES (:id, now(), now(), 'open')"
+                ),
+                {"id": incident_id},
+            )
+
+        async with engine.connect() as conn:
+            result = await conn.execute(
+                text("SELECT commit_sha FROM ai_change_records WHERE id = :id"), {"id": record_id}
+            )
+            assert result.scalar_one() == "deadbeefcafe"
+
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO incident_change_links "
+                    "(incident_id, ai_change_record_id, link_reason) "
+                    "VALUES (:incident_id, :record_id, 'test')"
+                ),
+                {"incident_id": incident_id, "record_id": record_id},
+            )
     finally:
         await engine.dispose()

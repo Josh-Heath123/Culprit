@@ -8,20 +8,28 @@ enough that the split app/incidents/ uses would just be indirection.
 """
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AiChangeRecord, ArchitectureDecision
+from app.db.models import (
+    AiChangeRecord,
+    ArchitectureDecision,
+    IncidentChangeLink,
+    InvariantViolation,
+)
 from app.memory.schemas import (
     AiChangeRecordCreate,
+    AiChangeRecordDetail,
     AiChangeRecordOut,
     ArchitectureDecisionCreate,
     ArchitectureDecisionOut,
     ArchitectureDecisionPatch,
+    InvariantViolationCreate,
+    InvariantViolationOut,
 )
 
 DEFAULT_LIMIT = 20
@@ -242,3 +250,83 @@ async def create_ai_change_record(
 
     await session.refresh(record)
     return _change_record_out(record), True
+
+
+async def get_ai_change_record_detail(
+    session: AsyncSession, record_id: UUID
+) -> AiChangeRecordDetail | None:
+    """The detail shape (Phase 23, docs/AI_NATIVE_PLAN.md): the base
+    record plus which incidents `worker/app/memory/link_job.py` linked it
+    to, and which Phase 22 violations (if any) preceded it. Two extra
+    reads, not a join — this package's write paths never touch either
+    new table directly, so there's no ORM relationship to eagerly load."""
+    record = await session.get(AiChangeRecord, record_id)
+    if record is None:
+        return None
+
+    linked_incident_ids = list(
+        (
+            await session.execute(
+                select(IncidentChangeLink.incident_id).where(
+                    IncidentChangeLink.ai_change_record_id == record_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    violations = (
+        (
+            await session.execute(
+                select(InvariantViolation)
+                .where(InvariantViolation.ai_change_record_id == record_id)
+                .order_by(InvariantViolation.detected_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    return AiChangeRecordDetail(
+        **_change_record_out(record).model_dump(),
+        linked_incident_ids=linked_incident_ids,
+        violations=[_violation_out(v) for v in violations],
+    )
+
+
+# --- Invariant violations ------------------------------------------------
+
+
+_InvariantName = Literal["migration_symmetry", "coupled_files"]
+
+
+def _violation_out(violation: InvariantViolation) -> InvariantViolationOut:
+    return InvariantViolationOut(
+        id=violation.id,
+        invariant_name=cast(_InvariantName, violation.invariant_name),
+        file_paths=list(violation.file_paths),
+        message=violation.message,
+        detected_at=violation.detected_at,
+    )
+
+
+async def create_invariant_violation(
+    session: AsyncSession, data: InvariantViolationCreate
+) -> InvariantViolationOut:
+    """`ai_change_record_id` always stays NULL here -- this is
+    exclusively the hook-time write path (docs/AI_NATIVE_PLAN.md Phase 23
+    Known Trap 1): no commit exists yet when
+    `.claude/hooks/check_invariants.sh` fires, so there's nothing to
+    resolve a link against. A violation with no linked commit — because
+    the agent fixed it and the fixed version is what actually got
+    committed — is the expected, correct outcome for most rows this
+    writes, not a gap to backfill."""
+    violation = InvariantViolation(
+        invariant_name=data.invariant_name,
+        file_paths=data.file_paths,
+        message=data.message,
+    )
+    session.add(violation)
+    await session.commit()
+    await session.refresh(violation)
+    return _violation_out(violation)

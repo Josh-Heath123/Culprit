@@ -18,6 +18,7 @@ configure_observability("culprit-worker")
 from app.anomaly.job import score_new_metrics  # noqa: E402
 from app.consumer import drain_edges, drain_streams, ensure_consumer_groups  # noqa: E402
 from app.correlation.job import correlate_recent_anomalies  # noqa: E402
+from app.memory.link_job import link_recent_changes  # noqa: E402
 from app.rag.embed_job import (  # noqa: E402
     embed_ai_change_record,
     embed_architecture_decision,
@@ -116,6 +117,15 @@ class WorkerSettings:
             correlate_recent_anomalies,  # pyright: ignore[reportArgumentType]
             second=set(range(4, 60, 5)),
         ),
+        # Phase 23 (docs/AI_NATIVE_PLAN.md): offset 3 was the one unused
+        # slot in this family — deliberately placed before
+        # correlate_recent_anomalies's own offset 4, not after. Running
+        # before this cycle's correlation step means an incident created
+        # in *this* tick is only picked up on the *next* offset-3 run, a
+        # few seconds later — acceptable (see link_job.py's own
+        # INCIDENT_RESCAN_WINDOW, generous enough that a one-cycle delay
+        # here never causes a real match to be missed).
+        cron(link_recent_changes, second=set(range(3, 60, 5))),  # pyright: ignore[reportArgumentType]
     ]
     on_startup = startup
     on_shutdown = shutdown

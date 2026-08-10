@@ -110,6 +110,11 @@ async def _insert_change_record(
             id=row_id,
             commit_sha=uuid.uuid4().hex,
             summary="Fix the flaky retry test.",
+            # Phase 23 added this column to worker's Core mirror as
+            # NOT NULL with no server_default (unlike the real,
+            # Alembic-migrated schema) -- metadata.create_all here
+            # doesn't carry that default, so every insert must supply it.
+            files_changed=[],
             embedding=embedding,
             committed_at=datetime.now(UTC),
         )
@@ -180,6 +185,7 @@ async def test_retrieve_similar_records_ai_change_uses_commit_sha_as_title(
             id=row_id,
             commit_sha="deadbeef" * 5,
             summary="A commit message.",
+            files_changed=[],
             embedding=_vec((0, 1.0)),
             committed_at=datetime.now(UTC),
         )

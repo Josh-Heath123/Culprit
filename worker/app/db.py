@@ -145,14 +145,28 @@ architecture_decisions = sa.Table(
 # `summary` is the text embed_job.py embeds (there's no `body` column on
 # this table); `commit_sha` stands in as this table's "title" for
 # retrieval.py's generalized UNION ALL (worker/app/rag/retrieval.py).
+# `files_changed` is mirrored too (Phase 23) — app/memory/link_job.py's
+# service/file substring heuristic reads it; nothing before that phase did.
 ai_change_records = sa.Table(
     "ai_change_records",
     metadata,
     sa.Column("id", UUID(as_uuid=True), primary_key=True),
     sa.Column("commit_sha", sa.String(), nullable=False),
     sa.Column("summary", sa.String(), nullable=False),
+    sa.Column("files_changed", JSONB(), nullable=False),
     sa.Column("embedding", Vector(1024), nullable=True),
     sa.Column("committed_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("embedded_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("embedding_error", sa.String(), nullable=True),
+)
+
+# Phase 23: app/memory/link_job.py inserts here (correlation-engine role);
+# only the columns that job actually writes are mirrored, per this file's
+# own "only enough shape" principle above.
+incident_change_links = sa.Table(
+    "incident_change_links",
+    metadata,
+    sa.Column("incident_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("ai_change_record_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("link_reason", sa.String(), nullable=False),
 )
