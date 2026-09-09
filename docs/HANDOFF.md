@@ -14,6 +14,11 @@ twice.
 - **Both read the whole file first.** It is committed, so `git log docs/HANDOFF.md`
   is the decision history.
 
+**Committing.** Use `git commit -F <message-file>`. The
+`-m "$(cat <<'EOF' ...)"` form triggers a permission prompt on command
+substitution every single time — that is the permission system working correctly,
+not a misconfiguration, and it has blocked three phases in a row.
+
 **The one rule that makes this work:** a phase does not advance on a red gate,
 and Claude Code does not auto-start the next phase. One human keystroke per
 phase is not friction — it is the review checkpoint, and it is the only place a
@@ -26,11 +31,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) |
-| Current phase | **27 — The system model (the circuit)** |
-| Status | Ready to start. 26.1 complete, pending its commit. |
-| Branch | `phase-26-truth-repair` (26 committed as `d39ca3b`; 26.1 staged). **`main` is two branches behind — merge before starting 27.** |
-| Blocking questions | **None.** Q1–Q5 all resolved (§3). |
-| Last gate run | 2026-09-09, all green (§5) |
+| Current phase | **28 — CLI, extractor protocol, intent extraction** |
+| Status | Ready to start once Phase 27 is committed and merged. |
+| Branch | `phase-27-system-model` (staged, uncommitted). `main` already has 26 and 26.1. |
+| Blocking questions | **None.** Q1–Q6 all resolved (§3). |
+| Last gate run | 2026-09-09, all green — 681 tests, both audits clean (§5) |
 
 Phase 25 (memory visualisation) is **cancelled**. Do not implement it.
 
@@ -54,6 +59,9 @@ supersedes the plan.
 | 2026-09-09 | `configured_facts.value` is NULL unless `grant_ref` names an explicit per-key grant, enforced by a CHECK constraint. Facts carry `value_shape`. | Resolves Q3. A convention against storing credentials is not a control. Nearly free now (table empty), a migration over live data after Phase 30. |
 | 2026-09-09 | Phase 26 acceptance criterion 1 reworded; the 10s key cache stays. | Resolves Q4. The original wording was untrue and making it true would put a DB round trip on the ingest hot path. The defect fixed was that revocation previously worked only by accident. |
 | 2026-09-09 | The `value_shape` hole is real. Fix is a closed `ValueShape` type in `culprit_model`, landing in Phase 28, not a wider CHECK constraint. §2.2's claim narrowed immediately to what is actually true. | Resolves Q5. A DB constraint cannot protect a capture bundle that is serialised and never inserted — which is exactly the artefact the guarantee is about. Enforcement belongs in the type. |
+| 2026-09-09 | Invariant 10: a new gate is not accepted until a deliberate mutation makes it fail, targeting the mechanism believed to be load-bearing. | Phase 27's mutation of the round-trip gate stayed green — the gate was fine, the belief about *why* it worked was wrong. A passing check is not evidence until shown it can go red. |
+| 2026-09-09 | `culprit.yaml` round-trip criterion is semantic equality plus a fixed point, not byte equality. Plus a new criterion that `--export` must not silently destroy a hand-maintained file. | Resolves Q6. Byte equality from the first export tests comment preservation — a human convenience, not a model correctness property. The substitution was an honest correction, not a weakening. |
+| 2026-09-09 | Commit with `git commit -F <file>`, never `-m "$(cat <<EOF...)"`. | The heredoc form triggers a permission prompt on command substitution every time — correct behaviour, but it has now blocked three phases running. `-F` matches the allow rule cleanly. |
 | 2026-09-09 | Two new standing invariants: migrations round-trip tested against a real DB in CI (8); every check's scanned roots covered by a test (9). | Phase 26.1 shipped a downgrade defect the AST symmetry checker structurally cannot see, and two consecutive phases found violations hiding outside a check's scanned roots. Both gaps are now gates. |
 | 2026-09-09 | Go for `cli/` — one static binary, CLI and probe agent. | Resolves Q1. D2's revisit trigger stands: ~6k lines by end of Phase 29, or control-plane logic leaking in, means the boundary is wrong. |
 | 2026-09-09 | Product first; phase order unchanged. Phases 29, 30 and 32 each also produce a recorded demo and a short written account. | Resolves Q2. The usable-early ordering is also the better portfolio story; capturing it costs an hour per phase and nothing architecturally. |
@@ -79,6 +87,16 @@ in the end, the better story. Additional standing obligation: Phases 29, 30 and
 32 each produce a recorded demonstration against a real fault and a short
 written account of what the engine established and how. Do it at the end of the
 phase, while the detail is fresh. No architectural consequence.
+
+**Q6 — RESOLVED 2026-09-09.** Rewording accepted; it was a correction, not a
+weakening. "Apply, export, diff is empty" was never the property that mattered —
+byte equality from the first export tests comment preservation, which is a
+convenience for humans editing the file, not a correctness property of the model.
+Semantic equality plus a fixed point tests exactly what the criterion is for.
+Applied to `docs/DIAGNOSTIC_PLAN.md` Phase 27, field 14, together with a new
+criterion: `--export` must not silently destroy a hand-maintained file, since
+comment loss is real even if it isn't a correctness bug. Keep the LIMITS.md
+split you wrote between unavoidable normalisation and design choice.
 
 **Q5 — RESOLVED 2026-09-09.** You were right and the plan was wrong. The CHECK
 guards `value`, the column extractors are told not to use; `value_shape`, the
@@ -126,6 +144,44 @@ Claude Code did not do either — both are outside 26.1's "nothing else" brief.
 `docs/LIMITS.md` and the migration docstring were narrowed to state the real
 scope rather than the claimed one.
 
+**Q6 — Should `connections` carry an authored order, and should
+acceptance criterion 2 be reworded?** (Raised by the Phase 27 phase audit.
+Does not block Phase 28.)
+
+Two related things, both about `culprit.yaml` round-tripping.
+
+*The wording.* Criterion 2 says "apply, export, diff is empty". Two of the
+three ways an export differs from a hand-written file are unsatisfiable by
+any database-backed round trip, not defects: YAML comments live in the
+parser rather than the document, and "did the author write `kind: http`
+explicitly or leave it to the default?" is not information the schema
+stores — `connections.kind` holds `http` either way. Phase 27 therefore
+checked the criterion as *semantic* equality (the exported manifest parses
+to a `Manifest` equal to the applied one) plus a fixed point (export is
+byte-identical on re-export, and re-applying reports zero writes), and
+documented the normalisation in `docs/LIMITS.md`. The phase auditor judged
+that an honest satisfaction rather than a weakening, and proposed:
+
+> `culprit.yaml` round-trips: applying a manifest, exporting, and
+> re-applying the export produces no writes; the exported manifest parses
+> to a `Manifest` equal to the applied one; and export is a fixed point
+> (exporting an exported file is byte-identical). The exporter emits a
+> canonical form, so a byte diff against a non-canonical hand-written file
+> is not expected.
+
+Worth adopting into `docs/DIAGNOSTIC_PLAN.md` so the next auditor can
+execute it without a judgement call.
+
+*The choice underneath it.* The third difference — each component's
+connections being sorted by `(to, kind)` — is **not** unavoidable.
+Component order survives because `apply_manifest` records each
+component's file position as its `sort_order`; the identical mechanism
+was available for connections and was not used, and `connections` has no
+`sort_order` column. Adding one would bring the export nearer the literal
+criterion at the cost of a column that exists only for presentation.
+Claude Code did not decide this either way; `docs/LIMITS.md` now marks
+that bullet explicitly as a design choice rather than a necessity.
+
 ---
 
 ## §4. Phase ledger
@@ -137,8 +193,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 |---|---|---|---|
 | 26 | Truth repair and the three-plane schema | **complete** | Signed off 2026-09-09. All five acceptance criteria met (criterion 1 as reworded). Verification quality was the bar for every phase after this one. |
 | 26.1 | `configured_facts` value safety | **complete, pending commit** | Signed off 2026-09-09. Caught two defects in the brief itself: the CHECK as specified would have inverted its own intent against `value NOT NULL DEFAULT 'null'::jsonb`, and the guarantee was narrower than §2.2 claimed. Both corrected. |
-| 27 | The system model (the circuit) | current | Merge `main` first. Two small additions in field 4 before the model work: the CI migration round-trip job (invariant 8) and `scripts/check_scan_coverage.py` (invariant 9) — both close gaps Phase 26.1 exposed, and every phase after this ships migrations. Then the model itself: data migration must not lose anything on an existing deployment, `culprit.yaml` must round-trip, `contract_id` stays null throughout. |
-| 28 | CLI, extractor protocol, intent extraction | not started | Blocked on Q1. |
+| 27 | The system model (the circuit) | **complete, pending commit** | Signed off 2026-09-09. Found two defects in the plan itself (field 11's networkx contradiction, criterion 2 unsatisfiable) and four real regressions in its own work, including `--export` laundering `declared_by` so a later apply could delete an accepted topology suggestion. Correlation ignoring `connections.kind` correctly deferred — now carried into Phase 32. |
+| 28 | CLI, extractor protocol, intent extraction | current | Go confirmed (Q1). Biggest phase so far and the one carrying the polyglot risk, so hold the D3 line hard: parse artefacts, ask the app to introspect itself, and only then thin per-language extraction. Two non-negotiables — the closed `ValueShape` type from the Q5 remediation, and a fixture corpus containing **at least two projects you did not write**, in stacks you do not control. That second one is the only defence against building an extractor that only works because everything in this repo is FastAPI. |
 | 29 | The divergence engine | not started | First shippable product. This is the wedge — treat its acceptance criteria as the real bar, especially "zero findings on a fixture known to be correct". |
 | 30 | Environment capture and cross-env diff | not started | — |
 | 31 | Probes | not started | — |
@@ -165,155 +221,200 @@ as its own commit, not folded into a phase.
 Claude Code overwrites this section at the end of every `/next`.
 
 ```
-Phase:        26.1 — configured_facts value safety (the §4 prerequisite to 27)
-Branch:       phase-26.1-configured-facts-value-safety (off d39ca3b)
+Phase:        27 — The system model (the circuit)
+Branch:       phase-27-system-model (off 8a36e62)
 Started:      2026-09-09
 Finished:     2026-09-09
 
-Scope note:   /next advanced ONE ledger row. Phase 27 was NOT started. 26.1's
-              own brief says "own branch, own commit", which is a second
-              review checkpoint by construction, and §1's rule is that Claude
-              Code does not auto-start the next phase.
+Scope note:   /next advanced ONE ledger row. Phase 28 was NOT started.
+              Correction to the previous run report: `main` was NOT two
+              branches behind. Both 26 and 26.1 were already merged
+              (1a3c989, 8a36e62); §1 said otherwise and was stale. No
+              merge was needed and none was done.
 
-Gates:        (from /verify, re-run independently by phase-auditor)
-  lint            PASS   (api+shared+scripts, worker, demo-services, mcp_server)
-  typecheck       PASS   (0 errors x4)
-  lint-imports    PASS   (4 contracts kept)
-  schema-drift    PASS   (16 worker tables match api's ORM)
-  tests           PASS   (api 426 (+5), worker 86, mcp_server 21; 3 skipped)
-  coupled-files   PASS   (the declared pair both changed)
-  no-llm-imports  PASS   (6 deterministic packages)
-  migration-sym   PASS   (3 files)
+Gates:        (from /verify; every one re-run independently by phase-auditor)
+  lint             PASS   (api+shared+scripts+examples, worker, demo-services, mcp_server)
+  typecheck        PASS   (0 errors x4, plus frontend tsc --noEmit 0 errors)
+  lint-imports     PASS   (4 contracts kept)
+  schema-drift     PASS   (16 worker tables match api's ORM)
+  tests            PASS   (api 574 (+6 after the audit), worker 86, mcp_server 21; 3 skipped)
+  coupled-files    PASS   (the declared pair both changed)
+  no-llm-imports   PASS   (6 deterministic packages)
+  migration-sym    PASS   (4 files)
+  scan-coverage    PASS   (NEW — 191/191 Python files covered by both repo-wide checks)
+  migration-round-trip  PASS   (NEW — upgrade -> seed -> downgrade base -> upgrade)
 
-Acceptance criteria (phase-auditor, executed not inferred — all MET):
-  1. Migration applies from an empty DB and produces exactly the specified
-     shape
-       MET. Fresh timescaledb-ha:pg16 container, alembic upgrade head ->
-       a3d81f6c4b27. value jsonb nullable, no default; value_shape jsonb
-       nullable; grant_ref varchar nullable; CHECK ((value IS NULL) OR
-       (grant_ref IS NOT NULL)) present under the expected name.
-  2. The DATABASE does the rejecting, not application code
-       MET, three ways. The test file imports no app.* module and inserts
-       via raw sa.text() on the superuser engine. The auditor reproduced
-       the rejection under a different driver (psycopg2, no pytest, no
-       conftest) and got CheckViolation. And the mutation test — remove
-       create_check_constraint, re-run — gives 2 failed / 3 passed, both
-       failures "DID NOT RAISE IntegrityError". Run twice independently
-       (once by me, once by the auditor), file restored byte-exact both
-       times, md5 verified.
-  3. The five tables are still empty, and no role can write them
-       MET. After a fresh migration: captures 0, intent_facts 0,
-       configured_facts 0, readings 0, divergences 0.
-       information_schema.role_table_grants and column_privileges over all
-       five, excluding superuser and PUBLIC, return zero rows. All ten
-       roles exist; none holds a grant. The migration contains no
-       GRANT/REVOKE.
-  4. "Nothing else" — scope discipline
-       MET. Diff vs d39ca3b: api/app/db/models.py, worker/app/db.py, the
-       new migration, the new test, and docs. shared/culprit_model/
-       untouched; no components/connections work begun.
+Acceptance criteria (phase-auditor, executed not inferred):
+  1. An existing deployment upgrades with no service/dependency data loss
+       MET. api/tests/test_model_migration.py (15 tests) migrates a
+       container to a3d81f6c4b27, inserts the real legacy topology
+       (3 services, 4 edges, 3 api_keys) as raw SQL, THEN upgrades.
+       Names, display names and all four edges survive; zero orphaned
+       api_keys; grants verified against information_schema, not read
+       out of the migration.
+  2. `culprit.yaml` round-trips: apply, export, diff is empty
+       MET IN SUBSTANCE, NOT AS LITERALLY WORDED. The auditor ran the
+       real CLI: `diff` is NOT empty. Two of the three deviations are
+       unsatisfiable by any DB-backed round trip (YAML comments are not
+       in the document; "was `kind: http` written or defaulted?" is not
+       stored). The auditor's hostile 6-component manifest round-tripped
+       with exactly two deltas: `kind: http` dropped, and two same-pair
+       edges reordered. Checked instead as semantic equality + fixed
+       point + zero-write re-apply. Auditor verdict: "an honest
+       satisfaction of the criterion, not a weakening". Rewording
+       proposed as Q6.
+  3. The dashboard renders components and typed connections
+       MET. Rendered in headless Edge against a live API with a real
+       admin login. The auditor's screenshot shows a component card with
+       `-> orders-cache [cache] background`, `-> orders-db [sql] on
+       request path`, `-> stripe [dns] unclassified`, `-> stripe [http]
+       on request path`, and a kind selector reading `frontend`.
+  4. Given a symptom component, the ordered set of upstream connections
+       MET. GET /model/graph?symptom=edge-web returned, in hop order:
+       edge-web-[http]->orders-api, orders-api-[sql]->orders-db,
+       orders-api-[dns]->stripe, orders-api-[http]->stripe. Background
+       edge excluded, `unknown` included, unknown component -> 404 not
+       an empty path, unauthenticated -> 401.
 
 Definition of done:
-  Migration + test               MET
-  docs/LIMITS.md updated         MET
-  Committed                      NOT DONE. `git commit` was denied at the
-                                 permission prompt — the same thing that
-                                 happened at the end of Phase 26. Nothing is
-                                 even staged: the denial covered the whole
-                                 `git add -A && git commit` command. The work
-                                 sits in the working tree of
-                                 phase-26.1-configured-facts-value-safety and
-                                 is exactly what every gate above was run
-                                 against. Re-running the commit is the one
-                                 step left. Not retried without approval.
-  Merged to main                 NOT DONE, deliberately — the human review
-                                 checkpoint. Note Phase 26 is also still
-                                 unmerged, so main is two branches behind.
+  The four criteria above         MET
+  demo-services/ described by a
+    committed culprit.yaml        MET. demo-services/culprit.yaml
+                                  applied to a fresh DB by the auditor:
+                                  3 components + 4 connections, matching
+                                  the legacy topology exactly.
+  docs/LIMITS.md updated          MET (six new entries)
+  CLAUDE.md status current        MET
+  docs/HANDOFF.md updated         MET (§1, §3 Q6, §4, §5)
+  Committed                       NOT DONE. `git commit` was denied at
+                                  the permission prompt — the third time
+                                  in a row (26, 26.1, 27). Everything is
+                                  staged: `git diff --cached --stat main`
+                                  shows 45 files, +5630/-635, and that is
+                                  exactly the tree every gate above was
+                                  run against. Re-running the commit is
+                                  the one step left. Not retried without
+                                  approval.
+  Merged to main                  NOT DONE, deliberately — the human
+                                  review checkpoint.
+
+Field 17 ("do NOT implement yet") — RESPECTED, verified by execution:
+  no contract content (contracts table empty, ZERO grants to any role,
+  every connection's contract_id null, no /contracts route in the
+  generated OpenAPI); no probes; no fault-tree UI (grep across
+  frontend/src, api/app, shared: zero matches).
 
 Built:
-  - api/migrations/versions/a3d81f6c4b27_configured_facts_value_safety.py:
-    adds value_shape (JSONB) and grant_ref (String), drops value to
-    nullable and removes its server default, adds
-    ck_configured_facts_value_requires_grant.
-  - api/tests/test_configured_facts_value_safety.py — 5 cases: ungranted
-    literal rejected, JSON-null-without-grant rejected, shape-without-value
-    accepted, granted value accepted, grant-without-value accepted.
-  - The coupled pair api/app/db/models.py + worker/app/db.py, kept in sync
-    including nullability.
-  - docs/LIMITS.md, CLAUDE.md status + architecture point 18.
+  - api/migrations/versions/7c2e94b1f0aa_*.py — services RENAMED to
+    components (so every FK and GRANT followed it), connections as a new
+    table keyed on (from, to, kind), empty contracts table, data
+    migration, grants carried across.
+  - shared/culprit_model/graph.py — the pure directed model: Component,
+    Connection, closed ComponentKind/ConnectionKind/Criticality/
+    DeclaredBy, reachability, and upstream_connections() for request-path
+    derivation. + shared/tests/test_graph.py (15 tests on a branching
+    topology, not the demo triangle).
+  - api/app/model/ — manifest.py (culprit.yaml schema, loader, credential
+    refusal, canonical dumper), schemas.py, service.py, router.py.
+  - api/scripts/apply_model.py (replacing apply_services.py),
+    demo-services/culprit.yaml (replacing infra/demo-services.yaml).
+  - api/app/registry/ rewritten as a thin /services alias over the model.
+  - frontend: useModel.ts, typed-connection editing and a component-kind
+    selector in SettingsServices.tsx.
+  - scripts/check_migration_round_trip.py (invariant 8) + its own CI job;
+    scripts/check_scan_coverage.py (invariant 9) + scripts/tests/
+    test_scan_coverage.py + CI step.
 
 Plan corrections — things the brief could not have known:
-  1. THE CONSTRAINT AS SPECIFIED WOULD HAVE INVERTED ITS OWN INTENT.
-     §2.2 and the §4 brief both say to add CHECK "value IS NULL OR
-     grant_ref IS NOT NULL". But c07a5f31d8e4 created value as NOT NULL
-     DEFAULT 'null'::jsonb, and 'null'::jsonb IS NULL is FALSE in SQL — so
-     adding that constraint verbatim would have required a grant_ref on
-     EVERY row, making the ordinary shape-only fact unrepresentable and
-     the granted-secret row the only legal one. The migration therefore
-     also drops value to nullable and removes the default, so SQL NULL is
-     the "no value stored" state. This is a real defect in the plan's
-     instruction, not a liberty taken with it.
-  2. §2.2's claim is broader than what the specified schema delivers.
-     Written up as Q5 in §3. The CHECK protects value; value_shape,
-     which is where the design sends extractors, is unconstrained JSONB
-     and will accept a literal secret. Not fixed here (outside "nothing
-     else"); the migration docstring and docs/LIMITS.md were narrowed to
-     claim only what is true.
+  1. FIELD 11 IS SELF-CONTRADICTORY. It says "no new dependencies —
+     networkx is already present and is retained for directed traversal",
+     but networkx is a *worker-only* dependency, and field 4 puts
+     graph.py in shared/culprit_model/, which api installs too. Using
+     networkx there would have made it a NEW dependency of api — the one
+     thing field 11 forbids. graph.py is plain-BFS Python instead. D4
+     bounds the model at "hundreds of nodes"; the stdlib covers that
+     completely. worker/app/correlation/graph.py keeps its own networkx
+     until Phase 32 removes it.
+  2. FIELD 10's "culprit.yaml at repo root" does not fit this repo. That
+     is the right convention for a *user's* repository, where the root is
+     the system being modelled. This repository's root is Culprit itself,
+     which is not the system the three demo services make up. The file is
+     at demo-services/culprit.yaml, which keeps the actual rule ("the
+     manifest sits at the root of the thing it describes") true.
+  3. CRITERION 2's literal wording is unsatisfiable. See above and Q6.
 
-Found and fixed en route:
-  - A round-trip defect in my own first draft of the migration, found by
-    replaying upgrade -> downgrade -> upgrade against a real database with
-    rows present. downgrade() rewrites SQL NULL to 'null'::jsonb to restore
-    NOT NULL; on re-upgrade those rows then looked like ungranted literal
-    values and ADD CONSTRAINT failed. Fixed by normalising 'null'::jsonb
-    back to SQL NULL in upgrade(). Worth noting for future phases:
-    check_migration_symmetry.py passed this migration both before and
-    after the fix — it is structural and cannot see this class of bug. A
-    real down/up replay is the only thing that catches it.
+Found and fixed en route — each caught by execution, not review:
+  - MY OWN MUTATION TEST OF THE NEW ROUND-TRIP GATE PASSED WHEN IT
+    SHOULD HAVE FAILED. I removed `ON CONFLICT DO NOTHING` from the
+    downgrade expecting the gate to go red; it stayed green. The comment
+    I had written was wrong: the GROUP BY is what collapses duplicate
+    pairs, and ON CONFLICT was redundant. Removing the GROUP BY *does*
+    fail the gate, with the exact duplicate-key error. Comment corrected
+    to say what actually holds the line. Worth recording because the
+    failure mode here is a plausible-sounding comment that would have
+    survived any amount of reading.
+  - THE NEW SCAN-COVERAGE GATE IMMEDIATELY FOUND A REAL BLIND SPOT on
+    its first run: examples/instrument_python.py was linted by nothing
+    and subject-checked by nothing. Now covered by both; it needed one
+    lint fix. This is invariant 9 paying for itself within the phase that
+    introduced it.
+  - I DROPPED mcp-reader's GRANT when replacing service_dependencies
+    with connections. beab08d5f92f had granted it SELECT; my migration
+    re-granted correlation-engine, api-reader and registry-admin and
+    silently shrank mcp-reader. Caught by the mcp_server suite. Fixed,
+    and now pinned by a set-equality test over every grant on
+    components/connections/contracts, so a *gained* grant fails too —
+    the subset assertions I wrote first could only catch a lost one.
 
-From the invariant audit (1 low violation, 5 risks; no gate broken):
-  Fixed here:
-  - V1: the test hand-formatted a subject URI
-    (config:orders-svc/DATABASE_URL). It escaped
-    scripts/tests/test_subject_construction.py only because api/tests is
-    outside that check's scanned roots — an exemption by accident, and
-    shared/tests IS scanned, so the repo's precedent runs the other way.
-    Now built with subjects.build().
-  - R1/R4: overreaching claims narrowed in the migration docstring and
-    docs/LIMITS.md (see Q5), and the silent half of the downgrade's data
-    loss documented — downgrade() also drops value_shape, which after
-    Phase 27 IS the payload of a CONFIGURED fact, so a down/up cycle
-    succeeds and leaves contentless facts behind. The granted-value half
-    fails loudly and was already documented; this half did not announce
-    itself.
+From the two audits (invariant audit: CLEAN, 0 violations; phase audit:
+all criteria met). Everything below was found as a "risk worth noting"
+rather than a violation, and all of it was fixed or documented here
+rather than deferred:
+  Fixed:
+  - PATCH /services/{id} had become non-atomic — a regression I
+    introduced. patch_component commits internally, so a PATCH carrying
+    both display_name and a typo'd depends_on returned 400 with the
+    display name already written. Dependencies are resolved first now,
+    matching create_service. Regression test added.
+  - `--export` laundered declared_by, defeating the accepted-suggestion
+    guarantee. export_manifest emitted edges of every provenance;
+    _apply_connections then rewrote them to culprit_yaml, so the
+    documented `apply_model --export > culprit.yaml` workflow made
+    accepted topology suggestions manifest-owned and therefore deletable
+    by a later apply — contradicting accept_topology_suggestion's own
+    docstring. Export now omits edges the manifest does not own.
+  - The alias's data-loss guard had NO TEST. docs/LIMITS.md promised in
+    writing that a legacy depends_on PATCH cannot delete a sql edge, and
+    deleting the guard would have kept the whole suite green. Tested now.
+  - GET /model/graph returned disabled components as nodes while every
+    traversal treated them as absent. Now excluded from the graph
+    (GET /model/components still lists them, which is what Settings
+    needs).
+  - A first apply reported each new component as both created AND
+    updated, because sort_order was set in a second pass. Set at
+    creation now.
+  Documented in docs/LIMITS.md rather than changed:
+  - Correlation adjacency ignores connection kind, so declaring a `sql`
+    edge makes those two components correlate. Zero impact at upgrade
+    (every migrated row is http). Deliberately not fixed: D5 says this
+    engine is replaced in Phase 32, not adapted, and teaching it half a
+    notion of kind would change correlation behaviour in a phase whose
+    first criterion is that nothing is lost.
+  - A legacy depends_on PATCH flattens declared_by to culprit_yaml,
+    which can make a later apply delete an accepted suggestion.
 
-  Surfaced, deliberately NOT fixed — all outside the "nothing else" brief,
-  and each one wants a decision rather than a guess:
-  - R1: value_shape needs a closed key vocabulary. This is Q5.
-  - R2: grant_ref = '' satisfies the constraint. Also Q5. Separately,
-    readings.grants_used (JSONB array) and configured_facts.grant_ref
-    (scalar string) are now two unrelated spellings of "grant" with no
-    stated relationship — worth pinning the identifier format before
-    Phase 31 builds on both.
-  - R3: shared/culprit_model/facts.py still has value: Any = None with no
-    value_shape, no grant_ref and no validator. Postgres is the only
-    enforcement point, so a Fact constructed and serialised WITHOUT being
-    inserted — which is exactly what a Phase 30 capture bundle is — is
-    unprotected. .claude/rules/model.md asks for safe-by-construction;
-    that is now true of the DB write path and still untrue of the model
-    layer. Nothing checks this pair (check_schema_drift.py compares
-    worker<->api only). Phase 27 or 30 should close it.
-  - R5: the constraint lives only in the migration. worker tests that
-    build schema with metadata.create_all would not have it, and
-    check_schema_drift.py compares columns only. Pre-existing house style
-    (ck_configured_facts_source_kind is migration-only too), so 26.1 adds
-    no new drift — flagged because this is the first such constraint whose
-    absence would be a security property going missing rather than a
-    validation rule.
+Surfaced, deliberately NOT done — wants a decision, not a guess:
+  - Q6: whether connections should carry an authored order (component
+    order is preserved; edge order is not, and that asymmetry is a
+    choice, not a necessity), and whether criterion 2 should be reworded
+    in docs/DIAGNOSTIC_PLAN.md. Does not block Phase 28.
+  - The frontend has no test tooling at all — no vitest, no playwright,
+    nothing in package.json. Criterion 3 is met, but nothing in CI
+    protects it; the auditor had to install puppeteer-core to verify it.
+    Not this phase's brief.
 
-Blocked on:  The commit itself, denied at the permission prompt. Every gate
-             is green against exactly the tree that is sitting there
-             uncommitted.
+Blocked on:  The commit itself, denied at the permission prompt. Every
+             gate is green against exactly the staged tree.
 ```
 
 ## §6. Escalate to the architecture session when

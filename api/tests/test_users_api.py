@@ -31,7 +31,7 @@ async def client(
 ) -> AsyncIterator[TestClient]:
     async with db_engine.begin() as conn:
         await conn.execute(text("TRUNCATE users CASCADE"))
-        await conn.execute(text("TRUNCATE services, service_dependencies, api_keys CASCADE"))
+        await conn.execute(text("TRUNCATE components, connections, api_keys CASCADE"))
 
     # app.incidents.limiter.limiter is a module-level singleton shared by
     # every router that rate-limits (POST /auth/login here) — its

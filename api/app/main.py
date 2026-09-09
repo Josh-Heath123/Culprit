@@ -33,6 +33,7 @@ from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E40
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
 from app.memory.router import router as memory_router  # noqa: E402
+from app.model.router import router as model_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
 from app.postmortems.router import router as postmortems_router  # noqa: E402
@@ -166,6 +167,12 @@ app.include_router(incidents_router, dependencies=[Depends(require_auth)])
 # role, not just any authenticated session — require_admin is a thin
 # wrapper over require_auth (app/auth/dependencies.py), so this is the
 # only line either router needed to change.
+# Phase 27: the system model (/model/components, /model/connections,
+# /model/graph, /model/apply). Same admin gate and the same two engines
+# the registry router uses -- app/model/router.py is the real surface,
+# and registry_router below is now a thin /services alias over it,
+# retained for one release and removed in Phase 30 (that phase field 9).
+app.include_router(model_router, dependencies=[Depends(require_admin)])
 app.include_router(registry_router, dependencies=[Depends(require_admin)])
 app.include_router(users_router, dependencies=[Depends(require_admin)])
 # Phase 18: not admin-only, unlike registry/users above — any

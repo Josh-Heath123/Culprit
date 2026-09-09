@@ -586,6 +586,17 @@ prior plans and extended:
    subject-construction lint never covered `api/tests/`. Both times a real
    violation sat unseen inside a green gate. The coverage of a check is itself a
    thing that has to be checked.
+10. **A new gate is not accepted until a deliberate mutation has made it fail.**
+    Added 2026-09-09. Phase 27 mutation-tested the new round-trip gate by
+    removing `ON CONFLICT DO NOTHING` from a downgrade, expecting red — and it
+    stayed green. The gate was fine; the *comment explaining why it worked* was
+    wrong (the `GROUP BY` collapses the duplicates, not the `ON CONFLICT`).
+    Removing the `GROUP BY` does fail it. A passing check is not evidence until
+    you have shown the thing it is supposed to catch actually turns it red, and
+    the mutation must target the mechanism you believe is load-bearing — that is
+    how a wrong belief about your own gate gets caught. This is the same claim as
+    §2.6's rule that a probe which cannot return `inconclusive` is a probe that
+    guesses.
 
 ---
 
@@ -759,8 +770,7 @@ release, then removed in Phase 30.
 **10. Configuration.** `culprit.yaml` at repo root becomes the canonical model
 source. Committed to the user's repo, reviewed like code.
 
-**11. Dependencies.** No new ones — `networkx` is already present and is retained
-for directed traversal.
+**11. Dependencies.** None. (Corrected 2026-09-09: the original text said `networkx` is retained for directed traversal. That was wrong — `networkx` is a `worker/` dependency, while `graph.py` lives in `shared/`, which `api/` also installs. Using it there would have *added* a dependency to `api`, which is what field 11 was promising not to do. Plain BFS is correct here: the model is hundreds of nodes, not millions.)
 
 **12. Security.** Model editing stays behind `require_admin`. `culprit.yaml`
 contains no secrets by construction — it names config keys, never values, and
@@ -772,7 +782,21 @@ fixture describing a system Culprit did not author.
 
 **14. Acceptance criteria.**
 - An existing deployment upgrades with no service/dependency data loss.
-- `culprit.yaml` round-trips: apply, export, diff is empty.
+- `culprit.yaml` round-trips **semantically**: apply then export produces a
+  document semantically equal to the input, and export→apply→export is
+  byte-identical from the second export onward (a fixed point). (Reworded
+  2026-09-09. The original — "diff is empty" — is not satisfiable and was never
+  the property that mattered: YAML comments do not exist in the document model,
+  and whether `kind: http` was written or defaulted is not stored. Byte equality
+  from the *first* export would test comment preservation, which is a convenience
+  for humans editing the file, not a correctness property of the model. Semantic
+  equality plus a fixed point tests exactly what the criterion is for — that
+  `culprit.yaml` is a faithful, reproducible source of truth. The normalisation
+  applied must be documented in `docs/LIMITS.md`, distinguishing what is
+  unavoidable from what is a design choice.)
+- `--export` does not silently destroy a hand-maintained file. Comments and
+  formatting are lost by export, which is acceptable only if the user is told:
+  either refuse to overwrite an existing file without `--force`, or warn.
 - The dashboard renders components and typed connections.
 - Given a symptom component, the model returns the ordered set of upstream
   connections on its request path.
@@ -1125,6 +1149,13 @@ and produce a fault tree that separates symptom from propagation from root cause
 
 **2. Why this phase exists.** This is the product. Everything before it is
 instrumentation; this is the thing a developer actually wants.
+
+**Carried in from Phase 27.** Correlation currently ignores `connections.kind`,
+so an `http` edge and a `cache` edge are treated as equally causal. Phase 27
+recorded this rather than fixing it, correctly — its own first criterion was that
+nothing is lost, and changing correlation behaviour there would have violated it.
+The isolation walk designed here replaces that logic outright, so this is where
+edge kind starts to matter: a typed edge is the whole point of the model.
 
 **3. Architectural changes.** `Investigation` replaces `incident_candidates` as
 the central object. The undirected correlation engine is deleted (D5).

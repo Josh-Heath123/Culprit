@@ -36,10 +36,27 @@ _SUBJECT_LITERAL = re.compile(rf"""f?["'](?:{"|".join(SCHEMES)}):(?!//)""")
 #: naturally contain `"http:` and say nothing about this repo's own code.
 _SKIPPED_PARTS = {"__pycache__", ".venv", "node_modules", "site-packages"}
 
-#: Directories scanned. Deliberately not the whole repo: `frontend/`,
-#: `docs/` and `demo-services/` have no business building subjects, and
-#: scanning them would only produce false positives from URLs and prose.
-SCANNED = ("api/app", "worker/app", "mcp_server", "scripts", "shared")
+#: Directories scanned: **every** Python-bearing top-level directory in
+#: the repository. It used to be ("api/app", "worker/app", "mcp_server",
+#: "scripts", "shared"), which left api/tests, api/migrations,
+#: api/scripts, worker/tests and demo-services unscanned — and the Phase
+#: 26.1 audit found a real hand-formatted subject sitting inside that
+#: blind spot, exempt purely by accident. Standing invariant 9 exists
+#: because of exactly that, and scripts/check_scan_coverage.py now
+#: asserts this tuple covers the repository rather than trusting it to.
+#:
+#: `frontend/` and `docs/` are absent because they hold no Python;
+#: check_scan_coverage.py knows that and says so, rather than leaving it
+#: to be inferred from this list.
+SCANNED = (
+    "api",
+    "worker",
+    "shared",
+    "scripts",
+    "mcp_server",
+    "demo-services",
+    "examples",
+)
 
 #: The implementation itself, and the fixture it is tested against.
 ALLOWED = {

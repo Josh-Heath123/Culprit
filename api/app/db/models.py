@@ -2,7 +2,16 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Float, ForeignKey, Index, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -156,20 +165,26 @@ class IncidentAnomaly(Base):
     )
 
 
-class Service(Base):
-    """A registered service (Phase 14) — the source of truth for topology
-    and monitored metrics, replacing the old hardcoded
-    shared/culprit_shared/services.py dict (still present, but demo-only
-    fixture data now — see that file's own docstring).
+class Component(Base):
+    """One node of the system model (Phase 27) — a service, a database, a
+    queue, a frontend, an external API.
+
+    Was `services` (Phase 14) and is the same table, renamed rather than
+    recreated (7c2e94b1f0aa) so every FK and GRANT pointing at it
+    survived. `kind` is what makes a divergence about this component
+    interpretable — Phase 31 selects probes by it — and the migration
+    CHECK-constrains it to the closed set in
+    culprit_model.graph.ComponentKind.
 
     `name` must match the OTel `service.name` resource attribute
     byte-for-byte (enforced at the API layer, not here — see
-    api/app/registry/schemas.py). `monitored_metrics` empty ([]) means
-    "score every metric seen for this service," not "score nothing" —
-    see worker/app/anomaly/job.py.
+    api/app/model/schemas.py). `monitored_metrics` empty ([]) means
+    "score every metric seen for this component," not "score nothing" —
+    see worker/app/anomaly/job.py. `environment_scope` empty ([]) means
+    "exists in every environment", the same convention.
     """
 
-    __tablename__ = "services"
+    __tablename__ = "components"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
@@ -193,35 +208,95 @@ class Service(Base):
     # without this, SQLAlchemy's default cascade tries to UPDATE each
     # child's service_id to NULL before the parent delete, which violates
     # service_id's NOT NULL constraint instead of actually cascading.
-    api_keys: Mapped[list["ApiKey"]] = relationship(
-        back_populates="service", passive_deletes=True
+    kind: Mapped[str] = mapped_column(server_default=text("'service'"))
+    environment_scope: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    labels: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
 
-    __table_args__ = (Index("ix_services_sort_order", "sort_order", "name"),)
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        back_populates="component", passive_deletes=True
+    )
+
+    __table_args__ = (Index("ix_components_sort_order", "sort_order", "name"),)
 
 
-class ServiceDependency(Base):
-    """A directed service-calls-service edge, user-declared (Phase 14) —
-    not inferred from trace data yet (that's Phase 19). Stored as one row
-    per direction even though worker/app/correlation/graph.py currently
-    treats the relation as symmetric, matching what real trace-derived
-    inference will eventually produce anyway.
+class Contract(Base):
+    """The interface a connection is supposed to honour (Phase 27).
+
+    **Created empty and left empty this phase** — Phase 27's field 17
+    says connections may carry a null `contract_id`, and no contract
+    content exists until Phase 28's extractors run. No Postgres role has
+    any grant on this table, for the same reason Phase 26's fact tables
+    have none: there is no component with a need yet.
+
+    `facts` is a JSONB array of intent-fact subject URIs rather than a
+    foreign key into `intent_facts`, because an `intent_facts` row is
+    scoped to a single capture and a contract outlives any one capture
+    of it.
     """
 
-    __tablename__ = "service_dependencies"
+    __tablename__ = "contracts"
 
-    from_service_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), primary_key=True
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    to_service_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), primary_key=True
+    kind: Mapped[str]
+    subject_prefix: Mapped[str]
+    facts: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+
+
+class Connection(Base):
+    """A directed, typed edge between two components (Phase 27) —
+    replacing `ServiceDependency`, whose untyped `(from, to)` pair could
+    not express the vision's central claim that a component can be
+    healthy while a connection is broken.
+
+    Identity is `(from, to, kind)`, not `(from, to)`: two components may
+    legitimately be connected in more than one way (Phase 27 field 8), so
+    an HTTP call and a shared cache between the same pair are two rows.
+    That is precisely why this could not be a rename of
+    `service_dependencies`, whose primary key was the untyped pair.
+
+    `criticality` defaults to `unknown` and that is a real value, not a
+    placeholder — see culprit_model.graph.Criticality. `contract_id` is
+    null throughout Phase 27 (field 17).
+    """
+
+    __tablename__ = "connections"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
+    from_component_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("components.id", ondelete="CASCADE")
+    )
+    to_component_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("components.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(server_default=text("'http'"))
+    # ON DELETE SET NULL, not CASCADE: deleting a contract must not
+    # delete the connection it described — the connection still exists,
+    # it has just stopped having a known interface.
+    contract_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contracts.id", ondelete="SET NULL")
+    )
+    declared_by: Mapped[str] = mapped_column(server_default=text("'culprit_yaml'"))
+    criticality: Mapped[str] = mapped_column(server_default=text("'unknown'"))
+    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
 
     __table_args__ = (
         CheckConstraint(
-            "from_service_id <> to_service_id", name="ck_service_dependencies_no_self_edge"
+            "from_component_id <> to_component_id", name="ck_connections_no_self_edge"
         ),
+        UniqueConstraint(
+            "from_component_id", "to_component_id", "kind", name="uq_connections_from_to_kind"
+        ),
+        Index("ix_connections_from_component", "from_component_id"),
+        Index("ix_connections_to_component", "to_component_id"),
     )
 
 
@@ -273,8 +348,12 @@ class ApiKey(Base):
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     service_name: Mapped[str]
+    #: Still named `service_id`, pointing at `components.id`. Phase 27
+    #: renamed the table, not this column: renaming it would reach into
+    #: api/app/ingest_gateway/, which that phase's field 5 does not list,
+    #: and the FK follows the renamed table either way. docs/LIMITS.md.
     service_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE")
+        UUID(as_uuid=True), ForeignKey("components.id", ondelete="CASCADE")
     )
     key_hash: Mapped[str] = mapped_column(unique=True)
     label: Mapped[str | None]
@@ -288,7 +367,7 @@ class ApiKey(Base):
     # scripts/check_schema_drift.py caught it.
     created_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
 
-    service: Mapped["Service"] = relationship(back_populates="api_keys")
+    component: Mapped["Component"] = relationship(back_populates="api_keys")
 
 
 class Postmortem(Base):

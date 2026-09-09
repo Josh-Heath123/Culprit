@@ -269,3 +269,175 @@ Three consequences worth knowing before you depend on it:
 
 The tables remain empty until Phase 27, so none of this affects a running
 deployment yet.
+
+## `culprit.yaml` export is a canonical form, not your file back
+
+`just apply-model <file>` then `just apply-model --export` gives you a
+manifest describing the same system — but not, in general, the same bytes.
+Two of the three normalisations below are unavoidable for anything backed
+by a database; the third is a design choice, and it is marked as such.
+
+- **Comments are gone.** YAML comments live in the parser, not the
+  document, so nothing can carry them through a database round trip. If
+  your `culprit.yaml` explains *why* an edge is on the request path, that
+  explanation does not survive an export. Keep the file you wrote under
+  version control and treat `--export` as a way to see what the model
+  currently holds, not as a replacement for it.
+- **Fields left at their default are omitted.** A connection written as
+  `kind: http` comes back with no `kind:` at all, because `http` is the
+  default; the same goes for `kind: service` on a component and
+  `criticality: unknown` on a connection. The model is identical; the text
+  is shorter.
+- **Each component's connections are sorted** by target then kind. This
+  one is a *choice*, not a necessity: component order is preserved,
+  because `apply` records each component's position in the file as its
+  `sort_order`, and the same mechanism was available for connections and
+  was not used (`connections` has no `sort_order` column). So the
+  top-level shape of your document survives while the edge lists within
+  it may be reordered. Giving connections an authored order is a real
+  option if the reordering turns out to matter in review.
+
+**Export omits edges the manifest does not own.** A connection whose
+`declared_by` is `inferred` or `accepted_suggestion` is deliberately left
+out of an exported `culprit.yaml`. Writing it in would transfer ownership
+to the manifest — `apply` treats every edge in the file as
+manifest-declared — and the next apply that dropped the line would delete
+an edge a human had explicitly accepted. Those edges are still real, and
+still visible in `GET /model/connections` and in **Settings → Services**;
+they are simply not part of the declarative document.
+
+What is guaranteed: no manifest-owned component, connection, kind or
+criticality is lost or invented, and the export is a fixed point — exporting an exported file
+gives identical bytes, and re-applying one reports no changes. Phase 27's
+acceptance criterion "apply, export, diff is empty" is true of a file
+already in canonical form, and true *semantically* of any file.
+
+## The `/services` API is an alias, and it flattens the model
+
+Everything under `/services` still works after Phase 27, and is what the
+dashboard's service list, `docs/INSTRUMENTATION.md` and any script you
+wrote against it still call. It is a translation layer over
+`components`/`connections`, retained for one release and removed in Phase
+30.
+
+It cannot express the model, and silently narrows it:
+
+- **`depends_on` shows only `http` connections.** A `sql` connection to a
+  database, a `message` connection to a queue or a `cache` connection
+  simply does not appear in a `GET /services` response. They exist, they
+  are in the graph, and correlation reads them — this surface just has
+  nowhere to put them.
+- **`PATCH /services/{id}` with `depends_on` rewrites only the `http`
+  edges.** That is deliberate: a legacy client that has never heard of
+  connection kinds must not delete a `sql` edge it cannot see. The
+  consequence is that the old API can no longer fully describe a
+  component's connections, so a script that "sets" `depends_on` is setting
+  a subset.
+- **Everything it creates is `kind: service`.** The old shape has no field
+  for a component's kind, and inferring one from the name would be a
+  guess. Correct it in **Settings → Services**, via
+  `PATCH /model/components/{id}`, or by declaring it in `culprit.yaml`.
+- **A legacy `depends_on` write flattens `declared_by` to
+  `culprit_yaml`.** `PATCH /services/{id}` rewrites that component's
+  `http` edges, and the old shape cannot say where an edge came from — so
+  an edge that had been an *accepted topology suggestion* comes back
+  labelled as hand-declared. That matters because `apply_model` treats
+  `culprit_yaml` edges as owned by the manifest and removes ones the file
+  no longer lists, while leaving accepted suggestions alone. An accepted
+  suggestion touched by a legacy PATCH can therefore be removed by a
+  later `apply` that would previously have spared it. Use
+  `PATCH /model/connections/{id}` instead, which preserves provenance.
+
+Use `/model/*` for anything new.
+
+## Migrated connections are `http`, declared, and unclassified
+
+Upgrading an existing deployment turns every `service_dependencies` row
+into a `connections` row. Three fields have to be filled in that the old
+table never recorded, and only one of them is a guess:
+
+- **`kind` becomes `http`.** A guess, and the right one: the registry's
+  only consumer was HTTP-service correlation. If a declared dependency was
+  really a database or a queue, re-declare it with the correct kind —
+  nothing detects this for you.
+- **`declared_by` becomes `culprit_yaml`.** Not a guess. Every row in
+  `service_dependencies` got there because a human declared it, through
+  the API, the UI or `apply_services.py`.
+- **`criticality` becomes `unknown`.** Also not a guess, and deliberately
+  not the flattering answer. Nothing ever classified these edges, and
+  `unknown` is a first-class value: an unclassified connection still
+  counts as on the request path (see below), so the honest label costs you
+  nothing in coverage and stops Phase 29 computing severity from an
+  invented fact.
+
+**`unknown` connections are treated as on the request path.** Only an edge
+explicitly marked `background` is excluded from
+`GET /model/graph?symptom=`. That is the safe direction — excluding
+unclassified edges would silently hide the real cause on any topology
+nobody had finished labelling — but it means the request path is wider
+than reality until you classify your edges.
+
+## `api_keys.service_id` still points at `components.id`
+
+Phase 27 renamed `services` to `components` rather than copying rows into
+a new table, so every foreign key and every GRANT followed the rename
+intact. The column on `api_keys` kept its old name. It is not a dangling
+reference and nothing is broken; it is one name that did not change with
+the others, and renaming it would have reached into
+`api/app/ingest_gateway/` for no behavioural gain. Expect to see it in
+`\d api_keys` and in `api/app/db/models.py`.
+
+## Downgrading past the system model collapses typed connections
+
+`alembic downgrade` below `7c2e94b1f0aa` recreates
+`service_dependencies`, whose primary key is the untyped `(from, to)`
+pair. Several connections of different kinds between the same two
+components therefore collapse into one row, and `kind`, `criticality`,
+`declared_by` and `contract_id` are dropped outright — as are a
+component's `kind`, `environment_scope` and `labels`.
+
+The downgrade succeeds; it does not warn. A subsequent re-upgrade produces
+one `http` connection per surviving pair, `declared_by = culprit_yaml`,
+`criticality = unknown`. Back up first (`scripts/backup.sh`). The round
+trip is verified in CI (`scripts/check_migration_round_trip.py`) — what is
+verified is that it *runs*, not that it is lossless, because it is not.
+
+## `culprit.yaml`'s credential check is a heuristic
+
+The loader refuses a manifest that looks like it carries a secret: a key
+matching `password|secret|token|api_key|...`, or a value matching a DSN
+with inline credentials, a PEM block, an AWS key id, a GitHub token or a
+JWT. This is a blunt guard against the obvious mistake, not a secret
+scanner.
+
+It will miss a credential that looks like ordinary text — a bare password
+in a field called `note`, an internal token format it has never seen. It
+will also refuse things that are not secrets: a component legitimately
+labelled `auth_token_issuer` is rejected on its key name. Both directions
+are deliberate. A manifest is a committed file, so the cost of a false
+positive is renaming a label, and the cost of a false negative is a
+credential in git history forever.
+
+The refusal never echoes the offending value, so a rejected manifest does
+not leak the secret into a CI log.
+
+## Correlation groups incidents across every connection kind
+
+`worker/app/correlation/job.py` builds its adjacency from `connections`
+with **no filter on `kind`**. Two components joined by a `sql`, `cache`
+or `message` edge are as "related" for incident grouping as two joined by
+`http`.
+
+At upgrade time this changes nothing — every migrated connection is
+`http`. It starts to matter the first time you declare a non-HTTP edge:
+declaring `orders-svc -sql-> orders-db` makes an anomaly in each of them
+correlate into one incident candidate, where before Phase 27 there was no
+way to express that edge at all.
+
+This is deliberate for now. `docs/DIAGNOSTIC_PLAN.md` D5 says the
+undirected correlation engine is *replaced* in Phase 32, not adapted —
+its central data structure is an `nx.Graph`, and teaching it half a
+notion of direction and kind would change correlation behaviour in a
+phase whose first acceptance criterion is that nothing is lost. The same
+applies to topology suggestions: an observed HTTP edge is no longer
+suggested once a connection of *any* kind already joins that pair.

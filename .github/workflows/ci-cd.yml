@@ -32,7 +32,7 @@ jobs:
       # both would otherwise go unlinted, while
       # .claude/hooks/fast_gates.sh lints them mid-session. Same as
       # `just lint`.
-      - run: cd api && uv run ruff check . ../shared ../scripts
+      - run: cd api && uv run ruff check . ../shared ../scripts ../examples
       - run: cd worker && uv run ruff check .
       - run: cd demo-services && uv run ruff check .
       - run: cd mcp_server && uv run ruff check .
@@ -73,6 +73,14 @@ jobs:
       # import graph, this walks source text across every project,
       # including packages with no venv of their own.
       - run: uv run --project api python scripts/check_no_llm_imports.py
+
+      # Phase 27, standing invariant 9: a check that never reads a file
+      # is not a gate for that file. Two blind spots (just lint missing
+      # scripts/, the subject lint missing api/tests/) each hid a real
+      # violation inside a green gate, so the coverage of a check is now
+      # itself checked. Offline and instant -- no container needed.
+      - name: Check scan coverage
+        run: uv run --project api python scripts/check_scan_coverage.py
       # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
       # together" pair (scripts/coupled_files.yaml) that changed on only
       # one side. Checked against the PR's committed diff, not a working
@@ -149,8 +157,38 @@ jobs:
       - name: pytest (mcp_server)
         run: cd mcp_server && uv run pytest
 
+  # Phase 27, standing invariant 8: every migration round-trips against
+  # a real database in CI -- upgrade head, seed representative rows,
+  # downgrade base, upgrade head again.
+  #
+  # Its own job rather than a step in `test` because it needs Docker and
+  # takes ~40s, and because a failure here should be legible as "the
+  # migrations do not round-trip" rather than buried in a pytest summary.
+  # It hangs off `typecheck` in parallel with `test`, not after it: the
+  # two are independent, and the migration chain is exactly the thing you
+  # want to know about early.
+  #
+  # scripts/check_migration_symmetry.py (in the typecheck job) is NOT a
+  # substitute. It is a structural AST check and cannot see a
+  # data-dependent defect -- it passed the Phase 26.1 downgrade bug both
+  # before and after the fix. That is precisely why this job exists.
+  migration-round-trip:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # No secrets and no real connection strings: the script generates
+      # its own throwaway role passwords against a container it destroys
+      # on exit (Phase 11's security requirement -- the only real secret
+      # anywhere in this workflow is the SSH deploy key).
+      - name: Migration round trip
+        run: uv run --project api python scripts/check_migration_round_trip.py
+
   build:
-    needs: test
+    needs: [test, migration-round-trip]
     runs-on: ubuntu-latest
     permissions:
       contents: read

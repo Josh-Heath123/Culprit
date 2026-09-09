@@ -134,8 +134,9 @@ Point your services' OTel exporters at
 [`docs/INSTRUMENTATION.md`](INSTRUMENTATION.md) for the exact env vars and
 a copy-pasteable Python example. Register each service and get its API
 key either through `/settings/services` in the dashboard or
-`just apply-services your-services.yaml` (see that command's own `--help`
-for the YAML shape) run from your own machine against
+`just apply-model your-culprit.yaml` (see that command's own `--help` for
+the file shape, and `demo-services/culprit.yaml` for a worked example)
+run from your own machine against
 `REGISTRY_ADMIN_DATABASE_URL` — check `infra/.env.prod` on the VM for that
 value if you're running it remotely, or SSH in and run it there.
 

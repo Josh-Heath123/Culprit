@@ -1,20 +1,45 @@
-"""DB access for the service registry — the registry-admin role for
-writes, whatever engine the caller passes for reads (api/app/main.py
-wires api-reader for GET /services, registry-admin for everything else;
-see that module's lifespan). Transform logic (ORM row -> ServiceOut) lives
-here too, not a separate transforms.py — this package is small enough
-that the split app/incidents/ uses would just be indirection.
+"""The pre-Phase-27 `/services` surface, re-expressed over the system
+model, plus the two things that were never part of the model itself:
+ingest API keys and the Phase 19 topology-suggestion queue.
+
+**What this module is now.** Phase 27 replaced `services`/
+`service_dependencies` with `components`/`connections` (see
+`api/app/model/`). The frontend and `docs/INSTRUMENTATION.md` both point
+at `/services`, so that surface is retained for one release as a thin
+translation layer and removed in Phase 30 (Phase 27, field 9). Every
+component/connection write below delegates to `app.model.service` — this
+is a different *shape* over the same logic, never a second
+implementation of what a component is.
+
+The translation that matters: a service's `depends_on` list is a set of
+**http connections** out of that component. That is what
+`service_dependencies` meant, and it is what the data migration produced,
+so a client that only ever spoke the old shape keeps seeing exactly the
+edges it declared. A connection of any other kind is invisible through
+this surface, by construction — the old shape has nowhere to put it. That
+is a documented limit (docs/LIMITS.md), not a silent one, and it is the
+reason the alias is temporary.
 """
 
 from collections import defaultdict
 from datetime import UTC, datetime
 from uuid import UUID
 
+from culprit_model.canonical import canonical_component
+from culprit_model.graph import ComponentKind, ConnectionKind, Criticality, DeclaredBy
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
-from app.db.models import ApiKey, ObservedServiceEdge, Service, ServiceDependency
+from app.db.models import ApiKey, Component, Connection, ObservedServiceEdge
+from app.model.schemas import ComponentCreate, ComponentPatch
+from app.model.service import (
+    ComponentNameTaken,
+    UnknownComponentName,
+    create_component,
+    delete_component,
+    patch_component,
+)
 from app.registry.keys import generate_api_key, hash_api_key
 from app.registry.schemas import (
     KeyCreate,
@@ -26,11 +51,16 @@ from app.registry.schemas import (
     TopologySuggestionOut,
 )
 
+#: The connection kind `depends_on` means. Everything on this surface is
+#: HTTP because `service_dependencies` had no kind and the migration gave
+#: every migrated row `http`.
+_LEGACY_KIND = str(ConnectionKind.HTTP)
 
-class ServiceNameTaken(Exception):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"a service named {name!r} already exists")
+
+class ServiceNameTaken(ComponentNameTaken):
+    """Kept as its own name because `app/registry/router.py` catches it
+    and turns it into a 409. A subclass, not a copy, so a caller that
+    catches either gets the same behaviour."""
 
 
 class UnknownDependency(Exception):
@@ -52,9 +82,9 @@ class UnknownEdge(Exception):
 
 class UnregisteredEndpoint(Exception):
     """Raised by accept_topology_suggestion when either endpoint of the
-    edge isn't a registered service — docs/SELF_HOSTED_PLAN.md Phase 19,
+    edge isn't a registered component — docs/SELF_HOSTED_PLAN.md Phase 19,
     Known Trap 2: refuse clearly rather than silently half-registering a
-    service with no API key, which is explicitly called out as the worst
+    component with no API key, which is explicitly called out as the worst
     of the available options."""
 
     def __init__(self, names: list[str]) -> None:
@@ -72,204 +102,209 @@ def _key_out(key: ApiKey) -> KeyOut:
     )
 
 
-def _service_out(service: Service, depends_on: list[str]) -> ServiceOut:
+def _service_out(component: Component, depends_on: list[str]) -> ServiceOut:
     return ServiceOut(
-        id=service.id,
-        name=service.name,
-        display_name=service.display_name,
-        sort_order=service.sort_order,
-        monitored_metrics=service.monitored_metrics,
-        disabled=service.disabled_at is not None,
+        id=component.id,
+        name=component.name,
+        display_name=component.display_name,
+        sort_order=component.sort_order,
+        monitored_metrics=component.monitored_metrics,
+        disabled=component.disabled_at is not None,
         depends_on=sorted(depends_on),
-        keys=[_key_out(k) for k in service.api_keys],
-        created_at=service.created_at,
+        keys=[_key_out(k) for k in component.api_keys],
+        created_at=component.created_at,
     )
 
 
-async def _resolve_dependency_ids(session: AsyncSession, names: list[str]) -> list[UUID]:
-    """Every name in `names` must already be a registered service — unlike
-    the demo-seeding migration (which silently skips unknown names because
-    it's reproducing fixed historical behaviour), this is a live admin API
-    call, so an unknown dependency name is reported back, not dropped
-    silently."""
-    if not names:
-        return []
-    rows = (
-        await session.execute(select(Service.id, Service.name).where(Service.name.in_(names)))
-    ).all()
-    found_by_name = {name: id_ for id_, name in rows}
-    missing = [name for name in names if name not in found_by_name]
-    if missing:
-        raise UnknownDependency(missing)
-    return [found_by_name[name] for name in names]
-
-
-async def _get_service_orm(session: AsyncSession, service_id: UUID) -> Service | None:
+async def _get_component_orm(session: AsyncSession, component_id: UUID) -> Component | None:
     return (
         await session.execute(
-            select(Service).options(selectinload(Service.api_keys)).where(Service.id == service_id)
+            select(Component)
+            .options(selectinload(Component.api_keys))
+            .where(Component.id == component_id)
         )
     ).scalar_one_or_none()
 
 
-async def _depends_on_for(session: AsyncSession, service_id: UUID) -> list[str]:
+async def _resolve_dependency_ids(session: AsyncSession, names: list[str]) -> list[UUID]:
+    """Every name must already be a registered component — unlike the
+    demo-seeding migration (which silently skips unknown names because
+    it's reproducing fixed historical behaviour), this is a live admin
+    API call, so an unknown dependency name is reported, not dropped."""
+    if not names:
+        return []
+    canonical = [canonical_component(name) for name in names]
     rows = (
         await session.execute(
-            select(Service.name)
-            .join(ServiceDependency, ServiceDependency.to_service_id == Service.id)
-            .where(ServiceDependency.from_service_id == service_id)
+            select(Component.id, Component.name).where(Component.name.in_(canonical))
+        )
+    ).all()
+    found_by_name = {name: id_ for id_, name in rows}
+    missing = [name for name in canonical if name not in found_by_name]
+    if missing:
+        raise UnknownDependency(missing)
+    return [found_by_name[name] for name in canonical]
+
+
+async def _depends_on_for(session: AsyncSession, component_id: UUID) -> list[str]:
+    rows = (
+        await session.execute(
+            select(Component.name)
+            .join(Connection, Connection.to_component_id == Component.id)
+            .where(
+                Connection.from_component_id == component_id,
+                Connection.kind == _LEGACY_KIND,
+            )
         )
     ).scalars()
     return list(rows)
 
 
 async def list_services(session: AsyncSession) -> list[ServiceOut]:
-    services = (
-        await session.execute(
-            select(Service)
-            .options(selectinload(Service.api_keys))
-            .order_by(Service.sort_order, Service.name)
+    components = (
+        (
+            await session.execute(
+                select(Component)
+                .options(selectinload(Component.api_keys))
+                .order_by(Component.sort_order, Component.name)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    id_to_name = {s.id: s.name for s in services}
-    dep_rows = (
+    id_to_name = {c.id: c.name for c in components}
+    edges = (
         await session.execute(
-            select(ServiceDependency.from_service_id, ServiceDependency.to_service_id)
+            select(Connection.from_component_id, Connection.to_component_id).where(
+                Connection.kind == _LEGACY_KIND
+            )
         )
     ).all()
     deps_by_from: dict[UUID, list[str]] = defaultdict(list)
-    for from_id, to_id in dep_rows:
+    for from_id, to_id in edges:
         to_name = id_to_name.get(to_id)
         if to_name is not None:
             deps_by_from[from_id].append(to_name)
 
-    return [_service_out(s, deps_by_from.get(s.id, [])) for s in services]
+    return [_service_out(c, deps_by_from.get(c.id, [])) for c in components]
 
 
 async def get_service(session: AsyncSession, service_id: UUID) -> ServiceOut | None:
-    service = await _get_service_orm(session, service_id)
-    if service is None:
+    component = await _get_component_orm(session, service_id)
+    if component is None:
         return None
-    return _service_out(service, await _depends_on_for(session, service_id))
+    return _service_out(component, await _depends_on_for(session, service_id))
 
 
 async def create_service(session: AsyncSession, data: ServiceCreate) -> tuple[ServiceOut, str]:
-    existing = (
-        await session.execute(select(Service.id).where(Service.name == data.name))
-    ).scalar_one_or_none()
-    if existing is not None:
-        raise ServiceNameTaken(data.name)
-
     dep_ids = await _resolve_dependency_ids(session, data.depends_on)
-
-    service = Service(
-        name=data.name,
-        display_name=data.display_name,
-        monitored_metrics=data.monitored_metrics,
-    )
-    session.add(service)
-    await session.flush()
+    try:
+        component, plaintext = await create_component(
+            session,
+            ComponentCreate(
+                name=data.name,
+                display_name=data.display_name,
+                # Everything created through the legacy surface is a
+                # service: the old shape had no way to say otherwise, and
+                # guessing a kind from the name would be a fabrication.
+                kind=ComponentKind.SERVICE,
+                monitored_metrics=data.monitored_metrics,
+            ),
+        )
+    except ComponentNameTaken as exc:
+        raise ServiceNameTaken(exc.name) from exc
 
     for dep_id in dep_ids:
-        session.add(ServiceDependency(from_service_id=service.id, to_service_id=dep_id))
-
-    plaintext = generate_api_key()
-    session.add(
-        ApiKey(
-            service_name=service.name,
-            service_id=service.id,
-            key_hash=hash_api_key(plaintext),
-            label="initial",
-        )
-    )
-
+        session.add(_legacy_connection(component.id, dep_id))
     await session.commit()
-    out = await get_service(session, service.id)
+
+    out = await get_service(session, component.id)
     assert out is not None
     return out, plaintext
+
+
+def _legacy_connection(from_id: UUID, to_id: UUID) -> Connection:
+    """An edge declared through the old surface.
+
+    `declared_by = culprit_yaml` because that is what
+    `service_dependencies` always meant — a human declared it — and
+    matching the data migration keeps a hand-declared edge and a migrated
+    one indistinguishable, which they are. `criticality = unknown`
+    because nothing on this surface can say otherwise; see
+    `Criticality`'s own docstring on why that is the honest value.
+    """
+    return Connection(
+        from_component_id=from_id,
+        to_component_id=to_id,
+        kind=_LEGACY_KIND,
+        declared_by=str(DeclaredBy.CULPRIT_YAML),
+        criticality=str(Criticality.UNKNOWN),
+    )
 
 
 async def patch_service(
     session: AsyncSession, service_id: UUID, patch: ServicePatch
 ) -> ServiceOut | None:
-    service = await _get_service_orm(session, service_id)
-    if service is None:
+    component = await _get_component_orm(session, service_id)
+    if component is None:
         return None
 
     fields = patch.model_dump(exclude_unset=True)
 
-    if "display_name" in fields:
-        service.display_name = fields["display_name"]
-    if "sort_order" in fields:
-        service.sort_order = fields["sort_order"]
-    if "monitored_metrics" in fields:
-        service.monitored_metrics = fields["monitored_metrics"]
-    if "disabled" in fields:
-        service.disabled_at = datetime.now(UTC) if fields["disabled"] else None
-    if "depends_on" in fields:
-        dep_ids = await _resolve_dependency_ids(session, fields["depends_on"])
-        existing_edges = (
-            await session.execute(
-                select(ServiceDependency).where(ServiceDependency.from_service_id == service_id)
-            )
-        ).scalars().all()
-        for edge in existing_edges:
-            await session.delete(edge)
-        for dep_id in dep_ids:
-            session.add(ServiceDependency(from_service_id=service_id, to_service_id=dep_id))
+    # Resolve dependency names BEFORE touching the component, matching
+    # create_service. patch_component commits internally, so validating
+    # afterwards would leave a PATCH carrying both `display_name` and a
+    # typo'd `depends_on` returning 400 with the display name already
+    # written — a half-applied PATCH the pre-Phase-27 implementation
+    # could not produce, because it committed exactly once at the end.
+    dep_ids = (
+        await _resolve_dependency_ids(session, fields["depends_on"])
+        if "depends_on" in fields
+        else None
+    )
 
-    await session.commit()
+    component_fields = {
+        key: fields[key]
+        for key in ("display_name", "sort_order", "monitored_metrics", "disabled")
+        if key in fields
+    }
+    if component_fields:
+        await patch_component(session, service_id, ComponentPatch(**component_fields))
+
+    if dep_ids is not None:
+        # Only http connections are rewritten. A sql or message edge into
+        # the same component was never expressible through this surface,
+        # so a legacy PATCH must not silently delete one.
+        await session.execute(
+            delete(Connection).where(
+                Connection.from_component_id == service_id,
+                Connection.kind == _LEGACY_KIND,
+            )
+        )
+        for dep_id in dep_ids:
+            session.add(_legacy_connection(service_id, dep_id))
+        await session.commit()
+
     return await get_service(session, service_id)
 
 
 async def delete_service(session: AsyncSession, service_id: UUID, *, purge: bool) -> bool:
-    """Soft delete (default) sets disabled_at only — every historical
-    raw_events/anomalies/incident_candidates row survives, and so does the
-    service row itself. `purge=True` hard-deletes the service row (and,
-    via the FKs' ON DELETE CASCADE, its api_keys and service_dependencies
-    edges) but still never touches telemetry tables — raw_events has no
-    FK to services at all, on purpose (see api/app/db/models.py's
-    RawEvent docstring on why hypertables don't get FKs in this project).
-    """
-    if purge:
-        # A plain Core DELETE, not session.delete(service) on the loaded
-        # ORM object: the ORM's unit-of-work nulls a loaded collection's
-        # FK before deleting the parent (it did here, since api_keys is
-        # already eager-loaded elsewhere in this module) — service_id is
-        # NOT NULL, so that null-out fails outright. A Core statement
-        # skips ORM relationship handling entirely and lets the FKs' own
-        # ON DELETE CASCADE do the actual work, which is what's wanted
-        # here regardless.
-        existing = (
-            await session.execute(select(Service.id).where(Service.id == service_id))
-        ).scalar_one_or_none()
-        if existing is None:
-            return False
-        await session.execute(delete(Service).where(Service.id == service_id))
-        await session.commit()
-        return True
-
-    service = await _get_service_orm(session, service_id)
-    if service is None:
-        return False
-    service.disabled_at = datetime.now(UTC)
-    await session.commit()
-    return True
+    return await delete_component(session, service_id, purge=purge)
 
 
 async def create_key(
     session: AsyncSession, service_id: UUID, data: KeyCreate
 ) -> tuple[ApiKey, str] | None:
-    service = (
-        await session.execute(select(Service.name).where(Service.id == service_id))
+    name = (
+        await session.execute(select(Component.name).where(Component.id == service_id))
     ).scalar_one_or_none()
-    if service is None:
+    if name is None:
         return None
     plaintext = generate_api_key()
     key = ApiKey(
         service_id=service_id,
-        service_name=service,
+        service_name=name,
         key_hash=hash_api_key(plaintext),
         label=data.label,
     )
@@ -292,20 +327,29 @@ async def revoke_key(session: AsyncSession, service_id: UUID, key_id: UUID) -> b
     return True
 
 
+# --- Phase 19 topology suggestions ------------------------------------
+
+
 async def _already_declared_pairs(session: AsyncSession) -> set[tuple[str, str]]:
-    """Every (from_name, to_name) already in service_dependencies, by
-    name — observed_service_edges stores names, not FKs (an edge can
-    legitimately point at a service Culprit hasn't registered), so
-    comparing against declared dependencies has to go through Service
-    twice, once per side of the directed edge."""
-    from_service = aliased(Service)
-    to_service = aliased(Service)
+    """Every (from_name, to_name) already connected, by name —
+    observed_service_edges stores names, not FKs (an edge can
+    legitimately point at a component Culprit hasn't registered), so
+    comparing against declared connections has to go through Component
+    twice, once per side of the directed edge.
+
+    Every connection kind counts, not just http: if a `sql` connection
+    already records that these two are joined, re-suggesting the pair
+    would be asking the admin to declare something the model already
+    knows.
+    """
+    from_component = aliased(Component)
+    to_component = aliased(Component)
     rows = (
         await session.execute(
-            select(from_service.name, to_service.name)
-            .select_from(ServiceDependency)
-            .join(from_service, from_service.id == ServiceDependency.from_service_id)
-            .join(to_service, to_service.id == ServiceDependency.to_service_id)
+            select(from_component.name, to_component.name)
+            .select_from(Connection)
+            .join(from_component, from_component.id == Connection.from_component_id)
+            .join(to_component, to_component.id == Connection.to_component_id)
         )
     ).all()
     return {(row[0], row[1]) for row in rows}
@@ -335,9 +379,9 @@ async def list_topology_suggestions(session: AsyncSession) -> list[TopologySugge
     if not edges:
         return []
 
-    service_names = {name for edge in edges for name in (edge.from_service, edge.to_service)}
+    names = {name for edge in edges for name in (edge.from_service, edge.to_service)}
     registered = set(
-        (await session.execute(select(Service.name).where(Service.name.in_(service_names))))
+        (await session.execute(select(Component.name).where(Component.name.in_(names))))
         .scalars()
         .all()
     )
@@ -370,18 +414,26 @@ async def _get_observed_edge(
 
 
 async def accept_topology_suggestion(session: AsyncSession, edge: TopologyEdgeRef) -> None:
-    """Inserts into service_dependencies — the only thing that actually
-    changes correlation behaviour; observed_service_edges itself is left
-    alone (no "accepted" flag exists or is needed: once declared, the
-    pair is filtered out of list_topology_suggestions by
-    _already_declared_pairs on the next call)."""
+    """Inserts a `connections` row — the only thing that actually changes
+    correlation behaviour; observed_service_edges itself is left alone
+    (no "accepted" flag exists or is needed: once declared, the pair is
+    filtered out of list_topology_suggestions by _already_declared_pairs
+    on the next call).
+
+    The new row is `declared_by = accepted_suggestion`, which the old
+    schema had no way to record. That distinction is why the column
+    exists: a human accepting a machine's proposal is different evidence
+    from a human writing the edge down unprompted, and `apply_model.py`
+    relies on it — an accepted suggestion is not removed by a
+    `culprit.yaml` that does not mention it.
+    """
     if await _get_observed_edge(session, edge) is None:
         raise UnknownEdge(edge.from_service, edge.to_service)
 
     rows = (
         await session.execute(
-            select(Service.id, Service.name).where(
-                Service.name.in_([edge.from_service, edge.to_service])
+            select(Component.id, Component.name).where(
+                Component.name.in_([edge.from_service, edge.to_service])
             )
         )
     ).all()
@@ -392,17 +444,21 @@ async def accept_topology_suggestion(session: AsyncSession, edge: TopologyEdgeRe
 
     existing = (
         await session.execute(
-            select(ServiceDependency).where(
-                ServiceDependency.from_service_id == id_by_name[edge.from_service],
-                ServiceDependency.to_service_id == id_by_name[edge.to_service],
+            select(Connection.id).where(
+                Connection.from_component_id == id_by_name[edge.from_service],
+                Connection.to_component_id == id_by_name[edge.to_service],
+                Connection.kind == _LEGACY_KIND,
             )
         )
     ).scalar_one_or_none()
     if existing is None:
         session.add(
-            ServiceDependency(
-                from_service_id=id_by_name[edge.from_service],
-                to_service_id=id_by_name[edge.to_service],
+            Connection(
+                from_component_id=id_by_name[edge.from_service],
+                to_component_id=id_by_name[edge.to_service],
+                kind=_LEGACY_KIND,
+                declared_by=str(DeclaredBy.ACCEPTED_SUGGESTION),
+                criticality=str(Criticality.UNKNOWN),
             )
         )
     await session.commit()
@@ -415,3 +471,22 @@ async def dismiss_topology_suggestion(session: AsyncSession, edge: TopologyEdgeR
     observed.dismissed_at = datetime.now(UTC)
     await session.commit()
     return True
+
+
+__all__ = [
+    "ServiceNameTaken",
+    "UnknownComponentName",
+    "UnknownDependency",
+    "UnknownEdge",
+    "UnregisteredEndpoint",
+    "accept_topology_suggestion",
+    "create_key",
+    "create_service",
+    "delete_service",
+    "dismiss_topology_suggestion",
+    "get_service",
+    "list_services",
+    "list_topology_suggestions",
+    "patch_service",
+    "revoke_key",
+]

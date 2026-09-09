@@ -106,8 +106,8 @@ def mcp_reader_url(postgres_container: PostgresContainer) -> str:
             "VALUES (now(), now(), 'open')",
         ),
         (
-            "services",
-            "INSERT INTO services (name) VALUES ('x')",
+            "components",
+            "INSERT INTO components (name) VALUES ('x')",
         ),
     ],
 )
@@ -135,8 +135,12 @@ async def test_mcp_reader_can_select_every_granted_table(mcp_reader_url: str) ->
                 "incident_change_links",
                 "incident_candidates",
                 "anomalies",
-                "services",
-                "service_dependencies",
+                # Phase 27 renamed services -> components and replaced
+                # service_dependencies with connections; 7c2e94b1f0aa
+                # carries this role's SELECT across both, so the MCP
+                # tools keep the reads they had.
+                "components",
+                "connections",
             ):
                 await conn.execute(text(f"SELECT count(*) FROM {table}"))
     finally:

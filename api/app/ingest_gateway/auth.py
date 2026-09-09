@@ -31,7 +31,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.sql import func
 
-from app.db.models import ApiKey, Service
+from app.db.models import ApiKey, Component
 from app.ingest_gateway.config import INGEST_GATEWAY_DATABASE_URL
 
 logger = structlog.get_logger("ingest_gateway.auth")
@@ -86,8 +86,8 @@ class ApiKeyStore:
             rows = (
                 await session.execute(
                     select(ApiKey.key_hash, ApiKey.service_name, ApiKey.id)
-                    .join(Service, Service.id == ApiKey.service_id)
-                    .where(ApiKey.revoked_at.is_(None), Service.disabled_at.is_(None))
+                    .join(Component, Component.id == ApiKey.service_id)
+                    .where(ApiKey.revoked_at.is_(None), Component.disabled_at.is_(None))
                 )
             ).all()
         self._hash_to_entry = {row.key_hash: (row.service_name, row.id) for row in rows}

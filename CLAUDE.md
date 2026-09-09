@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Phases 0–24 merged and deployed. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 26 and its follow-up 26.1 are done on their branches; Phase 27 is next
+## Status: Phases 0–26.1 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 27 is done on `phase-27-system-model` and not yet merged; Phase 28 is next
 
 Updated 2026-09-09. Update this section the moment it changes — a stale status line is worse than none, and this section was four phases stale until Phase 26 repaired it, which is exactly the cost being warned about.
 
@@ -18,7 +18,9 @@ Merged into `main` and deployed to `https://culprit.co.za`:
 
 **Phase 25 (scoped visualization) is cancelled. Do not implement it** — see `docs/HANDOFF.md` §1.
 
-**Phase 26 (truth repair and the three-plane schema) is complete on `phase-26-truth-repair`** (commit `d39ca3b`, not yet merged to `main`). It removed known-false claims from the repository, fixed the security and fail-open defects the plan's reconnaissance found, and landed `shared/culprit_model/` plus the `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables — created empty and left empty until Phase 27. **Phase 26.1**, a small prerequisite on `phase-26.1-configured-facts-value-safety`, followed it: `configured_facts` value safety (see architecture point 18). **Phase 27 (the system model — `components`/`connections`) is next and has not been started.** As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
+**Phases 26 and 26.1 are merged into `main`** (`d39ca3b`, `4b7dbef`). 26 removed known-false claims from the repository, fixed the security and fail-open defects the plan's reconnaissance found, and landed `shared/culprit_model/` plus the `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables. 26.1 made `configured_facts` structurally unable to hold an ungranted config value (architecture point 18).
+
+**Phase 27 (the system model) is complete on `phase-27-system-model` and not yet merged.** It replaced `services`/`service_dependencies` with `components`/`connections`/`contracts` — see architecture point 19. **Phase 28 (the CLI, the extractor protocol, intent extraction) is next and has not been started.** As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
 
 **Still genuinely outstanding, and not something a session can finish on its own:** the `ghcr.io` packages (`api`/`worker`/`frontend`/`mcp_server`) still default to **private** under `GITHUB_TOKEN`. Flipping them to public needs a human with repo admin access in the GitHub UI (Packages → each package → Package settings → Change visibility); the `gh` CLI token in this environment lacks `read:packages`/`write:packages`. Until that happens, `docs/SELF_HOSTED_PLAN.md` Phase 20's first acceptance criterion ("a machine with no GitHub account can `docker compose pull` every image") is not met, whatever else claims otherwise.
 
@@ -63,7 +65,7 @@ Self-observability (Phase 10) — `api/app/observability.py` and `worker/app/obs
 The self-hosted-pivot phases (`docs/SELF_HOSTED_PLAN.md`), each adding a distinct DB role/engine on top of the above rather than replacing it:
 
 7. **Frontend routing (Phase 13)** — `react-router-dom`; `frontend/src/routes/AppRoutes.tsx`, `RequireAuth.tsx`, `NotFound.tsx`. Before this, `App.tsx` was just `token ? <Dashboard /> : <LoginScreen />` and every URL rendered identically. `selectedIncidentId` now lives in the URL, not component state.
-8. **Service registry (Phase 14)** — `api/app/registry/` (`router.py`, `service.py`, `keys.py`, `schemas.py`, `config.py`), a `registry-admin` DB role/engine distinct from `api-reader`. Services and their API keys are now rows in `services`/`service_dependencies`/`api_keys`, managed via **Settings → Services** in the dashboard or `just apply-services <file.yaml>` (`api/scripts/apply_services.py`, declarative — see `infra/demo-services.yaml`), not hardcoded in `shared/culprit_shared/services.py` and a literal migration anymore. `worker/app/correlation/graph.py` reads adjacency from the DB now, passed in as a parameter rather than importing the old hardcoded dict.
+8. **Service registry (Phase 14)** — `api/app/registry/` (`router.py`, `service.py`, `keys.py`, `schemas.py`, `config.py`), a `registry-admin` DB role/engine distinct from `api-reader`. Services and their API keys are now rows in `services`/`service_dependencies`/`api_keys`, managed via **Settings → Services** in the dashboard or, since Phase 27, `just apply-model <file.yaml>` (`api/scripts/apply_model.py`, declarative — see `demo-services/culprit.yaml`), not hardcoded in `shared/culprit_shared/services.py` and a literal migration anymore. `worker/app/correlation/graph.py` reads adjacency from the DB now, passed in as a parameter rather than importing the old hardcoded dict.
 9. **Multi-user auth (Phase 16)** — replaces Phase 9's single operator account. `api/app/auth/` now has a real `users` table (`repository.py`, `users_router.py`), `admin`/`member` roles (`require_admin` vs `require_auth` in `dependencies.py`), and a new `auth-service` DB role/engine for writes; `api/scripts/create_user.py` (`just create-user <username> --role admin`) creates the first admin. `frontend/src/routes/SettingsUsers.tsx` + `components/auth/ChangePasswordDialog.tsx` are the UI for it. The old `OPERATOR_USERNAME`/`OPERATOR_PASSWORD_HASH` env vars are now migration-time-only inputs (read once by `api/migrations/versions/fbf4cb16570a_create_users_table.py`'s backfill), not read by application code at all.
 10. **Public ingest path + instrumentation guide (Phase 15)** — `ingest-gateway` is now reachable from outside the Docker network (previously only `frontend` was published), so a real third-party service can actually push telemetry in. `docs/INSTRUMENTATION.md` is the copyable guide for doing that against a real service, as opposed to `demo-services/shared/otel.py` which is demo-only.
 11. **One-command quickstart + real-VM install guide (Phase 17)** — `scripts/bootstrap_env.py` generates all secrets (including the newer `REGISTRY_ADMIN_DB_PASSWORD`/`AUTH_SERVICE_DB_PASSWORD`) instead of ~10 being hand-generated; `just quickstart` brings up a full working stack + three demo services + an auto-injected fault against `infra/docker-compose.quickstart.yml`, entirely via Docker (no local Python/uv needed, `bootstrap_env.py` runs inside a throwaway container). `docs/INSTALL.md` is the equivalent guide for a real VM (what `docs/IMPLEMENTATION_PLAN.md`'s Production deployment section below used to be the only source for). `just bootstrap-env --domain <domain>` is the prompted, non-quickstart version of the same secret-generation script.
@@ -81,6 +83,8 @@ The AI-native pass (`docs/AI_NATIVE_PLAN.md`, Phases 21–24), all merged:
 The diagnostic-engine rewrite (`docs/DIAGNOSTIC_PLAN.md`, Phases 26–35) has begun:
 
 18. **The three-plane core model (Phase 26)** — `shared/culprit_model/` (`planes.py`, `facts.py`, `subjects.py`, `canonical.py`), shipped inside the existing `culprit-shared` distribution so both `api/` and `worker/` already have it. `subjects.build()` is the **only** sanctioned way to construct a subject URI (`http:orders-svc/POST /orders`) — hand-formatting one anywhere else is a lint failure (`scripts/tests/test_subject_construction.py`). The `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables exist and are **empty by design** until Phase 27; nothing reads or writes them, and no role has been granted anything on them. Phase 26.1 then made `configured_facts` structurally unable to hold an ungranted config value: `value` is nullable and NULL by default, `value_shape` carries type/format instead, and a CHECK (`ck_configured_facts_value_requires_grant`) means a literal value can exist only in a row naming an explicit `grant_ref`. That guarantee covers the `value` column only — `value_shape` is still free-form JSONB (`docs/LIMITS.md`).
+
+19. **The system model (Phase 27)** — `services`/`service_dependencies` became `components`/`connections`, plus an empty `contracts` table. `services` was **renamed**, not copied, so every FK (`api_keys.service_id`, which keeps its old name) and every GRANT followed it intact. `connections` had to be a new table: its identity is `(from, to, kind)`, because two components may be connected in more than one way, where `service_dependencies`' primary key was the untyped pair. `shared/culprit_model/graph.py` is the pure in-memory graph — components, typed connections, reachability, and `upstream_connections()` for request-path derivation (plain BFS, no `networkx`: that is a `worker`-only dependency and `culprit_model` is installed into `api` too). `api/app/model/` is the new HTTP surface (`/model/components`, `/model/connections`, `/model/graph?symptom=`, `/model/apply`, `/model/export`); `api/app/registry/` is now a thin `/services` alias over it, retained for one release and removed in Phase 30. `culprit.yaml` (`api/app/model/manifest.py`, applied with `just apply-model`) is the declarative source — it names config keys and never their values, and the loader refuses anything credential-shaped. `demo-services/culprit.yaml` replaced `infra/demo-services.yaml` and the last hardcoded topology fixture. Two standing gates landed with it: `scripts/check_migration_round_trip.py` (invariant 8 — every migration round-trips against a real database with rows present, its own CI job) and `scripts/check_scan_coverage.py` (invariant 9 — every repo-wide check's declared roots actually cover the repository; it immediately found `examples/` covered by nothing).
 
 ## Tech stack (decided, don't re-litigate per session)
 
@@ -172,6 +176,8 @@ just lint-imports
 just check-schema-drift
 just check-no-llm-imports   # Phase 26: no LLM client in a deterministic package
 just check-invariants       # Phase 22: coupled files + migration symmetry
+just check-scan-coverage    # Phase 27: every repo-wide check's roots cover the repo
+just check-migration-round-trip  # Phase 27: upgrade -> seed -> downgrade -> upgrade (needs Docker)
 
 # the whole gate set at once, honestly reported: /verify (.claude/skills/verify)
 
@@ -192,8 +198,9 @@ just frontend        # dev server, talks to `just dev`'s API on :8000 by default
 just frontend-build
 just generate-types  # regenerates frontend/openapi.schema.json + src/lib/api-types.generated.ts
 
-# service registry (Phase 14) — declarative service list, e.g. infra/demo-services.yaml
-just apply-services <file.yaml>            # add --prune to remove services not in the file
+# system model (Phase 27) — declarative culprit.yaml, e.g. demo-services/culprit.yaml
+just apply-model <file.yaml>               # add --prune to disable components not in the file
+just apply-model --export                  # print the current model as a culprit.yaml
 
 # multi-user auth (Phase 16) — the only way to create the first admin account
 just create-user <username> --role admin
