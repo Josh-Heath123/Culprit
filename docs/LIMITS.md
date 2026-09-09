@@ -223,3 +223,49 @@ If you are upgrading and your `.env.prod` predates the `registry-admin`,
 will now crash on boot rather than start in a broken state. Compare against
 `infra/.env.prod.example`, which lists every variable, or regenerate with
 `just bootstrap-env`. See `docs/UPGRADING.md`.
+
+## A config value cannot be stored without naming an explicit grant
+
+`configured_facts` — the table that will hold what an environment is
+actually set up to do — records the *shape* of a config key, not its
+contents. `value_shape` carries type, length class and format class (e.g.
+`{"type": "url", "scheme": "postgresql", "host_resolves": true}`), and
+`value` is NULL unless `grant_ref` names the per-key grant that permitted
+storing the literal. A database CHECK constraint
+(`ck_configured_facts_value_requires_grant`) enforces that, so a carelessly
+written extractor is rejected by Postgres rather than trusted to behave.
+
+What this costs you: **a divergence over a config key can tell you the two
+environments differ, and how the shape differs, without being able to show
+you the two values.** That is the intended trade. This is the one table
+whose whole purpose is being safe to attach to a bug report, and a
+free-form value column would have become a `DATABASE_URL` sitting in
+Postgres the first time an extractor was written in a hurry.
+
+Three consequences worth knowing before you depend on it:
+
+- **The constraint covers `value`, not the whole table.** `value_shape` is
+  free-form JSONB, and an extractor that puts a literal secret in *there*
+  is not stopped by anything. The column that the design steers extractors
+  towards is the one that is unconstrained. Closing that — a fixed key
+  vocabulary for `value_shape` — is real outstanding work, not a
+  hypothetical; until it lands, "structurally excluded" is true of the
+  `value` column and is a convention everywhere else.
+- **The grant mechanism itself does not exist yet.** `grant_ref` is a
+  free-text column as of this migration; nothing validates that the grant
+  it names is real, because capability grants are Phase 31's work. A
+  literal empty string satisfies the constraint. Today the column is the
+  *structural place* for that check, not the check.
+- **Downgrading past this migration loses data, one half of it loudly and
+  one half silently.** `downgrade()` drops `grant_ref`, so a granted
+  literal value that goes down and comes back up is indistinguishable from
+  an ungranted one, and the CHECK refuses to be recreated until you
+  resolve those rows — a loud failure with a remedy, which beats silently
+  deleting operator data or silently keeping a value whose grant no longer
+  exists. It also drops `value_shape`, and *that* loss is silent: after
+  Phase 27 `value_shape` is the payload of a CONFIGURED fact, so a down/up
+  cycle succeeds and leaves contentless facts behind. Back up first
+  (`scripts/backup.sh`). Rows with no stored value round-trip cleanly.
+
+The tables remain empty until Phase 27, so none of this affects a running
+deployment yet.

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Phases 0–24 merged and deployed. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), starting at Phase 26
+## Status: Phases 0–24 merged and deployed. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 26 and its follow-up 26.1 are done on their branches; Phase 27 is next
 
 Updated 2026-09-09. Update this section the moment it changes — a stale status line is worse than none, and this section was four phases stale until Phase 26 repaired it, which is exactly the cost being warned about.
 
@@ -18,7 +18,7 @@ Merged into `main` and deployed to `https://culprit.co.za`:
 
 **Phase 25 (scoped visualization) is cancelled. Do not implement it** — see `docs/HANDOFF.md` §1.
 
-**Phase 26 (truth repair and the three-plane schema) is the current work.** It removes known-false claims from the repository, fixes the security and fail-open defects the plan's reconnaissance found, and lands `shared/culprit_model/` plus the `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables — created empty and left empty until Phase 27. As with every phase, don't assume `main` reflects it until it is merged; check `git status` and `git log <branch> --oneline`.
+**Phase 26 (truth repair and the three-plane schema) is complete on `phase-26-truth-repair`** (commit `d39ca3b`, not yet merged to `main`). It removed known-false claims from the repository, fixed the security and fail-open defects the plan's reconnaissance found, and landed `shared/culprit_model/` plus the `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables — created empty and left empty until Phase 27. **Phase 26.1**, a small prerequisite on `phase-26.1-configured-facts-value-safety`, followed it: `configured_facts` value safety (see architecture point 18). **Phase 27 (the system model — `components`/`connections`) is next and has not been started.** As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
 
 **Still genuinely outstanding, and not something a session can finish on its own:** the `ghcr.io` packages (`api`/`worker`/`frontend`/`mcp_server`) still default to **private** under `GITHUB_TOKEN`. Flipping them to public needs a human with repo admin access in the GitHub UI (Packages → each package → Package settings → Change visibility); the `gh` CLI token in this environment lacks `read:packages`/`write:packages`. Until that happens, `docs/SELF_HOSTED_PLAN.md` Phase 20's first acceptance criterion ("a machine with no GitHub account can `docker compose pull` every image") is not met, whatever else claims otherwise.
 
@@ -80,7 +80,7 @@ The AI-native pass (`docs/AI_NATIVE_PLAN.md`, Phases 21–24), all merged:
 
 The diagnostic-engine rewrite (`docs/DIAGNOSTIC_PLAN.md`, Phases 26–35) has begun:
 
-18. **The three-plane core model (Phase 26)** — `shared/culprit_model/` (`planes.py`, `facts.py`, `subjects.py`, `canonical.py`), shipped inside the existing `culprit-shared` distribution so both `api/` and `worker/` already have it. `subjects.build()` is the **only** sanctioned way to construct a subject URI (`http:orders-svc/POST /orders`) — hand-formatting one anywhere else is a lint failure (`scripts/tests/test_subject_construction.py`). The `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables exist and are **empty by design** until Phase 27; nothing reads or writes them, and no role has been granted anything on them.
+18. **The three-plane core model (Phase 26)** — `shared/culprit_model/` (`planes.py`, `facts.py`, `subjects.py`, `canonical.py`), shipped inside the existing `culprit-shared` distribution so both `api/` and `worker/` already have it. `subjects.build()` is the **only** sanctioned way to construct a subject URI (`http:orders-svc/POST /orders`) — hand-formatting one anywhere else is a lint failure (`scripts/tests/test_subject_construction.py`). The `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables exist and are **empty by design** until Phase 27; nothing reads or writes them, and no role has been granted anything on them. Phase 26.1 then made `configured_facts` structurally unable to hold an ungranted config value: `value` is nullable and NULL by default, `value_shape` carries type/format instead, and a CHECK (`ck_configured_facts_value_requires_grant`) means a literal value can exist only in a row naming an explicit `grant_ref`. That guarantee covers the `value` column only — `value_shape` is still free-form JSONB (`docs/LIMITS.md`).
 
 ## Tech stack (decided, don't re-litigate per session)
 
