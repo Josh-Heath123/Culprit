@@ -55,7 +55,12 @@ dev = [
 # tests ride along on api's pytest run rather than needing a third test
 # entry point. "tests" must stay listed explicitly once testpaths is
 # set, or api/tests/ itself stops being discovered.
-testpaths = ["tests", "../scripts/tests"]
+#
+# Phase 26 (docs/DIAGNOSTIC_PLAN.md): shared/tests/ rides along here for
+# the same reason -- culprit_model has no dependencies beyond pydantic
+# and is already installed into this venv as a path dependency, so a
+# fourth uv project purely to run its tests would buy nothing.
+testpaths = ["tests", "../scripts/tests", "../shared/tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 # Phase 14's integration tests share session-scoped async fixtures

@@ -15,7 +15,6 @@ rest of the corpus.
 
 import asyncio
 import logging
-import os
 import uuid
 from datetime import UTC, datetime
 
@@ -24,6 +23,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.db import postmortems  # noqa: E402
+from app.env import require_env  # noqa: E402
 from app.rag.embeddings import embed_document  # noqa: E402
 from app.rag.seed_postmortems import SEED_POSTMORTEMS  # noqa: E402
 from sqlalchemy import insert, select, update  # noqa: E402
@@ -32,9 +32,13 @@ from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("seed_postmortems")
 
-ROOT_CAUSE_DATABASE_URL = os.environ.get(
-    "ROOT_CAUSE_DATABASE_URL",
-    "postgresql+asyncpg://root-cause-writer:root-cause-writer-dev-password@localhost:5432/signalstack",
+#: No fallback (Phase 26, docs/DIAGNOSTIC_PLAN.md). This was the last
+#: committed credential in the repository. It is a script rather than a
+#: service, so it fell outside that phase's "every service refuses to
+#: start" criterion -- but an operator runs it by hand against a real
+#: database, which makes a silently-wrong default worse here, not better.
+ROOT_CAUSE_DATABASE_URL = require_env(
+    "ROOT_CAUSE_DATABASE_URL", hint="root-cause-writer; see worker/.env.example"
 )
 
 #: Voyage AI accounts without a billing method on file are capped at 3

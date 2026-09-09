@@ -28,7 +28,8 @@ Usage:
     check_migration_symmetry.py [FILE ...]
 
 With no arguments, checks every migration file changed vs. `main` (`git
-diff --name-only main...HEAD -- api/migrations/versions/`) -- for local,
+diff --name-only main...HEAD -- api/migrations/versions/`) *and* every
+uncommitted one (`git status --porcelain`) -- for local,
 non-hook use (`just check-invariants`). A Claude Code hook always passes
 the single just-edited file explicitly instead (see check_invariants.sh
 -- no reason to run a git diff on every keystroke when the hook already
@@ -235,21 +236,43 @@ def check_migration(path: Path) -> list[str]:
     return errors
 
 
-def _default_migration_files() -> list[Path]:
+def _git_lines(*args: str) -> list[str]:
     result = subprocess.run(
-        ["git", "diff", "--name-only", "main...HEAD", "--", "api/migrations/versions/"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=False
     )
     if result.returncode != 0:
         return []
-    return [
-        ROOT / line
-        for line in result.stdout.splitlines()
-        if line.strip() and (ROOT / line).exists()
-    ]
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _default_migration_files() -> list[Path]:
+    """Migrations changed vs. `main`, *plus* uncommitted ones.
+
+    The working-tree half is not an extra: without it this returns an
+    empty list on the normal case — a branch whose migration has been
+    written but not yet committed — and the check prints "0 file(s)" and
+    exits zero, which reads exactly like a pass. `scripts/check_coupled_files.py`
+    already looks at the working tree in its no-argument mode for the
+    same reason; this was the odd one out, and the gap was found by the
+    Phase 26 audit finding this gate silently checking nothing on a
+    branch that had two new migrations sitting in it.
+    """
+    paths = set(
+        _git_lines("diff", "--name-only", "main...HEAD", "--", "api/migrations/versions/")
+    )
+    # Staged + unstaged + untracked, the same set `git status --porcelain`
+    # reports, restricted to migration files.
+    for line in _git_lines("status", "--porcelain=v1", "--", "api/migrations/versions/"):
+        # "XY path", and "XY old -> new" for a rename: the new path is
+        # the one that still exists to be checked.
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        paths.add(path.strip('"'))
+
+    return sorted(
+        (ROOT / path for path in paths if (ROOT / path).exists()), key=lambda p: p.name
+    )
 
 
 def main(argv: list[str]) -> int:

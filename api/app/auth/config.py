@@ -1,5 +1,7 @@
 import os
 
+from app.env import require_env
+
 JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_MINUTES = int(os.environ.get("JWT_EXPIRY_MINUTES", "60"))
@@ -9,9 +11,12 @@ JWT_EXPIRY_MINUTES = int(os.environ.get("JWT_EXPIRY_MINUTES", "60"))
 #: app/auth/dependencies.py's require_auth to resolve a token's subject
 #: to a live role/disabled status without needing this write-capable
 #: engine on every request.
-AUTH_SERVICE_DATABASE_URL = os.environ.get(
-    "AUTH_SERVICE_DATABASE_URL",
-    "postgresql+asyncpg://auth-service:auth-service-dev-password@localhost:5432/signalstack",
+#: No dev-password fallback (Phase 26): an unset value used to default
+#: to a committed `auth-service-dev-password`, which made a
+#: misconfigured deploy start up and fail confusingly later instead of
+#: refusing to start. See app/env.py.
+AUTH_SERVICE_DATABASE_URL = require_env(
+    "AUTH_SERVICE_DATABASE_URL", hint="see infra/.env.prod.example"
 )
 
 #: Phase 21 (docs/AI_NATIVE_PLAN.md): the shared bearer credential
