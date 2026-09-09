@@ -228,7 +228,13 @@ configured_facts = sa.Table(
     sa.Column("environment", sa.String(), nullable=False),
     sa.Column("subject", sa.String(), nullable=False),
     sa.Column("predicate", sa.String(), nullable=False),
-    sa.Column("value", JSONB(), nullable=False),
+    # Nullable, and NULL unless `grant_ref` names the grant that
+    # permitted a literal value — ck_configured_facts_value_requires_grant
+    # (migration a3d81f6c4b27) enforces that in the database. A config
+    # key's content belongs in `value_shape` by default (§2.2).
+    sa.Column("value", JSONB(), nullable=True),
+    sa.Column("value_shape", JSONB(), nullable=True),
+    sa.Column("grant_ref", sa.String(), nullable=True),
     sa.Column("source_kind", sa.String(), nullable=False),
     sa.Column("extractor", sa.String(), nullable=False),
     sa.Column("artefact", sa.String(), nullable=True),

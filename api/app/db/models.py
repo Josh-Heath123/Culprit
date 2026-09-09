@@ -575,9 +575,16 @@ class ConfiguredFact(Base):
     environment: Mapped[str]
     subject: Mapped[str]
     predicate: Mapped[str]
-    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
-        JSONB, nullable=False, server_default=text("'null'::jsonb")
-    )
+    #: A literal config value, and NULL unless `grant_ref` names the
+    #: explicit per-key grant that permitted storing it — enforced by the
+    #: database (ck_configured_facts_value_requires_grant, migration
+    #: a3d81f6c4b27), not by whichever extractor happens to write the row.
+    #: §2.2: the default home for a config key's content is `value_shape`.
+    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(JSONB)
+    #: Type, length class, format class — e.g.
+    #: {"type": "url", "scheme": "postgresql", "host_resolves": true}.
+    value_shape: Mapped[dict | None] = mapped_column(JSONB)
+    grant_ref: Mapped[str | None]
     source_kind: Mapped[str]
     extractor: Mapped[str]
     artefact: Mapped[str | None]
