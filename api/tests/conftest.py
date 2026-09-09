@@ -25,6 +25,32 @@ from testcontainers.community.postgres import PostgresContainer
 
 load_dotenv()
 
+#: Import-time-required variables, defaulted here so `just test` works on
+#: a clean checkout with no api/.env. Phase 26 removed the fail-open
+#: `<role>-dev-password` fallbacks these used to have inside
+#: app/*/config.py (see app/env.py): refusing to start without them is
+#: the point, so the values have to come from somewhere, and a test
+#: harness is the right somewhere. `setdefault`, not assignment, so a
+#: real api/.env or a CI-provided value always wins.
+#:
+#: These are not connection strings anything connects with — every test
+#: that touches a database goes through `migrated_database_url` /
+#: `role_database_url` below, against a throwaway container. They exist
+#: only to satisfy reads that happen at module import.
+_IMPORT_TIME_DEFAULTS = {
+    "JWT_SECRET_KEY": "test-jwt-secret-not-a-real-secret",
+    "AGENT_AUTOMATION_TOKEN": "dev-agent-automation-token",
+    "INGEST_GATEWAY_DATABASE_URL": "postgresql+asyncpg://ingest-gateway:test@localhost:5432/test",
+    "API_READER_DATABASE_URL": "postgresql+asyncpg://api-reader:test@localhost:5432/test",
+    "REGISTRY_ADMIN_DATABASE_URL": "postgresql+asyncpg://registry-admin:test@localhost:5432/test",
+    "AUTH_SERVICE_DATABASE_URL": "postgresql+asyncpg://auth-service:test@localhost:5432/test",
+    "POSTMORTEM_WRITER_DATABASE_URL": (
+        "postgresql+asyncpg://postmortem-writer:test@localhost:5432/test"
+    ),
+}
+for _name, _value in _IMPORT_TIME_DEFAULTS.items():
+    os.environ.setdefault(_name, _value)
+
 _ALEMBIC_INI = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
 
 #: Role passwords the migrations under api/migrations/versions/ read via

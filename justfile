@@ -25,9 +25,15 @@ test:
 migrate: up
     cd api && uv run alembic upgrade head
 
-# Lint all projects
+# Lint all projects. `shared/` and `scripts/` have no venv of their own,
+# so they ride along on api's ruff (which picks up the same root ruff.toml
+# either way). Both were unlinted before Phase 26 — `shared/` because it
+# had no code worth linting until culprit_model landed there, `scripts/`
+# for no reason at all: .claude/hooks/fast_gates.sh lints every changed
+# Python file wherever it lives, so the hook was stricter than the gate
+# and caught pre-existing violations this recipe had never looked at.
 lint:
-    (cd api && uv run ruff check .)
+    (cd api && uv run ruff check . ../shared ../scripts)
     (cd worker && uv run ruff check .)
     (cd demo-services && uv run ruff check .)
     (cd mcp_server && uv run ruff check .)
@@ -43,6 +49,14 @@ lint-imports:
 check-schema-drift:
     uv run --project api python scripts/check_schema_drift.py
 
+# Fail if a package declared deterministic (.claude/rules/determinism.md)
+# imports an LLM or embedding client (Phase 26). Also a CI step, next to
+# lint-imports -- the two enforce the same boundary from different angles:
+# import-linter follows the installed import graph of one uv project,
+# this walks source text across all of them.
+check-no-llm-imports:
+    uv run --project api python scripts/check_no_llm_imports.py
+
 # Fail on a declared "must change together" pair (scripts/coupled_files.yaml)
 # changing on only one side, or a migration whose upgrade()/downgrade() aren't
 # structurally symmetric (Phase 22). Same reasoning as check-schema-drift
@@ -51,9 +65,10 @@ check-invariants:
     uv run --project api python scripts/check_coupled_files.py
     uv run --project api python scripts/check_migration_symmetry.py
 
-# Type-check all projects
+# Type-check all projects. `../shared` rides along on api's pyright for
+# the same reason it rides along on api's ruff (see `lint` above).
 typecheck:
-    (cd api && uv run pyright)
+    (cd api && uv run pyright . ../shared)
     (cd worker && uv run pyright)
     (cd demo-services && uv run pyright)
     (cd mcp_server && uv run pyright)
@@ -115,8 +130,16 @@ create-user *ARGS:
 # pieces of the generated file instead of hand-duplicating it (Phase 11
 # P1 fix). Needs api's venv (to introspect the schema, no server/DB
 # required) and frontend's node_modules (openapi-typescript itself).
+# The dummy env vars mirror what .github/workflows/ci-cd.yml sets for the
+# same step, and for the same reason: importing app.main runs every
+# app/*/config.py module-level read, and those deliberately refuse to
+# start without a value (Phase 26, api/app/env.py). Nothing here connects
+# to a database -- this only serialises the OpenAPI schema. Without them
+# `just generate-types` (and therefore `just frontend`, `just
+# frontend-build` and the frontend's Docker build) only worked on a
+# machine that already had a hand-written api/.env.
 generate-types:
-    cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
     cd frontend && npm run generate-types
 
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`
@@ -161,7 +184,18 @@ quickstart:
     # live while verifying this end to end -- order-service came up
     # without a valid key the first time this was wired as two `up`
     # calls). `run --rm` blocks until bootstrap's script exits.
-    "${COMPOSE[@]}" run --rm bootstrap
+    #
+    # `--build` is not optional (Phase 26, docs/DIAGNOSTIC_PLAN.md).
+    # `bootstrap` is deliberately absent from the `up --build` list above,
+    # so without it `run` reuses whatever culprit-quickstart-bootstrap
+    # image the machine already has. On a machine that ran quickstart
+    # once before, that is a months-old image, and its `alembic upgrade
+    # head` upgrades to *its* head, not the repo's -- silently, exit 0,
+    # no error anywhere. Found live: a quickstart on this branch left the
+    # database at fbf4cb16570a (Phase 16) while every other container ran
+    # current code. A fresh machine never sees it, which is exactly why
+    # it went unnoticed since Phase 17.
+    "${COMPOSE[@]}" run --rm --build bootstrap
     echo "==> Building and starting the demo services"
     "${COMPOSE[@]}" --profile demo up -d --build order-service inventory-service payments-service load-generator
     echo "==> Scheduling an automatic fault injection in 90s"

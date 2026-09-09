@@ -122,13 +122,32 @@ async def test_key_created_after_load_authenticates_once_the_reload_interval_ela
 
     plaintext = await _insert_service_and_key(db_engine, name="checkout-api")
 
-    # Too soon: load() just ran, so the miss below must NOT trigger a
+    # Too soon: load() just ran, so the lookup below must NOT trigger a
     # reload yet — this is the rate limit (_MIN_RELOAD_INTERVAL_S) doing
     # its job, not a bug.
     assert await store.authenticate(plaintext) is None
 
     _force_reload_due(store)
     assert await store.authenticate(plaintext) == "checkout-api"
+
+
+async def test_authentication_does_not_reload_within_the_rate_limit_interval(
+    store, db_engine: AsyncEngine
+) -> None:
+    """The other half of the Phase 26 fix: reloading before every lookup
+    must still be rate-limited, or a request flood becomes a DB flood.
+
+    Counts real reloads by watching `_last_reload_at`, which only moves
+    when `load()` actually ran.
+    """
+    plaintext = await _insert_service_and_key(db_engine, name="checkout-api")
+    _force_reload_due(store)
+    assert await store.authenticate(plaintext) == "checkout-api"
+
+    reloaded_at = store._last_reload_at
+    for _ in range(5):
+        assert await store.authenticate(plaintext) == "checkout-api"
+    assert store._last_reload_at == reloaded_at
 
 
 async def test_revoked_key_stops_authenticating_once_the_reload_interval_elapses(
@@ -141,11 +160,12 @@ async def test_revoked_key_stops_authenticating_once_the_reload_interval_elapses
     await _revoke(db_engine, plaintext)
     _force_reload_due(store)
 
-    # A revoked key's hash is still a cache HIT until the next reload
-    # actually runs -- presenting a never-seen key first is what forces
-    # that reload (a miss is the only thing that triggers one; see
-    # ApiKeyStore.authenticate()'s own docstring/logic).
-    assert await store.authenticate("clp_live_definitely-not-a-real-key") is None
+    # No intervening unknown-key request. This is the Phase 26 security
+    # regression test (docs/DIAGNOSTIC_PLAN.md Phase 26 field 12): the
+    # reload used to fire only on a lookup *miss*, and a revoked key
+    # always hits the stale map, so revocation silently did nothing until
+    # something unrelated happened to present a bad key. The very next
+    # request with the revoked key must fail.
     assert await store.authenticate(plaintext) is None
 
 
@@ -159,7 +179,8 @@ async def test_disabled_services_key_stops_authenticating_once_the_reload_interv
     await _disable_service(db_engine, "checkout-api")
     _force_reload_due(store)
 
-    assert await store.authenticate("clp_live_definitely-not-a-real-key") is None
+    # Same "no intervening unknown-key request" requirement as the
+    # revocation test above — disabling a service is a revocation too.
     assert await store.authenticate(plaintext) is None
 
 
@@ -174,3 +195,40 @@ async def test_load_never_returns_a_revoked_or_disabled_key(
 
     assert await store.authenticate(live) == "checkout-api"
     assert len(store._hash_to_entry) == 1
+
+
+async def test_a_database_failure_during_reload_does_not_fail_authentication(
+    store, db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase 26: reloading before every lookup must not couple the ingest
+    hot path to Postgres being reachable.
+
+    `_reload_if_due` runs on every request now, so a database outage
+    would otherwise turn every ingest request into a failed reload — and
+    each one into a 500 — for keys that were perfectly valid a moment
+    earlier. The old reload-on-miss code was accidentally immune to this;
+    the fix must be immune on purpose.
+    """
+    plaintext = await _insert_service_and_key(db_engine, name="checkout-api")
+    await store.load()
+
+    attempts = 0
+
+    async def exploding_load() -> None:
+        nonlocal attempts
+        attempts += 1
+        raise ConnectionError("postgres is down")
+
+    monkeypatch.setattr(store, "load", exploding_load)
+    _force_reload_due(store)
+
+    # Still authenticates, from the map loaded before the outage.
+    assert await store.authenticate(plaintext) == "checkout-api"
+    assert attempts == 1
+
+    # And the failed attempt still counts against the rate limit, so a
+    # flood of requests during an outage is one reload per interval, not
+    # one per request.
+    for _ in range(5):
+        assert await store.authenticate(plaintext) == "checkout-api"
+    assert attempts == 1

@@ -44,7 +44,18 @@ dev = [
 pythonpath = ["."]
 
 [tool.importlinter]
-root_package = "app"
+# Two roots, not one: `culprit_model` (Phase 26) lives in shared/ and is
+# installed into this venv as a path dependency, so the graph can reach
+# it from here — and docs/DIAGNOSTIC_PLAN.md §3's standing invariant 6
+# says every new deterministic package joins this contract in the commit
+# that creates it. scripts/check_no_llm_imports.py covers the same
+# package from the other direction (source text, no venv needed); this
+# one follows the real import graph, including transitive reaches.
+root_packages = ["app", "culprit_model"]
+# Required for the contract below to name `anthropic`/`voyageai`/
+# `google.genai` at all -- import-linter refuses external forbidden
+# modules without it.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "anomaly detection stays isolated from RAG/LLM"
@@ -70,3 +81,18 @@ name = "engineering memory stays isolated from RAG/LLM"
 type = "forbidden"
 source_modules = ["app.memory"]
 forbidden_modules = ["app.rag"]
+
+# Phase 26 (docs/DIAGNOSTIC_PLAN.md, .claude/rules/determinism.md): the
+# core model is comparison machinery -- subject construction,
+# canonicalisation, Fact/Divergence validation. Every one of those must
+# give the same answer twice, which an LLM cannot promise. Listed
+# transitively (app.rag as well as the SDKs) because this repo's own RAG
+# package is the shortest route to a model call.
+[[tool.importlinter.contracts]]
+name = "the three-plane core model stays deterministic"
+type = "forbidden"
+source_modules = ["culprit_model"]
+# `google`, not `google.genai`: import-linter cannot name a subpackage
+# of an external distribution, and the whole namespace is a fine thing
+# for a canonicalisation library to be barred from anyway.
+forbidden_modules = ["app.rag", "anthropic", "voyageai", "google"]

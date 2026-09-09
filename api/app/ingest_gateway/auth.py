@@ -5,10 +5,18 @@ Phase 14: keys are now issued through the service registry
 can go stale the moment an admin issues, revokes, or disables a key
 through that API while this process is already running. The fix isn't
 "query the DB every request" (that's the throughput cliff for a
-telemetry-ingestion hot path) — it's: keep serving the in-memory map for
-the common case, and only go back to the DB when a *miss* suggests the
-map might be stale, rate-limited so a flood of bad keys can't turn into
-a flood of DB round trips.
+telemetry-ingestion hot path) — it's: keep serving the in-memory map,
+and go back to the DB at most once per _MIN_RELOAD_INTERVAL_S, so a
+flood of requests (valid or not) can't turn into a flood of DB round
+trips.
+
+Phase 26 (docs/DIAGNOSTIC_PLAN.md) corrected *when* that reload happens.
+It used to fire only on a lookup miss, which sounds like a cheaper
+version of the same thing and is not: a revoked key still hashes to an
+entry in the stale map, so it always hits, so it never triggers the
+reload that would have removed it. Revocation silently did nothing until
+some unrelated request presented an unknown key. See
+`ApiKeyStore.authenticate`.
 """
 
 import asyncio
@@ -31,10 +39,12 @@ logger = structlog.get_logger("ingest_gateway.auth")
 _engine = create_async_engine(INGEST_GATEWAY_DATABASE_URL)
 _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
-#: On an auth *miss*, how often ApiKeyStore is willing to go back to the
-#: DB and reload before trying the lookup again. Bounds worst-case DB
-#: load from a flood of invalid/malicious keys to one reload per this
-#: many seconds, not one per request.
+#: How often ApiKeyStore is willing to go back to the DB and reload
+#: before an authentication lookup. Bounds worst-case DB load from any
+#: request flood, valid or malicious, to one reload per this many
+#: seconds. It is also the worst-case window in which a revoked key
+#: still authenticates — stated as such in docs/LIMITS.md rather than
+#: left to be discovered.
 _MIN_RELOAD_INTERVAL_S = 10.0
 
 #: How often, per key, a successful auth is allowed to trigger a
@@ -57,10 +67,9 @@ def _hash_key(plaintext: str) -> str:
 
 
 class ApiKeyStore:
-    """Loads active key hashes once at startup, then keeps them fresh
-    reactively (see module docstring) rather than on a fixed timer —
-    there's no reason to reload every N seconds if nothing's actually
-    missing lookups."""
+    """Loads active key hashes once at startup, then refreshes them at
+    most once per _MIN_RELOAD_INTERVAL_S on the authentication path (see
+    module docstring for why that isn't reload-on-miss any more)."""
 
     def __init__(self) -> None:
         self._hash_to_entry: dict[str, tuple[str, UUID]] = {}
@@ -85,6 +94,24 @@ class ApiKeyStore:
         self._last_reload_at = time.monotonic()
 
     async def _reload_if_due(self) -> None:
+        """Refreshes the map at most once per _MIN_RELOAD_INTERVAL_S, and
+        never propagates a database failure onto the ingest path.
+
+        Both halves matter. `load()` stamps `_last_reload_at` only on
+        success, so a failing database would otherwise leave the
+        timestamp stale and make *every* subsequent request due for a
+        reload — each one paying a full connection timeout, serialised
+        behind `_reload_lock`. A Postgres blip would become total ingest
+        unavailability, and would do so only because of the reload this
+        method exists to perform: under the old reload-on-miss code, a
+        holder of a valid key kept authenticating from the in-memory map
+        while the database was down, and telemetry kept landing in Redis.
+
+        So the interval is enforced on the *attempt*, and a failure is
+        logged and swallowed. The cost is serving a map up to one more
+        interval stale — bounded, and already stated in docs/LIMITS.md.
+        The alternative is failing requests that would otherwise succeed.
+        """
         if time.monotonic() - self._last_reload_at < _MIN_RELOAD_INTERVAL_S:
             return
         async with self._reload_lock:
@@ -92,7 +119,11 @@ class ApiKeyStore:
             # reloaded while this one was waiting for it.
             if time.monotonic() - self._last_reload_at < _MIN_RELOAD_INTERVAL_S:
                 return
-            await self.load()
+            self._last_reload_at = time.monotonic()
+            try:
+                await self.load()
+            except Exception:
+                logger.warning("api_key_reload_failed", exc_info=True)
 
     def _schedule_last_used_update(self, key_id: UUID) -> None:
         now = time.monotonic()
@@ -107,11 +138,26 @@ class ApiKeyStore:
         task.add_done_callback(self._background_tasks.discard)
 
     async def authenticate(self, presented_key: str) -> str | None:
-        presented_hash = _hash_key(presented_key)
-        entry = self._match(presented_hash)
-        if entry is None:
-            await self._reload_if_due()
-            entry = self._match(presented_hash)
+        # Refresh *before* the lookup, not only after a miss.
+        #
+        # Phase 26 (docs/DIAGNOSTIC_PLAN.md) fixed a real security bug
+        # here: reloading only on a miss means a revoked key is never
+        # re-checked, because a revoked key still hashes to an entry in
+        # the stale map and therefore always *hits*. Revocation only took
+        # effect if some unrelated request happened to present an unknown
+        # key first — which, for an attacker holding a key that was just
+        # revoked, is never. The whole point of revoking a credential is
+        # that it stops working.
+        #
+        # This costs at most one reload per _MIN_RELOAD_INTERVAL_S
+        # regardless of request rate (the same bound the miss path
+        # already had), so the throughput reasoning in this module's
+        # docstring still holds: six queries a minute, not one per
+        # request. It also subsumes the old miss-triggered reload — a
+        # newly-issued key is now picked up by the same call, so there is
+        # no second lookup below.
+        await self._reload_if_due()
+        entry = self._match(_hash_key(presented_key))
         if entry is None:
             return None
         service_name, key_id = entry

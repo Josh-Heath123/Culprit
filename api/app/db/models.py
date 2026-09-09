@@ -486,3 +486,175 @@ class IncidentChangeLink(Base):
     )
     linked_at: Mapped[datetime | None] = mapped_column(timestamptz, server_default=text("now()"))
     link_reason: Mapped[str]
+
+
+# --- The three-plane model (Phase 26, docs/DIAGNOSTIC_PLAN.md §2) ------
+#
+# Created empty and left empty this phase (field 17): nothing reads or
+# writes these until Phase 27 onwards. They are defined here now so the
+# ORM, worker/app/db.py and the migration land as one coherent change
+# rather than three that have to be reconciled later.
+#
+# The semantic definitions (Plane, Fact, Provenance, Divergence, subject
+# URIs) live in shared/culprit_model/ and are the source of truth for
+# what these columns *mean*; these classes are only the storage shape.
+
+
+class Capture(Base):
+    """One extraction, environment-capture or probe run.
+
+    `capture_id` on a fact points here, which is what makes a snapshot a
+    snapshot: "everything the Python extractor believed at 14:05" is a
+    query on this table, not a timestamp range guess over facts.
+    """
+
+    __tablename__ = "captures"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    plane: Mapped[str]
+    #: NULL exactly when plane is INTENT — enforced by a check constraint
+    #: in the migration, because INTENT is environment-independent (§0.2).
+    environment: Mapped[str | None]
+    extractor: Mapped[str]
+    started_at: Mapped[datetime] = mapped_column(timestamptz)
+    finished_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+
+
+class IntentFact(Base):
+    """A claim about what the system is *supposed* to do (§2.2).
+
+    No `environment` column and no `plane` column, both on purpose: the
+    plane is the table, and INTENT does not vary by environment. Two rows
+    with the same subject+predicate and different values are not a
+    duplicate — they are an `intent_conflict` divergence waiting to be
+    computed (§0.3).
+    """
+
+    __tablename__ = "intent_facts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    capture_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("captures.id", ondelete="CASCADE")
+    )
+    subject: Mapped[str]
+    predicate: Mapped[str]
+    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB, nullable=False, server_default=text("'null'::jsonb")
+    )
+    source_kind: Mapped[str]
+    extractor: Mapped[str]
+    artefact: Mapped[str | None]
+    locator: Mapped[str | None]
+    confidence_rank: Mapped[int]
+    captured_at: Mapped[datetime] = mapped_column(timestamptz)
+    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+
+
+class ConfiguredFact(Base):
+    """What one environment is actually set up to do (§2.2).
+
+    Has `environment` (required), and deliberately has no
+    `confidence_rank`: §2.4's ranks describe how much to trust a claim
+    about what *should* be true. Reading a live environment's config is
+    not that kind of claim.
+    """
+
+    __tablename__ = "configured_facts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    capture_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("captures.id", ondelete="CASCADE")
+    )
+    environment: Mapped[str]
+    subject: Mapped[str]
+    predicate: Mapped[str]
+    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB, nullable=False, server_default=text("'null'::jsonb")
+    )
+    source_kind: Mapped[str]
+    extractor: Mapped[str]
+    artefact: Mapped[str | None]
+    locator: Mapped[str | None]
+    captured_at: Mapped[datetime] = mapped_column(timestamptz)
+    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+
+
+class Reading(Base):
+    """The outcome of one probe run against one target (§2.6).
+
+    A TimescaleDB hypertable partitioned on `taken_at`, retained 90 days
+    — longer than `raw_events`, because a reading is the evidence behind
+    a verdict rather than raw telemetry.
+
+    Four verdicts, not two. `inconclusive` (the probe ran and could not
+    establish the answer) and `refused` (the agent lacked the capability)
+    are honest outputs that appear in reports, and both require a
+    `reason` — a check constraint in the migration, not a convention.
+    """
+
+    __tablename__ = "readings"
+
+    taken_at: Mapped[datetime] = mapped_column(timestamptz, primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    probe_id: Mapped[str]
+    probe_version: Mapped[int]
+    #: A subject URI — build it with culprit_model.subjects.build().
+    target: Mapped[str]
+    environment: Mapped[str]
+    verdict: Mapped[str]
+    measured: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    expected: Mapped[dict | None] = mapped_column(JSONB)
+    #: The Provenance of whatever said what `expected` should be, stored
+    #: whole: a reading has to stay explicable after its source capture
+    #: is superseded.
+    expected_source: Mapped[dict | None] = mapped_column(JSONB)
+    evidence: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    reason: Mapped[str | None]
+    expires_at: Mapped[datetime | None] = mapped_column(timestamptz)
+    agent_id: Mapped[str]
+    grants_used: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+
+
+class DivergenceRow(Base):
+    """Two facts about one subject+predicate that disagree (§2.5).
+
+    Named `DivergenceRow`, not `Divergence`, so it can never be confused
+    with `culprit_model.facts.Divergence` — that one is the semantic
+    object with its own validation, this one is a table.
+
+    Both sides are stored as whole serialised Facts rather than foreign
+    keys into the fact tables: a divergence has to remain readable and
+    citable after the capture that produced its facts has been superseded
+    by a newer one.
+    """
+
+    __tablename__ = "divergences"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    kind: Mapped[str]
+    subject: Mapped[str]
+    predicate: Mapped[str]
+    left_fact: Mapped[dict] = mapped_column(JSONB)
+    right_fact: Mapped[dict] = mapped_column(JSONB)
+    environment: Mapped[str | None]
+    severity: Mapped[str] = mapped_column(server_default=text("'unknown'"))
+    status: Mapped[str] = mapped_column(server_default=text("'open'"))
+    first_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
