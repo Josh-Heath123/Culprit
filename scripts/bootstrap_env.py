@@ -234,7 +234,13 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
         env["IMAGE_REGISTRY"] = ""
         env["IMAGE_TAG"] = ""
     else:
-        env["IMAGE_REGISTRY"] = "ghcr.io/josh-heath123/view"
+        # ghcr.io/josh-heath123/culprit, not .../view: the repository was
+        # renamed from `View` to `Culprit` in Phase 20 and the images have
+        # been published under the new path since. This still said `view`,
+        # so every non-local bootstrap produced a .env.prod whose
+        # `docker compose pull` reached for images that are not there
+        # (Phase 26 truth repair, docs/DIAGNOSTIC_PLAN.md).
+        env["IMAGE_REGISTRY"] = "ghcr.io/josh-heath123/culprit"
         env["IMAGE_TAG"] = "latest"
 
     # Written into .env.prod (0600, never committed, same as every other
@@ -297,7 +303,10 @@ def main() -> int:
         print(f"QUICKSTART_ADMIN_PASSWORD={admin_password}")
         print("next: just quickstart-up")
     else:
-        print(f"next: docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod config")
+        print(
+            "next: docker compose -f infra/docker-compose.prod.yml "
+            "--env-file infra/.env.prod config"
+        )
         print("      then follow docs/INSTALL.md")
     return 0
 

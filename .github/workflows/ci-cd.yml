@@ -28,7 +28,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: cd api && uv run ruff check .
+      # `../shared` and `../scripts` too: neither has a venv of its own and
+      # both would otherwise go unlinted, while
+      # .claude/hooks/fast_gates.sh lints them mid-session. Same as
+      # `just lint`.
+      - run: cd api && uv run ruff check . ../shared ../scripts
       - run: cd worker && uv run ruff check .
       - run: cd demo-services && uv run ruff check .
       - run: cd mcp_server && uv run ruff check .
@@ -49,7 +53,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: cd api && uv run pyright
+      # `../shared` too — see the ruff step's comment.
+      - run: cd api && uv run pyright . ../shared
       - run: cd worker && uv run pyright
       - run: cd demo-services && uv run pyright
       - run: cd mcp_server && uv run pyright
@@ -61,6 +66,13 @@ jobs:
       # shared ORM) — this catches the two drifting silently instead of
       # relying on someone remembering to update both by hand.
       - run: uv run --project api python scripts/check_schema_drift.py
+      # Phase 26 (docs/DIAGNOSTIC_PLAN.md): a package declared
+      # deterministic in .claude/rules/determinism.md that imports an LLM
+      # or embedding client. Complements `lint-imports` above rather than
+      # duplicating it -- import-linter sees one uv project's installed
+      # import graph, this walks source text across every project,
+      # including packages with no venv of their own.
+      - run: uv run --project api python scripts/check_no_llm_imports.py
       # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
       # together" pair (scripts/coupled_files.yaml) that changed on only
       # one side. Checked against the PR's committed diff, not a working
@@ -198,10 +210,20 @@ jobs:
         # the same way it was missing from the pytest (api) step (see
         # that step's comment). dump_openapi_schema.py never actually
         # touches auth or ingest-gateway logic; this only exists to
-        # satisfy both import-time reads.
+        # satisfy both import-time reads. Phase 26 added the four
+        # `*_DATABASE_URL` entries below for the same reason: those
+        # config modules used to fall back to a committed
+        # `<role>-dev-password` connection string when unset, and now
+        # correctly refuse to import without a value. Nothing here
+        # connects to a database — this step only serialises the
+        # OpenAPI schema.
         env:
           JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
           INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          API_READER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          REGISTRY_ADMIN_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'

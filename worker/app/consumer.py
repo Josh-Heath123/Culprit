@@ -7,6 +7,11 @@ reclaims anything left pending from a prior crash (XREADGROUP id "0")
 before reading new messages (id ">"). Writes are a single statement per
 batch, XACKed only once that write has committed.
 
+An entry that cannot be parsed is quarantined to DEAD_LETTER_STREAM and
+acked (Phase 26) rather than raising out of the batch: before that, one
+malformed message wedged the drain forever and every valid message
+behind it stopped arriving.
+
 drain_streams (raw_events, unchanged since Phase 3) and drain_edges
 (observed_service_edges, Phase 19) share the read/recover/ack mechanics
 via _drain_batch but not the write step — a plain bulk INSERT for
@@ -20,6 +25,7 @@ import logging
 import os
 from collections import Counter
 from collections.abc import Awaitable, Callable
+from typing import NamedTuple
 
 import redis.asyncio as redis
 from culprit_shared.raw_event import RawEventIn
@@ -51,6 +57,20 @@ BATCH_SIZE = 200
 LOCK_KEY = "raw-events-drain:lock"
 EDGES_LOCK_KEY = "service-edges-drain:lock"
 LOCK_TTL_S = 30
+
+#: Where an entry that cannot be parsed goes (Phase 26,
+#: docs/DIAGNOSTIC_PLAN.md). Before this, one malformed entry raised out
+#: of the batch's list comprehension, nothing was acked, and the *same*
+#: batch was reclaimed and failed again on every subsequent tick — a
+#: single bad message wedged the drain permanently and silently, and
+#: every valid message behind it stopped arriving. Quarantining and
+#: acking is the only outcome that lets the good entries through.
+DEAD_LETTER_STREAM = "dead-letter"
+
+#: Capped so a persistently-malformed producer cannot grow Redis without
+#: bound. Approximate trimming (Redis trims to a whole node boundary),
+#: which is the cheap variant and precise enough for a diagnostic queue.
+DEAD_LETTER_MAXLEN = 10_000
 
 
 _STREAM_GROUPS = [(stream, GROUP_NAME) for stream in STREAMS] + [(EDGES_STREAM, EDGES_GROUP_NAME)]
@@ -115,6 +135,26 @@ async def _write_edges(engine: AsyncEngine, rows: list[dict]) -> None:
         await conn.execute(stmt)
 
 
+class DrainResult(NamedTuple):
+    """What one batch did.
+
+    `quarantined` is carried out of the drain rather than only logged so
+    it reaches the job's return value, and from there the span and
+    structured log `instrument_job` builds from it -- the same treatment
+    `app/rag/job.py` gives its `dropped_citations`. A number that only
+    exists inside a log format string is a number nobody alerts on.
+    """
+
+    written: int
+    quarantined: int
+
+    def __add__(self, other: "DrainResult") -> "DrainResult":  # type: ignore[override]
+        return DrainResult(self.written + other.written, self.quarantined + other.quarantined)
+
+
+_NOTHING_DRAINED = DrainResult(written=0, quarantined=0)
+
+
 async def _drain_batch(
     client: redis.Redis,
     engine: AsyncEngine,
@@ -123,7 +163,7 @@ async def _drain_batch(
     start_id: str,
     parse: Callable[[dict], dict],
     write: Callable[[AsyncEngine, list[dict]], Awaitable[None]],
-) -> int:
+) -> DrainResult:
     response = await client.xreadgroup(
         groupname=group,
         consumername=CONSUMER_NAME,
@@ -132,11 +172,11 @@ async def _drain_batch(
         block=None if start_id != ">" else 200,
     )
     if not response:
-        return 0
+        return _NOTHING_DRAINED
 
     _stream_name, entries = response[0]
     if not entries:
-        return 0
+        return _NOTHING_DRAINED
 
     entry_ids = [entry_id for entry_id, _fields in entries]
     logger.info(
@@ -153,12 +193,87 @@ async def _drain_batch(
         logger.info("DRAIN_SIMULATED_DELAY_S=%s: sleeping before insert", crash_test_delay)
         await asyncio.sleep(crash_test_delay)
 
-    rows = [parse(fields) for _entry_id, fields in entries]
-    await write(engine, rows)
+    rows, quarantined = await _parse_or_quarantine(client, stream, group, entries, parse)
 
+    if not rows and len(entries) > 1:
+        # Every entry in the batch failed. That is not "a corrupt
+        # message", it is a systemic parse failure -- a gateway/worker
+        # version skew mid-rollout, say, where RawEventIn has moved on
+        # one side. Quarantining and acking the whole stream would
+        # destroy real telemetry: DEAD_LETTER_MAXLEN is 10k entries, and
+        # at the default 600/minute ingest rate the buffer wraps in under
+        # twenty minutes, after which the data is simply gone.
+        #
+        # So raise instead. Nothing is acked, the entries stay in the
+        # source stream, and the drain wedges -- which is the *old*,
+        # recoverable behaviour, kept deliberately for exactly the case
+        # where it is the right answer. A single bad message among good
+        # ones still gets quarantined and acked; that is the fix. This is
+        # only the all-or-nothing case.
+        raise RuntimeError(
+            f"every entry in a {len(entries)}-entry batch from {stream} failed to parse; "
+            f"refusing to ack. This looks systemic (a schema/version skew), not a corrupt "
+            f"message -- fix the cause and the batch will drain."
+        )
+
+    if rows:
+        await write(engine, rows)
+
+    # Acked only after both the write and the quarantine writes have
+    # committed. A crash before this point redelivers the whole batch,
+    # which is the existing at-least-once behaviour; a crash after a
+    # quarantine xadd but before this ack re-quarantines the same entry,
+    # which is a harmless duplicate in a diagnostic stream.
     await client.xack(stream, group, *entry_ids)
-    logger.info("wrote + acked %d rows from %s", len(rows), stream)
-    return len(rows)
+    logger.info(
+        "wrote + acked %d rows from %s (%d quarantined)", len(rows), stream, quarantined
+    )
+    return DrainResult(written=len(rows), quarantined=quarantined)
+
+
+async def _parse_or_quarantine(
+    client: redis.Redis,
+    stream: str,
+    group: str,
+    entries: list,
+    parse: Callable[[dict], dict],
+) -> tuple[list[dict], int]:
+    """Parses each entry independently, sending the failures to
+    DEAD_LETTER_STREAM rather than letting one of them take the batch
+    down.
+
+    Deliberately catching broad `Exception`: the failure modes here are
+    a truncated JSON body, a payload from an older/newer gateway that no
+    longer validates against `RawEventIn`, and anything else a corrupted
+    stream entry can be. All of them mean the same thing operationally —
+    this one entry is not processable and the other 199 in the batch
+    should not be held hostage to it.
+    """
+    rows: list[dict] = []
+    quarantined = 0
+    for entry_id, fields in entries:
+        try:
+            rows.append(parse(fields))
+        except Exception as exc:
+            quarantined += 1
+            logger.warning(
+                "quarantining unparseable entry %s from %s: %s", entry_id, stream, exc
+            )
+            await client.xadd(
+                DEAD_LETTER_STREAM,
+                {
+                    "source_stream": stream,
+                    "source_group": group,
+                    "source_entry_id": entry_id,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    # The original payload, verbatim — a quarantined
+                    # entry is only useful if you can see what it was.
+                    "data": fields.get("data", ""),
+                },
+                maxlen=DEAD_LETTER_MAXLEN,
+                approximate=True,
+            )
+    return rows, quarantined
 
 
 @instrument_job("drain_streams")
@@ -173,6 +288,7 @@ async def drain_streams(ctx: dict) -> dict[str, int]:
 
     try:
         totals: dict[str, int] = {}
+        quarantined = 0
         for stream in STREAMS:
             # Recover anything left pending from a prior crash first, then read new.
             recovered = await _drain_batch(
@@ -181,7 +297,14 @@ async def drain_streams(ctx: dict) -> dict[str, int]:
             fresh = await _drain_batch(
                 client, engine, stream, GROUP_NAME, ">", _parse_raw_event, _write_raw_events
             )
-            totals[stream] = recovered + fresh
+            result = recovered + fresh
+            totals[stream] = result.written
+            quarantined += result.quarantined
+        # Reported alongside the per-stream write counts so it lands in
+        # instrument_job's span and structured log, not only in a
+        # logger.info format string nobody can alert on.
+        if quarantined:
+            totals["quarantined"] = quarantined
         return totals
     finally:
         await client.delete(LOCK_KEY)
@@ -208,6 +331,10 @@ async def drain_edges(ctx: dict) -> dict[str, int]:
         fresh = await _drain_batch(
             client, engine, EDGES_STREAM, EDGES_GROUP_NAME, ">", _parse_edge, _write_edges
         )
-        return {EDGES_STREAM: recovered + fresh}
+        result = recovered + fresh
+        totals = {EDGES_STREAM: result.written}
+        if result.quarantined:
+            totals["quarantined"] = result.quarantined
+        return totals
     finally:
         await client.delete(EDGES_LOCK_KEY)

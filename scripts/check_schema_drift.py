@@ -82,7 +82,8 @@ def main() -> int:
             api_col = api_columns.get(col_name)
             if api_col is None:
                 errors.append(
-                    f"{table_name}.{col_name}: in worker/app/db.py, missing from api/app/db/models.py"
+                    f"{table_name}.{col_name}: in worker/app/db.py, "
+                    f"missing from api/app/db/models.py"
                 )
                 continue
             if worker_col["nullable"] != api_col["nullable"]:

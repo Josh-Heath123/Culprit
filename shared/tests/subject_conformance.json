@@ -1,0 +1,349 @@
+{
+  "_comment": [
+    "Shared conformance fixture for subject-URI construction",
+    "(docs/DIAGNOSTIC_PLAN.md §2.3). shared/tests/test_subjects.py asserts",
+    "the Python implementation matches it; cli/internal/model/subjects_test.go",
+    "asserts the same of the Go one from Phase 28. Written before the Go side",
+    "exists deliberately: two implementations reconciled after the fact agree",
+    "on whatever they both happened to do, not on what was specified.",
+    "Add a case here, not to one language's test file."
+  ],
+  "build": [
+    {
+      "why": "the plan's own example set (§2.3), verbatim",
+      "kind": "component",
+      "parts": {
+        "name": "orders-svc"
+      },
+      "subject": "component:orders-svc"
+    },
+    {
+      "kind": "connection",
+      "parts": {
+        "from_component": "orders-svc",
+        "to_component": "payments-svc"
+      },
+      "subject": "connection:orders-svc->payments-svc"
+    },
+    {
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "POST",
+        "path": "/api/v1/orders"
+      },
+      "subject": "http:orders-svc/POST /api/v1/orders"
+    },
+    {
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "POST",
+        "path": "/api/v1/orders",
+        "aspect": "request.body"
+      },
+      "subject": "http:orders-svc/POST /api/v1/orders#request.body"
+    },
+    {
+      "kind": "config",
+      "parts": {
+        "component": "orders-svc",
+        "key": "DATABASE_URL"
+      },
+      "subject": "config:orders-svc/DATABASE_URL"
+    },
+    {
+      "kind": "schema",
+      "parts": {
+        "database": "orders-db",
+        "namespace": "public",
+        "table": "orders"
+      },
+      "subject": "schema:orders-db/public.orders"
+    },
+    {
+      "kind": "schema",
+      "parts": {
+        "database": "orders-db",
+        "namespace": "public",
+        "table": "orders",
+        "column": "total_cents"
+      },
+      "subject": "schema:orders-db/public.orders.total_cents"
+    },
+    {
+      "kind": "dep",
+      "parts": {
+        "component": "orders-svc",
+        "dependency": "stripe"
+      },
+      "subject": "dep:orders-svc/stripe"
+    },
+    {
+      "kind": "image",
+      "parts": {
+        "component": "orders-svc"
+      },
+      "subject": "image:orders-svc"
+    },
+    {
+      "kind": "auth",
+      "parts": {
+        "from_component": "orders-svc",
+        "to_component": "payments-svc",
+        "aspect": "audience"
+      },
+      "subject": "auth:orders-svc->payments-svc/audience"
+    },
+    {
+      "why": "namespace defaults to public when the source doesn't say",
+      "kind": "schema",
+      "parts": {
+        "database": "orders-db",
+        "table": "orders"
+      },
+      "subject": "schema:orders-db/public.orders"
+    },
+    {
+      "why": "component names fold case; a Docker service, an OTel resource attribute and a registry row disagree on case far more often than on identity",
+      "kind": "component",
+      "parts": {
+        "name": "  Orders-SVC "
+      },
+      "subject": "component:orders-svc"
+    },
+    {
+      "why": "config keys do NOT fold case — env var names are case-sensitive",
+      "kind": "config",
+      "parts": {
+        "component": "Orders-SVC",
+        "key": "Database_Url"
+      },
+      "subject": "config:orders-svc/Database_Url"
+    },
+    {
+      "why": "Postgres identifiers fold case, matching unquoted-identifier folding",
+      "kind": "schema",
+      "parts": {
+        "database": "Orders-DB",
+        "namespace": "Public",
+        "table": "Orders",
+        "column": "Total_Cents"
+      },
+      "subject": "schema:orders-db/public.orders.total_cents"
+    },
+    {
+      "why": "method case-folds up",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "post",
+        "path": "/api/v1/orders"
+      },
+      "subject": "http:orders-svc/POST /api/v1/orders"
+    },
+    {
+      "why": "the four templating conventions must land on one subject — FastAPI/OpenAPI",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "/orders/{order_id}/items/{item_id}"
+      },
+      "subject": "http:orders-svc/GET /orders/{}/items/{}"
+    },
+    {
+      "why": "Express",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "/orders/:orderId/items/:itemId"
+      },
+      "subject": "http:orders-svc/GET /orders/{}/items/{}"
+    },
+    {
+      "why": "Flask / Django path() converters",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "/orders/<int:order_id>/items/<int:item_id>"
+      },
+      "subject": "http:orders-svc/GET /orders/{}/items/{}"
+    },
+    {
+      "why": "Django re_path, anchors and trailing slash included",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "^orders/(?P<order_id>[0-9]+)/items/(?P<item_id>[0-9]+)/$"
+      },
+      "subject": "http:orders-svc/GET /orders/{}/items/{}"
+    },
+    {
+      "why": "a parameter embedded in a literal segment, not occupying the whole one",
+      "kind": "http",
+      "parts": {
+        "component": "docs-svc",
+        "method": "GET",
+        "path": "/files/{name}.json"
+      },
+      "subject": "http:docs-svc/GET /files/{}.json"
+    },
+    {
+      "why": "an Express catch-all and a Flask path converter both mean 'the rest'",
+      "kind": "http",
+      "parts": {
+        "component": "docs-svc",
+        "method": "GET",
+        "path": "/static/<path:subpath>"
+      },
+      "subject": "http:docs-svc/GET /static/{}"
+    },
+    {
+      "why": "root path survives slash-stripping",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "/"
+      },
+      "subject": "http:orders-svc/GET /"
+    },
+    {
+      "why": "a query string is not part of a route's identity",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "/orders?limit=50"
+      },
+      "subject": "http:orders-svc/GET /orders"
+    },
+    {
+      "why": "duplicate and trailing slashes collapse",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET",
+        "path": "//api//v1//orders//"
+      },
+      "subject": "http:orders-svc/GET /api/v1/orders"
+    }
+  ],
+  "build_errors": [
+    {
+      "why": "unknown kind",
+      "kind": "service",
+      "parts": {
+        "name": "x"
+      }
+    },
+    {
+      "why": "missing required part",
+      "kind": "http",
+      "parts": {
+        "component": "orders-svc",
+        "method": "GET"
+      }
+    },
+    {
+      "why": "blank required part",
+      "kind": "component",
+      "parts": {
+        "name": "   "
+      }
+    },
+    {
+      "why": "unexpected part",
+      "kind": "image",
+      "parts": {
+        "component": "orders-svc",
+        "tag": "v1"
+      }
+    },
+    {
+      "why": "component containing a path separator would reparse as a different component",
+      "kind": "http",
+      "parts": {
+        "component": "ns/orders",
+        "method": "GET",
+        "path": "/x"
+      }
+    },
+    {
+      "why": "component containing the connection arrow collides with a different pair",
+      "kind": "connection",
+      "parts": {
+        "from_component": "a->b",
+        "to_component": "c"
+      }
+    },
+    {
+      "why": "component containing a space breaks the METHOD/path split",
+      "kind": "http",
+      "parts": {
+        "component": "orders svc",
+        "method": "GET",
+        "path": "/x"
+      }
+    },
+    {
+      "why": "aspect containing the aspect separator",
+      "kind": "auth",
+      "parts": {
+        "from_component": "a",
+        "to_component": "b",
+        "aspect": "aud#ience"
+      }
+    },
+    {
+      "why": "dotted table name collides with the namespace.table.column form",
+      "kind": "schema",
+      "parts": {
+        "database": "db",
+        "table": "a.b"
+      }
+    },
+    {
+      "why": "config key containing a path separator",
+      "kind": "config",
+      "parts": {
+        "component": "orders-svc",
+        "key": "a/b"
+      }
+    },
+    {
+      "why": "dependency containing a path separator",
+      "kind": "dep",
+      "parts": {
+        "component": "orders-svc",
+        "dependency": "npm/left-pad"
+      }
+    }
+  ],
+  "parse_errors": [
+    {
+      "why": "no scheme",
+      "subject": "orders-svc"
+    },
+    {
+      "why": "unknown scheme",
+      "subject": "service:orders-svc"
+    },
+    {
+      "why": "connection with no arrow",
+      "subject": "connection:orders-svc"
+    },
+    {
+      "why": "http with no method/path split",
+      "subject": "http:orders-svc/GET"
+    },
+    {
+      "why": "schema with too many dotted parts",
+      "subject": "schema:orders-db/a.b.c.d"
+    }
+  ]
+}

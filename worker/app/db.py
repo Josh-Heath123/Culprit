@@ -170,3 +170,111 @@ incident_change_links = sa.Table(
     sa.Column("ai_change_record_id", UUID(as_uuid=True), primary_key=True),
     sa.Column("link_reason", sa.String(), nullable=False),
 )
+
+
+# --- The three-plane model (Phase 26, docs/DIAGNOSTIC_PLAN.md §2) ------
+#
+# Mirrored here the moment they exist rather than when the worker first
+# queries them, because scripts/coupled_files.yaml declares this file and
+# api/app/db/models.py a must-change-together pair and
+# scripts/check_schema_drift.py compares them column by column. Empty
+# this phase (Phase 26 field 17) — no job reads or writes any of these
+# yet.
+#
+# Same "only enough shape" principle as the tables above: server-side
+# defaults are omitted, since the worker never needs SQLAlchemy to know
+# about a default Postgres applies itself.
+
+captures = sa.Table(
+    "captures",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("plane", sa.String(), nullable=False),
+    # NULL exactly when plane is INTENT (§0.2) — the check constraint
+    # lives in the migration.
+    sa.Column("environment", sa.String(), nullable=True),
+    sa.Column("extractor", sa.String(), nullable=False),
+    sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# No `environment` and no `plane` column, both deliberate: the plane is
+# the table, and INTENT is environment-independent by definition.
+intent_facts = sa.Table(
+    "intent_facts",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("capture_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("subject", sa.String(), nullable=False),
+    sa.Column("predicate", sa.String(), nullable=False),
+    sa.Column("value", JSONB(), nullable=False),
+    sa.Column("source_kind", sa.String(), nullable=False),
+    sa.Column("extractor", sa.String(), nullable=False),
+    sa.Column("artefact", sa.String(), nullable=True),
+    sa.Column("locator", sa.String(), nullable=True),
+    sa.Column("confidence_rank", sa.Integer(), nullable=False),
+    sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# No `confidence_rank`: §2.4's ranks describe trust in a claim about what
+# should be true, and reading a live environment isn't that.
+configured_facts = sa.Table(
+    "configured_facts",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("capture_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("environment", sa.String(), nullable=False),
+    sa.Column("subject", sa.String(), nullable=False),
+    sa.Column("predicate", sa.String(), nullable=False),
+    sa.Column("value", JSONB(), nullable=False),
+    sa.Column("source_kind", sa.String(), nullable=False),
+    sa.Column("extractor", sa.String(), nullable=False),
+    sa.Column("artefact", sa.String(), nullable=True),
+    sa.Column("locator", sa.String(), nullable=True),
+    sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# Hypertable on `taken_at`, hence the composite PK — same constraint
+# raw_events lives under.
+readings = sa.Table(
+    "readings",
+    metadata,
+    sa.Column("taken_at", sa.DateTime(timezone=True), primary_key=True),
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("probe_id", sa.String(), nullable=False),
+    sa.Column("probe_version", sa.Integer(), nullable=False),
+    sa.Column("target", sa.String(), nullable=False),
+    sa.Column("environment", sa.String(), nullable=False),
+    sa.Column("verdict", sa.String(), nullable=False),
+    sa.Column("measured", JSONB(), nullable=False),
+    sa.Column("expected", JSONB(), nullable=True),
+    sa.Column("expected_source", JSONB(), nullable=True),
+    sa.Column("evidence", JSONB(), nullable=False),
+    sa.Column("reason", sa.String(), nullable=True),
+    sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
+    sa.Column("agent_id", sa.String(), nullable=False),
+    sa.Column("grants_used", JSONB(), nullable=False),
+)
+
+# `left`/`right` in the model (§2.5) are `left_fact`/`right_fact` here —
+# both are reserved words in Postgres. Whole serialised Facts, not
+# foreign keys, so a divergence stays readable after its capture is
+# superseded.
+divergences = sa.Table(
+    "divergences",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("kind", sa.String(), nullable=False),
+    sa.Column("subject", sa.String(), nullable=False),
+    sa.Column("predicate", sa.String(), nullable=False),
+    sa.Column("left_fact", JSONB(), nullable=False),
+    sa.Column("right_fact", JSONB(), nullable=False),
+    sa.Column("environment", sa.String(), nullable=True),
+    sa.Column("severity", sa.String(), nullable=False),
+    sa.Column("status", sa.String(), nullable=False),
+    sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)

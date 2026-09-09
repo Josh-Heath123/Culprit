@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+from app.env import require_env  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 
 configure_observability("culprit-worker")
@@ -26,22 +27,26 @@ from app.rag.embed_job import (  # noqa: E402
 )
 from app.rag.job import generate_root_cause_narrative  # noqa: E402
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql+asyncpg://ingestion-writer:ingestion-writer-dev-password@localhost:5432/signalstack",
+# One URL per least-privilege role, all required (Phase 26,
+# docs/DIAGNOSTIC_PLAN.md). These used to default to committed
+# `<role>-dev-password` connection strings, which turned "you forgot a
+# variable" from a startup crash into a confusing connection failure
+# under the wrong identity later. See app/env.py.
+DATABASE_URL = require_env("DATABASE_URL", hint="ingestion-writer; see worker/.env.example")
+ANOMALY_DATABASE_URL = require_env(
+    "ANOMALY_DATABASE_URL", hint="anomaly-detector; see worker/.env.example"
 )
-ANOMALY_DATABASE_URL = os.environ.get(
-    "ANOMALY_DATABASE_URL",
-    "postgresql+asyncpg://anomaly-detector:anomaly-detector-dev-password@localhost:5432/signalstack",
+CORRELATION_DATABASE_URL = require_env(
+    "CORRELATION_DATABASE_URL", hint="correlation-engine; see worker/.env.example"
 )
-CORRELATION_DATABASE_URL = os.environ.get(
-    "CORRELATION_DATABASE_URL",
-    "postgresql+asyncpg://correlation-engine:correlation-engine-dev-password@localhost:5432/signalstack",
+ROOT_CAUSE_DATABASE_URL = require_env(
+    "ROOT_CAUSE_DATABASE_URL", hint="root-cause-writer; see worker/.env.example"
 )
-ROOT_CAUSE_DATABASE_URL = os.environ.get(
-    "ROOT_CAUSE_DATABASE_URL",
-    "postgresql+asyncpg://root-cause-writer:root-cause-writer-dev-password@localhost:5432/signalstack",
-)
+
+#: Still defaulted, deliberately: an unreachable Redis is a loud,
+#: immediate connection error at the point of use, not a silent
+#: connection under the wrong identity. It is a service address, not a
+#: credential.
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 
