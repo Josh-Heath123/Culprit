@@ -1,0 +1,191 @@
+{
+  "_comment": [
+    "Shared conformance fixture for canonicalisation (docs/DIAGNOSTIC_PLAN.md",
+    "\u00a72.3). shared/tests/test_canonical.py and cli/internal/model/canonical_test.go",
+    "both read it, so the two implementations of the 'single highest-risk piece",
+    "of code in the extraction layer' are held to one table rather than to two",
+    "that were written separately and compared afterwards.",
+    "Every case is asserted twice: once directly, once for idempotence, since a",
+    "subject gets rebuilt from a parsed one and a non-idempotent normaliser",
+    "would make a round-tripped subject stop matching the original.",
+    "Add a case here, not to one language's test file."
+  ],
+  "path": [
+    {
+      "source": "/api/v1/orders",
+      "canonical": "/api/v1/orders",
+      "convention": "literal"
+    },
+    {
+      "source": "/",
+      "canonical": "/",
+      "convention": "root"
+    },
+    {
+      "source": "",
+      "canonical": "/",
+      "convention": "empty"
+    },
+    {
+      "source": "orders",
+      "canonical": "/orders",
+      "convention": "missing leading slash"
+    },
+    {
+      "source": "/orders/",
+      "canonical": "/orders",
+      "convention": "trailing slash"
+    },
+    {
+      "source": "//api//v1//orders//",
+      "canonical": "/api/v1/orders",
+      "convention": "duplicate slashes"
+    },
+    {
+      "source": "  /orders  ",
+      "canonical": "/orders",
+      "convention": "surrounding whitespace"
+    },
+    {
+      "source": "/orders/{id}",
+      "canonical": "/orders/{}",
+      "convention": "OpenAPI / FastAPI"
+    },
+    {
+      "source": "/orders/{order_id}",
+      "canonical": "/orders/{}",
+      "convention": "OpenAPI, different param name"
+    },
+    {
+      "source": "/files/{file_path:path}",
+      "canonical": "/files/{}",
+      "convention": "Starlette path converter"
+    },
+    {
+      "source": "/orders/:id",
+      "canonical": "/orders/{}",
+      "convention": "Express"
+    },
+    {
+      "source": "/orders/:orderId",
+      "canonical": "/orders/{}",
+      "convention": "Express, camelCase param"
+    },
+    {
+      "source": "/orders/:id(\\d+)",
+      "canonical": "/orders/{}",
+      "convention": "Express with inline regex"
+    },
+    {
+      "source": "/orders/:id?",
+      "canonical": "/orders/{}",
+      "convention": "Express optional parameter"
+    },
+    {
+      "source": "/orders/<id>",
+      "canonical": "/orders/{}",
+      "convention": "Flask, untyped"
+    },
+    {
+      "source": "/orders/<int:id>",
+      "canonical": "/orders/{}",
+      "convention": "Flask, typed converter"
+    },
+    {
+      "source": "/static/<path:subpath>",
+      "canonical": "/static/{}",
+      "convention": "Flask path converter"
+    },
+    {
+      "source": "/orders/<int:pk>/items/<int:item>",
+      "canonical": "/orders/{}/items/{}",
+      "convention": "Django path()"
+    },
+    {
+      "source": "^orders/(?P<pk>[0-9]+)/$",
+      "canonical": "/orders/{}",
+      "convention": "Django re_path, anchored"
+    },
+    {
+      "source": "^orders/(?P<pk>\\d+)/items/(?P<item>\\d+)$",
+      "canonical": "/orders/{}/items/{}",
+      "convention": "Django re_path, two groups"
+    },
+    {
+      "source": "/files/{name}.json",
+      "canonical": "/files/{}.json",
+      "convention": "parameter inside a literal segment"
+    },
+    {
+      "source": "/v1/item-:id",
+      "canonical": "/v1/item-{}",
+      "convention": "Express parameter inside a literal segment"
+    },
+    {
+      "source": "/*",
+      "canonical": "/{}",
+      "convention": "wildcard"
+    },
+    {
+      "source": "/orders?limit=50",
+      "canonical": "/orders",
+      "convention": "query string dropped"
+    },
+    {
+      "source": "/orders#anchor",
+      "canonical": "/orders",
+      "convention": "fragment dropped \u2014 it is the subject aspect separator"
+    },
+    {
+      "source": "/orders?next=/x/y",
+      "canonical": "/orders",
+      "convention": "query string containing a slash"
+    }
+  ],
+  "method": [
+    {
+      "source": " post ",
+      "canonical": "POST",
+      "convention": "case and whitespace"
+    },
+    {
+      "source": "get",
+      "canonical": "GET",
+      "convention": "lowercase"
+    },
+    {
+      "source": "DELETE",
+      "canonical": "DELETE",
+      "convention": "already canonical"
+    }
+  ],
+  "component": [
+    {
+      "source": " Orders-SVC ",
+      "canonical": "orders-svc",
+      "convention": "case and whitespace"
+    },
+    {
+      "source": "order_service",
+      "canonical": "order_service",
+      "convention": "underscores are NOT folded to hyphens - a real naming divergence"
+    },
+    {
+      "source": "order-service",
+      "canonical": "order-service",
+      "convention": "hyphenated sibling of the above"
+    }
+  ],
+  "identifier": [
+    {
+      "source": " Total_Cents ",
+      "canonical": "total_cents",
+      "convention": "Postgres folds unquoted identifiers"
+    },
+    {
+      "source": "Orders",
+      "canonical": "orders",
+      "convention": "table name"
+    }
+  ]
+}

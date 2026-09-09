@@ -42,3 +42,16 @@ frontend/src/lib/api-types.generated.ts
 
 # Claude Code personal settings — per-developer, never shared
 .claude/settings.local.json
+
+# Phase 28: the extractor fixture corpus is *input data*, and running an
+# extractor against it imports the fixture -- which leaves __pycache__ and,
+# for the vendored Flask tutorial, a Flask `instance/` directory holding a
+# SQLite database. Neither is part of the fixture, and committing either
+# would stop a vendored upstream tree being a faithful copy of upstream.
+cli/testdata/fixtures/**/instance/
+
+# Phase 28: Go build output. `just cli-build` writes cli/bin/ and
+# `just cli-release` writes cli/dist/ (covered by `dist/` above). A 4 MB
+# binary in the repository is one that goes stale the moment anyone
+# edits cli/ without rebuilding.
+cli/bin/

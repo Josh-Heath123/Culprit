@@ -29,6 +29,7 @@ from culprit_model.canonical import (
     canonical_value,
     values_equal,
 )
+from culprit_model.errors import safe_errors, safe_message
 from culprit_model.facts import (
     Divergence,
     DivergenceKind,
@@ -48,9 +49,27 @@ from culprit_model.graph import (
     UnknownComponent,
 )
 from culprit_model.planes import ConfidenceRank, Plane, SourceKind
-from culprit_model.subjects import SubjectKind, build, parse
+from culprit_model.protocol import (
+    EXTRACTOR_PROTOCOL_VERSION,
+    CaptureBundle,
+    ExtractorRequest,
+    ExtractorResponse,
+    Predicate,
+    Skip,
+    Want,
+)
+from culprit_model.shape import (
+    LengthClass,
+    ValueFormat,
+    ValueShape,
+    ValueType,
+    classify_format,
+)
+from culprit_model.subjects import SubjectError, SubjectKind, build, parse
 
 __all__ = [
+    "EXTRACTOR_PROTOCOL_VERSION",
+    "CaptureBundle",
     "Component",
     "ComponentKind",
     "ConfidenceRank",
@@ -61,14 +80,24 @@ __all__ = [
     "Divergence",
     "DivergenceKind",
     "DivergenceStatus",
+    "ExtractorRequest",
+    "ExtractorResponse",
     "Fact",
+    "LengthClass",
     "Plane",
+    "Predicate",
     "Provenance",
     "Severity",
+    "Skip",
     "SourceKind",
+    "SubjectError",
     "SubjectKind",
     "SystemGraph",
     "UnknownComponent",
+    "ValueFormat",
+    "ValueShape",
+    "ValueType",
+    "Want",
     "build",
     "canonical_component",
     "canonical_identifier",
@@ -76,6 +105,9 @@ __all__ = [
     "canonical_method",
     "canonical_path",
     "canonical_value",
+    "classify_format",
     "parse",
+    "safe_errors",
+    "safe_message",
     "values_equal",
 ]

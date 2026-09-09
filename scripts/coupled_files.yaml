@@ -7,3 +7,24 @@
 # speculatively (see that phase's own Out of scope).
 pairs:
   - [worker/app/db.py, api/app/db/models.py]
+
+  # Phase 28. The closed `ValueShape` type and the CHECK constraint that
+  # mirrors it. The migration writes the enum members out as literals
+  # because a migration must not import mutable application code
+  # (.claude/rules/database.md), so adding a member to the type without
+  # touching the migration produces a value the type can construct and
+  # the database will refuse.
+  #
+  # Genuinely bidirectional, which is what makes it a fair pair for a
+  # symmetric check: neither side may move alone.
+  #
+  # Deliberately NOT declared here: the three subject-construction
+  # implementations against shared/tests/*conformance.json. The coupling
+  # is real but it is one-directional — changing an implementation should
+  # require touching the fixture, while *adding a case* to the fixture is
+  # the normal way to extend the suite and must not require editing three
+  # implementations that already handle it. A symmetric check would
+  # forbid the second, and the first is already gated harder: each
+  # implementation's own test suite reads the fixture, so a change that
+  # breaks conformance fails that language's tests immediately.
+  - [shared/culprit_model/shape.py, api/migrations/versions/d1f4a9c73b60_value_shape_and_fact_writer.py]

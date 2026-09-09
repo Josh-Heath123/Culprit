@@ -94,7 +94,7 @@ async def _run_apply(path: Path, *, prune: bool) -> int:
     return 0
 
 
-async def _run_export() -> int:
+async def _run_export(merge_from: Path | None) -> int:
     engine = create_async_engine(REGISTRY_ADMIN_DATABASE_URL)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -102,6 +102,34 @@ async def _run_export() -> int:
             manifest = await export_manifest(session)
     finally:
         await engine.dispose()
+
+    # Phase 28: the `extract:` section is NOT stored server-side.
+    #
+    # Extraction runs in the `culprit` binary against a checkout, with no
+    # control plane involved, so nothing in the database knows about it.
+    # A plain export therefore cannot reproduce it, and writing that
+    # export over a hand-maintained file would delete the user's
+    # extractor configuration outright — the same class of defect the
+    # Phase 27 audit found in `declared_by`, and the documented
+    # `apply-model --export > culprit.yaml` workflow walks straight into
+    # it.
+    #
+    # So: pass the current file and its `extract:` section is carried
+    # through; omit it and stderr says plainly what is being dropped.
+    # The export never silently loses it either way.
+    if merge_from is not None:
+        current = read_manifest(merge_from)
+        if current.extract is not None:
+            manifest = manifest.model_copy(update={"extract": current.extract})
+    else:
+        print(
+            "note: --export does not include an `extract:` section — the control "
+            "plane does not store one (docs/DIAGNOSTIC_PLAN.md Phase 28 field 3). "
+            "If your culprit.yaml has one, pass it as an argument to carry it "
+            "through: apply_model.py --export culprit.yaml",
+            file=sys.stderr,
+        )
+
     # stdout only, so `apply_model.py --export > culprit.yaml` and a diff
     # against the applied file are both one shell command.
     print(dump_manifest(manifest), end="")
@@ -114,7 +142,11 @@ def main() -> None:
         "path",
         type=Path,
         nargs="?",
-        help="culprit.yaml describing the system (omit with --export)",
+        help=(
+            "culprit.yaml describing the system. With --export, an optional "
+            "path to the current file, whose `extract:` section is carried "
+            "into the output (the control plane does not store one)."
+        ),
     )
     parser.add_argument(
         "--prune",
@@ -129,9 +161,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.export:
-        if args.path is not None or args.prune:
-            parser.error("--export takes no path and cannot be combined with --prune")
-        raise SystemExit(asyncio.run(_run_export()))
+        if args.prune:
+            parser.error("--export cannot be combined with --prune")
+        raise SystemExit(asyncio.run(_run_export(args.path)))
 
     if args.path is None:
         parser.error("a culprit.yaml path is required (or pass --export)")

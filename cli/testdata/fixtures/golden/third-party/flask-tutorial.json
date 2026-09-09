@@ -1,0 +1,60 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@test",
+  "capture_id": "00000000-0000-5000-8000-000000000000",
+  "started_at": "2026-01-01T00:00:00Z",
+  "finished_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "dep:flaskr/flask",
+      "predicate": "version",
+      "value": "*",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "pyproject.toml",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    }
+  ],
+  "skipped": [
+    {
+      "want": "*",
+      "reason": "extractor plugins were disabled for this run (--no-plugins); artefact readers only",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "config_keys",
+      "reason": "no .env.example (or .sample/.template/.dist) found",
+      "component": "flaskr",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "config_keys",
+      "reason": "no docker-compose file found",
+      "component": "flaskr",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "db_schema",
+      "reason": "no alembic versions/ directory found; migration head unknown",
+      "component": "flaskr",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "http_routes",
+      "reason": "no OpenAPI or Swagger document found under .",
+      "component": "flaskr",
+      "extractor": "culprit@test"
+    }
+  ],
+  "meta": {
+    "cli_version": "test",
+    "components": "flaskr"
+  }
+}

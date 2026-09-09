@@ -106,11 +106,26 @@ async def test_a_shape_without_a_value_is_the_normal_case_and_is_allowed(
     db_engine: AsyncEngine,
 ) -> None:
     """What an extractor should be emitting: the shape of the key's
-    contents, and no contents."""
+    contents, and no contents.
+
+    The shape here changed in Phase 28 and the change is the point. This
+    test used to assert
+    `{"type": "url", "scheme": "postgresql", "host_resolves": true}` —
+    §2.2's own illustrative example, and free-form JSONB, which is
+    exactly the hole the Phase 27 audit demonstrated by inserting
+    `{"type": "url", "sample": "postgresql://u:hunter2@db/orders"}` next
+    to it with no grant. `ck_configured_facts_value_shape_is_closed` now
+    admits only the four closed fields of `culprit_model.ValueShape`, so
+    the old example is refused along with the attack it could not be told
+    apart from. See api/tests/test_value_shape_constraint.py.
+    """
     await _insert_fact(
         db_engine,
         value=None,
-        value_shape='{"type": "url", "scheme": "postgresql", "host_resolves": true}',
+        value_shape=(
+            '{"type": "string", "length_class": "medium", '
+            '"format": "dsn", "present": true}'
+        ),
     )
 
 

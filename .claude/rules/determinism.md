@@ -2,6 +2,7 @@
 paths:
   - "worker/app/**"
   - "cli/internal/**"
+  - "extractors/**"
   - "mcp_server/**"
   - "shared/culprit_model/**"
   - "scripts/check_*.py"
@@ -15,7 +16,8 @@ model" is always the shortest path and always looks fine in a demo.
 **Deterministic — no LLM call, ever:**
 
 - Anomaly and impedance scoring (`worker/app/anomaly/`)
-- Fact extraction and comparison (`cli/internal/extract/`, `cli/internal/diverge/`)
+- Fact extraction and comparison (`cli/internal/extract/`, `cli/internal/diverge/`,
+  and the extractor plugins in `extractors/`)
 - Probe execution and readings (`cli/internal/probe/`)
 - Fault isolation (`cli/internal/isolate/`)
 - Verification (`cli/internal/verify/`)
@@ -32,6 +34,11 @@ create a fact, a divergence, a reading, a verdict or a hypothesis.
 `worker/pyproject.toml` declares `lint-imports` contracts; `scripts/tests/test_no_llm_imports.py`
 and `mcp_server/tests/test_no_llm_chat_calls.py` walk the AST and assert no LLM
 client is imported and that the Voyage client is only ever `.embed()`-ed.
+
+`scripts/check_no_llm_imports.py` covers nine packages across three languages
+(Phase 28) — the Python ones by AST walk, `cli/internal/` and `extractors/node/`
+by import-line scan, since this repository has no Go or JavaScript parser and
+importing a client is the observable act in both.
 
 **If a change needs to cross this boundary, that is the signal the rule is about
 to be broken — not a lint configuration to relax.** Widening a contract,

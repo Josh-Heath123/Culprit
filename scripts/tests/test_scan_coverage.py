@@ -110,3 +110,82 @@ def test_no_python_entries_all_carry_a_reason() -> None:
     for name, reason in coverage._NO_PYTHON.items():
         assert reason.strip(), f"{name} is excluded with no stated reason"
         assert len(reason) > 10, f"{name}'s reason is too thin to review: {reason!r}"
+
+
+def test_every_exclusion_carries_a_real_reason() -> None:
+    """Phase 28's `_EXCLUDED` must not become a dumping ground.
+
+    The whole premise of this script is that an unexamined exclusion is
+    indistinguishable from an oversight, so an entry with no reason — or
+    a reason too short to be one — defeats it. Asserted rather than
+    trusted, because `check_scan_coverage.py`'s own comment promises this
+    test exists.
+    """
+    assert coverage._EXCLUDED, "the exclusion map is empty; drop the mechanism"
+    for path, reason in coverage._EXCLUDED.items():
+        assert (ROOT / path).is_dir(), f"_EXCLUDED names a directory that does not exist: {path}"
+        assert len(reason.strip()) > 40, (
+            f"_EXCLUDED[{path!r}] has no real reason. An exclusion nobody wrote a "
+            "reason for is indistinguishable from an oversight, which is the "
+            "problem this script exists to solve."
+        )
+
+
+def test_an_excluded_directorys_python_is_really_skipped() -> None:
+    """The exclusion does what it says: those files are not measured.
+
+    Without this, `_EXCLUDED` could be silently ineffective and the check
+    would still pass — for the wrong reason, since the roots happen to
+    cover everything else.
+    """
+    files = {path.relative_to(ROOT).as_posix() for path in coverage._repo_python_files()}
+    assert files, "no Python files found at all"
+    for prefix in coverage._EXCLUDED:
+        offending = [name for name in files if name.startswith(prefix + "/")]
+        assert not offending, f"{prefix} is in _EXCLUDED but its files are still measured"
+    # And the exclusion is not so broad it swallowed the repository.
+    assert len(files) > 100, f"only {len(files)} files measured; an exclusion is too broad"
+
+
+def test_a_new_exclusion_cannot_hide_an_uncovered_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The mutation that matters for `_EXCLUDED` itself.
+
+    Remove the fixture exclusion and the fixture corpus — real Python
+    that no check reads — must make the coverage check fail. If it does
+    not, the exclusion is not load-bearing and something else is quietly
+    covering those files.
+    """
+    monkeypatch.setattr(coverage, "_EXCLUDED", {})
+    assert coverage.main() == 1
+
+
+def test_the_stop_hook_excludes_exactly_what_this_checker_does() -> None:
+    """`.claude/hooks/fast_gates.sh` lints changed Python on every turn.
+
+    It has to skip the same paths this checker excludes, or the hook
+    reformats vendored upstream source to satisfy our import style — and
+    a third-party fixture that has been reformatted is no longer a
+    third-party fixture, which is the only property that makes it worth
+    having.
+
+    The hook is bash and cannot import this module, so the list is
+    duplicated there. Parsed rather than restated here, so the two cannot
+    drift — the same technique `_ruff_roots` uses on the justfile, and
+    for the same reason: the copy that *runs* is the one that has to be
+    checked.
+    """
+    hook = ROOT / ".claude" / "hooks" / "fast_gates.sh"
+    assert hook.is_file(), f"the stop hook is missing: {hook}"
+
+    match = re.search(r"^EXCLUDED_PREFIXES='([^']*)'", hook.read_text(encoding="utf-8"), re.M)
+    assert match, "fast_gates.sh has no EXCLUDED_PREFIXES assignment to check"
+
+    hook_prefixes = {prefix for prefix in match.group(1).split() if prefix}
+    checker_prefixes = {prefix.rstrip("/") + "/" for prefix in coverage._EXCLUDED}
+    assert hook_prefixes == checker_prefixes, (
+        f"the stop hook excludes {sorted(hook_prefixes)} but this checker excludes "
+        f"{sorted(checker_prefixes)} — one of them is linting something the other "
+        "has decided must not be linted"
+    )

@@ -56,14 +56,30 @@ SCANNED = (
     "mcp_server",
     "demo-services",
     "examples",
+    # Phase 28: the extractor plugins build subject URIs, and the
+    # Python one does it through culprit_model.subjects like everything
+    # else. cli/ is Go and extractors/node/ is JavaScript, so neither is
+    # scanned here -- their own test suites hold them to the same shared
+    # conformance fixtures.
+    "extractors/python",
 )
 
 #: The implementation itself, and the fixture it is tested against.
+#: The migration is the one entry that is not part of the implementation,
+#: and it is here for a reason rather than for convenience. Its CHECK
+#: constraint has to recognise a `config:` subject *in SQL* — a migration
+#: is a historical snapshot and may not import mutable application code
+#: (`.claude/rules/database.md`), so `subjects.build()` is not reachable
+#: from it and never will be. It also *matches* a scheme rather than
+#: constructing a subject, which is the thing this lint exists to stop:
+#: nothing is being formatted, so no second place can disagree about
+#: trailing slashes or case.
 ALLOWED = {
     "shared/culprit_model/subjects.py",
     "shared/tests/subject_conformance.json",
     "shared/tests/test_subjects.py",
     "scripts/tests/test_subject_construction.py",
+    "api/migrations/versions/d1f4a9c73b60_value_shape_and_fact_writer.py",
 }
 
 

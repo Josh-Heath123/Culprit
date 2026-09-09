@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import check_no_llm_imports as llm_check
 from check_no_llm_imports import (
     CHAT_LLM_PREFIXES,
     DETERMINISTIC_PACKAGES,
@@ -128,3 +129,95 @@ def test_a_vendored_virtualenv_is_not_scanned(tmp_path: Path) -> None:
     (package / "module.py").write_text("import json", encoding="utf-8")
 
     assert check_package(package, STRICT) == []
+
+
+# --- the Go/JavaScript half (Phase 28) ---------------------------------
+#
+# Every case below is an evasion the Phase 28 invariant audit
+# demonstrated against the first version of this scanner. They are pinned
+# because each one passed CI while an LLM SDK sat inside the extraction
+# layer — the exact outcome `.claude/rules/determinism.md` says must be a
+# build failure rather than a goal.
+
+
+@pytest.mark.parametrize(
+    ("name", "source"),
+    [
+        pytest.param(
+            "aliased-in-block",
+            'package zz\n\nimport (\n\t"fmt"\n\n\toai "github.com/sashabaranov/go-openai"\n)\n',
+            id="aliased import inside a gofmt block",
+        ),
+        pytest.param(
+            "gemini",
+            'package zz\n\nimport (\n\t"github.com/google/generative-ai-go/genai"\n)\n',
+            id="the Gemini Go SDK",
+        ),
+        pytest.param(
+            "plain",
+            'package zz\n\nimport "github.com/anthropics/anthropic-sdk-go"\n',
+            id="a plain single-line import",
+        ),
+        pytest.param(
+            "langchain",
+            'package zz\n\nimport (\n\tllm "github.com/tmc/langchaingo/llms"\n)\n',
+            id="langchaingo, aliased",
+        ),
+    ],
+)
+def test_a_go_llm_import_is_caught(tmp_path: Path, name: str, source: str) -> None:
+    """The gofmt-canonical form is the one that matters.
+
+    An import inside a `import ( ... )` block starts with an identifier,
+    not the word `import`, so the original "is this line import-shaped?"
+    narrowing skipped it entirely. Go is scanned line for line now: an
+    import path can only be written as a quoted string, so matching the
+    module path anywhere is sufficient and nearly false-positive-free.
+    """
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / f"{name}.go").write_text(source, encoding="utf-8")
+    errors = llm_check.check_non_python_package(package, llm_check._GO_LLM_MODULES)
+    assert errors, f"an LLM import was not caught:\n{source}"
+
+
+def test_a_go_comment_mentioning_an_sdk_is_not_a_violation(tmp_path: Path) -> None:
+    """A check that fires on its own documentation gets switched off."""
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "a.go").write_text(
+        "package zz\n\n"
+        "// This package must never import github.com/anthropics/anthropic-sdk-go\n"
+        "// or any other model client -- see .claude/rules/determinism.md.\n"
+        'import "fmt"\n',
+        encoding="utf-8",
+    )
+    assert llm_check.check_non_python_package(package, llm_check._GO_LLM_MODULES) == []
+
+
+def test_a_javascript_llm_import_is_caught(tmp_path: Path) -> None:
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "a.js").write_text("import OpenAI from 'openai';\n", encoding="utf-8")
+    assert llm_check.check_non_python_package(package, llm_check._JS_LLM_MODULES)
+
+
+def test_every_go_package_root_covers_its_cmd_directory() -> None:
+    """`cli/internal` alone left `cli/cmd/culprit/main.go` unscanned.
+
+    Standing invariant 9 in miniature: a check that never reads a file is
+    not a gate for that file, and the entry point is the most likely
+    place for a "just print it nicely with a model" call to land.
+    """
+    roots = llm_check.NON_PYTHON_DETERMINISTIC_PACKAGES
+    go_files = [
+        path
+        for path in (llm_check.ROOT / "cli").rglob("*.go")
+        if llm_check.SKIPPED_DIRECTORY_NAMES.isdisjoint(path.parts)
+    ]
+    assert go_files, "no Go files found; this test would pass vacuously"
+    for path in go_files:
+        relative = path.relative_to(llm_check.ROOT).as_posix()
+        assert any(
+            relative.startswith(root.rstrip("/") + "/") for root in roots
+        ), f"{relative} is scanned by no root in NON_PYTHON_DETERMINISTIC_PACKAGES"

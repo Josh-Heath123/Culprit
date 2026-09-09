@@ -15,11 +15,15 @@ down:
 dev: up
     cd api && uv run uvicorn app.main:app --reload
 
-# Run the test suite for api, worker, and mcp_server
+# Run every test suite: api (which also runs scripts/tests and
+# shared/tests), worker, mcp_server, the Go CLI, and both extractors.
 test:
     (cd api && uv run pytest)
     (cd worker && uv run pytest)
     (cd mcp_server && uv run pytest)
+    (cd cli && go test ./...)
+    (cd extractors/python && uv run pytest)
+    (cd extractors/node && npm test)
 
 # Apply database migrations
 migrate: up
@@ -37,10 +41,24 @@ lint:
     (cd worker && uv run ruff check .)
     (cd demo-services && uv run ruff check .)
     (cd mcp_server && uv run ruff check .)
+    (cd extractors/python && uv run ruff check .)
+    # Go too, so the local gate set matches CI's. Not folded into the
+    # ruff lines above: scripts/check_scan_coverage.py parses those for
+    # its root list, and a `just cli-lint` line there would be one more
+    # thing for it to misread.
+    just cli-lint
 
 # Enforce module-isolation contracts (e.g. anomaly detection vs RAG/LLM)
 lint-imports:
-    cd worker && uv run lint-imports
+    # PYTHONIOENCODING: import-linter draws its progress spinner with
+    # `rich`, which emits emoji. On Windows, with stdout redirected,
+    # rich takes its win32 console path and cp1252 cannot encode them
+    # -- the run then exits 1 with a UnicodeEncodeError *after*
+    # printing "Contracts: 4 kept, 0 broken". A gate that reports
+    # success and then fails is the worst kind of flake, because the
+    # obvious reading of the output is that it passed. Linux CI never
+    # sees it; this makes the local run agree with CI.
+    cd worker && PYTHONIOENCODING=utf-8 uv run lint-imports
 
 # Fail if worker/app/db.py's Core tables drift from api/app/db/models.py's
 # ORM columns. Run via api's own venv (not a bare `python`/`python3` off
@@ -79,6 +97,96 @@ check-scan-coverage:
 check-migration-round-trip:
     uv run --project api python scripts/check_migration_round_trip.py
 
+
+# --- The culprit CLI and the extractors (Phase 28) --------------------
+#
+# Go lives in cli/ and is built with CGO_ENABLED=0 so the result is one
+# static binary with no libc dependency -- that is acceptance criterion
+# 5 ("one static binary, no runtime installed") and the reason `curl |
+# sh` can work at all. It is also why the CLI has no tree-sitter
+# dependency: the Go binding needs cgo, which would undo exactly this.
+
+# Build the culprit binary for this machine into cli/bin/
+cli-build:
+    cd cli && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=$(cat ../VERSION)" -o bin/culprit ./cmd/culprit
+
+# Cross-compile every released platform into cli/dist/ (what CI publishes)
+cli-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(cat VERSION)
+    cd cli
+    rm -rf dist && mkdir -p dist
+    for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+        os=${target%/*}
+        arch=${target#*/}
+        name="culprit_${version}_${os}_${arch}"
+        [ "$os" = "windows" ] && ext=".exe" || ext=""
+        echo "==> $name"
+        CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath             -ldflags "-s -w -X main.Version=${version}"             -o "dist/${name}${ext}" ./cmd/culprit
+    done
+    ls -la dist/
+
+cli-test:
+    cd cli && go test ./...
+
+# gofmt is the whole lint story for Go -- `go vet` catches the rest.
+cli-lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd cli
+    unformatted=$(gofmt -l .)
+    if [ -n "$unformatted" ]; then
+        echo "gofmt would change these files:" >&2
+        echo "$unformatted" >&2
+        exit 1
+    fi
+    go vet ./...
+
+# Rewrite the golden files in cli/testdata/fixtures/golden/.
+# READ THE DIFF before committing it: a golden file records what the
+# extractor currently believes, and updating one without looking is how
+# a regression becomes the new expectation.
+cli-golden-update:
+    cd cli && go test ./internal/extract/... -run TestGoldenFixtures -update
+
+# The two extractor plugins, tested in their own languages against the
+# same fixture corpus the Go golden tests use.
+extractors-test:
+    (cd extractors/python && uv run pytest)
+    (cd extractors/node && npm test)
+
+# No `extractors-lint` / `extractors-typecheck` recipes: `just lint` and
+# `just typecheck` already cover extractors/python, and a second recipe
+# running the same ruff invocation was actively harmful ---
+# scripts/check_scan_coverage.py parses the justfile for ruff roots, so
+# the duplicate satisfied the coverage check even when the real `lint`
+# recipe had stopped covering the directory. Found by mutation-testing
+# that gate (standing invariant 10): removing extractors/python from
+# `lint` left coverage green, which is the exact failure invariant 9
+# exists to prevent, one level up.
+
+# `culprit intent` over this repository itself (culprit.yaml at the
+# root) -- the fastest way to see what the command actually prints, and
+# the dogfood acceptance criterion 1 is verified against.
+#
+# The env vars are placeholders, and they live here rather than in
+# culprit.yaml on purpose: a manifest names config keys and never
+# carries values, and its loader refuses anything credential-shaped.
+# These are the same dummy values `just generate-types` and the CI
+# schema-dump step already set, for the same reason -- api/app/*/config.py
+# reads them at import time, and introspecting a FastAPI app means
+# importing it. Nothing here connects to anything.
+intent *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
+    export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER; do
+        export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
+    done
+    cd cli && exec go run ./cmd/culprit intent -f ../culprit.yaml {{ARGS}}
+
 # Type-check all projects. `../shared` rides along on api's pyright for
 # the same reason it rides along on api's ruff (see `lint` above).
 typecheck:
@@ -86,6 +194,7 @@ typecheck:
     (cd worker && uv run pyright)
     (cd demo-services && uv run pyright)
     (cd mcp_server && uv run pyright)
+    (cd extractors/python && uv run pyright)
 
 # Demo services (Phase 2) — run each in its own terminal
 demo-inventory:
@@ -155,7 +264,7 @@ create-user *ARGS:
 # frontend-build` and the frontend's Docker build) only worked on a
 # machine that already had a hand-written api/.env.
 generate-types:
-    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
     cd frontend && npm run generate-types
 
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`

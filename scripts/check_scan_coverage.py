@@ -69,8 +69,45 @@ _NO_PYTHON: dict[str, str] = {
 }
 
 
+#: Directories whose Python is deliberately outside every repo-wide
+#: check, each with the reason. Distinct from `_NO_PYTHON` above: that
+#: says "there is no Python here"; this says "there is, and no check
+#: should read it".
+#:
+#: The bar for an entry is high on purpose — the whole point of this
+#: script is that an unexamined exclusion is indistinguishable from an
+#: oversight. Only one category qualifies so far: **fixture corpora**,
+#: which are input data rather than code. Two of the fixtures are
+#: vendored verbatim from upstream projects at a pinned tag, and linting
+#: them would mean editing somebody else's source to satisfy our style —
+#: which turns a third-party fixture back into one of ours and destroys
+#: the only property that makes it worth having (see
+#: cli/testdata/fixtures/README.md). The author-written fixtures are
+#: excluded for the same reason: a fixture is a *sample of what real
+#: code looks like*, and a lint rule applied to it would change what is
+#: being tested.
+#:
+#: `scripts/tests/test_scan_coverage.py` asserts every entry here has a
+#: real reason and points at a directory that exists.
+_EXCLUDED: dict[str, str] = {
+    "cli/testdata/fixtures": (
+        "the extractor fixture corpus — input data, not code. Two fixtures are "
+        "vendored verbatim from upstream at a pinned tag and must not be edited; "
+        "the others are samples of what real code looks like, which a lint pass "
+        "would change. See cli/testdata/fixtures/README.md."
+    ),
+}
+
+
 class Gap(Exception):
     """Raised when a check's declared roots cannot be read at all."""
+
+
+def _is_excluded(relative: str) -> bool:
+    return any(
+        relative == prefix or relative.startswith(prefix.rstrip("/") + "/")
+        for prefix in _EXCLUDED
+    )
 
 
 def _repo_python_files() -> list[Path]:
@@ -79,6 +116,7 @@ def _repo_python_files() -> list[Path]:
         path
         for path in ROOT.rglob("*.py")
         if _SKIPPED_PARTS.isdisjoint(path.relative_to(ROOT).parts)
+        and not _is_excluded(path.relative_to(ROOT).as_posix())
     )
 
 
@@ -111,8 +149,33 @@ def _ruff_roots() -> tuple[str, ...]:
     since CI is a second place the same list is written down.
     """
     justfile = (ROOT / "justfile").read_text(encoding="utf-8")
+
+    # **Only the `lint` recipe's body.** Parsing every `ruff check` line
+    # in the file meant any *other* recipe running the same command
+    # satisfied this check on `lint`'s behalf — so `lint` could stop
+    # covering a directory and coverage stayed green. That happened: a
+    # convenience `extractors-lint` recipe masked exactly that, and the
+    # mutation test for this gate passed when it should have failed.
+    # Deleting the recipe fixed the instance; parsing the right lines
+    # fixes the mechanism (Phase 28 invariant audit, risk R2).
+    #
+    # A `just` recipe body is the indented block after `name:` and ends
+    # at the first non-indented, non-blank line.
+    lines = justfile.splitlines()
+    try:
+        start = next(
+            index for index, line in enumerate(lines) if line.rstrip() == "lint:"
+        )
+    except StopIteration as exc:  # pragma: no cover - the recipe was renamed
+        raise Gap("the justfile has no `lint:` recipe to read ruff roots from") from exc
+    body: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.strip() and not line[:1].isspace():
+            break
+        body.append(line)
+
     roots: set[str] = set()
-    for line in justfile.splitlines():
+    for line in body:
         # Recipes are parenthesised subshells:
         #     (cd api && uv run ruff check . ../shared ../scripts)
         stripped = line.strip().strip("()")

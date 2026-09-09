@@ -47,6 +47,15 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AUTH_SERVICE_DB_PASSWORD": "test-auth-service-password",
     "POSTMORTEM_WRITER_DB_PASSWORD": "test-postmortem-writer-password",
     "MCP_READER_DB_PASSWORD": "test-mcp-reader-password",
+    # Phase 28. Every migration's `_require_env` must be satisfied for
+    # `alembic upgrade head` to run at all, so a new role means a new
+    # entry in all three copies of this list (here, api/tests/conftest.py,
+    # scripts/check_migration_round_trip.py). That triplication is a real
+    # smell and is recorded in docs/LIMITS.md rather than fixed here:
+    # mcp_server is a separate uv project and cannot import api's
+    # conftest, which is the same reason worker/app/db.py hand-mirrors
+    # api's ORM.
+    "FACT_WRITER_DB_PASSWORD": "test-fact-writer-password",
 }
 
 

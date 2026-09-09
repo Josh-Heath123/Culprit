@@ -1,0 +1,567 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@test",
+  "capture_id": "00000000-0000-5000-8000-000000000000",
+  "started_at": "2026-01-01T00:00:00Z",
+  "finished_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "value": [
+        "0003_add_order_lines"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "migrations/versions",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L3",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "docker-compose.yml",
+        "locator": "$.services.orders-api",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "dsn",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L3",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/FEATURE_ASYNC_FULFILMENT",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L7",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/FEATURE_ASYNC_FULFILMENT",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "booleanish",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L7",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L4",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "docker-compose.yml",
+        "locator": "$.services.orders-api",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "opaque",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L4",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L5",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "docker-compose.yml",
+        "locator": "$.services.orders-api",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "port",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L5",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/REQUEST_TIMEOUT",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L6",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/REQUEST_TIMEOUT",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "duration",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L6",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/STRIPE_API_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L8",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/STRIPE_API_KEY",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "empty",
+        "format": "not_applicable",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L8",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:orders-api/alembic",
+      "predicate": "version",
+      "value": ">=1.13",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "pyproject.toml",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:orders-api/fastapi",
+      "predicate": "version",
+      "value": ">=0.115",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "pyproject.toml",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:orders-api/pydantic",
+      "predicate": "version",
+      "value": ">=2.9",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "pyproject.toml",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:orders-api/sqlalchemy",
+      "predicate": "version",
+      "value": ">=2.0",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "pyproject.toml",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/DELETE /api/v1/orders/{}",
+      "predicate": "exists",
+      "value": {
+        "method": "DELETE",
+        "path": "/api/v1/orders/{order_id}"
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders/{order_id}.delete",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/DELETE /api/v1/orders/{}",
+      "predicate": "status_codes",
+      "value": [
+        "204"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders/{order_id}.delete",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /api/v1/orders",
+      "predicate": "exists",
+      "value": {
+        "method": "GET",
+        "path": "/api/v1/orders"
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders.get",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /api/v1/orders",
+      "predicate": "status_codes",
+      "value": [
+        "200"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders.get",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /api/v1/orders/{}",
+      "predicate": "exists",
+      "value": {
+        "method": "GET",
+        "path": "/api/v1/orders/{order_id}"
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders/{order_id}.get",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /api/v1/orders/{}",
+      "predicate": "status_codes",
+      "value": [
+        "200",
+        "404"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders/{order_id}.get",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /healthz",
+      "predicate": "exists",
+      "value": {
+        "method": "GET",
+        "path": "/healthz"
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./healthz.get",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /healthz",
+      "predicate": "status_codes",
+      "value": [
+        "200"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./healthz.get",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /api/v1/orders",
+      "predicate": "exists",
+      "value": {
+        "method": "POST",
+        "path": "/api/v1/orders"
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders.post",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /api/v1/orders",
+      "predicate": "status_codes",
+      "value": [
+        "201",
+        "422"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders.post",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /api/v1/orders#request.body",
+      "predicate": "request_schema",
+      "value": {
+        "content_types": [
+          "application/json"
+        ],
+        "required": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "openapi.json",
+        "locator": "$.paths./api/v1/orders.post",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "image:orders-api",
+      "predicate": "exists",
+      "value": "ghcr.io/example/orders-api:v0.2.0",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "docker-compose.yml",
+        "locator": "$.services.orders-api",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    }
+  ],
+  "skipped": [
+    {
+      "want": "*",
+      "reason": "extractor plugins were disabled for this run (--no-plugins); artefact readers only",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "*",
+      "reason": "orders-db has no source root: nothing was extracted for it. Add extract.components.orders-db.root to culprit.yaml, or leave it undeclared if it has no source of its own (a managed database, a third-party service).",
+      "component": "orders-db",
+      "extractor": "culprit@test"
+    }
+  ],
+  "meta": {
+    "cli_version": "test",
+    "components": "orders-api,orders-db"
+  }
+}

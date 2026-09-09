@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Phases 0–26.1 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 27 is done on `phase-27-system-model` and not yet merged; Phase 28 is next
+## Status: Phases 0–27 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 28 is done on `phase-28-cli-extractors` and not yet merged; Phase 29 is next
 
 Updated 2026-09-09. Update this section the moment it changes — a stale status line is worse than none, and this section was four phases stale until Phase 26 repaired it, which is exactly the cost being warned about.
 
@@ -18,9 +18,11 @@ Merged into `main` and deployed to `https://culprit.co.za`:
 
 **Phase 25 (scoped visualization) is cancelled. Do not implement it** — see `docs/HANDOFF.md` §1.
 
-**Phases 26 and 26.1 are merged into `main`** (`d39ca3b`, `4b7dbef`). 26 removed known-false claims from the repository, fixed the security and fail-open defects the plan's reconnaissance found, and landed `shared/culprit_model/` plus the `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables. 26.1 made `configured_facts` structurally unable to hold an ungranted config value (architecture point 18).
+**Phases 26, 26.1 and 27 are merged into `main`** (`d39ca3b`, `4b7dbef`, `4f6e437`). 26 removed known-false claims from the repository, fixed the security and fail-open defects the plan's reconnaissance found, and landed `shared/culprit_model/` plus the `captures`/`intent_facts`/`configured_facts`/`readings`/`divergences` tables. 26.1 made `configured_facts` structurally unable to hold an ungranted config value (architecture point 18).
 
-**Phase 27 (the system model) is complete on `phase-27-system-model` and not yet merged.** It replaced `services`/`service_dependencies` with `components`/`connections`/`contracts` — see architecture point 19. **Phase 28 (the CLI, the extractor protocol, intent extraction) is next and has not been started.** As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
+**Phase 27 (the system model) is merged.** It replaced `services`/`service_dependencies` with `components`/`connections`/`contracts` — see architecture point 19.
+
+**Phase 28 (the CLI, the extractor protocol, intent extraction) is complete on `phase-28-cli-extractors` and not yet merged.** It introduces Go and JavaScript into the repository — see architecture point 20. **Phase 29 (the divergence engine, the first shippable product) is next and has not been started.** As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
 
 **Still genuinely outstanding, and not something a session can finish on its own:** the `ghcr.io` packages (`api`/`worker`/`frontend`/`mcp_server`) still default to **private** under `GITHUB_TOKEN`. Flipping them to public needs a human with repo admin access in the GitHub UI (Packages → each package → Package settings → Change visibility); the `gh` CLI token in this environment lacks `read:packages`/`write:packages`. Until that happens, `docs/SELF_HOSTED_PLAN.md` Phase 20's first acceptance criterion ("a machine with no GitHub account can `docker compose pull` every image") is not met, whatever else claims otherwise.
 
@@ -86,6 +88,8 @@ The diagnostic-engine rewrite (`docs/DIAGNOSTIC_PLAN.md`, Phases 26–35) has be
 
 19. **The system model (Phase 27)** — `services`/`service_dependencies` became `components`/`connections`, plus an empty `contracts` table. `services` was **renamed**, not copied, so every FK (`api_keys.service_id`, which keeps its old name) and every GRANT followed it intact. `connections` had to be a new table: its identity is `(from, to, kind)`, because two components may be connected in more than one way, where `service_dependencies`' primary key was the untyped pair. `shared/culprit_model/graph.py` is the pure in-memory graph — components, typed connections, reachability, and `upstream_connections()` for request-path derivation (plain BFS, no `networkx`: that is a `worker`-only dependency and `culprit_model` is installed into `api` too). `api/app/model/` is the new HTTP surface (`/model/components`, `/model/connections`, `/model/graph?symptom=`, `/model/apply`, `/model/export`); `api/app/registry/` is now a thin `/services` alias over it, retained for one release and removed in Phase 30. `culprit.yaml` (`api/app/model/manifest.py`, applied with `just apply-model`) is the declarative source — it names config keys and never their values, and the loader refuses anything credential-shaped. `demo-services/culprit.yaml` replaced `infra/demo-services.yaml` and the last hardcoded topology fixture. Two standing gates landed with it: `scripts/check_migration_round_trip.py` (invariant 8 — every migration round-trips against a real database with rows present, its own CI job) and `scripts/check_scan_coverage.py` (invariant 9 — every repo-wide check's declared roots actually cover the repository; it immediately found `examples/` covered by nothing).
 
+20. **The CLI, the extractor protocol and intent extraction (Phase 28)** — the first non-Python code in the repository. `cli/` is a Go module producing one static binary (`just cli-build`), which orchestrates extraction and **never parses application code itself** (D3). It reads built-in artefacts (OpenAPI, `.env.example`, compose, Alembic version chains, dependency manifests) and shells out to *extractor plugins* over a JSON-on-stdin/stdout protocol — `docs/EXTRACTOR_PROTOCOL.md` is the contract, `extractors/python/` and `extractors/node/` are the two reference implementations, and both install into the *target* project's virtualenv because introspecting a FastAPI app means importing it. `culprit intent` prints an inventory and stops: it compares nothing and uploads nothing (that phase's field 17). `shared/culprit_model/shape.py` is the Q5 remediation — a closed four-field `ValueShape` a config literal structurally cannot fit in — with `api/migrations/versions/d1f4a9c73b60_*.py` narrowing `configured_facts.value_shape` to match and adding the `fact-writer` role behind `POST /facts/captures` (an eleventh role; a project token, not a user JWT). The root `culprit.yaml` describes Culprit to itself and is what `just intent` extracts. There are now **three** implementations of subject construction, one per language, held together by `shared/tests/*conformance.json` — see `.claude/rules/model.md`.
+
 ## Tech stack (decided, don't re-litigate per session)
 
 - **Backend:** Python, FastAPI (`api/`), managed with `uv`
@@ -129,7 +133,7 @@ Pipeline (`.github/workflows/ci-cd.yml`): lint → typecheck (includes the `lint
 - `ghcr.io` images pushed via `GITHUB_TOKEN` default to **private** — `deploy.sh`'s `docker compose pull` on the VM needs either the packages flipped to public (GitHub → Packages → visibility), or a one-time `docker login ghcr.io` on the VM using a **classic** PAT with `read:packages` scope (fine-grained PATs don't support Packages access yet, confirmed against GitHub's own docs as of this writing). Still true as of Phase 20 (2026-08-08) — flipping this to public is that phase's own step 2, and it's still outstanding; see the Status section above for why a session can't just do it.
 - Caddy's first-ever Let's Encrypt cert issuance for a fresh domain took ~10s in practice — longer than the original flat `sleep 5` + 10s curl timeout budgeted for. `deploy.sh`'s health check now polls (12 attempts, 5s apart) instead of checking once.
 
-**Ten Postgres roles exist now**, not the four this section was written against: `ingestion-writer`, `api-reader`, `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`, plus `registry-admin` (14), `auth-service` (16), `postmortem-writer` (18, extended in 21 rather than joined by a new role) and `mcp-reader` (24). Phases 19 and 26 deliberately added none. The rule is in `.claude/rules/database.md`: **if a component needs a write the current roles cannot do, add a role — do not widen an existing one.** `scripts/bootstrap_env.py` generates every one of these passwords; the manual "~10 hand-generated secrets" process this section used to be the only record of is superseded by `docs/INSTALL.md` (Phase 17) — follow that doc for a real install, not a reconstruction from memory of what this section says.
+**Eleven Postgres roles exist now**, not the four this section was written against: `ingestion-writer`, `api-reader`, `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`, plus `registry-admin` (14), `auth-service` (16), `postmortem-writer` (18, extended in 21 rather than joined by a new role), `mcp-reader` (24) and `fact-writer` (28 — INSERT on `captures`/`intent_facts`, SELECT on `captures`, and nothing at all on `configured_facts`/`readings`/`divergences`, which belong to Phases 30 and 31). Phases 19 and 26 deliberately added none. The rule is in `.claude/rules/database.md`: **if a component needs a write the current roles cannot do, add a role — do not widen an existing one.** `scripts/bootstrap_env.py` generates every one of these passwords; the manual "~10 hand-generated secrets" process this section used to be the only record of is superseded by `docs/INSTALL.md` (Phase 17) — follow that doc for a real install, not a reconstruction from memory of what this section says.
 
 ## Toward a self-hosted, downloadable product — all seven original gaps closed (historical)
 
@@ -180,6 +184,20 @@ just check-scan-coverage    # Phase 27: every repo-wide check's roots cover the 
 just check-migration-round-trip  # Phase 27: upgrade -> seed -> downgrade -> upgrade (needs Docker)
 
 # the whole gate set at once, honestly reported: /verify (.claude/skills/verify)
+
+# the Go CLI and the two extractor plugins (Phase 28). Needs Go on PATH.
+just cli-build        # -> cli/bin/culprit, one static binary (CGO_ENABLED=0)
+just cli-test
+just cli-lint         # gofmt + go vet
+just cli-release      # cross-compile every published target into cli/dist/
+just cli-golden-update  # rewrite cli/testdata/fixtures/golden/ -- read the diff
+just extractors-test  # extractors/python (pytest) + extractors/node (node --test)
+
+# `culprit intent` over this repository itself (the root culprit.yaml),
+# with the placeholder env api/app/*/config.py needs at import time.
+just intent                        # human-readable inventory
+just intent --format json          # the capture bundle
+SOURCE_DATE_EPOCH=0 just intent --format json   # byte-reproducible
 
 # demo services (Phase 2) — one per terminal
 just demo-order / just demo-inventory / just demo-payments

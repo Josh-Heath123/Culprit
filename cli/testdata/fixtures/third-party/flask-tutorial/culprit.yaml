@@ -1,0 +1,18 @@
+# Added alongside the vendored tree, never inside it: everything else
+# under flask-tutorial/ is pallets/flask's own file at tag 3.1.0,
+# unmodified. A culprit.yaml is what a user would add to their own
+# repository, so adding one here is using the fixture, not editing it.
+version: 1
+components:
+  - name: flaskr
+    kind: service
+    display_name: Flaskr (pallets/flask tutorial)
+
+extract:
+  extractors:
+    - name: python
+      command: ["culprit-extract-python", "--app", "flaskr:create_app"]
+  components:
+    flaskr:
+      root: .
+      extractors: [python]

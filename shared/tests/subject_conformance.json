@@ -1,7 +1,7 @@
 {
   "_comment": [
     "Shared conformance fixture for subject-URI construction",
-    "(docs/DIAGNOSTIC_PLAN.md §2.3). shared/tests/test_subjects.py asserts",
+    "(docs/DIAGNOSTIC_PLAN.md \u00a72.3). shared/tests/test_subjects.py asserts",
     "the Python implementation matches it; cli/internal/model/subjects_test.go",
     "asserts the same of the Go one from Phase 28. Written before the Go side",
     "exists deliberately: two implementations reconciled after the fact agree",
@@ -10,7 +10,7 @@
   ],
   "build": [
     {
-      "why": "the plan's own example set (§2.3), verbatim",
+      "why": "the plan's own example set (\u00a72.3), verbatim",
       "kind": "component",
       "parts": {
         "name": "orders-svc"
@@ -113,7 +113,7 @@
       "subject": "component:orders-svc"
     },
     {
-      "why": "config keys do NOT fold case — env var names are case-sensitive",
+      "why": "config keys do NOT fold case \u2014 env var names are case-sensitive",
       "kind": "config",
       "parts": {
         "component": "Orders-SVC",
@@ -143,7 +143,7 @@
       "subject": "http:orders-svc/POST /api/v1/orders"
     },
     {
-      "why": "the four templating conventions must land on one subject — FastAPI/OpenAPI",
+      "why": "the four templating conventions must land on one subject \u2014 FastAPI/OpenAPI",
       "kind": "http",
       "parts": {
         "component": "orders-svc",
@@ -231,6 +231,24 @@
         "path": "//api//v1//orders//"
       },
       "subject": "http:orders-svc/GET /api/v1/orders"
+    },
+    {
+      "why": "a scoped npm package: the `/` is part of the dependency name and round-trips",
+      "kind": "dep",
+      "parts": {
+        "component": "web",
+        "dependency": "@babel/parser"
+      },
+      "subject": "dep:web/@babel/parser"
+    },
+    {
+      "why": "a Go module path, for the same reason",
+      "kind": "dep",
+      "parts": {
+        "component": "cli",
+        "dependency": "github.com/spf13/cobra"
+      },
+      "subject": "dep:cli/github.com/spf13/cobra"
     }
   ],
   "build_errors": [
@@ -316,11 +334,11 @@
       }
     },
     {
-      "why": "dependency containing a path separator",
+      "why": "a `/` in the *component* half is still refused: it would move the split point",
       "kind": "dep",
       "parts": {
-        "component": "orders-svc",
-        "dependency": "npm/left-pad"
+        "component": "ns/web",
+        "dependency": "react"
       }
     }
   ],

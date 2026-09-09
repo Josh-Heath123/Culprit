@@ -89,7 +89,15 @@ _FORBIDDEN_IN_PART: dict[str, tuple[str, ...]] = {
     "from_component": _ARROW_SEPARATED,
     "to_component": _ARROW_SEPARATED,
     "database": _ARROW_SEPARATED,
-    "dependency": _ARROW_SEPARATED,
+    # `/` is deliberately absent here, unlike every other name-shaped
+    # part. `_parse_dep` partitions on the *first* `/`, so
+    # `dep:web/@babel/parser` parses back as component `web`,
+    # dependency `@babel/parser` — it round-trips exactly. Forbidding
+    # `/` here silently dropped every scoped npm package and every Go
+    # module path, which is most of the dependencies in a real
+    # repository (found in Phase 28, against this repo's own frontend).
+    # The conformance fixture pins both round trips.
+    "dependency": (_ARROW, _ASPECT, " "),
     "key": ("/", _ASPECT, " "),
     "namespace": _DOT_SEPARATED,
     "table": _DOT_SEPARATED,
