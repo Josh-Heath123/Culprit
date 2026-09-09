@@ -226,14 +226,15 @@ will now crash on boot rather than start in a broken state. Compare against
 
 ## A config value cannot be stored without naming an explicit grant
 
-`configured_facts` — the table that will hold what an environment is
-actually set up to do — records the *shape* of a config key, not its
-contents. `value_shape` carries type, length class and format class (e.g.
-`{"type": "url", "scheme": "postgresql", "host_resolves": true}`), and
-`value` is NULL unless `grant_ref` names the per-key grant that permitted
-storing the literal. A database CHECK constraint
-(`ck_configured_facts_value_requires_grant`) enforces that, so a carelessly
-written extractor is rejected by Postgres rather than trusted to behave.
+`configured_facts` — the table that holds what an environment is actually
+set up to do — records the *shape* of a config key, not its contents.
+`value_shape` carries type, length class and format class (e.g.
+`{"type": "string", "length_class": "medium", "format": "dsn",
+"present": true}`), and `value` is NULL unless `grant_ref` names the
+per-key grant that permitted storing the literal. A database CHECK
+constraint (`ck_configured_facts_value_requires_grant`) enforces that, so
+a carelessly written extractor is rejected by Postgres rather than trusted
+to behave.
 
 What this costs you: **a divergence over a config key can tell you the two
 environments differ, and how the shape differs, without being able to show
@@ -244,18 +245,53 @@ Postgres the first time an extractor was written in a hurry.
 
 Three consequences worth knowing before you depend on it:
 
-- **The constraint covers `value`, not the whole table.** `value_shape` is
-  free-form JSONB, and an extractor that puts a literal secret in *there*
-  is not stopped by anything. The column that the design steers extractors
-  towards is the one that is unconstrained. Closing that — a fixed key
-  vocabulary for `value_shape` — is real outstanding work, not a
-  hypothetical; until it lands, "structurally excluded" is true of the
-  `value` column and is a convention everywhere else.
+- **~~The constraint covers `value`, not the whole table.~~ Closed in
+  Phase 28.** `value_shape` was free-form JSONB, and
+  `{"type": "url", "sample": "postgresql://u:hunter2@db/orders"}` inserted
+  happily with no grant — the column the design steers extractors
+  *towards* was the unconstrained one. It is now a closed type:
+  `culprit_model.ValueShape` has exactly four fields (`type`,
+  `length_class`, `format`, `present`), every one a closed enum or a
+  bool, so there is no field a string can be put in. A CHECK constraint
+  (`ck_configured_facts_value_shape_is_closed`) matches the key set
+  exactly — not a minimum, so an extra key alongside the four is refused
+  too. **The type is the primary guarantee and the constraint is defence
+  in depth**, because the artefact this promise is really about is a
+  capture bundle serialised to a file and attached to a bug report, which
+  never reaches Postgres at all.
+- **One deliberate exception: a `bool`.** A fact about a config key may
+  carry `true`/`false` without a grant, so an extractor can assert things
+  *about* a key that are not its value — `read_by: true`, `required:
+  true`. A bool has two inhabitants and cannot carry a credential. Every
+  other type needs a grant, numbers included: a numeric API key is a real
+  thing.
+- **The shape is coarse, and that costs you real findings.** There is no
+  `scheme` field, so a `DATABASE_URL` pointing at `postgresql://` in
+  staging and `mysql://` in production has the *same shape* and no
+  divergence is visible. Same for a hostname change, a port change, or
+  any two secrets of similar length. Shape comparison catches "set versus
+  unset", "empty versus populated", "a DSN where a bare hostname was
+  expected" and "credential-shaped where it should not be" — not
+  "pointing at the wrong thing". The field set was fixed by decision
+  (docs/HANDOFF.md §2, 2026-09-09); widening it is an architecture
+  decision, not an implementation one.
+- **`intent_facts` carries the same three constraints now.** Phase 28
+  gave it `value_shape` and `grant_ref` too, because an INTENT extractor
+  reading `.env.example` or an `os.environ.get("PORT", "8000")` default
+  genuinely has a shape to report about what a key is *supposed* to
+  hold — 32 of the 64 config facts a capture of this repository produces
+  are exactly that. Without the columns they were accepted and stored
+  with the shape discarded while the response reported them saved. That
+  matters more than the `configured_facts` version: `intent_facts` is the
+  table an unattended CI credential can actually INSERT into today.
 - **The grant mechanism itself does not exist yet.** `grant_ref` is a
-  free-text column as of this migration; nothing validates that the grant
-  it names is real, because capability grants are Phase 31's work. A
-  literal empty string satisfies the constraint. Today the column is the
-  *structural place* for that check, not the check.
+  free-text column; nothing validates that the grant it names is real,
+  because capability grants are Phase 31's work. Phase 28 closed the
+  cheapest half of that — a blank or whitespace-only `grant_ref` is now
+  refused by both the type and a second CHECK
+  (`ck_configured_facts_grant_ref_not_blank`) — but any *non-blank*
+  string still satisfies it. Today the column is the structural place for
+  that check, not the check.
 - **Downgrading past this migration loses data, one half of it loudly and
   one half silently.** `downgrade()` drops `grant_ref`, so a granted
   literal value that goes down and comes back up is indistinguishable from
@@ -441,3 +477,243 @@ notion of direction and kind would change correlation behaviour in a
 phase whose first acceptance criterion is that nothing is lost. The same
 applies to topology suggestions: an observed HTTP edge is no longer
 suggested once a connection of *any* kind already joins that pair.
+
+## "Safe to attach to a bug report" covers values, not every field
+
+The guarantee is precise and narrower than it sounds. A `Fact` cannot
+carry a config **value** without a grant, its `value_shape` is a closed
+four-field type, and its `subject` must be canonical. Those are enforced
+by the model, by the API and by three CHECK constraints.
+
+`provenance.artefact`, `provenance.locator` and `predicate` are **free
+text, stored verbatim**. An extractor that put a matched source line into
+`locator` — the natural place for "here is what I matched" — would put
+whatever that line contained into the capture, and nothing would stop it.
+The shipped extractors write a file path and a line number (`L142`,
+`$.paths./orders.post`), never content, but a third-party extractor is
+not bound by that.
+
+So: a capture bundle is safe to attach *because of what the shipped
+extractors put in it and what the model refuses*, not because every
+field is validated. If you write an extractor, put locations in
+`locator`, not excerpts. (Raised by the Phase 28 invariant audit.)
+
+## A malformed capture tells you which fact, not which subject
+
+Validation errors name the position (`facts.3`) and the rule, and
+deliberately never quote the subject, the value or the canonical form
+the subject should have had.
+
+That is because a subject is attacker-controlled text on this path and is
+exactly where a value would be hidden — `opaque:postgresql://u:pw@db/x`
+is a perfectly good way to smuggle a DSN into an error message, and an
+error quoting it would put that DSN in the 422 body and the access log.
+The audit found precisely this in the first version of the check that was
+added to prevent it.
+
+The cost is real: debugging a rejected bundle means looking at the index
+the error names rather than reading the subject out of the response.
+
+## A capture is one plane's worth of claims
+
+`POST /facts/captures` refuses a bundle whose facts are on a different
+plane than the bundle declares, or stamped with a different environment.
+
+That is not fussiness. `intent_facts` has no `plane` column and no
+`environment` column — the plane *is* the table — so an INTENT bundle
+carrying a CONFIGURED fact used to be accepted and stored with the
+environment and the grant silently discarded. A reading of production
+became a claim about what the system is supposed to do, and the
+comparator in Phase 29 would have compared production against itself and
+called the result intent. It is refused by request validation now, so no
+code path can route around it. (Found by the Phase 28 invariant audit.)
+
+The practical consequence: **one capture per plane, per environment.**
+A tool that gathers both at once must post two bundles.
+
+## A 422 does not tell you which value it refused
+
+The API's validation errors carry the field path, the message and the
+error type — never the offending value. FastAPI's default handler
+includes it, and for a capture bundle that means writing the credential
+you were refused for into this API's access log and your CI log.
+
+So a rejected bundle tells you *`facts.3` failed because a config fact
+needs a `grant_ref`*, and you look at `facts.3` yourself. That is a
+genuine loss of debugging convenience, taken deliberately: it would be
+strange to hold extractors to "never carry a config value" while the
+error path published one.
+
+## `culprit intent` extracts only what you point it at
+
+A component is extracted only if `culprit.yaml`'s `extract.components`
+gives it a `root`. A component with no entry produces **no facts at all**,
+and the report names it and says so.
+
+That is deliberate, and the first version did the opposite. Defaulting an
+undeclared component's root to the manifest directory meant every reader
+ran once per component over the same tree, so a database with no source of
+its own was credited with the API's routes, config keys and Alembic head —
+every fact in the capture existed twice, attributed to two components, one
+of them wrongly. Comparison is subject equality and nothing else, so a
+wrongly-attributed fact is a subject that will be compared against
+something it has nothing to do with. A named gap beats a confident wrong
+answer.
+
+Practically: if your report is emptier than you expected, read the
+`SKIPPED` section before concluding anything. It is not decoration. Every
+line names a component, a class of fact, and why that fact is missing.
+
+## An extractor is only as good as what it can import
+
+Runtime introspection means importing your application. Three things
+follow, and all three are visible in the report rather than silent:
+
+- **An app that reads required config at import time cannot be
+  introspected without that config.** This repository's own API raises
+  `KeyError: JWT_SECRET_KEY` on import, so `culprit intent` run bare skips
+  `http_routes` and `db_schema` with exactly that reason. `just intent`
+  sets placeholders. Those values are deliberately **not** in
+  `culprit.yaml` — a manifest names config keys and never carries values,
+  and its loader refuses anything credential-shaped, which it did when
+  placeholders were first tried there.
+- **Schema facts need your models to be reachable from the app you
+  name.** `culprit-extract-python` reads SQLAlchemy metadata out of
+  modules already imported as a side effect of importing your app. An app
+  that never imports its models yields no schema facts and says so.
+- **Importing runs your code**, at the same trust level as running your
+  test suite. `--no-import` degrades to static extraction only. See
+  `docs/EXTRACTOR_PROTOCOL.md`.
+
+## Static extraction sees literals, and skips the rest
+
+Every static reader in this phase requires a literal. A route path built
+from a variable, a config key read as `os.environ[name]`, a `fetch(url)` —
+none of them produce a fact. This is not a gap waiting for a cleverer
+parser: a subject built from a guess never matches anything and becomes a
+permanent phantom in every report, which is worse than an absence the
+report tells you about.
+
+What is and is not seen:
+
+- `os.environ["K"]`, `os.environ.get("K", default)` and `os.getenv("K")`
+  are read. A computed key is not.
+- `fetch('/x')`, `axios.get('/x')`, and a template with interpolation
+  (`fetch` of a backtick string `/users/${id}` becomes `/users/{}`) are
+  read. A bare variable is not, and an absolute URL to a third party is
+  deliberately not — that belongs to a `dep:` subject, and inventing a
+  component name for `api.stripe.com` would produce a subject nothing
+  else can match.
+- A project-local HTTP wrapper is invisible unless you name it:
+  `culprit-extract-node --client-fn request`. Almost every real codebase
+  has one and no generic tool can recognise it. Guessing — treating any
+  one-string-argument call as a request — would flood the report with
+  routes that do not exist.
+- **Test-derived route facts are a proximity heuristic.** Within one test
+  function, every asserted status code is paired with every path that
+  function calls. A test exercising two endpoints and asserting two codes
+  produces four facts, two of them wrong. They are rank 50 (§2.4), so
+  they lose to the app's own route table wherever the two overlap, and a
+  wrong pairing surfaces as a visible `intent_conflict` rather than a
+  silent wrong answer. Tracking which response came from which call is
+  dataflow analysis, which D6 rules out.
+
+## Byte-identical output needs the clock pinned
+
+`culprit intent` stamps `captured_at` on every fact and derives the
+capture id from the capture's content *and its time*. Two runs seconds
+apart therefore differ in exactly those fields — legitimately: they are
+two different captures of the same tree.
+
+Set `SOURCE_DATE_EPOCH` to pin it:
+
+    SOURCE_DATE_EPOCH=0 culprit intent --format json > a.json
+    SOURCE_DATE_EPOCH=0 culprit intent --format json > b.json
+    diff a.json b.json     # empty
+
+Everything else is deterministic by construction: map iteration is
+drained and sorted, fact order is total (subject, predicate, extractor,
+artefact, locator), and a plugin's own clock is overwritten with the
+run's.
+
+## The extraction walk is bounded, and skips vendored trees
+
+The Go readers and the Python extractor stop six directory levels below a
+component's root (the Node extractor, eight), and none of them descend
+into `node_modules`, `.venv`, `dist`, `build`, `vendor`, `.git` or the
+usual caches. A repository keeping real source deeper than that, or inside
+a directory named like a vendor tree, is not fully read — and nothing
+tells you, because once a directory is skipped "found nothing here" and
+"did not look here" are indistinguishable.
+
+The bound exists because an unbounded walk over a checked-out
+`node_modules` turns a sub-second command into a minute, and because a
+dependency's own `openapi.json` is not your system's intent.
+
+## Dependency facts merge runtime and dev dependencies
+
+A `dep:` subject has no slot for which group a dependency came from, so
+`package.json`'s `dependencies` and `devDependencies` — and the
+equivalents in `composer.json` and `Cargo.toml` — land in one namespace,
+runtime winning a name collision. `pyproject.toml` is read only for PEP
+621's `[project] dependencies`: Poetry's `[tool.poetry.dependencies]` is a
+different shape and is deliberately not half-read, because a partial
+dependency set looks exactly like a complete one.
+
+Version specifiers are kept verbatim, range syntax and all — `^4.18`, not
+`4.18`. That is the point: the difference between "any compatible 4.x" and
+"exactly 4.18" is what a comparison against a deployed version turns on.
+
+## Three implementations of subject construction now exist
+
+§2.3 anticipated two, Python and Go. There are three: `extractors/node/`
+carries its own, because it runs inside a user's npm project where neither
+a Python module nor a Go binary is available.
+
+They agree only because all three read the same two fixtures —
+`shared/tests/subject_conformance.json` and `canonical_conformance.json` —
+and each language's suite fails if its implementation drifts. Add a case
+to the fixture, never to one language's tests. A fourth implementation
+would raise this cost again and should be weighed against emitting facts
+through one of the three that exist.
+
+## `--export` cannot reproduce your `extract:` section
+
+The control plane does not store it. Extraction runs in the `culprit`
+binary against a checkout, so nothing in the database knows what your
+extractor commands are, and `just apply-model --export` cannot put them
+back.
+
+Pass your current file and the section is carried through:
+
+    just apply-model --export culprit.yaml > culprit.yaml.new
+
+Run it without one and stderr says plainly that the section is being
+dropped. It is never lost silently — that was the defect the Phase 27
+audit found in `declared_by`, and the documented
+`apply-model --export > culprit.yaml` workflow walks straight into it.
+
+## The extractor plugins are not published, and the CLI is not released
+
+`culprit-extract-python` is not on PyPI and `culprit-extract-node` is not
+on npm; both install from this repository as path dependencies. No
+`vX.Y.Z` tag has been cut, so `scripts/install.sh` has nothing to download
+— the release workflow exists and is exercised on every push, but cutting
+a release is a human pushing a tag.
+
+Until then: `just cli-build` produces the binary, and the extractors
+install with `uv add --dev --editable extractors/python` and
+`npm install --save-dev ./extractors/node`.
+
+## Three copies of the DB role-password list
+
+Adding a Postgres role means adding its password to
+`api/tests/conftest.py`, `scripts/check_migration_round_trip.py` **and**
+`mcp_server/tests/test_mcp_reader_role.py`, because every migration's
+`_require_env` must be satisfied for `alembic upgrade head` to run at all,
+and those are three separate uv projects that cannot import each other's
+fixtures. Miss one and that project's tests fail at container setup with a
+`CalledProcessError` that does not name the missing variable.
+
+Same root cause as `worker/app/db.py` hand-mirroring `api`'s ORM. Unlike
+that one, there is no drift checker for it yet.

@@ -71,3 +71,20 @@ components:
       - to: order-service
         kind: http
         criticality: on_request_path
+
+# No `extract:` section here, deliberately (Phase 28 field 10).
+#
+# These three services share one uv project and one virtualenv, and each
+# imports the sibling `shared/` package. Extraction runs per component
+# with that component's own directory as the root, so importing
+# `order_service/main.py` from inside `order_service/` fails on
+# `import shared` — the extractor reports exactly that, which is honest
+# but useless. Giving all three the same root instead would attribute
+# every service's config keys to all three: a confidently wrong fact
+# rather than a missing one, which is the worse of the two.
+#
+# The repository's own root `culprit.yaml` is where extraction is
+# dogfooded — `api/` and `frontend/` are a real Python+React pair with a
+# real layout, which is what acceptance criterion 1 is about. This file
+# stays what it has always been: the demo system's *topology*, applied
+# with `just apply-model`.

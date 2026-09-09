@@ -218,6 +218,15 @@ intent_facts = sa.Table(
     sa.Column("subject", sa.String(), nullable=False),
     sa.Column("predicate", sa.String(), nullable=False),
     sa.Column("value", JSONB(), nullable=False),
+    # Phase 28: an INTENT fact about a config key carries a shape too --
+    # `.env.example` and an `os.environ.get(...)` default are both claims
+    # about what a key is supposed to hold. Same constraints as
+    # configured_facts (migration d1f4a9c73b60).
+    # none_as_null: a Python None must be SQL NULL, not 'null'::jsonb --
+    # the CHECK constraint reads SQL NULL as "no shape recorded" and
+    # rejects JSON null. Same trap a3d81f6c4b27 unpicked on `value`.
+    sa.Column("value_shape", JSONB(none_as_null=True), nullable=True),
+    sa.Column("grant_ref", sa.String(), nullable=True),
     sa.Column("source_kind", sa.String(), nullable=False),
     sa.Column("extractor", sa.String(), nullable=False),
     sa.Column("artefact", sa.String(), nullable=True),

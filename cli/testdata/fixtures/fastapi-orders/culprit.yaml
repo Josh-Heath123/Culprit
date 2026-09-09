@@ -1,0 +1,24 @@
+# The fixture's own system model. `culprit intent` finds this by
+# searching upward from the working directory, exactly as it would in a
+# real repository.
+version: 1
+components:
+  - name: orders-api
+    kind: service
+    display_name: Orders API
+    connections:
+      - to: orders-db
+        kind: sql
+        criticality: on_request_path
+  - name: orders-db
+    kind: database
+
+# Phase 28 field 10: extractor commands and per-component source roots.
+extract:
+  extractors:
+    - name: python
+      command: ["culprit-extract-python", "--app", "orders_api.main:app"]
+  components:
+    orders-api:
+      root: .
+      extractors: [python]

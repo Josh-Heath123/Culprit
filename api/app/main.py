@@ -29,6 +29,9 @@ from app.auth.config import AUTH_SERVICE_DATABASE_URL  # noqa: E402
 from app.auth.dependencies import require_admin, require_auth  # noqa: E402
 from app.auth.router import router as auth_router  # noqa: E402
 from app.auth.users_router import router as users_router  # noqa: E402
+from app.errors import install as install_error_handlers  # noqa: E402
+from app.facts.config import FACT_WRITER_DATABASE_URL  # noqa: E402
+from app.facts.router import router as facts_router  # noqa: E402
 from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E402
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
@@ -82,6 +85,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.postmortem_session_factory = async_sessionmaker(
         postmortem_engine, expire_on_commit=False
     )
+    # Phase 28: a fifth engine, under fact-writer, for POST
+    # /facts/captures. INSERT-only on captures/intent_facts and nothing
+    # on configured_facts/readings -- a new role rather than a widened
+    # one, see app/facts/config.py. Capped like postmortem_engine above,
+    # and smaller: capture uploads are occasional CI events, not
+    # interactive traffic, so a large pool would only consume
+    # max_connections on an Always Free VM to sit idle.
+    fact_engine = create_async_engine(FACT_WRITER_DATABASE_URL, pool_size=2, max_overflow=3)
+    app.state.fact_session_factory = async_sessionmaker(fact_engine, expire_on_commit=False)
     # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
     # /postmortems to enqueue arq jobs by name — this API process never
     # runs arq jobs itself.
@@ -92,6 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await registry_engine.dispose()
     await auth_engine.dispose()
     await postmortem_engine.dispose()
+    await fact_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -116,6 +129,10 @@ app.add_exception_handler(
     RateLimitExceeded,
     _rate_limit_exceeded_handler,  # pyright: ignore[reportArgumentType]
 )
+# A 422 must not echo the request body: a rejected capture bundle
+# would otherwise write the credential it was refused for into this
+# API's access log and the caller's CI log. See app/errors.py.
+install_error_handlers(app)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -184,3 +201,10 @@ app.include_router(postmortems_router, dependencies=[Depends(require_auth)])
 # instead of require_auth and a router-level dependency can't be opted
 # out of per-route. See that module's own docstring.
 app.include_router(memory_router)
+# Phase 28 (docs/DIAGNOSTIC_PLAN.md): POST /facts/captures. No
+# router-level dependency, and for a different reason than memory_router
+# above -- this one is not authenticated by a user session at all. It
+# takes a project token (app/facts/dependencies.py), declared per-route,
+# so that adding an endpoint here later cannot inherit a credential
+# nobody chose for it.
+app.include_router(facts_router)

@@ -1,0 +1,26 @@
+version: 1
+components:
+  - name: web
+    kind: frontend
+    display_name: Storefront
+    connections:
+      - to: orders-api
+        kind: http
+        criticality: on_request_path
+  - name: orders-api
+    kind: service
+
+extract:
+  extractors:
+    - name: node
+      command: ["culprit-extract-node", "--client-fn", "apiRequest"]
+  components:
+    web:
+      root: .
+      extractors: [node]
+      # Whose routes this component's fetch() calls hit. Without it the
+      # call sites land on `http:web/...`, which is a truthful inventory
+      # line with nothing to compare against; with it they land on
+      # `http:orders-api/...`, the same subject the API's own extractor
+      # produces — which is the whole point.
+      calls_to: orders-api

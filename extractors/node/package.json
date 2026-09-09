@@ -1,0 +1,23 @@
+{
+  "name": "culprit-extract-node",
+  "version": "0.1.0",
+  "description": "Culprit intent extractor for JavaScript/TypeScript projects — Express/Fastify/Koa route definitions and HTTP client call sites, emitted as Facts on stdout (docs/EXTRACTOR_PROTOCOL.md).",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "culprit-extract-node": "./src/cli.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": ["src", "README.md"],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@babel/parser": "^7.28.0"
+  }
+}

@@ -25,6 +25,43 @@ release didn't touch the schema" — confirm by checking whether
 `api/migrations/versions/` gained new files between your current version
 and the one you're upgrading to, not by assuming.
 
+## A release that adds a Postgres role needs a new secret first
+
+Every migration that creates a role reads its password from the
+environment and **raises rather than defaulting** — so `alembic upgrade
+head` fails outright if `infra/.env.prod` does not have it. That is
+deliberate (a fail-open default here would provision a least-privilege
+role with a committed password), but it means the upgrade order above has
+a step before it whenever a release adds one:
+
+`infra/deploy.sh` only copies `docker-compose.prod.yml` and `deploy.sh`
+to the VM, so `.env.prod.example` is not there to compare against — fetch
+it from the release you are upgrading to:
+
+```bash
+cd ~/culprit
+curl -fsSL -o /tmp/env.example   https://raw.githubusercontent.com/Josh-Heath123/Culprit/vX.Y.Z/infra/.env.prod.example
+diff <(grep -oE '^[A-Z_]+=' .env.prod | sort)      <(grep -oE '^[A-Z_]+=' /tmp/env.example | sort)
+```
+
+Add any missing key with a freshly generated value before running
+migrations. If you skip it, the migration stops with
+`<NAME> must be set in the environment to run this migration` and nothing
+has changed — a safe failure, but one that halts the upgrade midway.
+
+**Phase 28 adds two:**
+
+```
+FACT_WRITER_DB_PASSWORD=<generate one>
+FACT_WRITER_DATABASE_URL=postgresql+asyncpg://fact-writer:<same password>@postgres:5432/culprit
+CULPRIT_PROJECT_TOKEN=<generate one, or leave unset>
+```
+
+`FACT_WRITER_DB_PASSWORD` is required — the migration will not run
+without it. `CULPRIT_PROJECT_TOKEN` is optional and **unset means
+`POST /facts/captures` refuses every request**, which is the correct
+default for an install that is not uploading captures.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

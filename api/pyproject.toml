@@ -31,6 +31,12 @@ package = false
 
 [tool.uv.sources]
 culprit-shared = { path = "../shared", editable = true }
+# Phase 28: a dev-only path dependency. It is deliberately NOT in
+# `[project] dependencies` — the extractor must never be part of the
+# api image (api/Dockerfile installs the default group only), because it
+# is a tool for analysing a project, not something the analysed project
+# runs.
+culprit-extract-python = { path = "../extractors/python", editable = true }
 
 [dependency-groups]
 dev = [
@@ -45,6 +51,7 @@ dev = [
     # TestClient, which needs httpx installed even though app code never
     # imports it directly.
     "httpx>=0.27",
+    "culprit-extract-python",
 ]
 
 [tool.pytest.ini_options]

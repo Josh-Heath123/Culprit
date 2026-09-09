@@ -1,0 +1,51 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@test",
+  "capture_id": "00000000-0000-5000-8000-000000000000",
+  "started_at": "2026-01-01T00:00:00Z",
+  "finished_at": "2026-01-01T00:00:00Z",
+  "facts": [],
+  "skipped": [
+    {
+      "want": "*",
+      "reason": "extractor plugins were disabled for this run (--no-plugins); artefact readers only",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "config_keys",
+      "reason": "no .env.example (or .sample/.template/.dist) found",
+      "component": "express-app",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "config_keys",
+      "reason": "no docker-compose file found",
+      "component": "express-app",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "db_schema",
+      "reason": "no alembic versions/ directory found; migration head unknown",
+      "component": "express-app",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "dependencies",
+      "reason": "no dependency manifest found (package.json, requirements.txt, pyproject.toml, go.mod, Gemfile, composer.json, Cargo.toml)",
+      "component": "express-app",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "http_routes",
+      "reason": "no OpenAPI or Swagger document found under .",
+      "component": "express-app",
+      "extractor": "culprit@test"
+    }
+  ],
+  "meta": {
+    "cli_version": "test",
+    "components": "express-app"
+  }
+}

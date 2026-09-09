@@ -36,6 +36,11 @@ jobs:
       - run: cd worker && uv run ruff check .
       - run: cd demo-services && uv run ruff check .
       - run: cd mcp_server && uv run ruff check .
+      # Phase 28: the Python extractor plugin. Linted here rather than
+      # in the `cli` job below, so scripts/check_scan_coverage.py sees
+      # one consistent ruff root list across the justfile and CI --
+      # which scripts/tests/test_scan_coverage.py asserts.
+      - run: cd extractors/python && uv run ruff check .
 
   typecheck:
     needs: lint
@@ -106,6 +111,80 @@ jobs:
           else
             echo "No migration files changed."
           fi
+
+  # Phase 28 (docs/DIAGNOSTIC_PLAN.md): the Go CLI and the two extractor
+  # plugins.
+  #
+  # Its own job rather than steps inside lint/typecheck, because it needs
+  # a different toolchain entirely (Go, and Node for the JS extractor)
+  # and a failure here should read as "the CLI is broken" rather than
+  # being buried among ruff output. It hangs off `lint` in parallel with
+  # `typecheck`: the two share no code and neither gates the other.
+  #
+  # CGO_ENABLED=0 everywhere. It is what makes the result one static
+  # binary with no libc dependency -- acceptance criterion 5, and the
+  # reason `curl | sh` can work at all. It is also why the CLI has no
+  # tree-sitter dependency: the Go binding needs cgo, which would undo
+  # exactly this.
+  cli:
+    needs: lint
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: cli/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # gofmt and go vet are the whole Go lint story here. A separate
+      # linter (golangci-lint) is a real option and is deliberately not
+      # taken yet: the Go surface is a few thousand lines, and adding a
+      # tool with its own config file before there is anything for it to
+      # find is the kind of setup that never gets tuned.
+      - name: gofmt
+        run: |
+          cd cli
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would change these files:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+      - name: go vet
+        run: cd cli && go vet ./...
+      # Includes the golden-file tests over the fixture corpus and the
+      # conformance tests against shared/tests/*.json -- the same two
+      # fixtures the Python and JavaScript implementations read, which is
+      # what keeps three implementations of subject construction from
+      # drifting.
+      - name: go test
+        run: cd cli && go test ./...
+
+      # Every released platform, built here rather than only at tag time,
+      # so a change that breaks the darwin/arm64 build is caught on the
+      # PR that makes it instead of on release day.
+      - name: Cross-compile every release target
+        run: |
+          cd cli
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            GOOS=${target%/*} GOARCH=${target#*/} go build -trimpath -o /dev/null ./cmd/culprit
+            echo "built $target"
+          done
+
+      - name: pytest (culprit-extract-python)
+        run: cd extractors/python && uv run pytest
+      - name: pyright (culprit-extract-python)
+        run: cd extractors/python && uv run pyright
+      - name: node --test (culprit-extract-node)
+        run: cd extractors/node && npm ci && npm test
 
   test:
     needs: typecheck
@@ -188,7 +267,7 @@ jobs:
         run: uv run --project api python scripts/check_migration_round_trip.py
 
   build:
-    needs: [test, migration-round-trip]
+    needs: [test, migration-round-trip, cli]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -262,6 +341,7 @@ jobs:
           REGISTRY_ADMIN_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
           AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
           POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          FACT_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'

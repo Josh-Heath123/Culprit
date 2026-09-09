@@ -54,6 +54,8 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("JWT_SECRET_KEY", "JWT signing key"),
     ("AGENT_AUTOMATION_TOKEN", "AI change-capture hook (Phase 21)"),
     ("MCP_READER_DB_PASSWORD", "mcp-reader role (Phase 24)"),
+    ("FACT_WRITER_DB_PASSWORD", "fact-writer role (Phase 28)"),
+    ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
 #: DB name/user for a fresh install. Deliberately "culprit", not
@@ -214,6 +216,23 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["MCP_READER_DATABASE_URL"] = _db_url(
         "mcp-reader", passwords["MCP_READER_DB_PASSWORD"], "postgres"
     )
+
+    # Phase 28 (docs/DIAGNOSTIC_PLAN.md): fact-writer role -- the only
+    # role that may INSERT into captures/intent_facts, used by
+    # POST /facts/captures. Required at migration time (that phase's own
+    # migration's _require_env), same reasoning as
+    # POSTMORTEM_WRITER_DB_PASSWORD above.
+    env["FACT_WRITER_DB_PASSWORD"] = passwords["FACT_WRITER_DB_PASSWORD"]
+    env["FACT_WRITER_DATABASE_URL"] = _db_url(
+        "fact-writer", passwords["FACT_WRITER_DB_PASSWORD"], "postgres"
+    )
+
+    # Phase 28: the project token `culprit` presents to POST
+    # /facts/captures. Not a DB role password (like JWT_SECRET_KEY and
+    # AGENT_AUTOMATION_TOKEN above) -- a shared bearer credential for an
+    # unattended CLI run, deliberately not a user JWT, because the caller
+    # is CI and has no session to log in with.
+    env["CULPRIT_PROJECT_TOKEN"] = passwords["CULPRIT_PROJECT_TOKEN"]
 
     env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = ""
 

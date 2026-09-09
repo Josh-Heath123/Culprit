@@ -625,6 +625,23 @@ class IntentFact(Base):
     value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSONB, nullable=False, server_default=text("'null'::jsonb")
     )
+    #: Phase 28. An INTENT extractor reading `.env.example` or an
+    #: `os.environ.get("PORT", "8000")` default has a shape to report
+    #: about what a key is *supposed* to hold, so shapes are not only an
+    #: environment-capture concern. Same closed four-field form and same
+    #: two constraints as `configured_facts` (migration d1f4a9c73b60);
+    #: without the column these facts were stored with the shape silently
+    #: dropped.
+    #: `none_as_null=True` is load-bearing, not decoration. SQLAlchemy's
+    #: JSONB renders a Python `None` as `'null'::jsonb` by default, and
+    #: `'null'::jsonb IS NULL` is false in SQL — so a fact with no shape
+    #: would be stored as JSON null and then fail
+    #: `ck_intent_facts_value_shape_is_closed`, which reads SQL NULL as
+    #: "no shape recorded". This is the same trap migration a3d81f6c4b27
+    #: had to unpick on `configured_facts.value`; one representation of
+    #: absent, not two.
+    value_shape: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    grant_ref: Mapped[str | None]
     source_kind: Mapped[str]
     extractor: Mapped[str]
     artefact: Mapped[str | None]

@@ -161,6 +161,57 @@ class ComponentSpec(BaseModel):
     connections: tuple[ConnectionSpec, ...] = ()
 
 
+class ExtractorSpec(BaseModel):
+    """One extractor plugin command (Phase 28 field 10)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    #: argv, never a shell string. A manifest is a committed file, and a
+    #: command interpreted by a shell would make `culprit.yaml` an
+    #: arbitrary-execution vector for anyone who can open a pull request.
+    command: tuple[str, ...] = ()
+    want: tuple[str, ...] = ()
+
+
+class ComponentExtractSpec(BaseModel):
+    """One component's extraction settings."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    root: str = ""
+    extractors: tuple[str, ...] = ()
+    artefacts: tuple[str, ...] = ()
+    #: The component whose routes this one's HTTP client calls hit. See
+    #: `cli/internal/extract/manifest.go` — a client-call extractor
+    #: cannot work this out on its own, and without it those facts land
+    #: under the caller and compare against nothing.
+    calls_to: str = ""
+
+
+class ExtractSpec(BaseModel):
+    """The `extract:` section.
+
+    **The control plane does not act on any of this.** Extraction runs
+    in the `culprit` binary, against a checkout, with no control plane
+    involved (Phase 28 field 3). This model exists so `apply-model`
+    accepts a manifest that carries the section, and so `--export`
+    round-trips it rather than silently deleting a user's extractor
+    configuration — which is exactly what `extra="forbid"` would have
+    done the first time somebody ran the documented
+    `apply-model --export > culprit.yaml` workflow.
+
+    It is validated all the same. A typo here is a source root that is
+    never scanned, and every fact the author expected simply absent —
+    which reads as "nothing wrong there".
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    extractors: tuple[ExtractorSpec, ...] = ()
+    components: dict[str, ComponentExtractSpec] = Field(default_factory=dict)
+
+
 class Manifest(BaseModel):
     """A whole `culprit.yaml`, validated.
 
@@ -174,6 +225,9 @@ class Manifest(BaseModel):
 
     version: int = MANIFEST_VERSION
     components: tuple[ComponentSpec, ...] = ()
+    #: Phase 28. Validated here, carried through load/dump untouched, and
+    #: never acted on by the control plane — see ExtractSpec.
+    extract: ExtractSpec | None = None
 
     @model_validator(mode="after")
     def _check_version(self) -> "Manifest":
@@ -216,6 +270,58 @@ class Manifest(BaseModel):
                 f"connection target(s) not declared in this file: {dangling}. "
                 "Declare the target as a component, even a bare `- name: x`."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _check_extract_references(self) -> "Manifest":
+        """Every name in `extract:` must be something this file declares.
+
+        Refused rather than ignored, matching the Go loader exactly. An
+        `extract.components` entry naming a component that is not in the
+        file means the author believes a root is being scanned that is
+        not; a `calls_to` pointing at nothing means client-call facts
+        stay on the caller's subject and compare against nothing. Both
+        fail silently as "fewer findings", which is the worst way for a
+        configuration mistake to present.
+        """
+        if self.extract is None:
+            return self
+        known = {component.name for component in self.components}
+
+        # The extractor list itself, checked the way the Go loader checks
+        # it. The docstring above used to claim the two matched exactly
+        # while these three rules existed only on the Go side, so
+        # `apply-model` accepted manifests `culprit intent` refuses —
+        # a file that passes the server and fails the tool is worse than
+        # one that fails both. (Found by the Phase 28 invariant audit.)
+        seen_extractors: set[str] = set()
+        for spec in self.extract.extractors:
+            if not spec.name.strip():
+                raise ValueError("extract.extractors: an entry has no name")
+            if not spec.command:
+                raise ValueError(f"extract.extractors.{spec.name}: command is empty")
+            if spec.name in seen_extractors:
+                raise ValueError(f"extract.extractors: duplicate name {spec.name}")
+            seen_extractors.add(spec.name)
+
+        extractors = seen_extractors
+        for name, spec in self.extract.components.items():
+            if name not in known:
+                raise ValueError(
+                    f"extract.components.{name}: no component named {name} is declared "
+                    "in this file"
+                )
+            unknown = sorted(set(spec.extractors) - extractors)
+            if unknown:
+                raise ValueError(
+                    f"extract.components.{name}: extractor(s) {unknown} are not declared "
+                    "in extract.extractors"
+                )
+            if spec.calls_to and spec.calls_to not in known:
+                raise ValueError(
+                    f"extract.components.{name}: calls_to names {spec.calls_to}, which is "
+                    "not a component in this file"
+                )
         return self
 
     def to_graph(self) -> SystemGraph:
@@ -314,12 +420,70 @@ def dump_manifest(manifest: Manifest) -> str:
             ]
         components.append(entry)
 
+    document: dict[str, Any] = {"version": manifest.version, "components": components}
+    # Phase 28: emitted only when present, and emitted *whole*.
+    #
+    # The alternative — dropping it, since the control plane does not act
+    # on it — is the same defect Phase 27's audit found in `declared_by`:
+    # the documented `apply-model --export > culprit.yaml` workflow would
+    # silently delete the user's extractor configuration, and the next
+    # `culprit intent` would report every source as skipped with nobody
+    # able to say why.
+    if manifest.extract is not None:
+        document["extract"] = _dump_extract(manifest.extract)
+
     return yaml.safe_dump(
-        {"version": manifest.version, "components": components},
+        document,
         sort_keys=False,
         default_flow_style=False,
         allow_unicode=True,
     )
+
+
+def _dump_extract(extract: "ExtractSpec") -> dict[str, Any]:
+    """The `extract:` section, defaults omitted, in a stable order."""
+    section: dict[str, Any] = {}
+    if extract.extractors:
+        section["extractors"] = [
+            {
+                key: value
+                for key, value in (
+                    ("name", spec.name),
+                    ("command", list(spec.command)),
+                    ("want", list(spec.want)),
+                )
+                if value
+            }
+            for spec in extract.extractors
+        ]
+    if extract.components:
+        # Sorted: a mapping has no authored order to preserve, unlike the
+        # components list, so an arbitrary one would make the export
+        # differ between runs and break the round-trip criterion.
+        # `entry or {}`, not a filter on truthiness. An all-default entry
+        # (`culprit-worker: {}`) is a deliberate statement — "this
+        # component is configured for extraction and takes the defaults"
+        # — and dropping it from the export silently changes the file's
+        # meaning, which is the same class of loss the surrounding
+        # comments were written to prevent.
+        section["components"] = {
+            name: _dump_component_extract(extract.components[name]) or {}
+            for name in sorted(extract.components)
+        }
+    return section
+
+
+def _dump_component_extract(spec: "ComponentExtractSpec") -> dict[str, Any]:
+    entry: dict[str, Any] = {}
+    if spec.root:
+        entry["root"] = spec.root
+    if spec.extractors:
+        entry["extractors"] = list(spec.extractors)
+    if spec.artefacts:
+        entry["artefacts"] = list(spec.artefacts)
+    if spec.calls_to:
+        entry["calls_to"] = spec.calls_to
+    return entry
 
 
 def _dump_connection(connection: ConnectionSpec) -> dict[str, Any]:

@@ -324,6 +324,29 @@ wheels = [
 ]
 
 [[package]]
+name = "culprit-extract-python"
+version = "0.1.0"
+source = { editable = "../extractors/python" }
+dependencies = [
+    { name = "culprit-shared" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "culprit-shared", editable = "../shared" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "django", specifier = ">=5.0" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "flask", specifier = ">=3.0" },
+    { name = "pyright", specifier = ">=1.1.383" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "ruff", specifier = ">=0.7" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+]
+
+[[package]]
 name = "culprit-shared"
 version = "0.1.0"
 source = { editable = "../shared" }
@@ -1203,6 +1226,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "culprit-extract-python" },
     { name = "httpx" },
     { name = "hypothesis" },
     { name = "pyright" },
@@ -1238,6 +1262,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "culprit-extract-python", editable = "../extractors/python" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "hypothesis", specifier = ">=6.115" },
     { name = "pyright", specifier = ">=1.1.383" },

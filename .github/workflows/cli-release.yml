@@ -1,0 +1,102 @@
+name: CLI release
+
+# Publishes `culprit` binaries when a vX.Y.Z tag is pushed.
+#
+# A separate workflow from ci-cd.yml, deliberately. That one builds and
+# pushes container images and deploys the control plane; this one
+# produces the artefacts `scripts/install.sh` downloads. They share a
+# trigger and nothing else, and folding the CLI's release into a job that
+# `needs:` the image build would make a broken Trivy scan block a binary
+# release that has nothing to do with containers.
+#
+# Nothing here deploys. A tag push never touches the VM — see
+# ci-cd.yml's own `on:` block for why.
+
+on:
+  push:
+    tags: ["v*"]
+  # Manually runnable so the release path can be exercised without
+  # cutting a tag. Uploads nothing in that mode.
+  workflow_dispatch:
+
+permissions:
+  contents: write # to create the release and attach binaries
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # One static binary, no libc dependency. Acceptance criterion 5,
+      # and the reason `curl | sh` works without a runtime.
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: cli/go.sum
+
+      # The tag is the source of truth for the version, not VERSION.
+      # Checked against each other rather than one silently winning: a
+      # binary that reports 0.1.0 from a v0.2.0 tag is untraceable, and
+      # the failure mode is a bug report nobody can place.
+      - name: Resolve and check the version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="v$(cat VERSION)"
+          fi
+          bare="${tag#v}"
+          declared="$(cat VERSION)"
+          if [ "$bare" != "$declared" ]; then
+            echo "tag $tag disagrees with VERSION ($declared)." >&2
+            echo "Update VERSION in the same commit as the tag." >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "bare=$bare" >> "$GITHUB_OUTPUT"
+
+      - name: Test before publishing anything
+        run: cd cli && go test ./...
+
+      - name: Cross-compile
+        run: |
+          cd cli
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"; arch="${target#*/}"
+            ext=""; [ "$os" = "windows" ] && ext=".exe"
+            name="culprit_${{ steps.version.outputs.bare }}_${os}_${arch}${ext}"
+            # -trimpath so the binary carries no build-machine paths, and
+            # -s -w to drop the symbol table: this is a CLI, not something
+            # anyone debugs from a core dump, and it halves the download.
+            GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.Version=${{ steps.version.outputs.bare }}" \
+              -o "dist/${name}" ./cmd/culprit
+            echo "built ${name}"
+          done
+          cd dist && sha256sum * > checksums.txt && cat checksums.txt
+
+      # Proof the artefact actually runs, before it is published rather
+      # than after somebody downloads it.
+      - name: Smoke-test the linux/amd64 binary
+        run: |
+          chmod +x "cli/dist/culprit_${{ steps.version.outputs.bare }}_linux_amd64"
+          "./cli/dist/culprit_${{ steps.version.outputs.bare }}_linux_amd64" --version
+          SOURCE_DATE_EPOCH=0 "./cli/dist/culprit_${{ steps.version.outputs.bare }}_linux_amd64" \
+            intent -f culprit.yaml --no-plugins --format json > /tmp/a.json
+          SOURCE_DATE_EPOCH=0 "./cli/dist/culprit_${{ steps.version.outputs.bare }}_linux_amd64" \
+            intent -f culprit.yaml --no-plugins --format json > /tmp/b.json
+          # Acceptance criterion 2, checked against the published
+          # artefact rather than only in a unit test.
+          diff /tmp/a.json /tmp/b.json
+
+      - name: Publish
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: cli/dist/*
+          generate_release_notes: true

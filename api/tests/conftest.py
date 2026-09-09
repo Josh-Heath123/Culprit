@@ -47,6 +47,8 @@ _IMPORT_TIME_DEFAULTS = {
     "POSTMORTEM_WRITER_DATABASE_URL": (
         "postgresql+asyncpg://postmortem-writer:test@localhost:5432/test"
     ),
+    "FACT_WRITER_DATABASE_URL": "postgresql+asyncpg://fact-writer:test@localhost:5432/test",
+    "CULPRIT_PROJECT_TOKEN": "test-project-token",
 }
 for _name, _value in _IMPORT_TIME_DEFAULTS.items():
     os.environ.setdefault(_name, _value)
@@ -69,6 +71,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AUTH_SERVICE_DB_PASSWORD": "test-auth-service-password",
     "POSTMORTEM_WRITER_DB_PASSWORD": "test-postmortem-writer-password",
     "MCP_READER_DB_PASSWORD": "test-mcp-reader-password",
+    "FACT_WRITER_DB_PASSWORD": "test-fact-writer-password",
 }
 
 

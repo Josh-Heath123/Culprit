@@ -1,0 +1,59 @@
+[project]
+name = "culprit-extract-python"
+version = "0.1.0"
+description = "Culprit intent extractor for Python projects — introspects FastAPI/Flask/Django route tables, SQLAlchemy metadata, Alembic revisions and config-key reads, and emits Facts on stdout (docs/EXTRACTOR_PROTOCOL.md)."
+readme = "README.md"
+requires-python = ">=3.12"
+# culprit-shared, and deliberately nothing else.
+#
+# docs/DIAGNOSTIC_PLAN.md Phase 28 field 11 says "stdlib plus optional
+# framework imports guarded by try/except". This one dependency is the
+# documented exception, and the reason outranks the guidance: §2.3 and
+# .claude/rules/model.md require subject URIs to be constructed in
+# exactly one place per language, and a stdlib-only extractor would have
+# to hand-format them or vendor a copy of subjects.py. Two copies of the
+# highest-risk normaliser in the system, drifting silently, is precisely
+# the failure the centralisation rule exists to prevent — a far worse
+# outcome than one pure-Python dependency.
+#
+# Every *framework* import (fastapi, flask, django, sqlalchemy, alembic)
+# is optional and guarded, exactly as field 11 requires.
+dependencies = [
+    "culprit-shared",
+]
+
+[project.scripts]
+culprit-extract-python = "culprit_extract_python.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["culprit_extract_python"]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+culprit-shared = { path = "../../shared", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.7",
+    "pyright>=1.1.383",
+    "fastapi>=0.115",
+    "flask>=3.0",
+    "sqlalchemy>=2.0",
+    # The optional framework imports, present in the dev group only.
+    # They are never runtime dependencies -- every import of them is
+    # guarded and degrades to a skip (field 11). They are installed here
+    # so pyright can resolve those branches and the tests can exercise
+    # them against real frameworks rather than assuming they work.
+    "alembic>=1.13",
+    "django>=5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

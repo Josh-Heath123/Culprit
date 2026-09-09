@@ -1,0 +1,17 @@
+# Added alongside the vendored tree, never inside it: everything else
+# under express-route-separation/ is expressjs/express's own file at tag
+# 4.21.2, unmodified.
+version: 1
+components:
+  - name: express-app
+    kind: service
+    display_name: Express route-separation example
+
+extract:
+  extractors:
+    - name: node
+      command: ["culprit-extract-node"]
+  components:
+    express-app:
+      root: .
+      extractors: [node]

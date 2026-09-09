@@ -1,0 +1,214 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@test",
+  "capture_id": "00000000-0000-5000-8000-000000000000",
+  "started_at": "2026-01-01T00:00:00Z",
+  "finished_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "config:web/VITE_API_URL",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L1",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:web/VITE_API_URL",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "path",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L1",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:web/VITE_SENTRY_DSN",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L2",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:web/VITE_SENTRY_DSN",
+      "predicate": "value_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "empty",
+        "format": "not_applicable",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L2",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/@tanstack/react-query",
+      "predicate": "version",
+      "value": "^5.51.0",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/@vitejs/plugin-react",
+      "predicate": "version",
+      "value": "^4.3.1",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/react",
+      "predicate": "version",
+      "value": "^18.3.1",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/react-dom",
+      "predicate": "version",
+      "value": "^18.3.1",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/react-router-dom",
+      "predicate": "version",
+      "value": "^6.26.0",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/typescript",
+      "predicate": "version",
+      "value": "^5.5.4",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "dep:web/vite",
+      "predicate": "version",
+      "value": "^5.4.0",
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "package.json",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    }
+  ],
+  "skipped": [
+    {
+      "want": "*",
+      "reason": "extractor plugins were disabled for this run (--no-plugins); artefact readers only",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "*",
+      "reason": "orders-api has no source root: nothing was extracted for it. Add extract.components.orders-api.root to culprit.yaml, or leave it undeclared if it has no source of its own (a managed database, a third-party service).",
+      "component": "orders-api",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "config_keys",
+      "reason": "no docker-compose file found",
+      "component": "web",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "db_schema",
+      "reason": "no alembic versions/ directory found; migration head unknown",
+      "component": "web",
+      "extractor": "culprit@test"
+    },
+    {
+      "want": "http_routes",
+      "reason": "no OpenAPI or Swagger document found under .",
+      "component": "web",
+      "extractor": "culprit@test"
+    }
+  ],
+  "meta": {
+    "cli_version": "test",
+    "components": "web,orders-api"
+  }
+}

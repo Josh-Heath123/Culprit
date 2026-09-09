@@ -5,7 +5,20 @@ piece of code in the extraction layer", so the table below is deliberately
 exhaustive about the *conventions* rather than about the routes: one row
 per way a framework can spell a parameter, plus the cases where an
 earlier version of this code was wrong.
+
+Phase 28: the table is now a **shared fixture**, `canonical_conformance.json`,
+read here and by `cli/internal/model/canonical_test.go`. §2.3 requires
+two sources describing the same thing to produce byte-identical subjects,
+and from this phase there are two *implementations* of the normaliser
+that decides that — one per language. Holding them to one table is the
+only way the requirement stays true; two tables written separately agree
+on whatever they both happened to do. `PATH_CASES` below is loaded from
+the fixture rather than restated, so a case added to one side is a case
+added to both.
 """
+
+import json
+from pathlib import Path
 
 import pytest
 from culprit_model import (
@@ -18,38 +31,13 @@ from culprit_model import (
     values_equal,
 )
 
+CONFORMANCE = json.loads(
+    (Path(__file__).parent / "canonical_conformance.json").read_text(encoding="utf-8")
+)
+
+#: (source path, canonical, which convention it came from)
 PATH_CASES = [
-    # (source path, canonical, which convention it came from)
-    ("/api/v1/orders", "/api/v1/orders", "literal"),
-    ("/", "/", "root"),
-    ("", "/", "empty"),
-    ("orders", "/orders", "missing leading slash"),
-    ("/orders/", "/orders", "trailing slash"),
-    ("//api//v1//orders//", "/api/v1/orders", "duplicate slashes"),
-    ("  /orders  ", "/orders", "surrounding whitespace"),
-    ("/orders/{id}", "/orders/{}", "OpenAPI / FastAPI"),
-    ("/orders/{order_id}", "/orders/{}", "OpenAPI, different param name"),
-    ("/files/{file_path:path}", "/files/{}", "Starlette path converter"),
-    ("/orders/:id", "/orders/{}", "Express"),
-    ("/orders/:orderId", "/orders/{}", "Express, camelCase param"),
-    (r"/orders/:id(\d+)", "/orders/{}", "Express with inline regex"),
-    ("/orders/:id?", "/orders/{}", "Express optional parameter"),
-    ("/orders/<id>", "/orders/{}", "Flask, untyped"),
-    ("/orders/<int:id>", "/orders/{}", "Flask, typed converter"),
-    ("/static/<path:subpath>", "/static/{}", "Flask path converter"),
-    ("/orders/<int:pk>/items/<int:item>", "/orders/{}/items/{}", "Django path()"),
-    (r"^orders/(?P<pk>[0-9]+)/$", "/orders/{}", "Django re_path, anchored"),
-    (
-        r"^orders/(?P<pk>\d+)/items/(?P<item>\d+)$",
-        "/orders/{}/items/{}",
-        "Django re_path, two groups",
-    ),
-    ("/files/{name}.json", "/files/{}.json", "parameter inside a literal segment"),
-    ("/v1/item-:id", "/v1/item-{}", "Express parameter inside a literal segment"),
-    ("/*", "/{}", "wildcard"),
-    ("/orders?limit=50", "/orders", "query string dropped"),
-    ("/orders#anchor", "/orders", "fragment dropped — it is the subject aspect separator"),
-    ("/orders?next=/x/y", "/orders", "query string containing a slash"),
+    (case["source"], case["canonical"], case["convention"]) for case in CONFORMANCE["path"]
 ]
 
 
@@ -98,10 +86,23 @@ def test_concrete_paths_are_not_treated_as_parameters() -> None:
     assert canonical_path("/orders/count") == "/orders/count"
 
 
-def test_canonical_method_and_names() -> None:
-    assert canonical_method(" post ") == "POST"
-    assert canonical_component(" Orders-SVC ") == "orders-svc"
-    assert canonical_identifier(" Total_Cents ") == "total_cents"
+@pytest.mark.parametrize(
+    ("group", "function"),
+    [
+        ("method", canonical_method),
+        ("component", canonical_component),
+        ("identifier", canonical_identifier),
+    ],
+)
+def test_canonical_scalars_match_the_shared_fixture(group: str, function: object) -> None:
+    """The non-path canonicalisers, from the same fixture the Go side reads.
+
+    Less risky than path templating, but they feed the same subject URIs,
+    so a Go/Python disagreement on `" post "` is just as invisible and
+    just as fatal to comparison as one on `/orders/{id}`.
+    """
+    for case in CONFORMANCE[group]:
+        assert function(case["source"]) == case["canonical"], case["convention"]  # type: ignore[operator]
 
 
 def test_canonical_component_does_not_fold_separators() -> None:

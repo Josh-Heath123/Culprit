@@ -49,7 +49,27 @@ changed="$( { git diff --name-only --diff-filter=ACM 2>/dev/null
             } | tr -d '\r' | sort -u )"
 [ -n "$changed" ] || exit 0
 
-py_files="$(printf '%s\n' "$changed" | grep '\.py$' || true)"
+# Paths whose Python is deliberately outside every repo-wide check.
+# Authoritative copy: scripts/check_scan_coverage.py's _EXCLUDED, which
+# carries the reasons; scripts/tests/test_scan_coverage.py asserts this
+# list matches it, so the two cannot drift.
+#
+# The fixture corpus is the whole of it. Two of its projects are vendored
+# verbatim from upstream at a pinned tag, and reformatting somebody else's
+# source to satisfy our import style turns a third-party fixture back into
+# one of ours — destroying the only property that makes it worth having
+# (cli/testdata/fixtures/README.md). The author-written fixtures are
+# excluded for the same reason: they are samples of what real code looks
+# like, and a lint pass would change what is being tested.
+#
+# This is the one place the hook is deliberately *less* strict than a
+# naive "lint every changed .py". The justfile's note about the hook once
+# being stricter than the gate was about the gate being too narrow; here
+# the gate is narrow on purpose and the hook follows it.
+EXCLUDED_PREFIXES='cli/testdata/fixtures/'
+
+py_files="$(printf '%s\n' "$changed" | grep '\.py$' \
+  | grep -v -F -e "$EXCLUDED_PREFIXES" || true)"
 migrations="$(printf '%s\n' "$py_files" | grep '^api/migrations/versions/' || true)"
 
 failures=""

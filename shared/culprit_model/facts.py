@@ -5,8 +5,8 @@ dataclasses for the same reason `culprit_shared/raw_event.py` is: these
 cross a process boundary (extractor subprocess -> CLI -> API -> Postgres)
 and the validation is the contract, not decoration on top of it.
 
-Two invariants are enforced here rather than left to the caller, because
-both have a silent-wrong-answer failure mode:
+Three invariants are enforced here rather than left to the caller,
+because each has a silent-wrong-answer failure mode:
 
 1. An INTENT fact may not carry an environment, and a CONFIGURED or
    OBSERVED fact must (§0.2 — INTENT is what the system is *supposed* to
@@ -15,6 +15,14 @@ both have a silent-wrong-answer failure mode:
 2. A Divergence's two sides must be about the same subject+predicate.
    A divergence between two unrelated facts is not a weaker finding, it
    is a meaningless one.
+3. **A fact about a config key cannot carry a literal value** unless it
+   names the explicit per-key grant that permitted it (§2.2, Phase 28
+   field 4). This used to live only in a Postgres CHECK constraint,
+   which left the artefact the promise is actually about — a capture
+   bundle serialised to JSON and attached to a bug report — completely
+   unguarded. It is enforced here now, so `model_dump_json()` on a
+   bundle that never touches a database is safe by construction. See
+   `shape.py` for the other half.
 """
 
 from datetime import datetime
@@ -26,6 +34,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from culprit_model.canonical import canonical_value
 from culprit_model.planes import Plane, SourceKind
+from culprit_model.shape import ValueShape
+from culprit_model.subjects import SubjectError, SubjectKind
+from culprit_model.subjects import build as build_subject
+from culprit_model.subjects import parse as parse_subject
 
 
 class Provenance(BaseModel):
@@ -51,18 +63,125 @@ class Provenance(BaseModel):
 
 
 class Fact(BaseModel):
-    """A single claim, on one plane, about one subject."""
+    """A single claim, on one plane, about one subject.
 
-    model_config = ConfigDict(frozen=True)
+    `extra="forbid"`, not for tidiness: an open model is a place a
+    literal config value can be smuggled past `_config_values_need_a_grant`
+    below by giving it a field name that validator has never heard of.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     plane: Plane
     subject: str
     predicate: str
     value: Any = None
+    #: Set instead of `value` for a config key (§2.2). A closed type, so
+    #: it has no field a literal can go in — see `shape.ValueShape`.
+    value_shape: ValueShape | None = None
+    #: Names the explicit per-key capability grant that permitted a
+    #: literal `value` on a `config:` subject. Mirrors
+    #: `configured_facts.grant_ref`; an empty string is not a grant.
+    grant_ref: str | None = None
     environment: str | None = None
     provenance: Provenance
     captured_at: datetime
     capture_id: UUID
+
+    @model_validator(mode="after")
+    def _config_values_need_a_grant(self) -> "Fact":
+        """Phase 28 acceptance criterion 3, in the one place that can
+        actually hold the line.
+
+        A `config:` subject means this fact is about a key whose value is
+        a credential far more often than not. Carrying that value is
+        allowed only when `grant_ref` names the grant that permitted it —
+        the same rule as `ck_configured_facts_value_requires_grant`, moved
+        up into the type so it also applies to a bundle that is written
+        to a file and emailed rather than inserted.
+
+        **The one exception, and why it is safe.** A `bool` is allowed
+        without a grant. Extractors need to assert things *about* a key
+        that are not its value — `read_by: true`, `required: true`,
+        `exists: true` — and a boolean has exactly two inhabitants, so it
+        cannot carry a credential, a hostname, or anything else worth
+        redacting. Every other type is refused: a string, a number, a
+        list and a mapping can all hold a secret, and a numeric API key
+        is a real thing. The line is drawn at "can this type hold
+        information about the value" rather than at "does this
+        particular value look sensitive", because the second is a
+        judgement call and this has to be a rule.
+
+        **The subject must be canonical, and that is load-bearing.** An
+        earlier version returned early when the subject did not parse, on
+        the reasoning that `subjects.build()` owns that error. It does
+        not, here: a Fact arriving over the wire has never been through
+        `build()` — the extractor protocol carries a plain string, and
+        extractors are third-party subprocesses. So a subject that merely
+        *looks* like a config subject without being one slipped past this
+        check entirely, and past the database's too, because
+        `ck_intent_facts_value_requires_grant` keys off an anchored,
+        case-sensitive LIKE on the config scheme. Both layers opened at
+        once: an upper-cased scheme, and a scheme with a leading space,
+        both stored an ungranted DATABASE_URL.
+
+        Demonstrated end to end by the Phase 28 invariant audit, against
+        a real database under the real role.
+
+        Requiring the round trip — `build(parse(s)) == s` — closes it and
+        restores §2.3's actual guarantee at the one boundary where a
+        subject enters the system without being built here. It costs
+        nothing: every subject `build()` produces round-trips by
+        construction, which is a property the conformance fixture already
+        asserts.
+        """
+        try:
+            kind, parts = parse_subject(self.subject)
+            canonical = build_subject(kind, **parts)
+        except SubjectError as exc:
+            # **The subject is not echoed, and that is not fussiness.** It
+            # is attacker-controlled text on this path, and a subject is
+            # exactly where somebody would hide a value —
+            # `opaque:postgresql://u:hunter2@db/orders` parses as an
+            # unknown scheme, and an error quoting it would put the DSN
+            # in the 422 body and the access log. pydantic's own `loc`
+            # already says which fact failed, which is what a caller
+            # needs. Caught by a test that posted precisely that.
+            raise ValueError(
+                "subject is not a valid subject URI. Build subjects with "
+                "culprit_model.subjects.build() — see docs/DIAGNOSTIC_PLAN.md §2.3."
+            ) from exc
+        if canonical != self.subject:
+            # Neither side is echoed: the canonical form is derived from
+            # the input, so printing it leaks the input.
+            raise ValueError(
+                "subject is not in canonical form. Two sources describing the same "
+                "thing must produce a byte-identical subject or nothing is ever "
+                "compared, and a subject that only looks canonical also slips past "
+                "the checks keyed on its scheme. Build it with "
+                "culprit_model.subjects.build()."
+            )
+        if kind is not SubjectKind.CONFIG:
+            if self.value_shape is not None:
+                raise ValueError(
+                    f"value_shape is only meaningful for a config: subject "
+                    f"(got {self.subject!r})"
+                )
+            return self
+        if (
+            self.value is not None
+            and not isinstance(self.value, bool)
+            and not (self.grant_ref or "").strip()
+        ):
+            raise ValueError(
+                f"a fact about config key {self.subject!r} may not carry a literal "
+                f"{type(self.value).__name__} value without a grant_ref naming the "
+                "per-key grant that permitted it — put the classification in "
+                "value_shape instead (docs/DIAGNOSTIC_PLAN.md §2.2). Only a bool "
+                "is allowed ungranted, for assertions about a key rather than its "
+                "value."
+            )
+        return self
 
     @model_validator(mode="after")
     def _environment_matches_plane(self) -> "Fact":

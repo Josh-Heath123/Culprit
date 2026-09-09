@@ -74,6 +74,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AUTH_SERVICE_DB_PASSWORD": "round-trip-auth-service",
     "POSTMORTEM_WRITER_DB_PASSWORD": "round-trip-postmortem-writer",
     "MCP_READER_DB_PASSWORD": "round-trip-mcp-reader",
+    "FACT_WRITER_DB_PASSWORD": "round-trip-fact-writer",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:
@@ -134,7 +135,20 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             "(capture_id, environment, subject, predicate, value, value_shape, grant_ref, "
             " source_kind, extractor, captured_at) "
             f"SELECT c.id, 'rt-env', '{port}', 'value', '8080'::jsonb, "
-            "       '{\"type\":\"int\"}'::jsonb, 'grant:config.read.values/PORT', "
+            # A shape in the closed four-field form Phase 28's
+            # ck_configured_facts_value_shape_is_closed requires. It used
+            # to be `{"type":"int"}` -- free-form JSONB, and not even a
+            # valid ValueType. The gate caught it the moment the
+            # constraint landed, which is the gate working: seed data
+            # that no longer describes the schema is a defect in this
+            # script, and it says so rather than blaming the migration.
+            "       '{\"type\":\"integer\",\"length_class\":\"short\","
+            "         \"format\": \"port\", \"present\": true}'::jsonb, "
+            # The space after each colon is load-bearing, not style:
+            # SQLAlchemy's text() reads `:true` as a bind parameter and
+            # substitutes it, producing `"present"$1` and a syntax error
+            # a long way from its cause.
+            "'grant:config.read.values/PORT', "
             "       'introspection', 'round-trip@0.0.0', now() FROM c",
         ),
         (
@@ -150,7 +164,8 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             "(capture_id, environment, subject, predicate, value_shape, "
             " source_kind, extractor, captured_at) "
             f"SELECT c.id, 'rt-env', '{database_url}', 'value', "
-            "       '{\"type\":\"url\"}'::jsonb, "
+            "       '{\"type\": \"string\", \"length_class\": \"medium\", "
+            "         \"format\": \"dsn\", \"present\": true}'::jsonb, "
             "       'introspection', 'round-trip@0.0.0', now() FROM c",
         ),
     )

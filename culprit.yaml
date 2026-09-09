@@ -1,0 +1,115 @@
+# Culprit, described to itself (Phase 28).
+#
+# This repository is a Python+React system — a FastAPI API, an arq
+# worker, a React/TypeScript frontend and a Postgres database — which
+# makes it the natural target for acceptance criterion 1: "`culprit
+# intent` on a Python+React repository emits facts for server routes,
+# client call sites, DB schema, migration head, config keys and
+# dependency versions."
+#
+#     just cli-build
+#     ./cli/bin/culprit intent            # or --format json
+#
+# Phase 27's field 10 said the manifest belongs "at repo root", and
+# demo-services/culprit.yaml deliberately does not live there because
+# the demo services are not what this repository *is*. Culprit is, so
+# this one does. The two describe different systems and neither is a
+# copy of the other: this file is the extraction target, that one is the
+# demo topology `just apply-model` loads into a database.
+#
+# Nothing applies this file to a database. `just apply-model
+# demo-services/culprit.yaml` is still the command that seeds the demo
+# model; applying this one would create components named after Culprit's
+# own services, which is not what anybody wants in a Culprit instance.
+version: 1
+components:
+  - name: culprit-api
+    kind: service
+    display_name: Culprit API
+    connections:
+      - to: culprit-db
+        kind: sql
+        criticality: on_request_path
+      - to: culprit-redis
+        kind: queue
+        criticality: on_request_path
+
+  - name: culprit-worker
+    kind: service
+    display_name: Culprit worker
+    connections:
+      - to: culprit-db
+        kind: sql
+        criticality: on_request_path
+      - to: culprit-redis
+        kind: queue
+        criticality: on_request_path
+
+  - name: culprit-web
+    kind: frontend
+    display_name: Culprit dashboard
+    connections:
+      - to: culprit-api
+        kind: http
+        criticality: on_request_path
+
+  - name: culprit-db
+    kind: database
+    display_name: Postgres (TimescaleDB + pgvector)
+
+  - name: culprit-redis
+    kind: queue
+    display_name: Redis Streams
+
+extract:
+  extractors:
+    - name: python
+      # Run inside api/'s own virtualenv, because introspecting a FastAPI
+      # app means importing it (D3). `--app` is explicit rather than left
+      # to discovery: discovery would find `app.main:app` here anyway,
+      # and naming it makes the run reproducible instead of dependent on
+      # which conventional layout happens to match first.
+      command: ["uv", "run", "--project", ".", "culprit-extract-python", "--app", "app.main:app"]
+      #
+      # `api/app/*/config.py` reads several variables at import time and
+      # refuses to import without them (Phase 26 removed the fail-open
+      # dev-password fallbacks deliberately), so introspecting the route
+      # table needs *a* value for each. Those values are NOT in this
+      # file: culprit.yaml names config keys and never carries values,
+      # and the loader refuses anything credential-shaped — which it did,
+      # loudly, when placeholders were first tried here.
+      #
+      # They belong in the invocation instead. `just intent` sets the
+      # same dummy values `just generate-types` and the CI schema-dump
+      # step already use. Run bare, this extractor reports
+      # `KeyError: JWT_SECRET_KEY` and skips those two wants, which is
+      # the honest answer rather than a broken one.
+    - name: node
+      # `--client-fn request` names frontend/src/lib/api.ts's wrapper.
+      # Every call in this frontend goes through it, and no generic
+      # extractor can recognise a project-local wrapper — so it is
+      # declared rather than guessed at. Without this line the frontend
+      # yields zero call sites and says so.
+      command: ["node", "../extractors/node/src/cli.js", "--client-fn", "request"]
+      want: [client_calls, dependencies]
+
+  components:
+    culprit-api:
+      root: api
+      extractors: [python]
+    culprit-web:
+      root: frontend
+      extractors: [node]
+      # Whose routes the dashboard's calls hit. Without this the call
+      # sites land on `http:culprit-web/...` and compare against nothing;
+      # with it they land on the same subjects `culprit-api`'s own
+      # extraction produces, which is what makes a "the frontend calls a
+      # route the API does not serve" finding possible at all.
+      calls_to: culprit-api
+
+    # culprit-worker, culprit-db and culprit-redis have no entry, and so
+    # are not extracted — the report names each of them and says why.
+    # That is correct for the last two (a Postgres instance and a Redis
+    # instance have no source of their own) and a real gap for the
+    # worker, which has routes-equivalent surface — arq job names — that
+    # no extractor in this phase knows how to read.
