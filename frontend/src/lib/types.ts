@@ -30,6 +30,23 @@ export type TopologyEdgeRef = components["schemas"]["TopologyEdgeRef"];
 export type KeyOut = components["schemas"]["KeyOut"];
 export type KeyCreateResponse = components["schemas"]["KeyCreateResponse"];
 
+// Phase 27: the system model. `/services*` above is a thin alias kept
+// for one release (Phase 27 field 9) and removed in Phase 30 — new UI
+// should read these, which are the only shapes that carry a component's
+// kind or a connection's kind and criticality at all.
+export type ComponentOut = components["schemas"]["ComponentOut"];
+export type ComponentsOut = components["schemas"]["ComponentsOut"];
+export type ComponentCreate = components["schemas"]["ComponentCreate"];
+export type ComponentPatch = components["schemas"]["ComponentPatch"];
+export type ConnectionOut = components["schemas"]["ConnectionOut"];
+export type ConnectionsOut = components["schemas"]["ConnectionsOut"];
+export type ConnectionCreate = components["schemas"]["ConnectionCreate"];
+export type ConnectionPatch = components["schemas"]["ConnectionPatch"];
+export type ComponentKind = ComponentOut["kind"];
+export type ConnectionKind = ConnectionOut["kind"];
+export type Criticality = ConnectionOut["criticality"];
+export type GraphOut = components["schemas"]["GraphOut"];
+
 // Phase 16: multi-user auth.
 export type UserOut = components["schemas"]["UserOut"];
 export type UsersOut = components["schemas"]["UsersOut"];

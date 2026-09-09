@@ -12,11 +12,17 @@ authenticate at all — there's no open/anonymous ingest path. Either:
 
 - **Settings → Services** in the dashboard: register a service, copy the
   API key it shows you once (it is never shown again), or
-- `POST {base}/services` with an admin session token (see
-  `api/app/registry/router.py`), or
-- a declarative YAML file applied with `just apply-services` (see
-  `api/scripts/apply_services.py` — useful if you're onboarding several
-  services at once).
+- `POST {base}/model/components` with an admin session token (see
+  `api/app/model/router.py`; the older `POST {base}/services` still works
+  and is kept for one release), or
+- a committed `culprit.yaml` applied with `just apply-model` (see
+  `api/scripts/apply_model.py`, and `demo-services/culprit.yaml` for a
+  worked example — this is the right option if you're onboarding several
+  components at once, or want the topology reviewed like code).
+
+`culprit.yaml` describes components and the typed connections between
+them. It names config keys and never their values: the loader refuses a
+file that looks like it carries a credential.
 
 Pick a `name` that matches your service's real name — see step 2 for why
 that match matters. You'll get back a key that looks like

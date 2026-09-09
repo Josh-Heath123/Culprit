@@ -14,6 +14,11 @@ twice.
 - **Both read the whole file first.** It is committed, so `git log docs/HANDOFF.md`
   is the decision history.
 
+**Committing.** Use `git commit -F <message-file>`. The
+`-m "$(cat <<'EOF' ...)"` form triggers a permission prompt on command
+substitution every single time — that is the permission system working correctly,
+not a misconfiguration, and it has blocked three phases in a row.
+
 **The one rule that makes this work:** a phase does not advance on a red gate,
 and Claude Code does not auto-start the next phase. One human keystroke per
 phase is not friction — it is the review checkpoint, and it is the only place a
@@ -26,11 +31,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) |
-| Current phase | **26 — Truth repair and the three-plane schema** |
-| Status | Complete on branch, **staged but not committed** — the commit was denied, see §5 |
-| Branch | `phase-26-truth-repair` (all 47 files staged via `git add -A`) |
-| Blocking questions | 4 open (§3) — none block Phase 26; Q1 blocks Phase 28, Q3 blocks Phase 30 |
-| Last gate run | 2026-09-09, all green (§5) |
+| Current phase | **28 — CLI, extractor protocol, intent extraction** |
+| Status | Ready to start once Phase 27 is committed and merged. |
+| Branch | `phase-27-system-model` (staged, uncommitted). `main` already has 26 and 26.1. |
+| Blocking questions | **None.** Q1–Q6 all resolved (§3). |
+| Last gate run | 2026-09-09, all green — 681 tests, both audits clean (§5) |
 
 Phase 25 (memory visualisation) is **cancelled**. Do not implement it.
 
@@ -51,6 +56,16 @@ supersedes the plan.
 | 2026-09-08 | Tier-3 business-logic correctness is out of scope permanently. | No oracle exists. Promising it fails the product's own standard on first contact. The shippable version is the unverifiable-surface report (Phase 29). |
 | 2026-09-08 | No `mutate`-effect probe and no `*.write` capability in this entire plan. | Structural boundary, not a config flag. Adding one requires its own plan document. |
 | 2026-09-08 | Historical baseline is a statistic over `OBSERVED`, never a fourth plane. | Treating "usual" as a proxy for "correct" is the exact mistake the rewrite exists to fix. |
+| 2026-09-09 | `configured_facts.value` is NULL unless `grant_ref` names an explicit per-key grant, enforced by a CHECK constraint. Facts carry `value_shape`. | Resolves Q3. A convention against storing credentials is not a control. Nearly free now (table empty), a migration over live data after Phase 30. |
+| 2026-09-09 | Phase 26 acceptance criterion 1 reworded; the 10s key cache stays. | Resolves Q4. The original wording was untrue and making it true would put a DB round trip on the ingest hot path. The defect fixed was that revocation previously worked only by accident. |
+| 2026-09-09 | The `value_shape` hole is real. Fix is a closed `ValueShape` type in `culprit_model`, landing in Phase 28, not a wider CHECK constraint. §2.2's claim narrowed immediately to what is actually true. | Resolves Q5. A DB constraint cannot protect a capture bundle that is serialised and never inserted — which is exactly the artefact the guarantee is about. Enforcement belongs in the type. |
+| 2026-09-09 | Invariant 10: a new gate is not accepted until a deliberate mutation makes it fail, targeting the mechanism believed to be load-bearing. | Phase 27's mutation of the round-trip gate stayed green — the gate was fine, the belief about *why* it worked was wrong. A passing check is not evidence until shown it can go red. |
+| 2026-09-09 | `culprit.yaml` round-trip criterion is semantic equality plus a fixed point, not byte equality. Plus a new criterion that `--export` must not silently destroy a hand-maintained file. | Resolves Q6. Byte equality from the first export tests comment preservation — a human convenience, not a model correctness property. The substitution was an honest correction, not a weakening. |
+| 2026-09-09 | Commit with `git commit -F <file>`, never `-m "$(cat <<EOF...)"`. | The heredoc form triggers a permission prompt on command substitution every time — correct behaviour, but it has now blocked three phases running. `-F` matches the allow rule cleanly. |
+| 2026-09-09 | Two new standing invariants: migrations round-trip tested against a real DB in CI (8); every check's scanned roots covered by a test (9). | Phase 26.1 shipped a downgrade defect the AST symmetry checker structurally cannot see, and two consecutive phases found violations hiding outside a check's scanned roots. Both gaps are now gates. |
+| 2026-09-09 | Go for `cli/` — one static binary, CLI and probe agent. | Resolves Q1. D2's revisit trigger stands: ~6k lines by end of Phase 29, or control-plane logic leaking in, means the boundary is wrong. |
+| 2026-09-09 | Product first; phase order unchanged. Phases 29, 30 and 32 each also produce a recorded demo and a short written account. | Resolves Q2. The usable-early ordering is also the better portfolio story; capturing it costs an hour per phase and nothing architecturally. |
+| 2026-09-09 | `CLAUDE.md` gets an explicit size budget (8 KB), tracked separately from accuracy. | It grew 32.5 KB → 37.2 KB during Phase 26. Accuracy was the stated criterion and was met; size was never a criterion, which was an ambiguity in the brief, not a failure of execution. |
 
 ---
 
@@ -58,46 +73,114 @@ supersedes the plan.
 
 Claude Code must not answer these. It surfaces them and stops.
 
-**Q1 — Is Go acceptable for the CLI and probe agent?** (Blocks Phase 28.)
-`docs/DIAGNOSTIC_PLAN.md` D2 chooses Go for a single static binary, because
-`pip install` at the first-run moment is friction where it costs most. The cost
-is two languages in one repo for a small team. Fallback if no: a Python CLI
-distributed via PyInstaller — worse distribution, no rewrite. **Decide before
-Phase 28 starts, not midway through it.**
+**Q1 — RESOLVED 2026-09-09: yes, Go.** `docs/DIAGNOSTIC_PLAN.md` D2 stands as
+written. `cli/` is a Go module producing one static binary that serves as both
+the developer CLI and the deployable probe agent. Keep it small and behind the
+versioned JSON contract in D3 — the revisit trigger in D2 still applies: if the
+Go surface passes ~6k lines by the end of Phase 29, or starts absorbing logic
+that belongs in the control plane, the boundary is wrong.
 
-**Q2 — Product or portfolio piece?** (Affects ordering from Phase 30 on.)
-As written, the phases optimise for a usable product early: Phase 29 ships
-something a stranger can run. If the priority is a portfolio artefact, Phases 31
-(probes) and 32 (fault isolation) are the impressive ones and Phase 30 could be
-deferred behind them.
+**Q2 — RESOLVED 2026-09-09: product first, portfolio deliberately.** Phase
+ordering is unchanged — 29 and 30 stay ahead of 31 and 32, because a thing a
+stranger can install and use in sixty seconds is both the better product and,
+in the end, the better story. Additional standing obligation: Phases 29, 30 and
+32 each produce a recorded demonstration against a real fault and a short
+written account of what the engine established and how. Do it at the end of the
+phase, while the detail is fresh. No architectural consequence.
 
-**Q3 — Should `configured_facts` structurally prevent storing config
-*values*?** (Raised by the Phase 26 invariant audit. Blocks Phase 30.)
-`.claude/rules/model.md` says facts carry config "names and shapes, never
-values, unless an explicit per-key grant applies… and there is a test asserting
-it." Phase 26 landed `configured_facts` with a free-form `value` JSONB: no
-`redacted` flag, no `value_shape` column, no constraint. Nothing is wrong today
-(the table is empty and no extractor exists), but the only thing that will keep
-a raw `DATABASE_URL` out of it once Phase 30 writes captures is extractor
-discipline — the schema will not object. Cheapest to decide now, while the table
-is still empty. Options: a `redacted boolean NOT NULL DEFAULT true` column; a
-separate `value_shape` column with `value` reserved for granted keys; or a
-documented convention plus the asserting test the rule already demands.
+**Q6 — RESOLVED 2026-09-09.** Rewording accepted; it was a correction, not a
+weakening. "Apply, export, diff is empty" was never the property that mattered —
+byte equality from the first export tests comment preservation, which is a
+convenience for humans editing the file, not a correctness property of the model.
+Semantic equality plus a fixed point tests exactly what the criterion is for.
+Applied to `docs/DIAGNOSTIC_PLAN.md` Phase 27, field 14, together with a new
+criterion: `--export` must not silently destroy a hand-maintained file, since
+comment loss is real even if it isn't a correctness bug. Keep the LIMITS.md
+split you wrote between unavoidable normalisation and design choice.
 
-**Q4 — Phase 26's acceptance criterion 1 is untrue as literally worded.**
-(Does not block anything; needs a wording decision.) It reads "A revoked ingest
-key is rejected on the very next request." The gateway serves an in-memory key
-map refreshed at most once per `_MIN_RELOAD_INTERVAL_S` (10s), so the literal
-next request inside that window still authenticates, and making it literally
-true means removing the cache — a per-request database round trip on the ingest
-hot path, which the design rejects for good reason. What Phase 26 actually
-fixed, and what the regression test asserts, is that revocation now takes
-effect *at all*: it used to require an unrelated unknown-key request to trigger
-the reload, which for an attacker holding a just-revoked key is never.
-Suggested rewording: *"A revoked ingest key stops authenticating within
-`_MIN_RELOAD_INTERVAL_S` (10s), on the first request after that interval
-elapses, with no intervening unknown-key request required."* Recorded rather
-than applied — Claude Code does not edit the plan's criteria.
+**Q5 — RESOLVED 2026-09-09.** You were right and the plan was wrong. The CHECK
+guards `value`, the column extractors are told not to use; `value_shape`, the
+one they are steered toward, was unconstrained. And `culprit_model.Fact` carries
+neither field, so Postgres was the only enforcement point — leaving a serialised
+capture bundle, the artefact the promise is actually about, unprotected. Fix is
+a closed `ValueShape` type in `culprit_model`, scheduled into Phase 28 (fields 4
+and 14) rather than bolted on now, because that is where Facts are first
+constructed and serialised for real. `docs/DIAGNOSTIC_PLAN.md` §2.2 has been
+narrowed to claim only what is true in the meantime. Keep the LIMITS.md wording
+you wrote — it was already the accurate one.
+
+**Q3 — RESOLVED 2026-09-09.** Yes, make it structural. `configured_facts`
+gains a `grant_ref` column and a CHECK constraint `value IS NULL OR grant_ref IS
+NOT NULL`; facts carry `value_shape` instead of `value` by default. Recorded in
+`docs/DIAGNOSTIC_PLAN.md` §2.2. See the prerequisite task in §4 — this lands
+before Phase 27 work begins, while the table is still empty.
+
+**Q4 — RESOLVED 2026-09-09.** Rewording accepted verbatim and applied to
+`docs/DIAGNOSTIC_PLAN.md` Phase 26, field 14. The code is correct; the criterion
+was wrong. Good catch — that is precisely the kind of plan defect the audit step
+exists to surface.
+
+**Q5 — Should `value_shape` have a closed key vocabulary?** (Raised by the 26.1
+invariant audit. Does not block Phase 27; wants deciding before Phase 30 writes
+real captures.)
+26.1 did exactly what its brief said and the CHECK constraint holds, but the
+guarantee is narrower than §2.2's sentence "Config values are structurally
+excluded, not conventionally" claims. The constraint protects `value` — the
+column the design tells extractors *not* to use. `value_shape`, the column it
+steers them *towards*, is free-form JSONB, and
+`{"type":"url","sample":"postgresql://u:hunter2@db/orders"}` inserts happily
+with no `grant_ref`. Verified by execution, not inferred.
+
+So the credential-in-Postgres failure mode Q3 was raised about is reduced, not
+closed. §2.2 already defines shape as type / length class / format class, so the
+vocabulary is finite and a CHECK over `jsonb_object_keys` (or a `ValueShape`
+model in `shared/culprit_model` with a negative test) would close it. Two things
+for the architecture session: whether to do that, and whether §2.2's wording
+should be narrowed in the meantime, since as written the plan overstates what
+the schema does. Related and cheaper: `grant_ref = ''` currently satisfies the
+constraint.
+
+Claude Code did not do either — both are outside 26.1's "nothing else" brief.
+`docs/LIMITS.md` and the migration docstring were narrowed to state the real
+scope rather than the claimed one.
+
+**Q6 — Should `connections` carry an authored order, and should
+acceptance criterion 2 be reworded?** (Raised by the Phase 27 phase audit.
+Does not block Phase 28.)
+
+Two related things, both about `culprit.yaml` round-tripping.
+
+*The wording.* Criterion 2 says "apply, export, diff is empty". Two of the
+three ways an export differs from a hand-written file are unsatisfiable by
+any database-backed round trip, not defects: YAML comments live in the
+parser rather than the document, and "did the author write `kind: http`
+explicitly or leave it to the default?" is not information the schema
+stores — `connections.kind` holds `http` either way. Phase 27 therefore
+checked the criterion as *semantic* equality (the exported manifest parses
+to a `Manifest` equal to the applied one) plus a fixed point (export is
+byte-identical on re-export, and re-applying reports zero writes), and
+documented the normalisation in `docs/LIMITS.md`. The phase auditor judged
+that an honest satisfaction rather than a weakening, and proposed:
+
+> `culprit.yaml` round-trips: applying a manifest, exporting, and
+> re-applying the export produces no writes; the exported manifest parses
+> to a `Manifest` equal to the applied one; and export is a fixed point
+> (exporting an exported file is byte-identical). The exporter emits a
+> canonical form, so a byte diff against a non-canonical hand-written file
+> is not expected.
+
+Worth adopting into `docs/DIAGNOSTIC_PLAN.md` so the next auditor can
+execute it without a judgement call.
+
+*The choice underneath it.* The third difference — each component's
+connections being sorted by `(to, kind)` — is **not** unavoidable.
+Component order survives because `apply_manifest` records each
+component's file position as its `sort_order`; the identical mechanism
+was available for connections and was not used, and `connections` has no
+`sort_order` column. Adding one would bring the export nearer the literal
+criterion at the cost of a column that exists only for presentation.
+Claude Code did not decide this either way; `docs/LIMITS.md` now marks
+that bullet explicitly as a design choice rather than a necessity.
 
 ---
 
@@ -108,9 +191,10 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 
 | Phase | Title | Status | Brief |
 |---|---|---|---|
-| 26 | Truth repair and the three-plane schema | complete (on branch) | Start here. Deliberately the smallest and most mechanical phase — a good shakedown for the whole toolchain. Do the `CLAUDE.md` repair *first*, before any code: every session until it lands pays for the stale version. |
-| 27 | The system model (the circuit) | not started | — |
-| 28 | CLI, extractor protocol, intent extraction | not started | Blocked on Q1. |
+| 26 | Truth repair and the three-plane schema | **complete** | Signed off 2026-09-09. All five acceptance criteria met (criterion 1 as reworded). Verification quality was the bar for every phase after this one. |
+| 26.1 | `configured_facts` value safety | **complete, pending commit** | Signed off 2026-09-09. Caught two defects in the brief itself: the CHECK as specified would have inverted its own intent against `value NOT NULL DEFAULT 'null'::jsonb`, and the guarantee was narrower than §2.2 claimed. Both corrected. |
+| 27 | The system model (the circuit) | **complete, pending commit** | Signed off 2026-09-09. Found two defects in the plan itself (field 11's networkx contradiction, criterion 2 unsatisfiable) and four real regressions in its own work, including `--export` laundering `declared_by` so a later apply could delete an accepted topology suggestion. Correlation ignoring `connections.kind` correctly deferred — now carried into Phase 32. |
+| 28 | CLI, extractor protocol, intent extraction | current | Go confirmed (Q1). Biggest phase so far and the one carrying the polyglot risk, so hold the D3 line hard: parse artefacts, ask the app to introspect itself, and only then thin per-language extraction. Two non-negotiables — the closed `ValueShape` type from the Q5 remediation, and a fixture corpus containing **at least two projects you did not write**, in stacks you do not control. That second one is the only defence against building an extractor that only works because everything in this repo is FastAPI. |
 | 29 | The divergence engine | not started | First shippable product. This is the wedge — treat its acceptance criteria as the real bar, especially "zero findings on a fixture known to be correct". |
 | 30 | Environment capture and cross-env diff | not started | — |
 | 31 | Probes | not started | — |
@@ -119,6 +203,17 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
 
+**Standing task, not a phase — `CLAUDE.md` size budget.** It is 37.2 KB
+(~9.3k tokens loaded every session) and grew during Phase 26. Phase 26's
+criterion was accuracy and that was met; size was never stated, which was an
+ambiguity in this file's brief. Target **under 8 KB**: keep what the product is
+now, the current phase and branch, the scope ceilings, the commands table, the
+CRLF warning, and a pointer to `docs/DIAGNOSTIC_PLAN.md`. Move the determinism
+and database material out — `.claude/rules/` already carries it and loads only
+when the relevant files are touched. Move the phase-by-phase history out — the
+three plan documents already hold it and load on demand via `@` imports. Do this
+as its own commit, not folded into a phase.
+
 ---
 
 ## §5. Last run
@@ -126,194 +221,201 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 Claude Code overwrites this section at the end of every `/next`.
 
 ```
-Phase:        26 — Truth repair and the three-plane schema
-Branch:       phase-26-truth-repair
+Phase:        27 — The system model (the circuit)
+Branch:       phase-27-system-model (off 8a36e62)
 Started:      2026-09-09
 Finished:     2026-09-09
 
-Gates:        (from /verify)
-  lint            PASS   (api+shared, worker, demo-services, mcp_server)
-  typecheck       PASS   (0 errors x4, api's now covers ../shared too)
-  lint-imports    PASS   (4 contracts kept, incl. the new culprit_model one)
-  schema-drift    PASS   (16 worker tables match api's ORM)
-  tests           PASS   (api 421, worker 86, mcp_server 21; 3 skipped)
-  coupled-files   PASS   (working tree and --base origin/main)
-  no-llm-imports  PASS   (new gate; 6 deterministic packages)
-  migration-sym   PASS   (2 files — see "Plan corrections" on why that number
-                          used to be 0)
+Scope note:   /next advanced ONE ledger row. Phase 28 was NOT started.
+              Correction to the previous run report: `main` was NOT two
+              branches behind. Both 26 and 26.1 were already merged
+              (1a3c989, 8a36e62); §1 said otherwise and was stale. No
+              merge was needed and none was done.
 
-Acceptance criteria (from phase-auditor, executed not inferred):
-  1. Revoked key rejected on the very next request
-       MET AS FIELD 5 SPECIFIES IT / NOT MET AS LITERALLY WORDED.
-       The auditor mutation-tested this: a throwaway subclass restoring the
-       old reload-on-miss authenticate() returns "checkout-api" for the
-       revoked key in the exact scenario where the fixed store returns None,
-       so the regression test is genuinely discriminating and the security
-       fix is real. But the literal next request inside the 10s cache window
-       still authenticates, and always will unless the cache goes. See Q4 in
-       §3 — the criterion needs rewording, not the code changing.
-  2. Every service refuses to start with an unset *_DATABASE_URL
-       MET. Verified by starting real processes, not by importing modules:
-       uvicorn (api, and ingest_gateway separately), arq (worker), and
-       python -m mcp_server each exit 1 with a message naming the missing
-       variable, once per variable, with an all-set control that starts.
-  3. `just quickstart` still produces an incident end to end
-       MET, and verified twice independently. Incident opened with
-       anomalies from the injected latency fault across
-       inventory-service/order-service/payments-service, fetched back
-       through the authenticated API. No root-cause narrative, which is the
-       documented quickstart default (VOYAGE_API_KEY is empty), not a
-       regression. This criterion failed twice before passing — see
-       "Plan corrections" below.
-  4. `alembic upgrade head` from an empty DB using only .env.example
-       MET. Fresh timescaledb container, no api/.env on disk, env sourced
-       from .env.example verbatim including every change-me-* value; 20
-       migrations applied through c07a5f31d8e4. Also verified the reverse:
-       downgrade to beab08d5f92f and back up again, both clean.
-  5. CLAUDE.md describes the repository as it actually is
-       MET, after the auditor found two false statements that survived the
-       first rewrite ("Phases 13-20, current work", and "one Postgres
-       instance, two roles" contradicting the same file's own "ten roles").
-       Both fixed. All 28 justfile recipes it names exist; every path it
-       cites exists; architecture point 18 matches reality.
+Gates:        (from /verify; every one re-run independently by phase-auditor)
+  lint             PASS   (api+shared+scripts+examples, worker, demo-services, mcp_server)
+  typecheck        PASS   (0 errors x4, plus frontend tsc --noEmit 0 errors)
+  lint-imports     PASS   (4 contracts kept)
+  schema-drift     PASS   (16 worker tables match api's ORM)
+  tests            PASS   (api 574 (+6 after the audit), worker 86, mcp_server 21; 3 skipped)
+  coupled-files    PASS   (the declared pair both changed)
+  no-llm-imports   PASS   (6 deterministic packages)
+  migration-sym    PASS   (4 files)
+  scan-coverage    PASS   (NEW — 191/191 Python files covered by both repo-wide checks)
+  migration-round-trip  PASS   (NEW — upgrade -> seed -> downgrade base -> upgrade)
 
-Definition of done (field 15):
-  All of field 14                   MET (given the Q4 rewording)
-  docs/LIMITS.md updated with the
-    Phase 23 linking heuristic      MET — plus five other new sections
-  Committed                         NOT DONE. `git commit` was denied by the
-                                    permission prompt. All 47 files are staged
-                                    (`git add -A` succeeded); the tree is
-                                    exactly what the gates above were run
-                                    against. Re-running the commit is the one
-                                    step left before review.
-  Merged to main, deployed          NOT DONE, deliberately. /next stops at the
-                                    branch; merging is the human review
-                                    checkpoint this file exists to create.
+Acceptance criteria (phase-auditor, executed not inferred):
+  1. An existing deployment upgrades with no service/dependency data loss
+       MET. api/tests/test_model_migration.py (15 tests) migrates a
+       container to a3d81f6c4b27, inserts the real legacy topology
+       (3 services, 4 edges, 3 api_keys) as raw SQL, THEN upgrades.
+       Names, display names and all four edges survive; zero orphaned
+       api_keys; grants verified against information_schema, not read
+       out of the migration.
+  2. `culprit.yaml` round-trips: apply, export, diff is empty
+       MET IN SUBSTANCE, NOT AS LITERALLY WORDED. The auditor ran the
+       real CLI: `diff` is NOT empty. Two of the three deviations are
+       unsatisfiable by any DB-backed round trip (YAML comments are not
+       in the document; "was `kind: http` written or defaulted?" is not
+       stored). The auditor's hostile 6-component manifest round-tripped
+       with exactly two deltas: `kind: http` dropped, and two same-pair
+       edges reordered. Checked instead as semantic equality + fixed
+       point + zero-write re-apply. Auditor verdict: "an honest
+       satisfaction of the criterion, not a weakening". Rewording
+       proposed as Q6.
+  3. The dashboard renders components and typed connections
+       MET. Rendered in headless Edge against a live API with a real
+       admin login. The auditor's screenshot shows a component card with
+       `-> orders-cache [cache] background`, `-> orders-db [sql] on
+       request path`, `-> stripe [dns] unclassified`, `-> stripe [http]
+       on request path`, and a kind selector reading `frontend`.
+  4. Given a symptom component, the ordered set of upstream connections
+       MET. GET /model/graph?symptom=edge-web returned, in hop order:
+       edge-web-[http]->orders-api, orders-api-[sql]->orders-db,
+       orders-api-[dns]->stripe, orders-api-[http]->stripe. Background
+       edge excluded, `unknown` included, unknown component -> 404 not
+       an empty path, unauthenticated -> 401.
 
-Field 17 (do NOT implement yet):   RESPECTED, verified by execution.
-  No cli/, no extractors/, no probes/. shared/culprit_model/ contains
-  exactly the five files field 4 names. All five new tables are empty after
-  a fresh migration AND after a full quickstart run with live telemetry,
-  anomalies and an incident. information_schema.role_table_grants for those
-  tables returns zero rows excluding the superuser — no least-privilege role
-  could write them even if code tried.
+Definition of done:
+  The four criteria above         MET
+  demo-services/ described by a
+    committed culprit.yaml        MET. demo-services/culprit.yaml
+                                  applied to a fresh DB by the auditor:
+                                  3 components + 4 connections, matching
+                                  the legacy topology exactly.
+  docs/LIMITS.md updated          MET (six new entries)
+  CLAUDE.md status current        MET
+  docs/HANDOFF.md updated         MET (§1, §3 Q6, §4, §5)
+  Committed                       NOT DONE. `git commit` was denied at
+                                  the permission prompt — the third time
+                                  in a row (26, 26.1, 27). Everything is
+                                  staged: `git diff --cached --stat main`
+                                  shows 45 files, +5630/-635, and that is
+                                  exactly the tree every gate above was
+                                  run against. Re-running the commit is
+                                  the one step left. Not retried without
+                                  approval.
+  Merged to main                  NOT DONE, deliberately — the human
+                                  review checkpoint.
+
+Field 17 ("do NOT implement yet") — RESPECTED, verified by execution:
+  no contract content (contracts table empty, ZERO grants to any role,
+  every connection's contract_id null, no /contracts route in the
+  generated OpenAPI); no probes; no fault-tree UI (grep across
+  frontend/src, api/app, shared: zero matches).
 
 Built:
-  - shared/culprit_model/ (planes, facts, subjects, canonical) inside the
-    existing culprit-shared distribution, so api and worker already have it.
-    subjects.build() is the only sanctioned subject constructor; hand-
-    formatting one anywhere else now fails scripts/tests/test_subject_
-    construction.py (verified by planting a violation — it fired).
-    shared/tests/subject_conformance.json is the shared fixture Phase 28's
-    Go implementation will be held to, written before that implementation
-    exists on purpose.
-  - Two migrations: c07a5f31d8e4 (captures, intent_facts, configured_facts,
-    readings as a 1-day-chunk hypertable with 7-day compression and 90-day
-    retention, divergences) and b41c7d9e02a5 (the two missing HNSW indexes
-    on architecture_decisions.embedding and ai_change_records.embedding).
-    Three invariants are encoded in the schema rather than left to code:
-    intent_facts has no environment column, captures has a check constraint
-    tying environment to plane, and readings requires a reason whenever the
-    verdict is inconclusive or refused.
-  - scripts/check_no_llm_imports.py + `just check-no-llm-imports` + a CI
-    step. Two tiers: nothing deterministic may import a chat client;
-    everything except mcp_server may not import an embedding client either
-    (mcp_server legitimately embeds to search memory, and its own AST test
-    proves the Voyage client is only ever .embed()-ed).
-  - Security fix: api/app/ingest_gateway/auth.py reloads before the lookup,
-    not only after a miss. A revoked key hashes to a hit, so it never
-    triggered the miss-reload that would have removed it — revocation did
-    nothing until an unrelated bad-key request happened along.
-  - Fail-open removal: the four api config modules, worker/app/main.py's
-    four DB URLs, and worker/scripts/seed_postmortems.py all lost their
-    committed <role>-dev-password fallbacks. `grep -rn "dev-password@"`
-    across the repo now returns nothing outside the test asserting it.
-  - worker/app/consumer.py quarantines unparseable entries to a `dead-letter`
-    Redis stream and acks them, instead of one bad message wedging the drain
-    forever and silently stopping every valid message behind it.
-  - worker/app/rag/job.py verifies each cited passage is a real substring of
-    the postmortem it is attributed to, drops the ones that are not, and
-    reports the count. A fabricated quotation used to be stored and rendered
-    indistinguishably from a real one.
-  - scripts/bootstrap_env.py's IMAGE_REGISTRY, api/.env.example's four
-    missing role passwords, CLAUDE.md's status and architecture sections,
-    docs/LIMITS.md.
+  - api/migrations/versions/7c2e94b1f0aa_*.py — services RENAMED to
+    components (so every FK and GRANT followed it), connections as a new
+    table keyed on (from, to, kind), empty contracts table, data
+    migration, grants carried across.
+  - shared/culprit_model/graph.py — the pure directed model: Component,
+    Connection, closed ComponentKind/ConnectionKind/Criticality/
+    DeclaredBy, reachability, and upstream_connections() for request-path
+    derivation. + shared/tests/test_graph.py (15 tests on a branching
+    topology, not the demo triangle).
+  - api/app/model/ — manifest.py (culprit.yaml schema, loader, credential
+    refusal, canonical dumper), schemas.py, service.py, router.py.
+  - api/scripts/apply_model.py (replacing apply_services.py),
+    demo-services/culprit.yaml (replacing infra/demo-services.yaml).
+  - api/app/registry/ rewritten as a thin /services alias over the model.
+  - frontend: useModel.ts, typed-connection editing and a component-kind
+    selector in SettingsServices.tsx.
+  - scripts/check_migration_round_trip.py (invariant 8) + its own CI job;
+    scripts/check_scan_coverage.py (invariant 9) + scripts/tests/
+    test_scan_coverage.py + CI step.
 
-Deliberately not built (field 17):
-  Extractors, probes, the CLI, and any code that writes the five new tables.
-  They are created empty and stay empty until Phase 27.
+Plan corrections — things the brief could not have known:
+  1. FIELD 11 IS SELF-CONTRADICTORY. It says "no new dependencies —
+     networkx is already present and is retained for directed traversal",
+     but networkx is a *worker-only* dependency, and field 4 puts
+     graph.py in shared/culprit_model/, which api installs too. Using
+     networkx there would have made it a NEW dependency of api — the one
+     thing field 11 forbids. graph.py is plain-BFS Python instead. D4
+     bounds the model at "hundreds of nodes"; the stdlib covers that
+     completely. worker/app/correlation/graph.py keeps its own networkx
+     until Phase 32 removes it.
+  2. FIELD 10's "culprit.yaml at repo root" does not fit this repo. That
+     is the right convention for a *user's* repository, where the root is
+     the system being modelled. This repository's root is Culprit itself,
+     which is not the system the three demo services make up. The file is
+     at demo-services/culprit.yaml, which keeps the actual rule ("the
+     manifest sits at the root of the thing it describes") true.
+  3. CRITERION 2's literal wording is unsatisfiable. See above and Q6.
 
-Plan corrections needed:
-  1. Acceptance criterion 1 is untrue as literally worded and cannot be made
-     true without removing the ingest key cache. Written up as Q4 in §3 with
-     a suggested rewording. Not edited here — Claude Code does not rewrite
-     the plan's criteria.
-  2. Field 5 under-specifies criterion 2. It names four api/app/*/config.py
-     modules, but the criterion says *every service*, and worker/app/main.py
-     had the same four fail-open defaults. Fixed the worker too, plus
-     seed_postmortems.py, which the invariant audit found holding the last
-     committed credential in the repository.
-  3. `docs/DIAGNOSTIC_PLAN.md` §2.5 names the Divergence fields `left` and
-     `right`. Both are reserved words in Postgres, so the columns are
-     `left_fact`/`right_fact`. The model keeps the plan's names.
+Found and fixed en route — each caught by execution, not review:
+  - MY OWN MUTATION TEST OF THE NEW ROUND-TRIP GATE PASSED WHEN IT
+    SHOULD HAVE FAILED. I removed `ON CONFLICT DO NOTHING` from the
+    downgrade expecting the gate to go red; it stayed green. The comment
+    I had written was wrong: the GROUP BY is what collapses duplicate
+    pairs, and ON CONFLICT was redundant. Removing the GROUP BY *does*
+    fail the gate, with the exact duplicate-key error. Comment corrected
+    to say what actually holds the line. Worth recording because the
+    failure mode here is a plausible-sounding comment that would have
+    survived any amount of reading.
+  - THE NEW SCAN-COVERAGE GATE IMMEDIATELY FOUND A REAL BLIND SPOT on
+    its first run: examples/instrument_python.py was linted by nothing
+    and subject-checked by nothing. Now covered by both; it needed one
+    lint fix. This is invariant 9 paying for itself within the phase that
+    introduced it.
+  - I DROPPED mcp-reader's GRANT when replacing service_dependencies
+    with connections. beab08d5f92f had granted it SELECT; my migration
+    re-granted correlation-engine, api-reader and registry-admin and
+    silently shrank mcp-reader. Caught by the mcp_server suite. Fixed,
+    and now pinned by a set-equality test over every grant on
+    components/connections/contracts, so a *gained* grant fails too —
+    the subset assertions I wrote first could only catch a lost one.
 
-Found and fixed en route, none of it in the plan (all pre-existing):
-  - `just quickstart` was broken on a clean checkout: it builds the frontend,
-    whose api-types.generated.ts is gitignored and generated by
-    `just generate-types`, which quickstart never runs. And generate-types
-    itself needed a hand-written api/.env. It now supplies its own dummy
-    values, the way CI already did.
-  - `just quickstart` builds every service EXCEPT bootstrap, so `run --rm
-    bootstrap` reused whatever image the machine already had. On this machine
-    that was a 2026-08-05 image with 13 migrations: the quickstart left the
-    database at fbf4cb16570a (Phase 16) while every other container ran
-    current code — exit 0, no error anywhere. Silent since Phase 17 on any
-    machine that had run quickstart before; invisible on a fresh one. Fixed
-    with `--build`.
-  - `scripts/check_migration_symmetry.py`'s no-argument mode diffed only
-    against `main`, so on a branch whose migrations were uncommitted it
-    checked zero files and printed a pass. It now includes the working tree,
-    the way check_coupled_files.py already did.
+From the two audits (invariant audit: CLEAN, 0 violations; phase audit:
+all criteria met). Everything below was found as a "risk worth noting"
+rather than a violation, and all of it was fixed or documented here
+rather than deferred:
+  Fixed:
+  - PATCH /services/{id} had become non-atomic — a regression I
+    introduced. patch_component commits internally, so a PATCH carrying
+    both display_name and a typo'd depends_on returned 400 with the
+    display name already written. Dependencies are resolved first now,
+    matching create_service. Regression test added.
+  - `--export` laundered declared_by, defeating the accepted-suggestion
+    guarantee. export_manifest emitted edges of every provenance;
+    _apply_connections then rewrote them to culprit_yaml, so the
+    documented `apply_model --export > culprit.yaml` workflow made
+    accepted topology suggestions manifest-owned and therefore deletable
+    by a later apply — contradicting accept_topology_suggestion's own
+    docstring. Export now omits edges the manifest does not own.
+  - The alias's data-loss guard had NO TEST. docs/LIMITS.md promised in
+    writing that a legacy depends_on PATCH cannot delete a sql edge, and
+    deleting the guard would have kept the whole suite green. Tested now.
+  - GET /model/graph returned disabled components as nodes while every
+    traversal treated them as absent. Now excluded from the graph
+    (GET /model/components still lists them, which is what Settings
+    needs).
+  - A first apply reported each new component as both created AND
+    updated, because sort_order was set in a second pass. Set at
+    creation now.
+  Documented in docs/LIMITS.md rather than changed:
+  - Correlation adjacency ignores connection kind, so declaring a `sql`
+    edge makes those two components correlate. Zero impact at upgrade
+    (every migrated row is http). Deliberately not fixed: D5 says this
+    engine is replaced in Phase 32, not adapted, and teaching it half a
+    notion of kind would change correlation behaviour in a phase whose
+    first criterion is that nothing is lost.
+  - A legacy depends_on PATCH flattens declared_by to culprit_yaml,
+    which can make a later apply delete an accepted suggestion.
 
-From the invariant audit (verdict: clean on every enforced invariant),
-fixed here:
-  - subjects.build() accepted parts containing its own separators, so
-    build("http", component="ns/orders", ...) produced a subject that parsed
-    back as a different component without raising — the exact silently-
-    mangled subject its own SubjectError docstring warns about. Now rejected,
-    with seven cases added to the shared conformance fixture so Phase 28's Go
-    implementation inherits the rule.
-  - The reload-before-lookup fix stamped _last_reload_at only on success, so
-    a Postgres outage made every request due for a reload, each paying a
-    connection timeout behind one lock — turning a database blip into total
-    ingest unavailability, which the old code was accidentally immune to.
-    Now stamped on attempt, failure logged and swallowed.
-  - Dead-lettering an entire failed batch would push real telemetry through
-    a 10k ring buffer within minutes at any real ingest rate. A wholly
-    unparseable batch now raises instead of acking — the old recoverable
-    wedge, kept deliberately for the one case where it is right. The
-    quarantine count is also carried into the job's return value so it
-    reaches the span and structured log, not just a format string.
-  - Citation verification keyed on postmortem title, which has no unique
-    constraint; a duplicate title would drop a real citation as fabricated.
-    Now checks every retrieved postmortem sharing that title.
-  - check_no_llm_imports.py walked .venv directories (no listed package had
-    one until mcp_server was added).
+Surfaced, deliberately NOT done — wants a decision, not a guess:
+  - Q6: whether connections should carry an authored order (component
+    order is preserved; edge order is not, and that asymmetry is a
+    choice, not a necessity), and whether criterion 2 should be reworded
+    in docs/DIAGNOSTIC_PLAN.md. Does not block Phase 28.
+  - The frontend has no test tooling at all — no vitest, no playwright,
+    nothing in package.json. Criterion 3 is met, but nothing in CI
+    protects it; the auditor had to install puppeteer-core to verify it.
+    Not this phase's brief.
 
-One more pre-existing gap, found by the fast_gates hook at the end:
-  `just lint` covered api/worker/demo-services/mcp_server but not
-  `scripts/`, while .claude/hooks/fast_gates.sh lints every changed Python
-  file wherever it lives. The hook was stricter than the gate, and had
-  three real pre-existing violations waiting in scripts/bootstrap_env.py
-  and scripts/check_schema_drift.py. `scripts/` now rides along on api's
-  ruff the same way `shared/` does, in both the justfile and CI.
-
-Blocked on:  The commit itself — denied at the permission prompt. Work is
-             staged and every gate is green against exactly what is staged.
+Blocked on:  The commit itself, denied at the permission prompt. Every
+             gate is green against exactly the staged tree.
 ```
-
----
 
 ## §6. Escalate to the architecture session when
 

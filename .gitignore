@@ -39,3 +39,6 @@ frontend/src/lib/api-types.generated.ts
 
 # scripts/backup.sh's default output — database dumps, never committed.
 /backups/
+
+# Claude Code personal settings — per-developer, never shared
+.claude/settings.local.json

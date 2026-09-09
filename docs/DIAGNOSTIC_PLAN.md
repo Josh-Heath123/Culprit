@@ -365,6 +365,31 @@ Provenance
   confidence_rank int   -- §2.4
 ```
 
+**Config values.** (Decided 2026-09-09; corrected 2026-09-09 after the Phase 26.1
+audit showed the first version of this paragraph overclaimed.) A `CONFIGURED`
+fact about a config key carries `value_shape` — type, length class, format class
+— and **`value` is NULL by default**. `configured_facts` carries `grant_ref` and
+a CHECK constraint `value IS NULL OR grant_ref IS NOT NULL`, so a literal value
+can exist only in a row naming the explicit per-key grant that permitted it.
+
+**What that constraint does and does not buy.** It protects `value` — the column
+extractors are told not to use. It does *not* protect `value_shape`, which is
+free-form JSONB and would accept
+`{"type":"url","sample":"postgresql://u:hunter2@db/orders"}` with no grant at
+all. Worse, `culprit_model.Fact` carries neither field, so **Postgres is
+currently the only enforcement point**, and a capture bundle serialised to JSON
+without ever being inserted — precisely the artefact §5 promises is safe to
+attach to a bug report — is unprotected.
+
+The real fix is a **closed `ValueShape` type in `culprit_model`** that
+structurally cannot hold a literal: a fixed set of fields (`type`,
+`length_class`, `format`, `present`) with constrained values, not an open
+mapping. Then serialisation is safe by construction, the database CHECK becomes
+defence in depth rather than the only line, and `value_shape` as a column can be
+narrow rather than free JSONB. **This lands in Phase 28**, where Facts are first
+constructed and serialised for real. Until it does, the guarantee is partial and
+`docs/LIMITS.md` says so.
+
 ### §2.3 Subject URIs
 
 A stable, canonical identifier for the thing being asserted about. Comparison
@@ -546,6 +571,32 @@ prior plans and extended:
 6. Every new deterministic package is added to the `lint-imports` contract in the
    same commit that creates it.
 7. Every phase adds its own limits to `docs/LIMITS.md` in the same commit.
+8. **Every migration is round-trip tested against a real database in CI** —
+   `upgrade head → downgrade base → upgrade head`. Added 2026-09-09 after Phase
+   26.1 shipped a downgrade that rewrote SQL `NULL` to `'null'::jsonb`, so
+   re-upgrading failed on its own new constraint.
+   `scripts/check_migration_symmetry.py` passed that migration both before and
+   after the fix and always will: it is a structural AST check and cannot see a
+   data-dependent defect. A structural check that cannot fail on a real class of
+   bug is not a gate for that class, and pretending otherwise is the exact error
+   this product exists to stop.
+9. **Every check declares its scanned roots, and a test asserts those roots cover
+   the repository.** Added 2026-09-09. Two separate blind spots surfaced in two
+   consecutive phases: `just lint` never covered `scripts/`, and the
+   subject-construction lint never covered `api/tests/`. Both times a real
+   violation sat unseen inside a green gate. The coverage of a check is itself a
+   thing that has to be checked.
+10. **A new gate is not accepted until a deliberate mutation has made it fail.**
+    Added 2026-09-09. Phase 27 mutation-tested the new round-trip gate by
+    removing `ON CONFLICT DO NOTHING` from a downgrade, expecting red — and it
+    stayed green. The gate was fine; the *comment explaining why it worked* was
+    wrong (the `GROUP BY` collapses the duplicates, not the `ON CONFLICT`).
+    Removing the `GROUP BY` does fail it. A passing check is not evidence until
+    you have shown the thing it is supposed to catch actually turns it red, and
+    the mutation must target the mechanism you believe is load-bearing — that is
+    how a wrong belief about your own gate gets caught. This is the same claim as
+    §2.6's rule that a probe which cannot return `inconclusive` is a probe that
+    guesses.
 
 ---
 
@@ -618,7 +669,13 @@ Django conventions. `check_no_llm_imports.py` runs in CI over
 `shared/culprit_model`.
 
 **14. Acceptance criteria.**
-- A revoked ingest key is rejected on the very next request.
+- A revoked ingest key stops authenticating within `_MIN_RELOAD_INTERVAL_S`
+  (10s), on the first request after that interval elapses, with no intervening
+  unknown-key request required. (Reworded 2026-09-09: the original wording,
+  "rejected on the very next request", was untrue given the in-memory key
+  cache, and making it literally true would mean a database round trip on the
+  ingest hot path. The defect being fixed is that revocation previously took
+  effect only by accident, when an unrelated unknown key forced a reload.)
 - Every service refuses to start with an unset `*_DATABASE_URL`.
 - `just quickstart` still produces an incident end to end.
 - `alembic upgrade head` succeeds from an empty database using only
@@ -655,6 +712,11 @@ for proposed connections rather than a parallel table. Connections gain a
 `contract_ref` pointing at intent facts.
 
 **4. Components to create.**
+- A CI job running the migration round trip of standing invariant 8 against a
+  real TimescaleDB container, plus `scripts/check_scan_coverage.py` for
+  invariant 9. Both are small, both close a gap found in Phase 26.1, and both
+  belong here rather than in a later phase because every phase after this one
+  ships migrations.
 - Migration creating `components`, `connections`, `contracts`, with a data
   migration from the existing tables.
 - `api/app/model/` — router, service, schemas for reading and editing the model.
@@ -708,8 +770,7 @@ release, then removed in Phase 30.
 **10. Configuration.** `culprit.yaml` at repo root becomes the canonical model
 source. Committed to the user's repo, reviewed like code.
 
-**11. Dependencies.** No new ones — `networkx` is already present and is retained
-for directed traversal.
+**11. Dependencies.** None. (Corrected 2026-09-09: the original text said `networkx` is retained for directed traversal. That was wrong — `networkx` is a `worker/` dependency, while `graph.py` lives in `shared/`, which `api/` also installs. Using it there would have *added* a dependency to `api`, which is what field 11 was promising not to do. Plain BFS is correct here: the model is hundreds of nodes, not millions.)
 
 **12. Security.** Model editing stays behind `require_admin`. `culprit.yaml`
 contains no secrets by construction — it names config keys, never values, and
@@ -721,7 +782,21 @@ fixture describing a system Culprit did not author.
 
 **14. Acceptance criteria.**
 - An existing deployment upgrades with no service/dependency data loss.
-- `culprit.yaml` round-trips: apply, export, diff is empty.
+- `culprit.yaml` round-trips **semantically**: apply then export produces a
+  document semantically equal to the input, and export→apply→export is
+  byte-identical from the second export onward (a fixed point). (Reworded
+  2026-09-09. The original — "diff is empty" — is not satisfiable and was never
+  the property that mattered: YAML comments do not exist in the document model,
+  and whether `kind: http` was written or defaulted is not stored. Byte equality
+  from the *first* export would test comment preservation, which is a convenience
+  for humans editing the file, not a correctness property of the model. Semantic
+  equality plus a fixed point tests exactly what the criterion is for — that
+  `culprit.yaml` is a faithful, reproducible source of truth. The normalisation
+  applied must be documented in `docs/LIMITS.md`, distinguishing what is
+  unavoidable from what is a design choice.)
+- `--export` does not silently destroy a hand-maintained file. Comments and
+  formatting are lost by export, which is acceptable only if the user is told:
+  either refuse to overwrite an existing file without `--force`, or warn.
 - The dashboard renders components and typed connections.
 - Given a symptom component, the model returns the ordered set of upstream
   connections on its request path.
@@ -756,6 +831,12 @@ with no control plane and no account.
 - `cli/` — Go module. `cmd/culprit/`, `internal/model/` (subject construction
   mirroring the Python), `internal/extract/` (orchestration + built-in artefact
   readers), `internal/render/`.
+- **`ValueShape` in `shared/culprit_model/`** — a closed type with a fixed field
+  set and constrained values, mirrored in `cli/internal/model/`. Constructing a
+  `Fact` about a config key takes a `ValueShape`, never a free mapping, so a
+  literal cannot be carried even in a bundle that never reaches Postgres. This
+  is the Phase 26.1 remediation described in §2.2; `configured_facts.value_shape`
+  narrows from free JSONB to match, in the same migration.
 - `extractors/python/` — `culprit-extract-python`, published to PyPI, installed
   as a dev-dependency in the target project.
 - `extractors/node/` — `culprit-extract-node`, published to npm.
@@ -817,6 +898,9 @@ files per fixture.
   client call sites, DB schema, migration head, config keys and dependency
   versions.
 - Running it twice on an unchanged tree produces byte-identical output.
+- A `Fact` about a config key **cannot be constructed carrying a literal value**
+  — not through the API, not by serialising a bundle that never touches the
+  database. Proved by attempting it in a test, not by inspection.
 - With no extractor installed, it still emits artefact-derived facts and reports
   precisely what it skipped and why.
 - One static binary, no runtime installed, `curl | sh` documented.
@@ -1065,6 +1149,13 @@ and produce a fault tree that separates symptom from propagation from root cause
 
 **2. Why this phase exists.** This is the product. Everything before it is
 instrumentation; this is the thing a developer actually wants.
+
+**Carried in from Phase 27.** Correlation currently ignores `connections.kind`,
+so an `http` edge and a `cache` edge are treated as equally causal. Phase 27
+recorded this rather than fixing it, correctly — its own first criterion was that
+nothing is lost, and changing correlation behaviour there would have violated it.
+The isolation walk designed here replaces that logic outright, so this is where
+edge kind starts to matter: a typed edge is the whole point of the model.
 
 **3. Architectural changes.** `Investigation` replaces `incident_candidates` as
 the central object. The undirected correlation engine is deleted (D5).

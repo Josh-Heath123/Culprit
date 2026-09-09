@@ -40,7 +40,7 @@ async def client(
     async with db_engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE services, service_dependencies, api_keys, "
+                "TRUNCATE components, connections, api_keys, "
                 "observed_service_edges CASCADE"
             )
         )
@@ -56,6 +56,7 @@ async def client(
     from app.auth.dependencies import require_admin
     from app.auth.repository import create_user
     from app.auth.security import create_access_token, hash_password
+    from app.model.router import router as model_router
     from app.registry.router import router as registry_router
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -67,6 +68,10 @@ async def client(
     app.state.session_factory = async_sessionmaker(read_engine, expire_on_commit=False)
     app.state.registry_session_factory = async_sessionmaker(write_engine, expire_on_commit=False)
     app.include_router(registry_router, dependencies=[Depends(require_admin)])
+    # Phase 27: the model router is mounted here too, so the tests that
+    # check the /services alias cannot destroy a connection it has no way
+    # to express have something to create that connection with.
+    app.include_router(model_router, dependencies=[Depends(require_admin)])
 
     # require_admin needs a real users row (require_auth's own DB-backed
     # disabled-check reads it via api-reader) -- created directly via
@@ -342,3 +347,71 @@ def test_dismiss_unknown_edge_404s(client: TestClient) -> None:
         json={"from_service": "ghost", "to_service": "phantom"},
     )
     assert response.status_code == 404
+
+
+# --- Phase 27: the alias must not destroy what it cannot see ----------
+
+
+def test_legacy_depends_on_patch_leaves_non_http_connections_alone(
+    client: TestClient,
+) -> None:
+    """`docs/LIMITS.md` promises this in writing, and nothing tested it.
+
+    `PATCH /services/{id}` rewrites a component's `http` edges from
+    `depends_on`. A `sql`, `message` or `cache` edge was never
+    expressible through this surface, so a legacy client — which cannot
+    know those edges exist — must not be able to delete one. Removing the
+    `Connection.kind == _LEGACY_KIND` predicate in
+    `app/registry/service.py` would silently destroy every non-HTTP edge
+    out of the component, and without this test the whole suite would
+    still pass.
+    """
+    checkout = _create(client, "checkout-api")["service"]
+    _create(client, "inventory-api")
+    _create(client, "orders-db")
+
+    # A sql edge, declared through the model API — invisible to /services.
+    sql_edge = client.post(
+        "/model/connections",
+        json={"from_component": "checkout-api", "to_component": "orders-db", "kind": "sql"},
+    )
+    assert sql_edge.status_code == 201, sql_edge.text
+
+    response = client.patch(
+        f"/services/{checkout['id']}", json={"depends_on": ["inventory-api"]}
+    )
+    assert response.status_code == 200, response.text
+    # The legacy surface sees only the http edge it just set...
+    assert response.json()["depends_on"] == ["inventory-api"]
+
+    # ...and the sql edge is still there.
+    edges = {
+        (c["from_component"], c["to_component"], c["kind"])
+        for c in client.get("/model/connections").json()["items"]
+    }
+    assert ("checkout-api", "orders-db", "sql") in edges
+    assert ("checkout-api", "inventory-api", "http") in edges
+
+
+def test_a_rejected_depends_on_does_not_half_apply_the_patch(
+    client: TestClient,
+) -> None:
+    """A PATCH carrying both a valid `display_name` and an unknown
+    dependency must write neither.
+
+    `patch_component` commits internally, so validating `depends_on`
+    after it runs would persist the display name and then return 400 —
+    a half-applied PATCH the pre-Phase-27 implementation could not
+    produce, because it committed exactly once at the end.
+    """
+    checkout = _create(client, "checkout-api", display_name="Checkout API")["service"]
+
+    response = client.patch(
+        f"/services/{checkout['id']}",
+        json={"display_name": "Renamed", "depends_on": ["does-not-exist"]},
+    )
+    assert response.status_code == 400
+    assert "does-not-exist" in response.json()["detail"]
+
+    after = client.get(f"/services/{checkout['id']}").json()
+    assert after["display_name"] == "Checkout API"

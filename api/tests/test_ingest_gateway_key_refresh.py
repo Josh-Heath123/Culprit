@@ -39,7 +39,7 @@ async def store(
     monkeypatch: pytest.MonkeyPatch,
 ):
     async with db_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE services, service_dependencies, api_keys CASCADE"))
+        await conn.execute(text("TRUNCATE components, connections, api_keys CASCADE"))
 
     import app.ingest_gateway.auth as auth_module
 
@@ -66,7 +66,10 @@ async def _insert_service_and_key(
     disabled_at = datetime.now(UTC) if disabled else None
     async with db_engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO services (id, name, disabled_at) VALUES (:id, :name, :disabled_at)"),
+            text(
+                "INSERT INTO components (id, name, disabled_at) "
+                "VALUES (:id, :name, :disabled_at)"
+            ),
             {"id": service_id, "name": name, "disabled_at": disabled_at},
         )
         await conn.execute(
@@ -95,7 +98,7 @@ async def _revoke(db_engine: AsyncEngine, plaintext: str) -> None:
 async def _disable_service(db_engine: AsyncEngine, name: str) -> None:
     async with db_engine.begin() as conn:
         await conn.execute(
-            text("UPDATE services SET disabled_at = now() WHERE name = :name"), {"name": name}
+            text("UPDATE components SET disabled_at = now() WHERE name = :name"), {"name": name}
         )
 
 

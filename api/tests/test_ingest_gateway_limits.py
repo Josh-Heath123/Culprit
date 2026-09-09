@@ -86,7 +86,7 @@ async def store(
     test_ingest_gateway_key_refresh.py — see that file's module
     docstring for why."""
     async with db_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE services, service_dependencies, api_keys CASCADE"))
+        await conn.execute(text("TRUNCATE components, connections, api_keys CASCADE"))
 
     import app.ingest_gateway.auth as auth_module
 
@@ -106,7 +106,7 @@ async def _insert_service_and_key(db_engine: AsyncEngine, *, name: str) -> str:
     service_id = uuid.uuid4()
     async with db_engine.begin() as conn:
         await conn.execute(
-            text("INSERT INTO services (id, name, disabled_at) VALUES (:id, :name, NULL)"),
+            text("INSERT INTO components (id, name, disabled_at) VALUES (:id, :name, NULL)"),
             {"id": service_id, "name": name},
         )
         await conn.execute(

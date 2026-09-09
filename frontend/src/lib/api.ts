@@ -4,6 +4,14 @@
 
 import { getToken, setToken } from "@/lib/auth";
 import type {
+  ComponentOut,
+  ComponentPatch,
+  ComponentsOut,
+  ConnectionCreate,
+  ConnectionOut,
+  ConnectionPatch,
+  ConnectionsOut,
+  GraphOut,
   IncidentDetail,
   KeyCreateResponse,
   LoginResponse,
@@ -191,6 +199,51 @@ export function dismissTopologySuggestion(edge: TopologyEdgeRef): Promise<void> 
     method: "POST",
     body: JSON.stringify(edge),
   });
+}
+
+// Phase 27: the system model. The /services functions above still work
+// (they are served by a thin alias router) but cannot express a
+// component's kind or a connection's kind and criticality — those exist
+// only here.
+export function fetchComponents(): Promise<ComponentsOut> {
+  return request<ComponentsOut>("/model/components");
+}
+
+export function patchComponent(id: string, body: ComponentPatch): Promise<ComponentOut> {
+  return request<ComponentOut>(`/model/components/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchConnections(): Promise<ConnectionsOut> {
+  return request<ConnectionsOut>("/model/connections");
+}
+
+export function createConnection(body: ConnectionCreate): Promise<ConnectionOut> {
+  return request<ConnectionOut>("/model/connections", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchConnection(id: string, body: ConnectionPatch): Promise<ConnectionOut> {
+  return request<ConnectionOut>(`/model/connections/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteConnection(id: string): Promise<void> {
+  return request<void>(`/model/connections/${id}`, { method: "DELETE" });
+}
+
+/** `symptom` asks for the ordered set of upstream connections on that
+ * component's request path, nearest hop first (Phase 27 acceptance
+ * criterion 4). Omit it for the plain graph. */
+export function fetchGraph(symptom?: string): Promise<GraphOut> {
+  const query = symptom ? `?symptom=${encodeURIComponent(symptom)}` : "";
+  return request<GraphOut>(`/model/graph${query}`);
 }
 
 // Phase 18: postmortem write path.

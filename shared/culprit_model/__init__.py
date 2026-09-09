@@ -37,11 +37,27 @@ from culprit_model.facts import (
     Provenance,
     Severity,
 )
+from culprit_model.graph import (
+    Component,
+    ComponentKind,
+    Connection,
+    ConnectionKind,
+    Criticality,
+    DeclaredBy,
+    SystemGraph,
+    UnknownComponent,
+)
 from culprit_model.planes import ConfidenceRank, Plane, SourceKind
 from culprit_model.subjects import SubjectKind, build, parse
 
 __all__ = [
+    "Component",
+    "ComponentKind",
     "ConfidenceRank",
+    "Connection",
+    "ConnectionKind",
+    "Criticality",
+    "DeclaredBy",
     "Divergence",
     "DivergenceKind",
     "DivergenceStatus",
@@ -51,6 +67,8 @@ __all__ = [
     "Severity",
     "SourceKind",
     "SubjectKind",
+    "SystemGraph",
+    "UnknownComponent",
     "build",
     "canonical_component",
     "canonical_identifier",

@@ -89,28 +89,37 @@ postmortems = sa.Table(
     sa.Column("embedding_error", sa.String(), nullable=True),
 )
 
-# Phase 14: worker/app/correlation/job.py queries these two for adjacency
-# (services.disabled_at, service_dependencies) — api_keys isn't mirrored
-# here since nothing in worker ever queries it, per this file's own
-# "only enough shape to SELECT/INSERT/UPDATE" principle above.
-services = sa.Table(
-    "services",
+# Phase 14, retyped in Phase 27: worker/app/correlation/job.py queries
+# these two for adjacency (components.disabled_at, connections) —
+# api_keys isn't mirrored here since nothing in worker ever queries it,
+# per this file's own "only enough shape to SELECT/INSERT/UPDATE"
+# principle above. `services`/`service_dependencies` were renamed and
+# retyped by 7c2e94b1f0aa; correlation reads `connections` now.
+components = sa.Table(
+    "components",
     metadata,
     sa.Column("id", UUID(as_uuid=True), primary_key=True),
     sa.Column("name", sa.String(), nullable=False),
     sa.Column("display_name", sa.String(), nullable=True),
     sa.Column("sort_order", sa.Integer(), nullable=False),
     sa.Column("monitored_metrics", JSONB(), nullable=False),
+    sa.Column("kind", sa.String(), nullable=False),
     sa.Column("disabled_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
-service_dependencies = sa.Table(
-    "service_dependencies",
+# `criticality` is mirrored even though correlation does not filter on it
+# yet: Phase 29 computes divergence severity from it, and a column the
+# worker can see is one scripts/check_schema_drift.py keeps honest.
+connections = sa.Table(
+    "connections",
     metadata,
-    sa.Column("from_service_id", UUID(as_uuid=True), primary_key=True),
-    sa.Column("to_service_id", UUID(as_uuid=True), primary_key=True),
-    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("from_component_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("to_component_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("kind", sa.String(), nullable=False),
+    sa.Column("criticality", sa.String(), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 # Phase 19: app/consumer.py's drain_edges upserts into this. Only the
@@ -228,7 +237,13 @@ configured_facts = sa.Table(
     sa.Column("environment", sa.String(), nullable=False),
     sa.Column("subject", sa.String(), nullable=False),
     sa.Column("predicate", sa.String(), nullable=False),
-    sa.Column("value", JSONB(), nullable=False),
+    # Nullable, and NULL unless `grant_ref` names the grant that
+    # permitted a literal value — ck_configured_facts_value_requires_grant
+    # (migration a3d81f6c4b27) enforces that in the database. A config
+    # key's content belongs in `value_shape` by default (§2.2).
+    sa.Column("value", JSONB(), nullable=True),
+    sa.Column("value_shape", JSONB(), nullable=True),
+    sa.Column("grant_ref", sa.String(), nullable=True),
     sa.Column("source_kind", sa.String(), nullable=False),
     sa.Column("extractor", sa.String(), nullable=False),
     sa.Column("artefact", sa.String(), nullable=True),

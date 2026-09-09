@@ -1,5 +1,10 @@
-"""Demo fixture topology for the three toy services (Phase 2) — no
-longer the product's source of truth for service topology.
+"""The demo services' API-key environment variables. Nothing else.
+
+Phase 27 removed this module's last piece of topology fixture data
+(DEMO_SERVICE_ADJACENCY, and the DEMO_SERVICES tuple beside it): the demo
+system is described by demo-services/culprit.yaml now, applied with
+`just apply-model`, so a second hardcoded copy of the same three-service
+graph in Python had nothing left to be right about.
 
 Phase 14 replaced that role with a real `services` table
 (api/app/db/models.py's Service/ServiceDependency, managed through
@@ -24,23 +29,11 @@ list is gone entirely (Phase 14): the frontend now fetches services from
 GET /services (see frontend/src/hooks/useServices.ts).
 """
 
-#: order-service calls both inventory-service and payments-service
-#: directly; inventory-service and payments-service have no direct
-#: relationship to each other (only via order-service). Fixture data
-#: only — real adjacency for registered services lives in the
-#: service_dependencies table now.
-DEMO_SERVICE_ADJACENCY: dict[str, frozenset[str]] = {
-    "order-service": frozenset({"inventory-service", "payments-service"}),
-    "inventory-service": frozenset({"order-service"}),
-    "payments-service": frozenset({"order-service"}),
-}
-
-DEMO_SERVICES: tuple[str, ...] = ("order-service", "inventory-service", "payments-service")
-
 #: Which environment variable holds each demo service's ingest-gateway
-#: API key. The one constant in this module still actually imported by
-#: application code (demo-services/shared/otel.py) — everything else
-#: here is fixture data kept for tests/local docs, not a live dependency.
+#: API key — the only constant left here, and the reason this module
+#: still exists: demo-services/shared/otel.py imports it. A culprit.yaml
+#: names components, never secrets (Phase 27 field 12), so this mapping
+#: has nowhere to move to.
 DEMO_SERVICE_API_KEY_ENV_VARS: dict[str, str] = {
     "order-service": "ORDER_SERVICE_API_KEY",
     "inventory-service": "INVENTORY_SERVICE_API_KEY",

@@ -33,7 +33,7 @@ migrate: up
 # Python file wherever it lives, so the hook was stricter than the gate
 # and caught pre-existing violations this recipe had never looked at.
 lint:
-    (cd api && uv run ruff check . ../shared ../scripts)
+    (cd api && uv run ruff check . ../shared ../scripts ../examples)
     (cd worker && uv run ruff check .)
     (cd demo-services && uv run ruff check .)
     (cd mcp_server && uv run ruff check .)
@@ -64,6 +64,20 @@ check-no-llm-imports:
 check-invariants:
     uv run --project api python scripts/check_coupled_files.py
     uv run --project api python scripts/check_migration_symmetry.py
+
+# Fail if a repo-wide check's declared roots don't actually cover the
+# repository (Phase 27, standing invariant 9). Cheap and offline -- the
+# roots are read from the checks themselves, nothing is executed.
+check-scan-coverage:
+    uv run --project api python scripts/check_scan_coverage.py
+
+# Fail if the migration chain can't round-trip against a real database
+# (Phase 27, standing invariant 8): upgrade head -> seed rows ->
+# downgrade base -> upgrade head. NOT part of `check-invariants` above:
+# it needs Docker and takes ~40s, where everything there is instant and
+# offline. Its own CI job for the same reason.
+check-migration-round-trip:
+    uv run --project api python scripts/check_migration_round_trip.py
 
 # Type-check all projects. `../shared` rides along on api's pyright for
 # the same reason it rides along on api's ruff (see `lint` above).
@@ -113,11 +127,13 @@ mcp-server:
 seed-postmortems:
     cd worker && uv run python -m scripts.seed_postmortems
 
-# Apply a declarative service list (Phase 14) — e.g.:
-#   just apply-services demo-services.yaml
-#   just apply-services demo-services.yaml --prune
-apply-services *ARGS:
-    cd api && uv run python -m scripts.apply_services {{ARGS}}
+# Apply a declarative system model from a culprit.yaml (Phase 27,
+# replacing Phase 14's `just apply-services`) — e.g.:
+#   just apply-model demo-services/culprit.yaml
+#   just apply-model demo-services/culprit.yaml --prune
+#   just apply-model --export > culprit.yaml
+apply-model *ARGS:
+    cd api && uv run python -m scripts.apply_model {{ARGS}}
 
 # Create a user (Phase 16) — the only way to create the *first* admin;
 # prompts for the password. e.g.: just create-user operator --role admin

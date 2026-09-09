@@ -72,6 +72,22 @@ _MIGRATION_ROLE_PASSWORDS = {
 }
 
 
+#: Exposed as fixtures because a test module cannot safely
+#: `from tests.conftest import ...`: `just test` runs api's pytest over
+#: both api/tests and scripts/tests, and both directories have a
+#: conftest, so that import resolves to whichever `tests` package landed
+#: on sys.path first. Fixtures go through pytest's own conftest
+#: resolution, which is directory-scoped and unambiguous.
+@pytest.fixture(scope="session")
+def alembic_ini() -> str:
+    return _ALEMBIC_INI
+
+
+@pytest.fixture(scope="session")
+def migration_role_passwords() -> dict[str, str]:
+    return dict(_MIGRATION_ROLE_PASSWORDS)
+
+
 @pytest.fixture(scope="session")
 def postgres_container() -> Iterator[PostgresContainer]:
     # Same image infra/docker-compose.yml uses locally (timescaledb-ha

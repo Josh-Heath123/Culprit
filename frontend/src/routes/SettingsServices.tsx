@@ -12,8 +12,66 @@ import {
   useDismissTopologySuggestion,
   useTopologySuggestions,
 } from "@/hooks/useTopologySuggestions";
-import { createKey, createService, patchService, revokeKey } from "@/lib/api";
-import type { ServiceOut, TopologySuggestionOut } from "@/lib/types";
+import { connectionsBySource, useComponents, useConnections } from "@/hooks/useModel";
+import {
+  createConnection,
+  createKey,
+  createService,
+  deleteConnection,
+  patchComponent,
+  patchConnection,
+  patchService,
+  revokeKey,
+} from "@/lib/api";
+import type {
+  ComponentKind,
+  ComponentOut,
+  ConnectionKind,
+  ConnectionOut,
+  Criticality,
+  ServiceOut,
+  TopologySuggestionOut,
+} from "@/lib/types";
+
+/** Phase 27's closed sets, mirrored from culprit_model.graph. Closed on
+ * purpose: `kind` selects a probe in Phase 31 and `criticality` feeds
+ * divergence severity in Phase 29, so a free-text field here would push
+ * both decisions onto whoever typed the row. The API rejects anything
+ * off these lists (422), and the migration's CHECK constraints reject it
+ * again at the database. */
+const COMPONENT_KINDS: ComponentKind[] = [
+  "service",
+  "frontend",
+  "database",
+  "queue",
+  "external_api",
+  "job",
+  "cache",
+  "object_store",
+];
+
+const CONNECTION_KINDS: ConnectionKind[] = [
+  "http",
+  "grpc",
+  "sql",
+  "message",
+  "cache",
+  "dns",
+  "auth",
+];
+
+/** `unknown` is a real value, not a placeholder — see
+ * culprit_model.graph.Criticality. It is shown as "unclassified" rather
+ * than hidden, because an unclassified edge still counts as on the
+ * request path and an operator should be able to see which ones nobody
+ * has decided about yet. */
+const CRITICALITIES: Criticality[] = ["on_request_path", "background", "unknown"];
+
+const CRITICALITY_LABEL: Record<Criticality, string> = {
+  on_request_path: "on request path",
+  background: "background",
+  unknown: "unclassified",
+};
 
 const SERVICE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/;
 
@@ -195,13 +253,202 @@ function AddServiceForm({ existing }: { existing: ServiceOut[] }) {
   );
 }
 
-function ServiceRow({ service }: { service: ServiceOut }) {
+/** The typed edges out of one component (Phase 27 field 5: "connection
+ * types visible"). The pre-Phase-27 page rendered this as a flat
+ * `calls: a, b` line, which could not say whether the call was HTTP or
+ * SQL, or whether it was on the request path — the two things the
+ * diagnostic engine reasons about. */
+function ConnectionsPanel({
+  component,
+  connections,
+  components,
+}: {
+  component: ComponentOut;
+  connections: ConnectionOut[];
+  components: ComponentOut[];
+}) {
+  const queryClient = useQueryClient();
+  const [target, setTarget] = useState("");
+  const [kind, setKind] = useState<ConnectionKind>("http");
+  const [criticality, setCriticality] = useState<Criticality>("unknown");
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["model"] });
+    // The /services alias derives `depends_on` from http connections, so
+    // anything that changes an edge changes that view too.
+    queryClient.invalidateQueries({ queryKey: ["services"] });
+  }
+
+  const add = useMutation({
+    mutationFn: () =>
+      createConnection({
+        from_component: component.name,
+        to_component: target,
+        kind,
+        criticality,
+      }),
+    onSuccess: () => {
+      invalidate();
+      setTarget("");
+    },
+  });
+
+  const reclassify = useMutation({
+    mutationFn: ({ id, next }: { id: string; next: Criticality }) =>
+      patchConnection(id, { criticality: next }),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteConnection(id),
+    onSuccess: invalidate,
+  });
+
+  const candidates = components.filter((c) => c.name !== component.name);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border/60 p-3">
+      <span className="text-xs font-medium text-muted-foreground">Connections</span>
+
+      {connections.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          None declared. Nothing downstream of this component is on a request path yet.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {connections.map((connection) => (
+            <div key={connection.id} className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">&rarr;</span>
+                <span className="font-mono text-foreground">{connection.to_component}</span>
+                <Badge variant="secondary">{connection.kind}</Badge>
+                <Badge
+                  variant={connection.criticality === "on_request_path" ? "default" : "outline"}
+                >
+                  {CRITICALITY_LABEL[connection.criticality]}
+                </Badge>
+                {connection.declared_by !== "culprit_yaml" ? (
+                  <span className="text-muted-foreground">
+                    {connection.declared_by === "accepted_suggestion" ? "accepted" : "inferred"}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1">
+                <select
+                  aria-label={`Criticality of ${component.name} to ${connection.to_component}`}
+                  className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs"
+                  value={connection.criticality}
+                  onChange={(event) =>
+                    reclassify.mutate({
+                      id: connection.id,
+                      next: event.target.value as Criticality,
+                    })
+                  }
+                >
+                  {CRITICALITIES.map((value) => (
+                    <option key={value} value={value}>
+                      {CRITICALITY_LABEL[value]}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => remove.mutate(connection.id)}
+                  disabled={remove.isPending}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {candidates.length > 0 ? (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (target) add.mutate();
+          }}
+        >
+          <select
+            aria-label={`Add a connection from ${component.name}`}
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+          >
+            <option value="">to…</option>
+            {candidates.map((candidate) => (
+              <option key={candidate.id} value={candidate.name}>
+                {candidate.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Connection kind"
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+            value={kind}
+            onChange={(event) => setKind(event.target.value as ConnectionKind)}
+          >
+            {CONNECTION_KINDS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Connection criticality"
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+            value={criticality}
+            onChange={(event) => setCriticality(event.target.value as Criticality)}
+          >
+            {CRITICALITIES.map((value) => (
+              <option key={value} value={value}>
+                {CRITICALITY_LABEL[value]}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" variant="secondary" size="sm" disabled={!target || add.isPending}>
+            {add.isPending ? "Adding…" : "Add connection"}
+          </Button>
+        </form>
+      ) : null}
+
+      {add.isError ? (
+        <p className="font-mono text-xs text-destructive">
+          {add.error instanceof Error ? add.error.message : "Couldn't add that connection."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ServiceRow({
+  service,
+  component,
+  connections,
+  components,
+}: {
+  service: ServiceOut;
+  component: ComponentOut | undefined;
+  connections: ConnectionOut[];
+  components: ComponentOut[];
+}) {
   const queryClient = useQueryClient();
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["services"] });
+    queryClient.invalidateQueries({ queryKey: ["model"] });
   }
+
+  const setKind = useMutation({
+    mutationFn: (next: ComponentKind) =>
+      patchComponent(service.id, { kind: next }),
+    onSuccess: invalidate,
+  });
 
   const toggleDisabled = useMutation({
     mutationFn: () => patchService(service.id, { disabled: !service.disabled }),
@@ -231,18 +478,41 @@ function ServiceRow({ service }: { service: ServiceOut }) {
           ) : null}
           {service.disabled ? <Badge variant="outline">disabled</Badge> : null}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => toggleDisabled.mutate()}
-          disabled={toggleDisabled.isPending}
-        >
-          {service.disabled ? "Enable" : "Disable"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Phase 27: a component is a service, a database, a queue...
+              and which one decides how it can be probed later. Editable
+              here because the alternative is that everything migrated
+              from the old registry stays labelled `service` forever. */}
+          <select
+            aria-label={`Kind of ${service.name}`}
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+            value={component?.kind ?? "service"}
+            onChange={(event) => setKind.mutate(event.target.value as ComponentKind)}
+            disabled={setKind.isPending}
+          >
+            {COMPONENT_KINDS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toggleDisabled.mutate()}
+            disabled={toggleDisabled.isPending}
+          >
+            {service.disabled ? "Enable" : "Disable"}
+          </Button>
+        </div>
       </div>
 
-      {service.depends_on.length > 0 ? (
-        <p className="text-xs text-muted-foreground">calls: {service.depends_on.join(", ")}</p>
+      {component ? (
+        <ConnectionsPanel
+          component={component}
+          connections={connections}
+          components={components}
+        />
       ) : null}
       <p className="text-xs text-muted-foreground">
         monitored metrics:{" "}
@@ -362,6 +632,15 @@ function TopologySuggestions() {
 
 export function SettingsServices() {
   const { services, isPending, isError } = useServices();
+  // Phase 27: the page still lists via /services (keys and the create
+  // form live there), but a component's kind and its typed connections
+  // exist only on /model — so both are read, and every mutation
+  // invalidates both query keys.
+  const { components } = useComponents();
+  const { connections } = useConnections();
+
+  const componentByName = new Map(components.map((component) => [component.name, component]));
+  const outgoing = connectionsBySource(connections);
 
   return (
     <div className="flex h-screen flex-col">
@@ -381,7 +660,13 @@ export function SettingsServices() {
 
         <div className="flex flex-col gap-3">
           {services.map((service) => (
-            <ServiceRow key={service.id} service={service} />
+            <ServiceRow
+              key={service.id}
+              service={service}
+              component={componentByName.get(service.name)}
+              connections={outgoing.get(service.name) ?? []}
+              components={components}
+            />
           ))}
         </div>
 

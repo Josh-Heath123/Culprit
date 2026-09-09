@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.anomaly.scorer import ANOMALY_THRESHOLD, MetricScorer, is_anomalous
 from app.anomaly.state import load_scorer, load_watermark, save_progress
-from app.db import raw_events, services
+from app.db import components, raw_events
 from app.observability import instrument_job
 
 logger = logging.getLogger("anomaly")
@@ -41,7 +41,8 @@ _INSERT_ANOMALY_SQL = text(
 )
 
 #: How long a loaded monitored_metrics map stays cached in-process before
-#: re-querying `services`. Phase 14: a real third-party service can export
+#: re-querying `components` (`services` until Phase 27 renamed it).
+#: Phase 14: a real third-party service can export
 #: hundreds of metrics, and without this allowlist every single one gets
 #: its own persistent EWMA scorer in Redis forever. Same reasoning as
 #: worker/app/correlation/job.py's adjacency cache -- a service's
@@ -62,7 +63,9 @@ async def _load_monitored_metrics(engine: AsyncEngine) -> dict[str, list[str]]:
         return _monitored_metrics_cache
 
     async with engine.connect() as conn:
-        rows = (await conn.execute(select(services.c.name, services.c.monitored_metrics))).all()
+        rows = (
+            await conn.execute(select(components.c.name, components.c.monitored_metrics))
+        ).all()
 
     _monitored_metrics_cache = {row.name: row.monitored_metrics for row in rows}
     _monitored_metrics_cached_at = now

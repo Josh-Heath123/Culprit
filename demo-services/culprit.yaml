@@ -1,0 +1,73 @@
+# The demo system, described declaratively (Phase 27, field 15).
+#
+# This replaces infra/demo-services.yaml, and it replaces
+# shared/culprit_shared/services.py's DEMO_SERVICE_ADJACENCY, which was
+# the last hardcoded copy of this topology in Python (Phase 27, field 6).
+# Applied by docker-compose.quickstart.yml's one-shot `bootstrap` service
+# via `apply_model.py`, and by `just apply-model demo-services/culprit.yaml`
+# locally.
+#
+# It lives here, next to the services it describes, rather than at the
+# repository root. Phase 27's field 10 says "culprit.yaml at repo root
+# becomes the canonical model source" — that is the convention for a
+# *user's* repository, where the root is the system being modelled. This
+# repository's root is Culprit itself, which is not the system these
+# three toy services make up. Putting it here keeps "the manifest sits at
+# the root of the thing it describes" true, which is the rule the
+# convention is actually for.
+#
+# Two things are deliberately different from the pre-Phase-27
+# demo-services.yaml, and both are the point of the phase:
+#
+#   * `kind` is now stated. order-service, inventory-service and
+#     payments-service are all services; if the demo ever grows a
+#     database or a queue, that becomes expressible here rather than
+#     being flattened into "another service".
+#   * `criticality` is stated as on_request_path, which the old schema
+#     could not record at all. Every edge here really is on the path a
+#     POST /orders takes — see demo-services/order_service/main.py, which
+#     calls both dependencies synchronously while handling the request.
+#     That is what lets `GET /model/graph?symptom=order-service` return a
+#     request path rather than a shrug.
+#
+# monitored_metrics is left empty on all three: "[] means score every
+# metric seen" (Phase 14) is already right for the demo services' small,
+# known metric set.
+#
+# The edges reproduce exactly the four-edge adjacency that
+# api/migrations/versions/635870479f4e_create_service_registry.py
+# backfills on a live database — order-service is connected to both
+# inventory-service and payments-service, and each of those back to
+# order-service. Stored per direction because a connection is directed;
+# see docs/SELF_HOSTED_PLAN.md Phase 14's schema section.
+version: 1
+components:
+  - name: order-service
+    kind: service
+    display_name: Order Service
+    monitored_metrics: []
+    connections:
+      - to: inventory-service
+        kind: http
+        criticality: on_request_path
+      - to: payments-service
+        kind: http
+        criticality: on_request_path
+
+  - name: inventory-service
+    kind: service
+    display_name: Inventory Service
+    monitored_metrics: []
+    connections:
+      - to: order-service
+        kind: http
+        criticality: on_request_path
+
+  - name: payments-service
+    kind: service
+    display_name: Payments Service
+    monitored_metrics: []
+    connections:
+      - to: order-service
+        kind: http
+        criticality: on_request_path

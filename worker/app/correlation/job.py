@@ -33,10 +33,10 @@ from app.correlation.graph import (
 )
 from app.db import (
     anomalies,
+    components,
+    connections,
     incident_anomalies,
     incident_candidates,
-    service_dependencies,
-    services,
 )
 from app.observability import instrument_job
 
@@ -50,11 +50,11 @@ logger = logging.getLogger("correlation")
 LOOKBACK = CORRELATION_WINDOW * 2
 
 #: How long a loaded adjacency stays cached in-process before this job
-#: queries services/service_dependencies again. Phase 14: adjacency now
-#: lives in the DB, not a hardcoded import, but re-querying it every
-#: 5-second tick for data that changes maybe once a day is wasted work.
-#: A service added mid-minute correlates one tick late until this
-#: expires — acceptable; the alternative (query every tick) is not
+#: queries components/connections again. Phase 14 moved adjacency into
+#: the DB; Phase 27 retyped the tables it comes from. Re-querying it
+#: every 5-second tick for data that changes maybe once a day is wasted
+#: work. A component added mid-minute correlates one tick late until
+#: this expires — acceptable; the alternative (query every tick) is not
 #: meaningfully more correct, just more load.
 _ADJACENCY_CACHE_TTL_S = 60.0
 _adjacency_cache: dict[str, frozenset[str]] | None = None
@@ -68,16 +68,24 @@ async def _load_adjacency(engine: AsyncEngine) -> dict[str, frozenset[str]]:
         return _adjacency_cache
 
     async with engine.connect() as conn:
-        name_rows = (await conn.execute(select(services.c.id, services.c.name))).all()
-        dep_rows = (
+        name_rows = (await conn.execute(select(components.c.id, components.c.name))).all()
+        edge_rows = (
             await conn.execute(
-                select(service_dependencies.c.from_service_id, service_dependencies.c.to_service_id)
+                select(connections.c.from_component_id, connections.c.to_component_id)
             )
         ).all()
 
     id_to_name = {row.id: row.name for row in name_rows}
+    # Every connection kind collapses into one undirected-ish adjacency
+    # map here, because that is all this job's nx.Graph can consume
+    # (worker/app/correlation/graph.py). Phase 27 gives connections a
+    # kind and a criticality; nothing in *this* engine reads either,
+    # deliberately — D5 says this engine is replaced in Phase 32, not
+    # adapted, and half-teaching it about direction now would produce a
+    # correlation behaviour change nobody asked for in a phase whose
+    # first acceptance criterion is that nothing is lost.
     adjacency: dict[str, set[str]] = defaultdict(set)
-    for from_id, to_id in dep_rows:
+    for from_id, to_id in edge_rows:
         from_name = id_to_name.get(from_id)
         to_name = id_to_name.get(to_id)
         if from_name is not None and to_name is not None:
