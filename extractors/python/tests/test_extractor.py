@@ -146,7 +146,7 @@ def test_a_default_becomes_a_shape_never_a_value() -> None:
         fact
         for fact in response["facts"]
         if fact["subject"] == build("config", component="orders-api", key="REQUEST_TIMEOUT")
-        and fact["predicate"] == "value_shape"
+        and fact["predicate"] == "default_shape"
     ]
     assert shapes, "a default was not classified into a shape"
     shape = shapes[0]["value_shape"]

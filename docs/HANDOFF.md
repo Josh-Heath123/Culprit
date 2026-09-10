@@ -31,11 +31,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) |
-| Current phase | **29 — The divergence engine** (not started) |
-| Status | Phase 28 complete on its branch and **staged but uncommitted** — `git commit` denied at the permission prompt for the fourth phase running (§5). One command away; gates all green against the staged tree. |
-| Branch | `phase-28-cli-extractors`. `main` has 26, 26.1 and 27 (`4f6e437`). |
-| Blocking questions | **None.** Q1–Q6 resolved; Q7–Q8 raised by Phase 28 and neither blocks 29 (§3). |
-| Last gate run | 2026-09-09, all green — 802 tests across five suites and three languages (§5) |
+| Current phase | **30 — Environment capture and cross-environment diff** (not started) |
+| Status | Phase 29 complete on its branch. Publication deliberately not done — see §4's own condition and §5. |
+| Branch | `phase-29-divergence-engine` — **staged, not committed**: `git commit` was denied by the permission system four times, exactly as it was for Phase 28. The full message is at `scratchpad/commit-msg.txt`; 102 files are staged and every gate is green. HEAD is still `a4e7c60` (Phase 28). `main` has 26, 26.1, 27. |
+| Blocking questions | **None.** Q1–Q8 all resolved (§3), but **Q1's revisit trigger has fired** — the Go surface is 6,060 non-test lines against its ~6k threshold. That is a question for the architecture session, not a blocker for Phase 30. |
+| Last gate run | 2026-09-09, all green. Fifteen defects found and fixed — eight by execution, seven by the two audits, which failed criterion 6 on the first pass and were right to (§5) |
 
 Phase 25 (memory visualisation) is **cancelled**. Do not implement it.
 
@@ -57,8 +57,17 @@ supersedes the plan.
 | 2026-09-08 | No `mutate`-effect probe and no `*.write` capability in this entire plan. | Structural boundary, not a config flag. Adding one requires its own plan document. |
 | 2026-09-08 | Historical baseline is a statistic over `OBSERVED`, never a fourth plane. | Treating "usual" as a proxy for "correct" is the exact mistake the rewrite exists to fix. |
 | 2026-09-09 | `configured_facts.value` is NULL unless `grant_ref` names an explicit per-key grant, enforced by a CHECK constraint. Facts carry `value_shape`. | Resolves Q3. A convention against storing credentials is not a control. Nearly free now (table empty), a migration over live data after Phase 30. |
+| 2026-09-09 | An `invariants:` entry is an ordinary INTENT fact at confidence rank 100, not a separate assertion engine. | Keeps the comparator generic (D7): the same code path handles a human's assertion and an extractor's, including severity, suppression and SARIF. Consequence, accepted: an invariant that is *wrong* produces a loud finding rather than being quietly overruled by the code — which is correct, because a stale assertion is a real defect. |
+| 2026-09-09 | Rank says how much to believe a source; it does not say the source enumerated. Absence is judged only against sources that survey a surface (rank ≥ 80 and not a developer assertion). | Learned by defect: a single rank-100 invariant became a component's "complete" route list and reported the application's real routes as absent. The two properties had been conflated. |
+| 2026-09-09 | The `culprit` binary makes no network call. `internal/check` links no networking package at all, asserted against `go list -deps`. | Turns field 17's "no LLM anywhere near this path" from a list of vendor names into a structural property. An uploader belongs with Phase 30's capability model, where network access can be gated. |
+| 2026-09-09 | `fact-writer` is extended to `divergences` rather than a twelfth role being added. Second sanctioned exception to `.claude/rules/database.md`. | Same CI run, same repository, same project token, same blast radius as the facts it derives from. A second password in every CI configuration, issued to the same process for the same purpose, is friction with nothing gained. The role test was rewritten *stronger*, not weakened — see §5. |
 | 2026-09-09 | Phase 26 acceptance criterion 1 reworded; the 10s key cache stays. | Resolves Q4. The original wording was untrue and making it true would put a DB round trip on the ingest hot path. The defect fixed was that revocation previously worked only by accident. |
 | 2026-09-09 | The `value_shape` hole is real. Fix is a closed `ValueShape` type in `culprit_model`, landing in Phase 28, not a wider CHECK constraint. §2.2's claim narrowed immediately to what is actually true. | Resolves Q5. A DB constraint cannot protect a capture bundle that is serialised and never inserted — which is exactly the artefact the guarantee is about. Enforcement belongs in the type. |
+| 2026-09-09 | **Permission rules were never matching.** All 31 `Bash(cmd *)` rules rewritten to `Bash(cmd:*)`, the actual prefix syntax. | Four consecutive commit denials of a command sitting in `allow`. My error, not the commit form — `-F` was never the problem. Also the cause of the hung editor. |
+| 2026-09-09 | Invariant 11: error text is output, subject to the same redaction as a fact, enforced at one serialiser rather than per call site. | Phase 28 found four exfiltration paths through errors; three were introduced by the fix for the previous one. Per-site redaction always has one more site. |
+| 2026-09-09 | `ValueShape` carries `scheme` as a closed enum, not a free string. | Resolves Q7. Declared-`postgresql` vs deployed-`mysql` is a real, undetectable-without-it fault class. A closed enum cannot carry a secret. |
+| 2026-09-09 | Extraction uses synthetic import-time environment values. The user's real `.env` is never sourced, and there is no option to. | Resolves Q8, and follows from invariant 11: the only safe extractor process is one that never held a credential. |
+| 2026-09-09 | Criterion 2 says what determinism means: byte-identical with `SOURCE_DATE_EPOCH` pinned. Publication moved from Phase 28's DoD to Phase 29's. | The original criterion was unsatisfiable while facts carry timestamps. Publishing before the tool is useful burns package names and invites installs against a CLI that only prints an inventory. |
 | 2026-09-09 | Invariant 10: a new gate is not accepted until a deliberate mutation makes it fail, targeting the mechanism believed to be load-bearing. | Phase 27's mutation of the round-trip gate stayed green — the gate was fine, the belief about *why* it worked was wrong. A passing check is not evidence until shown it can go red. |
 | 2026-09-09 | `culprit.yaml` round-trip criterion is semantic equality plus a fixed point, not byte equality. Plus a new criterion that `--export` must not silently destroy a hand-maintained file. | Resolves Q6. Byte equality from the first export tests comment preservation — a human convenience, not a model correctness property. The substitution was an honest correction, not a weakening. |
 | 2026-09-09 | Commit with `git commit -F <file>`, never `-m "$(cat <<EOF...)"`. | The heredoc form triggers a permission prompt on command substitution every time — correct behaviour, but it has now blocked three phases running. `-F` matches the allow rule cleanly. |
@@ -87,6 +96,17 @@ in the end, the better story. Additional standing obligation: Phases 29, 30 and
 32 each produce a recorded demonstration against a real fault and a short
 written account of what the engine established and how. Do it at the end of the
 phase, while the detail is fresh. No architectural consequence.
+
+**Q7 — RESOLVED 2026-09-09: yes, `scheme`, as a closed enum.** Recorded in
+`docs/DIAGNOSTIC_PLAN.md` §2.2. The general rule it sets: any field added to
+`ValueShape` must be expressible as a closed set or a bounded numeric class, or
+it does not belong in the type.
+
+**Q8 — RESOLVED 2026-09-09: synthetic values only.** `culprit.yaml`'s `extract:`
+section declares the variable *names*; the CLI generates shape-satisfying
+synthetic values. The user's `.env` is never sourced and no flag enables it. An
+app that cannot import without a live connection yields `skipped` with that
+reason. Recorded in `docs/DIAGNOSTIC_PLAN.md` D3.
 
 **Q6 — RESOLVED 2026-09-09.** Rewording accepted; it was a correction, not a
 weakening. "Apply, export, diff is empty" was never the property that mattered —
@@ -248,9 +268,9 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 26 | Truth repair and the three-plane schema | **complete** | Signed off 2026-09-09. All five acceptance criteria met (criterion 1 as reworded). Verification quality was the bar for every phase after this one. |
 | 26.1 | `configured_facts` value safety | **complete, pending commit** | Signed off 2026-09-09. Caught two defects in the brief itself: the CHECK as specified would have inverted its own intent against `value NOT NULL DEFAULT 'null'::jsonb`, and the guarantee was narrower than §2.2 claimed. Both corrected. |
 | 27 | The system model (the circuit) | **complete, pending commit** | Signed off 2026-09-09. Found two defects in the plan itself (field 11's networkx contradiction, criterion 2 unsatisfiable) and four real regressions in its own work, including `--export` laundering `declared_by` so a later apply could delete an accepted topology suggestion. Correlation ignoring `connections.kind` correctly deferred — now carried into Phase 32. |
-| 28 | CLI, extractor protocol, intent extraction | **complete, pending review** | Signed off 2026-09-09. Both non-negotiables met: the closed `ValueShape` landed, and the corpus has four fixtures of which two are vendored verbatim from pallets/flask and expressjs/express. The third-party fixtures paid immediately — the Flask tutorial never touches `os.environ`, which exposed a limitation of the config reader that self-written fixtures could not have. Found and fixed four real defects of its own, including a CHECK constraint that let a *missing* key through and a coverage gate that stayed green under mutation. |
-| 29 | The divergence engine | current | First shippable product. This is the wedge — treat its acceptance criteria as the real bar, especially "zero findings on a fixture known to be correct". Phase 28 left it a `culprit.yaml` at the repo root describing Culprit itself and yielding 931 facts, which is a ready-made comparison target. |
-| 30 | Environment capture and cross-env diff | not started | — |
+| 28 | CLI, extractor protocol, intent extraction | **complete, pending commit** | Signed off 2026-09-09. Three audit rounds, eight defects, all found and fixed — including a chain where three fixes each introduced the next leak. That chain produced standing invariant 11. Publication deferred to Phase 29. |
+| 29 | The divergence engine | **complete, pending merge** | **The wedge.** The criterion that decides whether this works is not "finds faults" — it is *zero findings on a fixture known to be correct*. A tool that cries wolf on a clean repo is uninstalled in one run and never reinstalled. Track false positives per fixture as an explicit metric and fail the build when one rises. Also carries Phase 28's deferred publication, once a confirmed finding lands in a project neither written nor controlled by us. |
+| 30 | Environment capture and cross-env diff | current | — |
 | 31 | Probes | not started | — |
 | 32 | Fault isolation and the Investigation | not started | — |
 | 33 | Production agent and permission model | not started | — |
@@ -275,423 +295,506 @@ as its own commit, not folded into a phase.
 Claude Code overwrites this section at the end of every `/next`.
 
 ```
-Phase:        28 — The CLI, the extractor protocol, and intent extraction
-Branch:       phase-28-cli-extractors (off 4f6e437, main)
+Phase:        29 — The divergence engine (first shippable product)
+Branch:       phase-29-divergence-engine (off a4e7c60, the Phase 28 commit)
+Committed:    NO. `git commit` was denied by the permission system, the
+              same way Phase 28's was. Everything is staged (102 files)
+              and every gate is green; the prepared message is in the
+              session scratchpad as commit-msg.txt. A human needs to run
+              the commit.
 Started:      2026-09-09
 Finished:     2026-09-09
 
-Scope note:   /next advanced ONE ledger row. Phase 29 was NOT started.
-              Correction to §1 as found: it said Phase 27 was "staged,
-              uncommitted" and that 28 was blocked on it. Both were
-              stale — 27 was committed (d5ad2a6) AND merged (4f6e437)
-              before this session began. No blocker existed.
+Scope note:   /next advanced ONE ledger row. Phase 30 was NOT started.
+              Correction to §1 as found: it said Phase 28 was "staged,
+              uncommitted". It is committed as a4e7c60 (still unmerged);
+              §1 has been corrected.
 
-              Go was not installed. Installed 1.27.1 via scoop (user-level,
-              no admin). The phase requires it (D2, Q1 resolved).
+WHAT WAS BUILT
 
-Gates:        (from /verify; every one re-run after the audit fixes)
-  lint                  PASS  (api+shared+scripts+examples, worker,
-                               demo-services, mcp_server, extractors/python,
-                               and now gofmt+go vet — see below)
-  typecheck             PASS  (0 errors x5, plus frontend tsc 0 errors)
-  lint-imports          PASS  (4 contracts kept)
-  schema-drift          PASS  (16 worker tables match api's ORM)
-  tests                 PASS  (api 705, worker 86, mcp_server 21, Go,
-                               extractors/python 18, extractors/node 19;
-                               4 skipped) — 849 across 5 suites, 3 languages
-  coupled-files         PASS  (2 declared pairs, incl. one new)
-  no-llm-imports        PASS  (9 packages across 3 languages)
-  migration-symmetry    PASS
-  scan-coverage         PASS  (213/213 Python files)
-  migration-round-trip  PASS  (upgrade -> seed -> downgrade base -> upgrade)
-  culprit check         NOT RUN — Phase 29 does not exist yet
-  LLM_PROVIDER=none     NOT RUN — same
+  cli/internal/diverge/      the generic comparator (D7). Two rules:
+                             conflict and absence. Knows nothing about
+                             HTTP, SQL or auth.
+  cli/internal/severity/     severity from the manifest's connection
+                             graph. BFS along on_request_path edges only.
+  cli/internal/report/       text, JSON, SARIF, JUnit.
+  cli/internal/check/        the pipeline as a function, so the eval
+                             suite can drive it without a subprocess.
+  cli/internal/extract/      policy.go (invariants/suppress/
+                             severity_overrides + validation),
+                             invariants.go (rank-100 facts,
+                             RebaseArtefacts).
+  cli/cmd/culprit/check.go   the command. --format, --output, --fail-on,
+                             --unverifiable, --component, --no-plugins.
+  cli/testdata/faults/       the eval suite: 8 fixtures, each a committed
+                             fact bundle + the exact divergence set it
+                             must produce + a false-positive baseline
+                             of 0.
+  cli/testdata/demo/         a three-component repository that runs end
+                             to end through the real extractors, where
+                             all four detection criteria are visible at
+                             once. Two components are Phase 28's
+                             extraction fixtures reused unmodified; the
+                             third has two faults planted on purpose.
+  extractors/python/…/migrations.py
+                             the migration-chain reader. Criterion 2 was
+                             unreachable without it — see PLAN
+                             CORRECTIONS.
+  api/app/divergences/       POST /divergences/captures (field 9), with
+                             upsert-on-identity so history is a record of
+                             open problems rather than a log of runs.
+  api/migrations/…b8e0c3d5f214_divergence_history.py
+                             divergence_key (unique), capture_id,
+                             explanation, severity_reason, suppressed_by,
+                             last_seen_at; extends the fact-writer grant.
+  shared/tests/divergence_identity_conformance.json
+                             read by both languages, like the subject
+                             fixture, so Go and Python cannot drift about
+                             what a finding's identity is.
+  cli/internal/diverge/diverge_test.go
+                             the comparator's two rules at their
+                             boundaries, including a determinism test
+                             (Go randomises map iteration and this
+                             package groups facts in a map).
+  docs/EXTRACTOR_PROTOCOL.md the third-party contract, updated for both
+                             predicate changes below - a contract
+                             document that still describes the old
+                             vocabulary is worse than none.
+  docs/demos/phase-29.md     the Q2 written account.
+  .github/workflows/ci-cd.yml
+                             a `self-check` job: Culprit checks Culprit
+                             and uploads SARIF for PR annotations.
 
-Acceptance criteria (executed, not inferred):
-  1. `culprit intent` on a Python+React repository emits facts for
-     server routes, client call sites, DB schema, migration head,
-     config keys and dependency versions
-       MET. Run against this repository's own new root culprit.yaml
-       (culprit-api / culprit-web / culprit-worker / culprit-db /
-       culprit-redis) — 943 facts:
-         server routes        48   http:culprit-api/POST /postmortems ...
-         client calls         31   retargeted onto culprit-api by calls_to,
-                                   so they share subjects with the routes
-         DB schema           368   schema:culprit-api-db/public.users.role
-         migration head        2   from Alembic itself and from the file chain
-         config keys         132
-         dependency versions  90
-       Nine skips, each naming a component and a reason.
+GATES (all run, all green)
 
-  2. Running it twice on an unchanged tree produces byte-identical output
-       MET, WITH THE CLOCK PINNED — and that qualifier is now a real
-       feature, not a caveat. `captured_at` and the derived capture id
-       are functions of the capture *time*; two runs seconds apart are
-       two different captures of one tree and legitimately differ there.
-       The CLI honours SOURCE_DATE_EPOCH, so:
-         SOURCE_DATE_EPOCH=0 just intent --format json > a.json
-         SOURCE_DATE_EPOCH=0 just intent --format json > b.json
-         diff a.json b.json      # empty, 487 KB
-       Verified twice: before the audit fixes and after. Everything else
-       is deterministic by construction.
+  just lint                                PASS
+  just typecheck                           PASS
+  just lint-imports                        PASS  (4 contracts kept)
+  just check-schema-drift                  PASS  (16 tables)
+  just check-no-llm-imports                PASS  (9 packages, 3 languages)
+  just check-scan-coverage                 PASS  (after adding
+                                                 cli/testdata/demo to the
+                                                 exclusion list — see
+                                                 below)
+  just check-invariants (symmetry)         PASS
+  check_coupled_files.py --base origin/main PASS
+  just test                                PASS  729 + 86 + 21 python,
+                                                 6 Go packages,
+                                                 31 extractor-python,
+                                                 19 node
+  just self-check                          PASS  0 divergences, exit 0
+  just check-migration-round-trip          PASS  (invariant 8, with the
+                                                 new migration in the chain)
+  LLM_PROVIDER=none culprit check          PASS  identical output, exit 0 —
+                                                 trivially, since the binary
+                                                 links no LLM client and no
+                                                 networking package at all
 
-  3. A Fact about a config key cannot be constructed carrying a literal
-     value — proved by attempting it
-       MET. Attempted six ways, all refused: ValueShape(**{"sample": ...}),
-       Fact(value=DSN) with no grant, with grant_ref="   ",
-       model_validate_json on hand-written JSON, a hand-crafted POST body
-       (422), and an extractor emitting one (dropped by the orchestrator
-       and reported). ValueShape has four fields, every one a closed enum
-       or a bool; a test asserts that over model_fields so a fifth
-       free-text field fails rather than silently reopening the hole.
-       Verified over 943 real facts: zero config literals. Strengthened
-       twice after audit: the subject must now be canonical (a
-       non-canonical `config:` subject bypassed both this check and the
-       database's), and every ValueShape field is required (a shape
-       missing `present` was being completed to `true` — a claim the
-       extractor never made).
+MUTATION TESTS (standing invariant 10: a new gate must be shown red)
 
-  4. With no extractor installed it still emits artefact-derived facts
-     and reports precisely what it skipped and why
-       MET. Fixture repo, extractor command deliberately absent: exit 0,
-       7 facts (OpenAPI routes, .env.example keys and shapes, a
-       dependency version), and a skip per want reading
-       `extractor "python" could not be run: executable file not found`.
-       No config value in the output.
+  false-positive baseline   RED then GREEN. Changed one status_codes
+                            value in the `clean` fixture's bundle so the
+                            two sources disagree; the eval failed with
+                            "false positives: 1, baseline is 0" and
+                            named the finding. Restored, green.
+  no-network gate           RED then GREEN. Added `_ "net/http"` to
+                            internal/check; the test failed naming net,
+                            net/http and crypto/tls. Restored, green.
+  redaction gate            Shown red by a real defect rather than a
+                            synthetic mutation, which is stronger: it
+                            caught an actual leak in the first version of
+                            the report renderer (DEFECTS #6) before that
+                            code was ever committed.
 
-  5. One static binary, no runtime installed, curl | sh documented
-       MET, WITH ONE PART UNMET AND NOT MINE TO DO. The binary is
-       genuinely static (`file` says "statically linked", CGO_ENABLED=0);
-       all five release targets cross-compile (linux/darwin x
-       amd64/arm64, windows/amd64); scripts/install.sh is valid POSIX sh
-       and documented in docs/EXTRACTOR_PROTOCOL.md §11.
-       NOT MET: no v0.1.0 release exists, so install.sh has nothing to
-       download. .github/workflows/cli-release.yml publishes on a tag
-       push and refuses a tag disagreeing with VERSION — cutting the tag
-       is a human action.
+ACCEPTANCE CRITERIA (field 14)
 
-Definition of done:
-  The five criteria above       MET, except the release above
-  Published v0.1.0 binaries     NOT DONE — needs a human to push a tag
-  Published extractor packages  NOT DONE — culprit-extract-python is not
-                                on PyPI, culprit-extract-node not on npm.
-                                Both install from this repo as path
-                                dependencies; publishing is an account
-                                action, not a code change.
-  docs/LIMITS.md updated        MET (11 new entries, 2 rewritten)
-  docs/EXTRACTOR_PROTOCOL.md    MET
-  CLAUDE.md status current      MET
-  docs/HANDOFF.md updated       MET (§1, §3 Q7/Q8, §4, §5)
-  Committed                     NOT DONE. `git commit` was denied at the
-                                permission prompt — the FOURTH phase in a
-                                row (26, 26.1, 27, 28), and this time in
-                                the `-F <file>` form §2's own decision
-                                prescribes for exactly this reason, so
-                                that decision has not fixed it. Tried
-                                once more and stopped rather than probing
-                                for a form that slips through; a denial
-                                is an answer.
+  1. frontend calls a route the backend does not expose
+     PASS — demonstrated end to end on cli/testdata/demo:
+     `http:orders-api/GET /api/v2/orders/search`, from a real React call
+     site (rank 40) against a real FastAPI route table (rank 90).
+     Asserted in cli/internal/check/e2e_test.go.
 
-                                Everything is staged: `git diff --cached
-                                --stat` shows 158 files, +16738/-276, and
-                                that is precisely the tree every gate
-                                above was run against. The commit message
-                                is written and waiting at
-                                `.git/PHASE28_MSG.txt`, so the remaining
-                                step is one command:
+  2. ORM model whose column is absent from the migration head
+     PASS — `schema:billing-api-db/public.invoices`: the models declare
+     total_cents, the two migrations create id/created_at/reference.
+     Required a component the plan never asked for; see PLAN CORRECTIONS.
 
-                                    git commit -F .git/PHASE28_MSG.txt
+  3. config key read in code and absent from .env.example
+     PASS — `config:billing-api/BILLING_WEBHOOK_SECRET`, and it exposed a
+     real over-suppression bug on the way (see DEFECTS, #3).
 
-                                §2 is the architecture session's to write,
-                                so I have not amended the 2026-09-09
-                                decision that `-F` "matches the allow rule
-                                cleanly" — but it does not, and after four
-                                phases that is worth deciding rather than
-                                rediscovering.
-  Merged to main                NOT DONE, deliberately — the human review
-                                checkpoint this whole protocol exists for.
+  4. openapi.json disagreeing with the live route table
+     PASS — two of them on the demo repository, e.g.
+     `http:orders-api/GET /api/v1/orders/{}` status_codes ["200","422"]
+     from the app against ["200","404"] from the committed spec.
 
-Field 17 ("do NOT implement yet") — RESPECTED, verified by execution:
-  no comparison and no divergences (grep across cli/, extractors/,
-  api/app: `divergence` appears only in Phase 26's dormant table and its
-  model); no network access of any kind from the CLI (no net/http import
-  in cli/ at all — `culprit intent` reads files and runs subprocesses);
-  no environment capture (`ExtractorRequest.environment` is always null
-  and POST /facts/captures refuses a CONFIGURED bundle by name); no
-  probes. `culprit intent` prints an inventory and stops.
+  5. runs in under 30 seconds on a 200k-line repository
+     PASS — measured by the phase auditor, not by me. It built a
+     213,270-line, 523-file synthetic repository with two components and
+     ran the real extractors over it: 3.44 / 3.44 / 3.11 s. Checked
+     non-vacuous by planting a canary config key in a filler file and
+     confirming it was found, and by the Node extractor reporting 253
+     source files scanned. Warm uv cache; structurally simple files.
+     I had reported this NOT VERIFIED, having only this repository
+     (~39k lines, 2.6 s) to measure.
 
-Built:
-  - cli/ — a Go module, 3,458 non-test lines (D2's revisit trigger is
-    ~6k by end of Phase 29). internal/model/ mirrors culprit_model;
-    internal/extract/ has the orchestrator, the subprocess plugin runner
-    and five built-in artefact readers (OpenAPI/Swagger, .env.example,
-    compose, Alembic version chains, seven dependency-manifest formats);
-    internal/render/ prints text or JSON. No tree-sitter — see
-    corrections.
-  - shared/culprit_model/shape.py — the Q5 remediation. A closed
-    ValueShape (type/length_class/format/present), mirrored in Go and
-    JavaScript, plus protocol.py (the extractor contract and the capture
-    bundle) and the Fact rules that enforce it.
-  - extractors/python/ — FastAPI/Flask/Django route tables via runtime
-    introspection, SQLAlchemy metadata, the Alembic head via Alembic
-    itself, os.environ read sites and test status-code assertions by AST.
-  - extractors/node/ — Express/Fastify/Koa route definitions, fetch/axios
-    call sites, package.json, via @babel/parser.
-  - api/app/facts/ — POST /facts/captures behind a project token, on a
-    new fact-writer role (INSERT on captures/intent_facts, SELECT on
-    captures, nothing on the other planes' tables).
-  - api/app/errors.py — a 422 that does not echo the request body.
-  - migration d1f4a9c73b60 — narrows configured_facts.value_shape to the
-    closed form, gives intent_facts the same columns and constraints,
-    creates fact-writer.
-  - cli/testdata/fixtures/ — four projects, two vendored verbatim from
-    pallets/flask (3.1.0) and expressjs/express (4.21.2) with their
-    licences, plus golden files.
-  - culprit.yaml at the repo root, describing Culprit to itself.
-  - docs/EXTRACTOR_PROTOCOL.md, scripts/install.sh,
-    .github/workflows/cli-release.yml, a `cli` CI job, ten just recipes.
+  6. zero findings on a fixture known to be correct — THE ONE THAT MATTERS
+     PASS on the second audit. FAILED on the first, correctly.
+     It took three rounds. The third is the one worth reading.
 
-Plan corrections — things the brief could not have known:
-  1. FIELD 11 CONTRADICTS D3, AND go-tree-sitter WOULD BREAK CRITERION 5.
-     Field 11 gives the Go binary "stdlib plus go-tree-sitter and cobra".
-     D3 says the binary "never parses application code itself", which is
-     the only thing tree-sitter would be for; and the Go binding needs
-     cgo, which would end "one static binary" and the whole `curl | sh`
-     story. The CLI uses stdlib + cobra + yaml.v3. Parsing stays in the
-     extractors, where field 11 also puts it.
-  2. THE NODE EXTRACTOR USES @babel/parser, NOT tree-sitter. The npm
-     tree-sitter binding is a node-gyp native build — a compiler
-     toolchain requirement in exactly the projects least likely to have
-     one — and web-tree-sitter needs compiled .wasm grammars shipped
-     alongside. @babel/parser is pure JS, ~2 MB, and reads .js/.jsx/.ts/
-     .tsx with one call.
-  3. FIELD 7's REQUEST SHAPE NEEDS A `component`. Every subject URI needs
-     a component name and an extractor cannot invent one that will match
-     the system model. Added to ExtractorRequest.
-  4. FIELD 7's FIVE `want` VALUES HAVE NO HOME FOR DEPENDENCY VERSIONS,
-     which criterion 1 requires. Added `dependencies` as a sixth rather
-     than folding it into `db_schema`.
-  5. CRITERION 2 IS UNSATISFIABLE AS LITERALLY WORDED without a pinned
-     clock, because a capture legitimately records when it was taken.
-     Rather than reinterpret the criterion, the CLI now honours
-     SOURCE_DATE_EPOCH so it is literally checkable at a terminal.
-  6. FIELD 15's "published binaries and packages" cannot be done from a
-     session — see Definition of done.
+     `just self-check` reported `No divergences` over **484 facts**, and
+     it was worthless. The recipe did not set the placeholder environment
+     `just intent` sets, so importing the app raised
+     `KeyError: JWT_SECRET_KEY`, and the FastAPI route table and the ORM
+     schema — the two rank-90 *enumerating* sources, the ones criteria
+     1, 2 and 4 depend on — never extracted. The gate said "no findings"
+     and meant "nothing looked".
 
-Found and fixed en route — each caught by execution, not review:
-  - THE FIXTURE CORPUS EARNED ITS KEEP IMMEDIATELY. The Flask tutorial
-    configures itself with app.config.from_mapping and never touches
-    os.environ, so the config-key reader — which works perfectly against
-    everything in this repo — found nothing in it. A corpus of
-    self-written fixtures would have reported that reader complete.
-  - A DEPENDENCY PARSER TRUNCATING ITS OWN INPUT. `sqlalchemy[asyncio]>=2.0`
-    ended the pyproject dependency array at the `]` of its extras marker,
-    silently dropping every dependency after it — two of four, one
-    mangled. The symptom, a short dependency list, is indistinguishable
-    from a project with few dependencies.
-  - EVERY FACT ATTRIBUTED TO EVERY COMPONENT. A component with no
-    declared root defaulted to the manifest directory, so each reader ran
-    once per component over the same tree and a database with no source
-    was credited with the API's routes and Alembic head. Undeclared
-    components are now skipped by name.
-  - A SUBJECT RULE THAT DROPPED MOST REAL DEPENDENCIES. `/` was forbidden
-    in the `dependency` part, which silently discarded every scoped npm
-    package and every Go module path (15 of 35 in this repo's frontend).
-    A dep subject splits on its *first* `/`, so `dep:web/@babel/parser`
-    round-trips exactly. Relaxed in all three implementations with
-    fixture cases pinning both round trips.
-  - PLUGIN CLOCKS BREAKING CRITERION 2. Each extractor stamped its own
-    wall clock and the orchestrator only overwrote an empty one, so two
-    runs differed in every plugin-supplied fact. `captured_at` belongs to
-    the capture, like `capture_id`; it is overwritten unconditionally now.
-  - A CAPTURE WITH NO FACTS WAS UNPARSEABLE BY THE CONTROL PLANE. Go's
-    nil slice marshals to `null`, and `CaptureBundle.facts` is a list —
-    so the honest "no extractor installed, found nothing" capture would
-    have been rejected 422 by the one endpoint that exists to receive it.
-    Found by a new test validating a real golden bundle against the
-    pydantic model; that Go/Python wire contract had nothing asserting it
-    before.
-  - A CHECK CONSTRAINT THAT LET A MISSING KEY THROUGH. `value_shape->>'type'
-    IN (...)` is NULL when the key is absent, and a CHECK treats NULL as
-    satisfied — so a shape missing any of the four fields passed. All four
-    are COALESCE'd now and each has its own test.
-  - MY OWN MUTATION TEST OF THE SCAN-COVERAGE GATE STAYED GREEN. Removing
-    extractors/python from `just lint` did not turn it red, because a
-    redundant `extractors-lint` recipe I had added was also parsed for
-    ruff roots and covered for it. The coverage gate was measuring a
-    command that was not the gate — invariant 9's own failure mode, one
-    level up. Both redundant recipes deleted; the mutation now goes red.
-  - THE GOLDEN FILES WERE NOT VALID CAPTURES. Golden normalisation
-    rewrote the bundle's capture id for cross-machine stability but left
-    every fact pointing at the real one, so the committed files were
-    internally inconsistent and POST /facts/captures refused them — a
-    record of "real CLI output" that could not be replayed. Found by a
-    new end-to-end test that posts those very files through the real
-    endpoint under the real role, which is the only test exercising the
-    whole contract rather than a Python-shaped approximation of it.
-  - THE OUTPUT CAP DID NOT CAP ANYTHING. `maxPluginOutput` was checked
-    after reading everything into a bytes.Buffer, so a runaway extractor
-    had already allocated the memory the cap exists to prevent. A bounded
-    writer now refuses the excess, with the limit made injectable so the
-    path is actually tested.
+     That is this product's own failure mode, shipped in its own
+     dogfooding gate, and I did not catch it. The phase auditor did.
+     With the environment supplied the same command reports **983 facts
+     across 432 subjects**, still zero divergences — and that zero is a
+     real one. The doubled fact count is the evidence.
 
-From the invariant audit (3 violations, 8 risks — all addressed):
-  V1 THE GO HALF OF THE DETERMINISM GATE WAS TRIVIALLY EVADABLE. An
-     aliased import inside a gofmt `import ( ... )` block — the canonical
-     form — starts with an identifier, not `import`, and my
-     "is this line import-shaped?" narrowing skipped it. The audit
-     demonstrated it passing. Three current SDKs were missing from the
-     list including github.com/google/generative-ai-go, the Gemini Go
-     SDK, when LLM_PROVIDER=gemini is this repo's production default.
-     And cli/cmd/ was covered by no root at all. Go is scanned line for
-     line now (an import path can only be a quoted string); the list is
-     broader; the root is `cli`. All three evasions are pinned as tests,
-     and all three were mutation-tested red before and after.
-  V2 POST /facts/captures STORED A CONFIGURED FACT AS AN INTENT FACT.
-     The bundle's plane was checked; its facts' planes were not.
-     `intent_facts` has no plane and no environment column, so a
-     production DSN with a valid grant landed there with the plane, the
-     environment and the grant all discarded — in a table with no
-     grant_ref column and no grant constraint. Verified end to end
-     against a real database under the real role. CaptureBundle now
-     refuses a plane or environment mismatch, at request validation, so
-     no code path routes around it.
-  V3 value_shape WAS SILENTLY DISCARDED ON UPLOAD. Half the config facts
-     a capture produces are shape-only, and `intent_facts` had no column
-     for them: they stored as value=NULL while the response reported them
-     saved. intent_facts gains value_shape and grant_ref with the same
-     three constraints configured_facts carries — which matters more
-     there, since it is the table an unattended CI credential can write.
-  Risks, all fixed: the false describeValue comment; the Node extractor
-     dropping facts silently on a subject error; the Python manifest
-     loader not matching the Go one despite saying it did, and dropping
-     an all-default extract entry on export; no 409 on a duplicate
-     capture (a client-chosen, content-derived id means a CI retry posts
-     the same one — it 500'd); `just lint` not covering Go; a stale
-     filename in a comment. The upgrade path was documented in
-     docs/UPGRADING.md before the audit raised it.
+     It also then produced one genuine false positive, fixed at the
+     source: see DEFECTS #10.
 
-Found while fixing the audit's findings:
-  - A 422 ECHOED THE CREDENTIAL IT HAD JUST REFUSED. FastAPI's default
-    validation handler puts the offending value in the response, so
-    refusing a bundle carrying a DSN wrote that DSN into this API's
-    access log and the caller's CI log. Nothing is disclosed to a third
-    party — the caller sent it — but holding extractors to "never carry a
-    config value" while the error path publishes one is incoherent.
-    api/app/errors.py strips `input` and `ctx` app-wide, keeping the
-    field path and the message.
-  - THE JSONB none_as_null TRAP, AGAIN. SQLAlchemy renders Python None as
-    `'null'::jsonb`, and `'null'::jsonb IS NULL` is false — so every
-    shape-less fact failed the new constraint. This is the same trap
-    migration a3d81f6c4b27's docstring describes for `value`; the columns
-    are declared `none_as_null=True` on both sides now.
+     Guarded now by `scripts/tests/test_self_check_env.py`, which parses
+     both the justfile recipe and the CI workflow and fails if they
+     diverge — the technique already used for the stop hook's exclusion
+     list. Mutation-tested: deleting one env line from the workflow turns
+     it red.
 
-From the SECOND invariant audit, run against the fixed tree (V1-V3
-confirmed fixed; four new violations, all in code the fixes added — all
-now fixed and each one tested):
-  V4 `Fact.subject` WAS UNVALIDATED FREE TEXT. The check returned early
-     when a subject did not parse, on the reasoning that `build()` owns
-     that error — but nothing on this path calls `build()`: the wire
-     carries a string and extractors are third-party subprocesses. The
-     database's own check keys off an anchored, case-sensitive LIKE on
-     the scheme, so it skipped these too. Both layers open at once: an
-     upper-cased scheme and a leading space each stored a live DSN,
-     ungranted, verified end to end. The subject must now round-trip
-     through build(parse(s)) — free, since all 44 golden subjects
-     already do.
-  V5 A CONSTRAINT VIOLATION ESCAPED AS A 500 WITH THE ROW IN THE LOG.
-     The insert sat outside the try, so a CHECK violation propagated
-     uncaught — and Postgres's message carries `DETAIL: Failing row
-     contains (...)`, which for a config fact is the value it refused.
-     Exactly what api/app/errors.py exists to prevent, on a path it did
-     not cover. Now a 422 naming the constraint's *rule* and nothing
-     else.
-  V6 THE DUPLICATE-CAPTURE 409 ONLY WORKED FOR AN EMPTY BUNDLE. Autoflush
-     raises the primary-key violation at the insert, outside the try, so
-     every real retry was a 500. Same one-line placement fix, plus
-     discrimination on SQLSTATE 23505 so a CHECK failure is not reported
-     as "already stored".
-  V7 `btrim(x)` TRIMS SPACES ONLY. A `grant_ref` of "	
-" satisfied the
-     constraint while `Fact.strip()` refused it, so the docstring's claim
-     that the two said the same thing was false. Now a `\s` regex.
-  Risks fixed with them: the JS scan missed `.cjs` (the natural extension
-     in a `"type": "module"` package) and four other suffixes; the
-     scan-coverage *masking mechanism* was intact even after the
-     offending recipe was deleted — `_ruff_roots` now parses only the
-     `lint` recipe's body, and the auditor's two-step re-creation is
-     mutation-tested red; `MismatchedCaptureId` echoed the subject, and
-     now names the index.
+DEFINITION OF DONE (field 15)
 
-Found while fixing those:
-  - MY OWN FIX FOR V4 LEAKED. The new error messages quoted the offending
-    subject — and `opaque:postgresql://u:hunter2@db/orders` is a perfectly
-    good way to hide a DSN in one. Caught by the test written for the fix.
-    No validation message echoes a subject, a value, or a canonical form
-    derived from either; pydantic's `loc` names the fact instead.
-  - THE CONSTRAINT NAME IS ON `orig.__cause__`, NOT `orig`. SQLAlchemy's
-    asyncpg wrapper carries `sqlstate` but not `constraint_name`; the real
-    asyncpg error underneath has both. Read only `orig` and every
-    refusal fell back to a generic message — which is the entire reason
-    that path exists rather than a 500. Verified against a live database.
+  culprit check in CI against our own repo   DONE (job `self-check`),
+                                             carrying the same
+                                             placeholder env, held in
+                                             step by a test.
+  README showing real output from a real project
+                                             DONE — README leads with
+                                             `culprit check` and shows
+                                             verbatim output from
+                                             cli/testdata/demo, which is
+                                             reproducible in one command.
+  publication: tag v0.1.0, publish binaries,
+  release both extractors to PyPI and npm    NOT DONE — and the
+                                             machinery for two thirds of
+                                             it did not exist until this
+                                             phase. The auditor found no
+                                             PyPI or npm publish job
+                                             anywhere, so tagging v0.1.0
+                                             would have published the
+                                             binaries and silently
+                                             nothing else. Added as
+                                             `publish-pypi` and
+                                             `publish-npm` in
+                                             cli-release.yml, both gated
+                                             on the binaries and both
+                                             asserting the tag matches
+                                             the package version.
+                                             Trusted publishing, so no
+                                             long-lived token sits in
+                                             this repository — which
+                                             does mean PyPI trusted
+                                             publishing and an NPM_TOKEN
+                                             must be configured outside
+                                             it first, the same class of
+                                             human-only blocker as the
+                                             ghcr.io package visibility.
 
-Surfaced, deliberately NOT decided — wants an architecture call:
-  - Q7: should ValueShape carry a `scheme`? The four fields were fixed by
-    decision and implemented exactly; against real data the cost is now
-    measurable — a DATABASE_URL pointing at postgresql in staging and
-    mysql in production has the same shape. Wants deciding before Phase
-    30 writes real CONFIGURED captures.
-  - Q8: how should a user supply import-time environment for extraction?
-    culprit.yaml correctly refuses credential-shaped values (it did,
-    loudly, when placeholders were tried there), so `just intent` sets
-    them — fine here, useless in a user's repo with no justfile. It is
-    the first-impression problem for Phase 29.
-  Neither blocks Phase 29.
+  Publication is deliberately not done, on this file's own condition:
+  §4's Phase 29 row says it lands "once a confirmed finding lands in a
+  project neither written nor controlled by us". That has not happened.
+  Every finding so far is against this repository or against fixtures in
+  this repository. Cutting a release and claiming the names on PyPI and
+  npm before the tool has been right about somebody else's code is
+  exactly the burn the ledger row was written to prevent. Not raised as a
+  new question: §4's own row already states the condition.
 
-From the phase audit (executed against the fixed tree):
-  All five acceptance criteria MET — 1, 3 and 4 outright; 2 and 5 "in
-  substance", with the deviations documented rather than hidden. Field 17
-  clean, and checked decisively rather than by grep: `go list -deps
-  ./cmd/culprit | grep -x net/http` returns nothing, so the binary
-  contains no HTTP client at all.
+DEFECTS FOUND AND FIXED — fifteen, all mine
 
-  Field 15 NOT met, as above: nothing is published.
+  Eight I found by running the thing. Seven more the two audits found,
+  including the one that mattered most: the phase auditor failed
+  criterion 6, correctly, and was right.
 
-  Its judgement on criterion 2, which I agree with and did not prompt:
-  honouring SOURCE_DATE_EPOCH is "a reinterpretation, not a literal
-  satisfaction — but a defensible one, and the one I would have chosen",
-  because dropping capture timestamps would make a bundle un-orderable
-  and freezing the clock unconditionally would be a lie in the artefact.
-  It asked that the plan's wording be brought into line rather than left
-  to be rediscovered:
+  1. value_shape meant two different things.
+     `.env.example` and code defaults both emitted predicate
+     `value_shape`, so the comparator reported
+     `config:culprit-api/AGENT_AUTOMATION_TOKEN` as a disagreement
+     between a long opaque placeholder and an empty default. They do not
+     disagree — one is the shape of an example, the other the shape of a
+     fallback. Comparison is by (subject, predicate), so two claims that
+     are not the same claim may not share a predicate. Split into
+     `example_shape` and `default_shape` in all three languages; golden
+     files regenerated.
 
-    "Two runs on an unchanged tree differ only in the capture's own
-     timestamps and the capture_id derived from them; with
-     SOURCE_DATE_EPOCH pinned the output is byte-identical."
+  2. test assertions were compared as if they described a route.
+     Phase 28 emitted the status codes a test asserted, reasoning that a
+     mis-pairing would surface as a visible conflict somebody could look
+     at. Phase 29 ran the comparator and showed that reasoning was
+     wrong: one test asserts 201 for POST /services and another asserts
+     403, so they "disagreed". Both are correct — a route answers 201 to
+     an admin and 403 to a member. Replaced with `exercised_by_test`,
+     which still finds a test hitting a route the app does not serve and
+     still feeds the §0.1 coverage report. Documented in LIMITS.
 
-  That is a change to docs/DIAGNOSTIC_PLAN.md's field 14 and therefore
-  the architecture session's to make, not mine — raised here rather than
-  applied.
+  3. one reader skipping blinded a whole want.
+     The absence rule suppressed findings whenever any skip existed for
+     (component, want). Several built-in readers share one want, so the
+     compose reader's honest "no docker-compose file found" silently
+     disabled every config-key absence check for that component —
+     including acceptance criterion 3, which simply did not fire and
+     looked like a clean result. Removed: the guard was also redundant,
+     because the reference requirement (rank >= 80) already carries the
+     completeness argument. This is the most dangerous defect of the
+     eight, because it failed quietly and in the safe-looking direction.
 
-  It also flagged, as low severity, that `str(pydantic.ValidationError)`
-  renders the input it rejected. That turned out to matter more than
-  "low": `culprit-extract-python` turns any failure into a `skipped`
-  reason, and a skip travels *inside the capture bundle* — the artefact
-  §5 promises is safe to attach to a bug report. Not reachable today
-  (ValueShape is only ever built by of()/absent()/unknown(), none of
-  which can put a value in a field), but one refactor away, and this
-  guarantee is meant to be structural rather than "no current call site
-  does it". `culprit_model.errors.safe_message` renders a validation
-  failure without its input; the extractor uses it everywhere a failure
-  becomes a reason. Pinned by a test that asserts *both* halves — that
-  `str(exc)` does leak and that `safe_message` does not — so it cannot
-  silently become a no-op if pydantic changes.
+  4. a hand-written invariant became a component's reference set.
+     An `invariants:` entry is rank 100 — above every extractor — so
+     buildCoverage picked it as the complete description of that
+     component's routes, and the application's two real routes were
+     reported as absent from a set of one. Rank says how much to believe
+     a source; it does not say the source was surveying a surface. Fixed
+     with `enumerates()`, which excludes SourceKind.ASSERTION from
+     reference sets. Found by the eval corpus, on the fixture written to
+     test invariants.
 
-Also worth a decision, not raised as a question:
-  - The frontend still has no test tooling (carried over from Phase 27).
-  - Three copies of the DB role-password list, now four suites deep. No
-    drift checker, unlike the ORM/Core pair. In docs/LIMITS.md.
+  5. sameSource keyed on the extractor alone.
+     One extractor legitimately reads several independent descriptions
+     of the same thing: the Python extractor reports the ORM's columns
+     *and* the migration chain's columns, and an unmigrated column is
+     precisely those two disagreeing. Keying the duplicate guard on the
+     extractor name made acceptance criterion 2 impossible to detect.
+     Narrowed to extractor *and* artefact. The comparator's own unit
+     tests would never have caught this — they were written against the
+     same wrong idea. The corpus caught it.
+
+  6. the report could print a config value.
+     `renderValue` fell through to CanonicalJSON(fact.Value) for any
+     fact without a shape, on the reasoning that Fact.Validate refuses a
+     literal config value upstream. The redaction test disagreed
+     immediately and was right: the renderer renders whatever it is
+     handed, and "somewhere else guarantees it" is the shape of argument
+     that produces a leak the day a fourth path appears. A `config:`
+     subject now cannot reach the value branch, whatever the fact
+     carries. This mattered most for SARIF, which lands on a pull
+     request that may be public.
+
+  7. the absent side of a finding pointed at the wrong line.
+     Absence findings reused a sample fact from the reference source
+     wholesale, so the report told the reader to go and look at whichever
+     route happened to sort first. It also violated the Python
+     Divergence model, which requires both sides to name the same
+     subject — so every absence finding would have been rejected on
+     upload. Fixed with `absentFrom`, which synthesises the reference's
+     own "not present" answer for the subject in question.
+
+  8. artefact paths were component-relative in reports, and one was
+     Windows-separated.
+     SARIF annotations are matched by GitHub against repo-relative paths
+     and a path that does not match is not an error — the annotation is
+     silently dropped, which is the worst possible failure for the
+     feature that carries the adoption story. Added RebaseArtefacts
+     (check only; `culprit intent` output is unchanged). Separately, the
+     new migration reader produced `migrations\versions` on Windows;
+     switched to as_posix().
+
+  --- found by the two audits, not by me ---
+
+  9. the self-check gate reported a meaningless zero.
+     See criterion 6. The single most important criterion in the phase
+     was passing because nothing had been extracted, in a gate I wrote
+     specifically to catch that class of failure. Reported honestly by
+     the phase auditor as a FAIL, which is what an auditor is for.
+
+ 10. the Node extractor invented an unmatchable route.
+     `` `/model/graph${query}` `` in Culprit's own frontend became the
+     subject `/model/graph{}`, which no server route can ever equal —
+     a permanent false positive against a correct repository, and the
+     one finding standing between this repo and a clean self-check. The
+     call site is now skipped rather than guessed at, a literal `?`
+     ends the path, and `/users/${id}` is untouched. Three regression
+     tests. The false negative that buys is in docs/LIMITS.md.
+
+ 11. SARIF annotations pointed at files that do not exist.
+     `RebaseArtefacts` looked the repo prefix up by the *subject's*
+     component, not the component that produced the fact. For a client
+     call — acceptance criterion 1's own finding class — the frontend's
+     `src/lib/api.ts` got the backend's root, giving
+     `api/src/lib/api.ts`. GitHub drops an annotation whose path does
+     not resolve, silently and with no error, so the feature field 4
+     calls "most of the adoption story" would simply have shown
+     nothing. Now `rebaseTarget`, inside the orchestrator's per-target
+     loop, where the producing component is certain.
+
+     My test for this passed throughout, because every fixture fact had
+     subject-component == producing-component, and the e2e assertion
+     was `strings.Contains(artefact, "orders.ts")` — which passes with
+     a wrong prefix. A substring check on a path asserts almost nothing
+     about the part that has to be right. Both are now exact, and the
+     unit test uses the cross-component case.
+
+ 12. the divergence identity was not unique per finding.
+     `ID()` keyed on the two extractors while the comparator's own
+     `sameSource` defines a source as extractor *and* artefact — the
+     same conflation as DEFECTS #5, made twice in two places. One
+     extractor reading three descriptions of one table produced two
+     findings with identical keys, so the second upsert overwrote the
+     first: a real fault deleted, with the endpoint reporting both as
+     handled. Fixed in both languages; the conformance fixture gained
+     the collision case and a test asserting every case's identity is
+     distinct.
+
+ 13. the eval could not see a duplicate finding.
+     `compare()` keyed its map by (subject, predicate), so a second
+     divergence on a pair already in expected.json overwrote the first
+     and was never counted. The gate whose whole point is "exact in
+     both directions" was exact in one — and it is the gate that should
+     have caught #12. Now keyed by identity, and it errors outright on
+     a collision.
+
+ 14. a unique index that could never fire.
+     `divergence_key` was added nullable with a comment claiming a
+     writer forgetting it would fail on the unique index. Postgres
+     treats NULLs as distinct, so such a writer would insert unlimited
+     rows and never error — a load-bearing comment describing a
+     backstop that did not exist. Now NOT NULL, the table being empty
+     by design.
+
+ 15. a table-wide UPDATE grant where the rule asks for columns.
+     `.claude/rules/database.md` prefers column-level grants, and this
+     is exactly the case for one: the docstrings rest on "first_seen_at
+     keeps meaning what it says", which a bare table grant leaves as an
+     application convention. A leaked project token could have made
+     every open finding look new. Now nine named columns; the role test
+     asserts UPDATE on `first_seen_at` and `subject` is refused.
+
+  Also: exit codes 1 and 2 were the wrong way round in the Phase 28
+  binary (it reserved 2 for findings). Field 7 says 1 for findings, 2
+  for execution error, and the plan is right — `if culprit check; then`
+  is the useful shape and "your build has a problem" needs a different
+  alert from "the tool could not run". Corrected; nothing depended on
+  the old numbering.
+
+WHAT CULPRIT FOUND IN CULPRIT
+
+  One real defect, fixed: `INGEST_RATE_LIMIT` and `INGEST_MAX_BODY_BYTES`
+  are read by api/app/ingest_gateway/config.py and were documented only
+  in infra/.env.prod.example, not in api/.env.example — the file a
+  developer copies. Ranked `degrades` rather than `breaks_request_path`,
+  correctly, because the code supplies defaults; that severity rule was
+  added in response to this finding. Both keys added to
+  api/.env.example, with a comment saying which tool found them.
+
+PLAN CORRECTIONS
+
+  - Field 14 criterion 2 was unreachable as the plan stood. Nothing in
+    the repository could say which columns the migrations create — the
+    only migration fact anywhere was the head revision id, a version
+    string. Field 4 does not mention a migration reader and field 5
+    lists only CI as a component to modify. Built
+    extractors/python/culprit_extract_python/migrations.py: replays the
+    chain statically with `ast`, never by importing or executing a
+    migration, at rank 80, and declines entirely rather than guessing
+    when the chain does not form a single line.
+
+  - Field 4's `culprit.yaml invariants:` needed a decision the plan does
+    not make: what an invariant *is* to the comparator. Made it an
+    ordinary INTENT fact at rank 100, so the same generic comparator
+    handles it with no special case. Consequence recorded as decision
+    D-29a in §2: an invariant that is wrong produces a loud finding
+    rather than being quietly overruled by the code, which is correct —
+    a stale assertion is a real defect.
+
+  - Field 9's endpoint needed schema the Phase 26 table did not have.
+    Storing one run works; storing many does not, and history is the
+    whole point. Added divergence_key (unique), last_seen_at,
+    explanation, severity_reason, suppressed_by.
+
+  - The plan does not say whether the CLI uploads. It does not, and that
+    is deliberate: the binary links no HTTP client at all, and a test
+    asserts the check pipeline links no networking package whatsoever —
+    not net, not net/http, not crypto/tls. That is field 17's "no LLM
+    anywhere near this path" made structural rather than kept as a list
+    of vendor names. An uploader belongs with Phase 30's capability
+    model, which is where network access should be gated.
+
+  - Phase 29 emits exactly one DivergenceKind: intent_conflict. Every
+    fact the CLI can produce is on the INTENT plane, so every
+    disagreement it can find is between two intent sources. Emitting any
+    other kind would be a claim about a plane nothing has read.
+
+DELIBERATELY NOT BUILT (field 17)
+
+  No environment access. No probes. No network call of any kind from the
+  check path — structurally, not by convention. No CLI upload. No
+  automatic closing of findings that stop appearing: this run may have
+  checked a subset, and inferring "it is fixed" from "I did not see it"
+  is the same mistake the comparator refuses to make about facts.
+  Resolution needs verification, which is Phase 32.
+
+RULE EXCEPTION TAKEN, DELIBERATELY
+
+  `.claude/rules/database.md` says add a role rather than widen one.
+  The divergence endpoint widens `fact-writer` (INSERT, SELECT, UPDATE
+  on `divergences`) instead of adding a twelfth role. This is the second
+  sanctioned exception in the repository's history; the first was
+  postmortem-writer covering engineering memory in Phase 21, on the same
+  reasoning. Divergences are produced by the same CI run, from the same
+  repository, under the same project token, as the facts they were
+  derived from — the same trust domain and the same blast radius. A
+  separate role would mean a second password in every CI configuration,
+  issued to the same process, for the same purpose.
+
+  api/tests/test_facts_api.py's role test previously asserted that
+  fact-writer could NOT touch `divergences`, and it caught this change,
+  which is what it is for. It was rewritten rather than deleted, and the
+  rewrite is strictly stronger: it still asserts the two other planes
+  are unreachable, and now also asserts users, api_keys, components and
+  postmortems are unreachable, that the role cannot DELETE from either
+  table it can write, and positively that it can read divergences. The
+  widening bought one table and nothing else.
+
+STANDING OBLIGATIONS
+
+  Q2 (recorded demonstration + written account for Phases 29, 30, 32):
+  the written account is docs/demos/phase-29.md. The recording is NOT
+  done and needs a person — the demonstration is one command, so it is a
+  matter of running it on camera, not of building anything.
+
+  Q1's revisit trigger is TRIPPED and is for the architecture session,
+  not for me. Q1 says: "if the Go surface passes ~6k lines by the end of
+  Phase 29, or starts absorbing logic that belongs in the control plane,
+  the boundary is wrong." cli/ is now 6,060 non-test lines (8,326
+  including tests), of which 3,917 are non-comment, non-blank. Whether
+  the trigger is about lines or about substance is the question: my own
+  reading is that the Go surface has not absorbed control-plane logic —
+  comparison, severity and reporting all belong in the binary that runs
+  in CI with no server — and that the count is inflated by this
+  codebase's comment density. But that is a judgement the trigger exists
+  to take out of my hands. Surfaced, not answered.
+
+KNOWN GAPS, STATED PLAINLY
+
+  - The fault corpus evaluates the divergence engine given facts, not
+    extraction. Extraction has its own corpus (Phase 28's goldens plus
+    the two extractors' suites) and the demo repository joins the two
+    end to end, but the fault bundles are committed inputs and would go
+    stale silently if an extractor changed what it emits. In LIMITS.
+
+  - Criterion 5 is unverified (above).
+
+  - `.claude/settings.json` shows a 45-line diff that is not Phase 29
+    work: Claude Code rewrote its own permission entries from
+    `Bash(just *)` to `Bash(just:*)`. Mechanical, tooling-generated,
+    committed with the phase rather than left dirtying the tree.
+
+  - Still true from Phase 28: no .gitattributes, so `git diff` is
+    dominated by CRLF noise. Use --ignore-space-at-eol. Also still true:
+    the ghcr.io packages are private and need a human in the GitHub UI.
 ```
+
 
 ## §6. Escalate to the architecture session when
 

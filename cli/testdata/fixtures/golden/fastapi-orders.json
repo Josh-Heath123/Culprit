@@ -26,37 +26,7 @@
     {
       "plane": "INTENT",
       "subject": "config:orders-api/DATABASE_URL",
-      "predicate": "exists",
-      "value": true,
-      "provenance": {
-        "source_kind": "spec",
-        "extractor": "culprit@test",
-        "artefact": ".env.example",
-        "locator": "L3",
-        "confidence_rank": 80
-      },
-      "captured_at": "2026-01-01T00:00:00Z",
-      "capture_id": "00000000-0000-5000-8000-000000000000"
-    },
-    {
-      "plane": "INTENT",
-      "subject": "config:orders-api/DATABASE_URL",
-      "predicate": "exists",
-      "value": true,
-      "provenance": {
-        "source_kind": "spec",
-        "extractor": "culprit@test",
-        "artefact": "docker-compose.yml",
-        "locator": "$.services.orders-api",
-        "confidence_rank": 80
-      },
-      "captured_at": "2026-01-01T00:00:00Z",
-      "capture_id": "00000000-0000-5000-8000-000000000000"
-    },
-    {
-      "plane": "INTENT",
-      "subject": "config:orders-api/DATABASE_URL",
-      "predicate": "value_shape",
+      "predicate": "example_shape",
       "value_shape": {
         "type": "string",
         "length_class": "medium",
@@ -75,14 +45,29 @@
     },
     {
       "plane": "INTENT",
-      "subject": "config:orders-api/FEATURE_ASYNC_FULFILMENT",
+      "subject": "config:orders-api/DATABASE_URL",
       "predicate": "exists",
       "value": true,
       "provenance": {
         "source_kind": "spec",
         "extractor": "culprit@test",
         "artefact": ".env.example",
-        "locator": "L7",
+        "locator": "L3",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "docker-compose.yml",
+        "locator": "$.services.orders-api",
         "confidence_rank": 80
       },
       "captured_at": "2026-01-01T00:00:00Z",
@@ -91,7 +76,7 @@
     {
       "plane": "INTENT",
       "subject": "config:orders-api/FEATURE_ASYNC_FULFILMENT",
-      "predicate": "value_shape",
+      "predicate": "example_shape",
       "value_shape": {
         "type": "string",
         "length_class": "short",
@@ -110,14 +95,14 @@
     },
     {
       "plane": "INTENT",
-      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "subject": "config:orders-api/FEATURE_ASYNC_FULFILMENT",
       "predicate": "exists",
       "value": true,
       "provenance": {
         "source_kind": "spec",
         "extractor": "culprit@test",
         "artefact": ".env.example",
-        "locator": "L4",
+        "locator": "L7",
         "confidence_rank": 80
       },
       "captured_at": "2026-01-01T00:00:00Z",
@@ -126,22 +111,7 @@
     {
       "plane": "INTENT",
       "subject": "config:orders-api/JWT_SECRET_KEY",
-      "predicate": "exists",
-      "value": true,
-      "provenance": {
-        "source_kind": "spec",
-        "extractor": "culprit@test",
-        "artefact": "docker-compose.yml",
-        "locator": "$.services.orders-api",
-        "confidence_rank": 80
-      },
-      "captured_at": "2026-01-01T00:00:00Z",
-      "capture_id": "00000000-0000-5000-8000-000000000000"
-    },
-    {
-      "plane": "INTENT",
-      "subject": "config:orders-api/JWT_SECRET_KEY",
-      "predicate": "value_shape",
+      "predicate": "example_shape",
       "value_shape": {
         "type": "string",
         "length_class": "short",
@@ -160,6 +130,56 @@
     },
     {
       "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L4",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": "docker-compose.yml",
+        "locator": "$.services.orders-api",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "example_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "port",
+        "present": true
+      },
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L5",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
       "subject": "config:orders-api/PORT",
       "predicate": "exists",
       "value": true,
@@ -190,43 +210,8 @@
     },
     {
       "plane": "INTENT",
-      "subject": "config:orders-api/PORT",
-      "predicate": "value_shape",
-      "value_shape": {
-        "type": "string",
-        "length_class": "short",
-        "format": "port",
-        "present": true
-      },
-      "provenance": {
-        "source_kind": "spec",
-        "extractor": "culprit@test",
-        "artefact": ".env.example",
-        "locator": "L5",
-        "confidence_rank": 80
-      },
-      "captured_at": "2026-01-01T00:00:00Z",
-      "capture_id": "00000000-0000-5000-8000-000000000000"
-    },
-    {
-      "plane": "INTENT",
       "subject": "config:orders-api/REQUEST_TIMEOUT",
-      "predicate": "exists",
-      "value": true,
-      "provenance": {
-        "source_kind": "spec",
-        "extractor": "culprit@test",
-        "artefact": ".env.example",
-        "locator": "L6",
-        "confidence_rank": 80
-      },
-      "captured_at": "2026-01-01T00:00:00Z",
-      "capture_id": "00000000-0000-5000-8000-000000000000"
-    },
-    {
-      "plane": "INTENT",
-      "subject": "config:orders-api/REQUEST_TIMEOUT",
-      "predicate": "value_shape",
+      "predicate": "example_shape",
       "value_shape": {
         "type": "string",
         "length_class": "short",
@@ -245,9 +230,29 @@
     },
     {
       "plane": "INTENT",
-      "subject": "config:orders-api/STRIPE_API_KEY",
+      "subject": "config:orders-api/REQUEST_TIMEOUT",
       "predicate": "exists",
       "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L6",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/STRIPE_API_KEY",
+      "predicate": "example_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "empty",
+        "format": "not_applicable",
+        "present": true
+      },
       "provenance": {
         "source_kind": "spec",
         "extractor": "culprit@test",
@@ -261,13 +266,8 @@
     {
       "plane": "INTENT",
       "subject": "config:orders-api/STRIPE_API_KEY",
-      "predicate": "value_shape",
-      "value_shape": {
-        "type": "string",
-        "length_class": "empty",
-        "format": "not_applicable",
-        "present": true
-      },
+      "predicate": "exists",
+      "value": true,
       "provenance": {
         "source_kind": "spec",
         "extractor": "culprit@test",

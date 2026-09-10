@@ -18,6 +18,16 @@ model" is always the shortest path and always looks fine in a demo.
 - Anomaly and impedance scoring (`worker/app/anomaly/`)
 - Fact extraction and comparison (`cli/internal/extract/`, `cli/internal/diverge/`,
   and the extractor plugins in `extractors/`)
+- Severity classification (`cli/internal/severity/`) — §2.5 states it directly:
+  a divergence on a subject that lies on a known request path is
+  `breaks_request_path`; one on an unreferenced config key is `cosmetic`.
+  "It is never an LLM judgement."
+- The check pipeline and every report format (`cli/internal/check/`,
+  `cli/internal/report/`). `internal/check` links **no networking package at
+  all** — not `net`, not `net/http`, not `crypto/tls` — and
+  `cli/cmd/culprit/check_test.go` asserts it against `go list -deps`. A package
+  that does not link a socket cannot open one, which is a stronger guarantee
+  than any list of vendor names.
 - Probe execution and readings (`cli/internal/probe/`)
 - Fault isolation (`cli/internal/isolate/`)
 - Verification (`cli/internal/verify/`)

@@ -55,3 +55,10 @@ cli/testdata/fixtures/**/instance/
 # binary in the repository is one that goes stale the moment anyone
 # edits cli/ without rebuilding.
 cli/bin/
+
+# Phase 29: `culprit check --format sarif --output culprit.sarif`, and the
+# `just self-check-sarif` recipe that writes it. A build artefact CI
+# uploads, not source. `.gobuildtmp/` is a GOTMPDIR escape hatch for
+# machines whose antivirus objects to linking in the system temp dir.
+culprit.sarif
+cli/.gobuildtmp/

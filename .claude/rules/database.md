@@ -10,18 +10,38 @@ paths:
 
 ## Least privilege
 
-One Postgres role per job. Ten exist: `ingestion-writer`, `api-reader`,
+One Postgres role per job. Eleven exist: `ingestion-writer`, `api-reader`,
 `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`,
-`registry-admin`, `auth-service`, `postmortem-writer`, `mcp-reader`.
+`registry-admin`, `auth-service`, `postmortem-writer`, `mcp-reader`,
+`fact-writer`.
 
 **If a component needs a write the current roles cannot do, add a role. Do not
 widen an existing one.** A role is reused only when the new surface is genuinely
-the same trust domain (`postmortem-writer` covering engineering memory is the one
-sanctioned example, and it is documented as such).
+the same trust domain. **Two** such exceptions exist, and both are documented
+where the reuse happens:
+
+1. `postmortem-writer` covering engineering memory (Phase 21).
+2. `fact-writer` covering `divergences` (Phase 29) — divergences are produced by
+   the same CI run, from the same repository, under the same project token, as
+   the facts they were derived from. Reasoned in `api/app/divergences/config.py`
+   and in `api/migrations/versions/b8e0c3d5f214_*.py`.
+
+If you are about to add a third, that is the signal this rule has stopped
+working, not that the third one is fine. Each exception must be argued in the
+migration and in the module, and the test that asserts the old boundary must be
+rewritten *stronger* rather than deleted — `api/tests/test_facts_api.py`'s
+`test_fact_writer_cannot_touch_the_other_planes_tables` is the worked example.
 
 Column-level grants are used where they express the real need — `ingest-gateway`
-has `UPDATE (last_used_at)` on `api_keys` and nothing else on that table. Prefer
-that over a table grant when only one column is written.
+has `UPDATE (last_used_at)` on `api_keys`, and `fact-writer` has UPDATE on nine
+named columns of `divergences` and nothing else on that table. Prefer that over a
+table grant whenever the writer touches a knowable subset.
+
+This is not tidiness. `divergences.first_seen_at` answers "how long has this been
+broken", and a bare table grant would have made "a repeat sighting cannot move
+it" an application convention rather than something the database enforces — so a
+leaked CI token could have made every open finding look new. The column list is
+what turns a docstring's promise into a guarantee.
 
 ## Schema parity
 

@@ -1,0 +1,11 @@
+{
+  "description": "The ORM declares orders.total_cents. The migration chain never creates it.",
+  "expected": [
+    {
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

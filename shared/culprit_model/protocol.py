@@ -89,13 +89,28 @@ class Predicate(StrEnum):
     MIGRATION_HEAD = "migration_head"
     #: A `dep:` subject's declared version specifier.
     VERSION = "version"
-    #: A `config:` subject: the key is read somewhere in the code, and
-    #: (separately) what shape a value for it takes.
+    #: A `config:` subject: the key is read somewhere in the code.
     READ_BY = "read_by"
+    #: Kept as a name a third-party extractor may use; nothing in this
+    #: repository emits it any more. It was one predicate carrying two
+    #: different claims, and Phase 29 found the false positive that
+    #: results: `.env.example` reporting a long opaque placeholder and
+    #: the code reporting an empty default is not a disagreement, it is
+    #: two different facts. Comparison is by (subject, predicate), so
+    #: claims that are not the same claim may not share a predicate.
     VALUE_SHAPE = "value_shape"
+    #: The shape of the placeholder committed in a `.env.example`.
+    EXAMPLE_SHAPE = "example_shape"
+    #: The shape of the default a piece of code falls back to.
+    DEFAULT_SHAPE = "default_shape"
     REQUIRED = "required"
     #: A client call site — "this component calls that path".
     CALLS = "calls"
+    #: A test exercises this route. Deliberately not the status code the
+    #: test asserts: a route answering 201 to an admin and 403 to a
+    #: member is one route behaving correctly, not two sources
+    #: disagreeing. See `extract_test_assertions`.
+    EXERCISED_BY_TEST = "exercised_by_test"
 
 
 class Skip(BaseModel):

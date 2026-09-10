@@ -1,0 +1,11 @@
+{
+  "description": "A cosmetic finding that culprit.yaml says is not cosmetic.",
+  "expected": [
+    {
+      "subject": "config:orders-api/LEGACY_PAYMENTS_FLAG",
+      "predicate": "exists",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

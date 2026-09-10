@@ -1,0 +1,88 @@
+{
+  "why": [
+    "A divergence's identity is what makes history possible: the same unfixed",
+    "fault carries the same key on Tuesday and on Friday, so a consumer can tell",
+    "'still broken' from 'broken again'. It is computed twice - by the Go CLI",
+    "before upload (cli/internal/model/divergence.go) and by the Python model on",
+    "receipt (shared/culprit_model/facts.py) - and two implementations that",
+    "drift apart produce duplicate rows nobody notices, because nothing errors.",
+    "Same arrangement as subject_conformance.json, for the same reason.",
+    "",
+    "A source is an extractor AND an artefact. Keying on the extractor alone",
+    "made two genuinely different findings about one (subject, predicate) share",
+    "a key - see the 'same extractor, different artefacts' cases below, which",
+    "are the ones this fixture exists for."
+  ],
+  "cases": [
+    {
+      "name": "an ordinary route conflict",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "exists",
+      "left_extractor": "culprit-extract-node@0.1.0",
+      "left_artefact": "frontend/src/lib/api.ts",
+      "right_extractor": "culprit-extract-python@0.1.0",
+      "right_artefact": "api/app/main.py",
+      "identity": "http:orders-api/GET /orders|exists|culprit-extract-node@0.1.0|frontend/src/lib/api.ts|culprit-extract-python@0.1.0|api/app/main.py"
+    },
+    {
+      "name": "a templated path, already canonical",
+      "subject": "http:orders-api/GET /orders/{}/refunds",
+      "predicate": "calls",
+      "left_extractor": "culprit-extract-node@0.1.0",
+      "left_artefact": "frontend/src/lib/api.ts",
+      "right_extractor": "culprit-extract-python@0.1.0",
+      "right_artefact": "api/app/main.py",
+      "identity": "http:orders-api/GET /orders/{}/refunds|calls|culprit-extract-node@0.1.0|frontend/src/lib/api.ts|culprit-extract-python@0.1.0|api/app/main.py"
+    },
+    {
+      "name": "a developer assertion, whose extractor name has spaces",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "exists",
+      "left_extractor": "culprit.yaml invariants",
+      "left_artefact": "culprit.yaml",
+      "right_extractor": "culprit-extract-python@0.1.0",
+      "right_artefact": "api/app/main.py",
+      "identity": "http:orders-api/GET /orders|exists|culprit.yaml invariants|culprit.yaml|culprit-extract-python@0.1.0|api/app/main.py"
+    },
+    {
+      "name": "same extractor, different artefacts: the ORM against the migrations",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "left_extractor": "culprit-extract-python@0.1.0",
+      "left_artefact": "api/app/db/models.py",
+      "right_extractor": "culprit-extract-python@0.1.0",
+      "right_artefact": "api/migrations/versions",
+      "identity": "schema:orders-api-db/public.orders|columns|culprit-extract-python@0.1.0|api/app/db/models.py|culprit-extract-python@0.1.0|api/migrations/versions"
+    },
+    {
+      "name": "same extractor, same subject, a THIRD artefact - must not collide with the case above",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "left_extractor": "culprit-extract-python@0.1.0",
+      "left_artefact": "api/app/db/models.py",
+      "right_extractor": "culprit-extract-python@0.1.0",
+      "right_artefact": "api/schema.sql",
+      "identity": "schema:orders-api-db/public.orders|columns|culprit-extract-python@0.1.0|api/app/db/models.py|culprit-extract-python@0.1.0|api/schema.sql"
+    },
+    {
+      "name": "a config key",
+      "subject": "config:orders-api/PAYMENTS_WEBHOOK_SECRET",
+      "predicate": "read_by",
+      "left_extractor": "culprit-extract-python@0.1.0",
+      "left_artefact": "api/app/config.py",
+      "right_extractor": "culprit@dev",
+      "right_artefact": "api/.env.example",
+      "identity": "config:orders-api/PAYMENTS_WEBHOOK_SECRET|read_by|culprit-extract-python@0.1.0|api/app/config.py|culprit@dev|api/.env.example"
+    },
+    {
+      "name": "a fact with no artefact at all - the empty string is part of the key",
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "left_extractor": "culprit-extract-python@0.1.0",
+      "left_artefact": "",
+      "right_extractor": "culprit@dev",
+      "right_artefact": "",
+      "identity": "component:orders-api|migration_head|culprit-extract-python@0.1.0||culprit@dev|"
+    }
+  ]
+}

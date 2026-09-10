@@ -1,0 +1,11 @@
+{
+  "description": "app/config.py reads PAYMENTS_WEBHOOK_SECRET. .env.example never mentions it.",
+  "expected": [
+    {
+      "subject": "config:orders-api/PAYMENTS_WEBHOOK_SECRET",
+      "predicate": "read_by",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

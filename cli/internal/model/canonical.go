@@ -14,6 +14,8 @@
 package model
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -128,4 +130,67 @@ func CanonicalComponent(name string) string {
 // because Postgres folds unquoted identifiers that way.
 func CanonicalIdentifier(name string) string {
 	return strings.ToLower(strings.TrimSpace(name))
+}
+
+// CanonicalValue recursively normalises a fact value for comparison,
+// mirroring `culprit_model.canonical.canonical_value`.
+//
+// Mappings are key-ordered and sets become sorted lists, because neither
+// has an order and any order but a deterministic one would make equal
+// values compare unequal. **Lists are not sorted**: order is meaningful
+// in a list of path segments or middleware, and sorting would erase a
+// real divergence.
+//
+// JSON numbers arrive from `encoding/json` as float64 and from a Go
+// literal as int, so both are folded to float64 — otherwise `200` read
+// from a file and `200` written in a test would differ, which is a
+// difference about the decoder rather than about the system.
+func CanonicalValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		normalised := make(map[string]any, len(typed))
+		for key, inner := range typed {
+			normalised[key] = CanonicalValue(inner)
+		}
+		return normalised
+	case []any:
+		normalised := make([]any, len(typed))
+		for index, inner := range typed {
+			normalised[index] = CanonicalValue(inner)
+		}
+		return normalised
+	case []string:
+		normalised := make([]any, len(typed))
+		for index, inner := range typed {
+			normalised[index] = inner
+		}
+		return normalised
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case float32:
+		return float64(typed)
+	default:
+		return value
+	}
+}
+
+// CanonicalJSON is a stable string form of a value, for equality.
+//
+// `json.Marshal` sorts map keys, which is exactly the normalisation
+// wanted; the recursion above handles the rest. A value that cannot be
+// marshalled falls back to its Go representation rather than erroring —
+// an unexpected type should make comparison noisy, not crash a run.
+func CanonicalJSON(value any) string {
+	encoded, err := json.Marshal(CanonicalValue(value))
+	if err != nil {
+		return fmt.Sprintf("%#v", value)
+	}
+	return string(encoded)
+}
+
+// ValuesEqual is the only sanctioned equality test between fact values.
+func ValuesEqual(left, right any) bool {
+	return CanonicalJSON(left) == CanonicalJSON(right)
 }

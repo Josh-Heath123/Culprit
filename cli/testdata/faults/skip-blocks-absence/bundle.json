@@ -1,0 +1,48 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "calls",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-node@0.1.0",
+        "confidence_rank": 40,
+        "artefact": "frontend/src/lib/api.ts",
+        "locator": "L12"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders/{}/refunds",
+      "predicate": "calls",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-node@0.1.0",
+        "confidence_rank": 40,
+        "artefact": "frontend/src/lib/api.ts",
+        "locator": "L13"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    }
+  ],
+  "skipped": [
+    {
+      "want": "http_routes",
+      "component": "orders-api",
+      "reason": "importing the application raised KeyError: 'JWT_SECRET_KEY'",
+      "extractor": "culprit-extract-python@0.1.0"
+    }
+  ]
+}

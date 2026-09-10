@@ -100,3 +100,77 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           files: cli/dist/*
           generate_release_notes: true
+
+  # The two extractor plugins (Phase 29 field 15).
+  #
+  # Separate jobs, gated on the binaries publishing first: a release
+  # where `culprit` exists and `culprit-extract-python` does not is
+  # worse than no release, because the CLI's first run against a Python
+  # project would degrade to artefact readers only and the user would
+  # conclude the tool does not work.
+  #
+  # Trusted publishing, no long-lived tokens: PyPI takes an OIDC
+  # identity (`id-token: write`) and npm takes provenance the same way
+  # from npm 11.5. Neither needs a secret in this repository, which is
+  # the point — a publish credential sitting in Actions secrets is a
+  # supply-chain liability for exactly as long as it exists.
+  publish-pypi:
+    needs: release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      # The version in the tag and the version in the package must
+      # agree, or `pip install culprit-extract-python==0.1.0` installs
+      # something the release notes do not describe.
+      - name: Check the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          declared=$(grep -m1 '^version' extractors/python/pyproject.toml | cut -d'"' -f2)
+          if [ "$tag" != "$declared" ]; then
+            echo "tag ${tag} but pyproject.toml says ${declared}" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: cd extractors/python && uv build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: extractors/python/dist/
+
+  publish-npm:
+    needs: release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Check the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          declared=$(node -p "require('./extractors/node/package.json').version")
+          if [ "$tag" != "$declared" ]; then
+            echo "tag ${tag} but package.json says ${declared}" >&2
+            exit 1
+          fi
+
+      - name: Test before publishing
+        run: cd extractors/node && npm ci && npm test
+
+      - name: Publish
+        run: cd extractors/node && npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

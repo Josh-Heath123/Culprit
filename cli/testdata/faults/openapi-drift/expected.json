@@ -1,0 +1,11 @@
+{
+  "description": "The committed openapi.json says POST /orders answers 200 and 404. The app also answers 409.",
+  "expected": [
+    {
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "status_codes",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

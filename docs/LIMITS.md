@@ -604,6 +604,26 @@ What is and is not seen:
   deliberately not — that belongs to a `dep:` subject, and inventing a
   component name for `api.stripe.com` would produce a subject nothing
   else can match.
+- **A trailing interpolation glued to a path segment is skipped, not
+  resolved.** A backtick string ending in `graph${query}` — no `/`
+  before the expression, nothing after it — could be a query string, a
+  suffix or a path fragment, and the template cannot say which. The
+  call site is dropped.
+
+  This is a deliberate false negative, traded for a false positive that
+  was worse. Appending the parameter placeholder produced the subject
+  `/model/graph{}`, which can never match any route a server declares:
+  a permanent, unfixable finding against a repository that is correct.
+  Culprit reported exactly that about its own frontend, where `query`
+  holds `?symptom=…`. Truncating instead would be the opposite error —
+  a path ending in `orders${rest}` where `rest` is `/42/refunds` is not
+  a call to `/orders` — and choosing between them by reading the
+  variable's *name* is the implementation-level inference D6 rules out.
+
+  A literal `?` does end the path, so a template written
+  `graph?symptom=${s}` reads as `/graph`. An interpolation after a `/`
+  is unambiguously a segment, so `/users/${id}` is unaffected — that is
+  most call sites in a React codebase.
 - A project-local HTTP wrapper is invisible unless you name it:
   `culprit-extract-node --client-fn request`. Almost every real codebase
   has one and no generic tool can recognise it. Guessing — treating any
@@ -717,3 +737,130 @@ fixtures. Miss one and that project's tests fail at container setup with a
 
 Same root cause as `worker/app/db.py` hand-mirroring `api`'s ORM. Unlike
 that one, there is no drift checker for it yet.
+
+## `culprit check` compares intent against intent, and nothing else
+
+Every fact the CLI can produce is on the INTENT plane, so every finding
+it can report is an `intent_conflict`: two things your repository says
+about itself that do not agree. It does not know what your staging
+environment is configured to do (Phase 30) or what actually happened in
+production (Phase 31).
+
+That is a real limit and it is also most of the value. Two sources of
+intent disagreeing is usually itself the bug, and it is detectable in a
+pull request before anything is deployed, with no environment access and
+no account.
+
+## Absence is only judged against a source that enumerates
+
+"The frontend calls a route the backend does not expose" is a finding
+only when something *complete* described that backend's routes — a
+running application's own route table, or a committed `openapi.json`
+(confidence rank 80 or above, §2.4). A scrape of call sites is not a
+complete list of anything, and its silence is never treated as evidence.
+
+Two consequences worth knowing:
+
+- **If extraction was skipped, no absence is reported at all.** A
+  component whose route table could not be read produces skips, not
+  findings, and the report lists them under "Not checked". A clean report
+  with nine skips is not a clean system.
+- **A hand-written `invariants:` entry is never a reference either.** It
+  is rank 100 — above every extractor — but rank says how much to
+  *believe* a source, not whether it was surveying a surface. An
+  invariant says "this route must exist"; it never says "and these are
+  all of them".
+
+## The migration-chain reader understands literal Alembic operations only
+
+`schema:` facts from your migrations are produced by reading the
+migration files with Python's `ast` — never by running them, which would
+need a database this phase deliberately has no access to.
+
+It follows `create_table`, `add_column`, `drop_column`, `drop_table`,
+`rename_table` and `alter_column ... new_column_name`, with literal
+arguments. A migration that builds its columns in a loop, or issues raw
+`op.execute("ALTER TABLE ...")`, is invisible to it, and the resulting
+column list will be missing whatever those did.
+
+It also **declines entirely** rather than guessing when the revision
+chain does not form a single line — a merge revision, two roots, a cycle,
+or an unreachable file. A partially replayed chain would produce a
+confident column list that is simply wrong, and every difference against
+it would be a false positive.
+
+Emitted at rank 80, below the ORM's runtime introspection at 90, so when
+the two disagree the report treats the models as the reference.
+
+## A test assertion says a route is exercised, not what it returns
+
+Phase 28's extractor recorded the status codes a test asserted. Phase 29
+removed that, because it produced false positives on Culprit's own
+repository: one test asserts 201 for `POST /services` and another asserts
+403, and the comparator reported them as disagreeing. They do not — a
+route answers 201 to an admin and 403 to a member.
+
+What survives is `exercised_by_test`, which still catches a test calling
+a route the application does not serve, and still tells the coverage
+report which parts of your surface no test touches. "The test expects 200
+and the app returns 404" is not detectable this way and is not claimed.
+
+## A config key's example and its default are not compared
+
+`.env.example` gives the shape of a *placeholder somebody wrote*;
+`os.environ.get("KEY", "")` gives the shape of a *default the code falls
+back to*. These are different claims, so they carry different predicates
+(`example_shape` and `default_shape`) and never compare against each
+other.
+
+The cost: a genuine type disagreement between the two — `PORT=8000` in
+the example, `"localhost"` as the default — is not currently detected.
+The alternative was reporting every key whose placeholder is longer than
+its default, which is nearly all of them.
+
+## Severity is only as good as your `culprit.yaml`
+
+`breaks_request_path` means "reachable from an entry point along an edge
+you marked `on_request_path`". A manifest with no `connections:` gives
+the classifier nothing to work with, and it says so — findings come back
+`unknown` rather than being quietly filed as trivial.
+
+`unknown` deliberately ranks *above* `cosmetic`, so `--fail-on=any`
+includes it. "We could not work out how bad this is" must not be quieter
+than "we worked it out and it is trivial".
+
+## The fault corpus evaluates the engine, not extraction
+
+`cli/testdata/faults/` is the eval suite: each fixture is a committed
+fact bundle plus the exact divergence set it must produce, and an
+unexpected finding fails the build as a false positive. What it exercises
+is comparison, severity, suppression and invariants — given facts.
+
+Extraction has its own corpus (`cli/testdata/fixtures/`, plus the Python
+and Node extractors' test suites). The seam between the two is the
+subject URI, held by a conformance fixture both languages read.
+
+The gap this leaves is real: if an extractor changes what it emits, the
+fault bundles go stale silently, because nothing regenerates them from a
+live extraction. Splitting the evals this way keeps them hermetic and
+fast enough to run on every commit, which a corpus needing `uv` and
+`npx` per fixture would not be.
+
+## The CLI does not upload anything
+
+`POST /divergences/captures` exists and stores history, but no version of
+the `culprit` binary calls it — the binary links no HTTP client at all,
+and a test asserts that its check pipeline links no networking package
+whatsoever. Uploading is deliberately deferred to Phase 30, where network
+access arrives with the capability model that should gate it.
+
+Until then, history is populated by posting to the endpoint yourself
+(`culprit check --format json` gives you the findings).
+
+## Findings are never closed automatically
+
+A divergence that stops appearing is not marked resolved. This run may
+have checked a subset of components, or extraction may have been skipped
+for one entirely. Inferring "it is fixed" from "I did not see it" is the
+same mistake the comparator refuses to make about facts. Resolution
+arrives with verification, in Phase 32.

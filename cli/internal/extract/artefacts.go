@@ -152,9 +152,15 @@ func (c captureContext) fact(subject, predicate string, value any, provenance mo
 
 // configFact is the only way a reader may say anything about a config
 // key. It takes a shape and has no parameter a literal could go through.
-func (c captureContext) configFact(key string, shape model.ValueShape, provenance model.Provenance) (model.Fact, bool) {
+//
+// The predicate is a parameter rather than a constant because a shape is
+// only meaningful alongside what kind of shape it is — see
+// model.PredicateValueShape for the false positive that taught us so.
+func (c captureContext) configFact(
+	key, predicate string, shape model.ValueShape, provenance model.Provenance,
+) (model.Fact, bool) {
 	candidate, err := model.NewConfigFact(
-		model.PlaneIntent, c.Component, key, model.PredicateValueShape,
+		model.PlaneIntent, c.Component, key, predicate,
 		shape, provenance, c.CapturedAt, c.CaptureID)
 	if err != nil {
 		return model.Fact{}, false

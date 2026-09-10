@@ -252,7 +252,18 @@ class Divergence(BaseModel):
     right: Fact
     severity: Severity = Severity.UNKNOWN
     first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
     status: DivergenceStatus = DivergenceStatus.OPEN
+    #: One sentence a human reads first, built from the two facts by the
+    #: comparator. Never generated: D8 forbids an LLM on this path.
+    explanation: str = ""
+    #: Why that severity, in the system model's own terms. A severity
+    #: nobody can trace is a severity nobody trusts.
+    severity_reason: str = ""
+    #: The reason from `culprit.yaml` that silenced this, when it is
+    #: suppressed. A suppressed finding still has to explain itself, or
+    #: the suppression list stops being auditable.
+    suppressed_by: str = ""
 
     @model_validator(mode="after")
     def _sides_are_comparable(self) -> "Divergence":
@@ -269,3 +280,42 @@ class Divergence(BaseModel):
         if self.subject != self.left.subject or self.predicate != self.left.predicate:
             raise ValueError("divergence subject/predicate must match its own facts")
         return self
+
+    def identity(self) -> str:
+        """A stable key for one finding, across runs.
+
+        Derived from what the finding *is* - its subject, its predicate,
+        and the two *sources* that disagreed - so the same unfixed fault
+        carries the same key on Tuesday and on Friday, and a consumer can
+        tell "still broken" from "broken again".
+
+        A source is an extractor **and** an artefact. One extractor
+        legitimately reads several independent descriptions of the same
+        thing - the ORM's columns and the migration chain's columns come
+        from the same process - so keying on the extractor alone made two
+        genuinely different findings share one key, and the second upsert
+        silently overwrote the first.
+
+        Deliberately not a hash of the whole object: values move, clocks
+        move, severities move when the system model changes. Identity
+        does not.
+
+        **Kept byte-identical to `Divergence.ID()` in
+        `cli/internal/model/divergence.go`**, which is what the CLI
+        computes before it ever reaches this model. The two are held
+        together by `shared/tests/test_divergence_identity.py`, reading
+        the same fixture the Go test reads - the same arrangement subject
+        URIs use, and for the same reason: two implementations of one
+        identity that drift apart produce duplicate history nobody
+        notices.
+        """
+        return "|".join(
+            (
+                self.subject,
+                self.predicate,
+                self.left.provenance.extractor,
+                self.left.provenance.artefact or "",
+                self.right.provenance.extractor,
+                self.right.provenance.artefact or "",
+            )
+        )

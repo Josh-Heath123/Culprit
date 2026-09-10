@@ -240,6 +240,20 @@ language (inaccurate for anything involving dynamic route registration, which is
 most frameworks); an LSP-based approach (heavy, and language servers are not
 designed to answer these questions).
 
+**Import-time environment: synthetic only, never the user's real values.**
+(Resolves Q8, 2026-09-09.) Importing an application to introspect it often
+requires environment variables to be set. `culprit.yaml`'s `extract:` section
+declares which *names* must be present; the CLI generates **synthetic values that
+satisfy the shape** (`postgresql://extract:extract@localhost/extract`) and passes
+those. It never sources the user's `.env`, and there is no option to.
+
+The reason is Phase 28's own defect chain (standing invariant 11): every error
+path is an exfiltration path, so the only safe extractor process is one that
+never held a real credential in the first place. If an application genuinely
+cannot be imported without a live connection, the extractor emits `skipped` with
+that reason — an honest partial answer, which is the whole design of the
+protocol.
+
 **Trade-off.** Extraction requires installing something into the user's project.
 Mitigation: it is one dev-dependency, it is pure-Python/pure-JS, it imports
 nothing at runtime, and `culprit check` degrades to artefact-only extraction if
@@ -380,6 +394,15 @@ all. Worse, `culprit_model.Fact` carries neither field, so **Postgres is
 currently the only enforcement point**, and a capture bundle serialised to JSON
 without ever being inserted — precisely the artefact §5 promises is safe to
 attach to a bug report — is unprotected.
+
+**`ValueShape` carries `scheme`, as a closed enum.** (Resolves Q7, 2026-09-09.)
+Diagnosis genuinely needs it: "the application declares a `postgresql` URL and
+the environment holds a `mysql` one" is a real fault class that is undetectable
+without it. But it is an enum of known schemes — `postgresql`, `mysql`, `https`,
+`redis`, `amqp`, … with `other` as the fallback — never a free string. A closed
+enum cannot carry a secret; a free string always can. Same reasoning applies to
+every field added to `ValueShape` from here: if it cannot be expressed as a
+closed set or a bounded numeric class, it does not belong in the type.
 
 The real fix is a **closed `ValueShape` type in `culprit_model`** that
 structurally cannot hold a literal: a fixed set of fields (`type`,
@@ -597,6 +620,20 @@ prior plans and extended:
     how a wrong belief about your own gate gets caught. This is the same claim as
     §2.6's rule that a probe which cannot return `inconclusive` is a probe that
     guesses.
+11. **Error text is output, and carries the same redaction obligations as a
+    fact.** Added 2026-09-09. Phase 28's audits found four paths by which a
+    credential escaped through an error: a non-canonical subject slipping past
+    both the model's and the database's config-value checks; a CHECK violation
+    surfacing as a 500 with Postgres's failing row in the log; the fix for that
+    quoting the offending subject, and a subject is a fine place to hide a DSN;
+    and `str(ValidationError)` rendering its input, which an extractor turns into
+    a skip reason that travels inside the capture bundle — the artefact whose
+    safety is the whole claim. **Three of those four were introduced by the fix
+    for the previous one.** That is the real finding: redaction bolted on per
+    call site will always have one more call site. It belongs at a single choke
+    point — one serialiser that structurally cannot render a secret, applied to
+    every outbound string, with error messages, skip reasons, probe
+    `inconclusive`/`refused` reasons and log lines all inside its scope.
 
 ---
 
@@ -897,7 +934,13 @@ files per fixture.
 - `culprit intent` on a Python+React repository emits facts for server routes,
   client call sites, DB schema, migration head, config keys and dependency
   versions.
-- Running it twice on an unchanged tree produces byte-identical output.
+- Running it twice on an unchanged tree is **reproducible**: byte-identical with
+  `SOURCE_DATE_EPOCH` pinned, and identical except for `captured_at` without it.
+  (Reworded 2026-09-09. The original said "byte-identical" full stop, which is
+  unsatisfiable while a fact carries a capture timestamp. Pinning the clock is
+  the standard way to assert reproducibility — it is how reproducible builds are
+  tested everywhere else — so this is a literal satisfaction of the property the
+  criterion is for, once the criterion says what it means.)
 - A `Fact` about a config key **cannot be constructed carrying a literal value**
   — not through the API, not by serialising a bundle that never touches the
   database. Proved by attempting it in a test, not by inspection.
@@ -905,8 +948,16 @@ files per fixture.
   precisely what it skipped and why.
 - One static binary, no runtime installed, `curl | sh` documented.
 
-**15. Definition of done.** Above, plus published `v0.1.0` binaries and the two
-extractor packages.
+**15. Definition of done.** Above, plus binaries built and installable from a
+local checkout, and both extractor packages installable from a local path.
+
+**Publication moved to Phase 29** (2026-09-09). Tagging `v0.1.0` and claiming the
+names on PyPI and npm before Phase 29 makes the tool useful to anyone would burn
+good package names on something nobody can yet get value from, and a published
+`v0.1.0` invites installs against a CLI whose only verb prints an inventory. The
+eval corpus installs the extractors from a local path, so nothing in this phase
+needs a registry. Publication becomes real when Phase 29's criterion — a
+confirmed finding in a project we neither wrote nor control — is met.
 
 **16. Connects to next phase.** Phase 29 compares these facts. Nothing is
 compared yet.
@@ -982,7 +1033,10 @@ false-positive count rises fails the build.
   important criterion in this phase.**
 
 **15. Definition of done.** Above, plus `culprit check` running against Culprit's
-own repo in CI, and a README that shows real output from a real project.
+own repo in CI, and a README that shows real output from a real project. Plus
+**publication, moved here from Phase 28**: tag `v0.1.0`, publish the binaries,
+and release both extractor packages to PyPI and npm. This is the first point at
+which a stranger installing them gets something worth having.
 
 **16. Connects to next phase.** Phase 30 adds the `CONFIGURED` plane, which
 multiplies the fault classes this same comparator can find without changing it.

@@ -1,0 +1,5 @@
+{
+  "description": "Every source agrees. The most important fixture in the corpus: it must stay empty.",
+  "expected": [],
+  "false_positives": 0
+}

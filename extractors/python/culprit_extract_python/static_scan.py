@@ -121,7 +121,7 @@ def extract_config_keys(root: Path, builder: FactBuilder) -> list[Any]:
                 facts.append(
                     builder.config_fact(
                         subject,
-                        Predicate.VALUE_SHAPE,
+                        Predicate.DEFAULT_SHAPE,
                         ValueShape.of(default),
                         artefact=artefact,
                         locator=locator,
@@ -203,20 +203,37 @@ _HTTP_CALL_METHODS = frozenset(
 
 
 def extract_test_assertions(root: Path, builder: FactBuilder) -> list[Any]:
-    """Finds `assert response.status_code == N` next to a client call.
+    """Finds routes a test exercises, by looking for a client call next
+    to an asserted status code.
 
-    **A heuristic, and stated as one** (docs/LIMITS.md). Within one test
-    function, this pairs every asserted status code with every path the
-    function calls. A test that exercises two endpoints and asserts two
-    codes therefore produces four facts, two of which are wrong.
+    **The claim is that the route is exercised, not what it returns.**
 
-    Two things make that acceptable rather than reckless. Rank 50 is the
-    second-lowest in §2.4, so a test-derived claim loses to the app's own
-    route table wherever they overlap. And a wrong pairing produces an
-    `intent_conflict` — a visible disagreement someone can look at — not
-    a silent wrong answer. The alternative, tracking which response
-    variable came from which call, is dataflow analysis, which is the
-    kind of implementation-level modelling D6 rules out.
+    Phase 28 emitted the asserted status codes here, as `status_codes`,
+    reasoning that a wrong pairing would surface as a visible
+    `intent_conflict` somebody could look at. Phase 29 ran the comparator
+    over this repository and showed that reasoning to be wrong. Three
+    findings came out, all noise, all the same shape: one test asserts
+    201 for `POST /services` and another asserts 403, so the two "disagree".
+
+    They do not. A route answers 201 to an admin and 403 to a member, and
+    both tests are correct. `status_codes` on a route table means "the
+    set of codes this route can return"; on a test it meant "a code seen
+    once, in one scenario, possibly paired with the wrong call". Those
+    are different claims and they must not share a predicate — comparison
+    is by (subject, predicate), and a predicate that means two things
+    produces a disagreement between two facts that are both true.
+
+    So the status code is dropped and the surviving claim is the one that
+    was always the valuable part: **this route is exercised by a test**.
+    That still finds a test hitting a route the application does not
+    serve, and it still tells §0.1's coverage report which parts of the
+    surface no test touches. What is lost — "the test expects 200 and the
+    app returns 404" — was never soundly detectable this way.
+
+    The pairing heuristic itself is unchanged and still stated in
+    `docs/LIMITS.md`: within one test function, every asserted code is
+    paired with every path the function calls. It now costs less, because
+    the mis-pairing no longer changes what is claimed.
     """
     facts: list[Any] = []
     for path in python_files(root):
@@ -245,8 +262,8 @@ def extract_test_assertions(root: Path, builder: FactBuilder) -> list[Any]:
                 facts.append(
                     builder.fact(
                         subject,
-                        Predicate.STATUS_CODES,
-                        sorted({str(code) for code in codes}),
+                        Predicate.EXERCISED_BY_TEST,
+                        True,
                         source_kind=SourceKind.TEST,
                         artefact=artefact,
                         locator=f"{function.name}:L{line}",

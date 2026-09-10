@@ -66,10 +66,20 @@ changed="$( { git diff --name-only --diff-filter=ACM 2>/dev/null
 # naive "lint every changed .py". The justfile's note about the hook once
 # being stricter than the gate was about the gate being too narrow; here
 # the gate is narrow on purpose and the hook follows it.
-EXCLUDED_PREFIXES='cli/testdata/fixtures/'
+EXCLUDED_PREFIXES='cli/testdata/fixtures/ cli/testdata/demo/'
+
+# One `grep -v -F -e <prefix>` per entry, built up rather than passing
+# the whole string as a single pattern: with two prefixes,
+# `-e "$EXCLUDED_PREFIXES"` would look for the literal
+# "cli/testdata/fixtures/ cli/testdata/demo/", match nothing, and
+# silently start linting both fixture corpora again.
+exclude_args=""
+for prefix in $EXCLUDED_PREFIXES; do
+  exclude_args="$exclude_args -e $prefix"
+done
 
 py_files="$(printf '%s\n' "$changed" | grep '\.py$' \
-  | grep -v -F -e "$EXCLUDED_PREFIXES" || true)"
+  | grep -v -F $exclude_args || true)"
 migrations="$(printf '%s\n' "$py_files" | grep '^api/migrations/versions/' || true)"
 
 failures=""

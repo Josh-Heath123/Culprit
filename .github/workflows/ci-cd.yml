@@ -186,6 +186,119 @@ jobs:
       - name: node --test (culprit-extract-node)
         run: cd extractors/node && npm ci && npm test
 
+  # Culprit checks Culprit (Phase 29 field 5).
+  #
+  # Dogfooding is the cheapest continuous eval available. This repository
+  # is a real multi-language system - an OpenAPI surface, an ORM, a
+  # 23-revision migration chain, a React frontend calling the API, about
+  # five hundred facts across five components - so if the comparator
+  # starts inventing findings, it invents them here first, on the pull
+  # request that caused it.
+  #
+  # Its own job rather than a step in `cli` above: it needs the Python
+  # extractor installed into api's environment to introspect anything,
+  # and a failure here means something different from a unit-test
+  # failure. It says the product is wrong about a real repository.
+  self-check:
+    needs: cli
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Uploading a SARIF file needs this. It is what turns a finding
+      # into an annotation on the changed line of a pull request, which
+      # is most of the adoption story for a CI tool - and it would be odd
+      # to ship that and then not use it ourselves.
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: cli/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install the extractor plugins
+        run: |
+          cd api && uv sync --all-extras
+          cd ../frontend && npm ci
+
+      # `continue-on-error`, deliberately, and only on this step.
+      #
+      # A finding here should be visible on the pull request, and it
+      # should not be able to block an unrelated change from merging on
+      # the day the tool first gets something wrong about our own
+      # repository. The gate that *can* fail the build is the false
+      # positive corpus in `cli/testdata/faults/`, which runs in the
+      # `cli` job above and is an exact assertion. This step is the
+      # noisier, more valuable, less trustworthy signal, and it is
+      # treated as one.
+      #
+      # If it stays green for a few releases, remove this line.
+      # `just self-check-sarif`, not the binary directly.
+      #
+      # The recipe carries the placeholder environment
+      # `api/app/*/config.py` needs at import time, and introspecting a
+      # FastAPI app means importing it. Without it the extractor reports
+      # `KeyError: JWT_SECRET_KEY` and skips `http_routes` and
+      # `db_schema` — the two rank-90 enumerating sources — so the job
+      # would check a fact set with the route table and the ORM schema
+      # missing and report a confident, meaningless zero.
+      #
+      # That is this product's own failure mode, and it shipped in this
+      # job until the Phase 29 audit caught it. Invoking through `just`
+      # is what keeps the two from drifting apart again.
+      # The placeholder environment, duplicated from the justfile's
+      # `_self-check-env` recipe rather than shelled through `just` —
+      # no other job here needs `just`, and adding an action to install
+      # it is supply-chain surface for one step. The duplication is held
+      # in step by `scripts/tests/test_self_check_env.py`, which parses
+      # both this file and the justfile and fails if they diverge. Same
+      # technique, and same reason, as the stop hook's exclusion list.
+      - name: culprit check (this repository)
+        id: check
+        continue-on-error: true
+        env:
+          JWT_SECRET_KEY: culprit-intent-extraction-placeholder
+          AGENT_AUTOMATION_TOKEN: culprit-intent-extraction-placeholder
+          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          API_READER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          REGISTRY_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+        run: |
+          cd cli
+          go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
+
+      # Run again for the log. The SARIF file went to disk, so without
+      # this the job's output says nothing a person reading it can use.
+      - name: culprit check (human-readable, including coverage)
+        if: always()
+        env:
+          JWT_SECRET_KEY: culprit-intent-extraction-placeholder
+          AGENT_AUTOMATION_TOKEN: culprit-intent-extraction-placeholder
+          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          API_READER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          REGISTRY_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+        run: |
+          cd cli
+          go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: culprit.sarif
+          category: culprit
+
   test:
     needs: typecheck
     runs-on: ubuntu-latest

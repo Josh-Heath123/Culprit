@@ -130,6 +130,56 @@ cli-release:
 cli-test:
     cd cli && go test ./...
 
+# Run `culprit check` against Culprit's own repository (Phase 29 field 5).
+#
+# Dogfooding is the cheapest continuous eval available: this repository
+# is a real multi-language system with an OpenAPI surface, an ORM, a
+# migration chain, a React frontend calling the API, and about five
+# hundred facts across five components. If the comparator starts
+# inventing findings, it invents them here first.
+#
+# `--fail-on=breaks_request_path` rather than the default `degrades`: the
+# gate is about faults that break requests, and a stricter threshold in
+# our own CI than we recommend to users would be us not believing our own
+# default.
+#
+# **The placeholder env is not optional here.** `just intent` sets it
+# because api/app/*/config.py reads those variables at import time and
+# introspecting a FastAPI app means importing it. Without them the
+# extractor reports `KeyError: JWT_SECRET_KEY` and skips `http_routes`
+# and `db_schema` — the two rank-90 enumerating sources — so the check
+# runs against a fact set with the route table and the ORM schema
+# missing and reports a confident, meaningless zero.
+#
+# That is exactly the failure this product exists to prevent, shipped in
+# its own dogfooding gate: "no findings" that means "nothing looked".
+# The Phase 29 audit caught it. Every self-check recipe below therefore
+# goes through `_self-check-env`, and none of them invokes the binary
+# directly.
+self-check *ARGS:
+    @just _self-check-env --fail-on=breaks_request_path {{ARGS}}
+
+# The same, as the SARIF file CI uploads for pull-request annotations.
+self-check-sarif:
+    @just _self-check-env --fail-on=breaks_request_path --format sarif --output ../culprit.sarif
+
+# The §0.1 coverage report: subjects only one source describes, where
+# nothing could ever catch a mistake. Not defects — a map of where this
+# repository is unverifiable.
+self-check-coverage:
+    @just _self-check-env --fail-on=any --unverifiable
+
+# The one place the placeholder env lives. Same values as `just intent`.
+_self-check-env *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
+    export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER; do
+        export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
+    done
+    cd cli && exec go run ./cmd/culprit check -f ../culprit.yaml {{ARGS}}
+
 # gofmt is the whole lint story for Go -- `go vet` catches the rest.
 cli-lint:
     #!/usr/bin/env bash
