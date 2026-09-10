@@ -300,6 +300,32 @@ def _database_facts(root: Path, app: Any, builder: FactBuilder) -> tuple[list[An
         except Exception as exc:
             reasons.append(f"reading SQLAlchemy metadata raised {safe_message(exc)}")
 
+    # The chain's own schema, read statically. Deliberately *outside* the
+    # `app is not None` branch above: on a repository whose app cannot be
+    # imported — a missing JWT_SECRET_KEY, say, which is Culprit's own
+    # situation — this is the only schema fact anything can produce, and
+    # it is better than none.
+    # Imported outside the `try` below: it is a local module with no
+    # optional dependency, so an ImportError here would be a bug in this
+    # package rather than a condition to degrade over — and catching
+    # `ChainError` requires the name to be bound whichever way the try
+    # goes.
+    from culprit_extract_python.migrations import ChainError, extract_migration_schema
+
+    try:
+        schema = extract_migration_schema(root, builder)
+        if schema:
+            facts.extend(schema)
+        else:
+            reasons.append("no alembic versions/ directory with migrations was found")
+    except ChainError as exc:
+        # Named separately from the generic handler because this is the
+        # honest-refusal path, not a bug: the chain could not be ordered,
+        # so replaying it would produce a schema that never existed.
+        reasons.append(f"the migration chain was not replayed: {exc}")
+    except Exception as exc:
+        reasons.append(f"replaying the migration chain raised {safe_message(exc)}")
+
     try:
         from culprit_extract_python.database import extract_migration_head
         head = extract_migration_head(root, builder)

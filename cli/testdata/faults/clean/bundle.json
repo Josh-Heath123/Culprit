@@ -1,0 +1,180 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/app/main.py",
+        "locator": "L40"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/app/main.py",
+        "locator": "L41"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "calls",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-node@0.1.0",
+        "confidence_rank": 40,
+        "artefact": "frontend/src/lib/api.ts",
+        "locator": "L12"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "calls",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-node@0.1.0",
+        "confidence_rank": 40,
+        "artefact": "frontend/src/lib/api.ts",
+        "locator": "L13"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "status_codes",
+      "value": [
+        "200"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/openapi.json",
+        "locator": "$.paths./orders.get"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "status_codes",
+      "value": [
+        "200"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/app/main.py",
+        "locator": "L40"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/GET /orders",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/openapi.json",
+        "locator": "$.paths./orders.get"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.example",
+        "locator": "L3"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.example",
+        "locator": "L4"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "read_by",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 60,
+        "artefact": "api/app/config.py",
+        "locator": "L8"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "read_by",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 60,
+        "artefact": "api/app/config.py",
+        "locator": "L9"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    }
+  ],
+  "skipped": []
+}

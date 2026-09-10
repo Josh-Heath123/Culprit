@@ -1,0 +1,48 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "value": [
+        "created_at",
+        "id",
+        "total_cents"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/app/db/models.py",
+        "locator": "public.orders"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "value": [
+        "created_at",
+        "id"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 80,
+        "artefact": "api/migrations/versions",
+        "locator": "public.orders"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    }
+  ],
+  "skipped": []
+}

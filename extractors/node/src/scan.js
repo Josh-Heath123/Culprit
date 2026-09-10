@@ -97,14 +97,61 @@ function literalString(node) {
  * path: `` `/users/${id}` `` is not a call to `/users`, and reporting it
  * as one would invent a route. Hence a placeholder per expression rather
  * than a truncation.
+ *
+ * **A query string is not part of the path.** `` `/model/graph${query}` ``
+ * where `query` is `"?symptom=x"` is a call to `/model/graph`, not to
+ * `/model/graph{}` — and the second cannot match any route the server
+ * declares, so it becomes a permanent, unfixable false positive on a
+ * repository that is correct. Culprit found exactly that in its own
+ * frontend during Phase 29.
+ *
+ * Two shapes are handled beyond the ordinary one.
+ *
+ * **A literal `?` ends the path.** `` `/graph?symptom=${s}` `` is a call
+ * to `/graph`; everything from the `?` onwards is a query string, not a
+ * route.
+ *
+ * **A trailing interpolation glued to a segment is not resolvable, so
+ * the call site is skipped.** `` `/model/graph${query}` `` — no `/`
+ * before the expression, nothing after it — could be a query string
+ * (`?symptom=x`), a suffix (`.json`), or a path fragment, and the
+ * template cannot say which. The previous behaviour produced
+ * `/model/graph:x` → subject `/model/graph{}`, which can never match any
+ * route a server declares: a permanent, unfixable false positive on a
+ * repository that is correct. Culprit found exactly that in its own
+ * frontend during Phase 29, and it was the only finding standing between
+ * this repo and a clean self-check.
+ *
+ * Guessing the truncation instead would be the other error: `` `/orders${rest}` ``
+ * where `rest` is `/42/refunds` is not a call to `/orders`, and claiming
+ * it is invents a route. Inferring which from the variable's *name* is
+ * precisely the implementation-level inference D6 rules out. So the
+ * honest answer is the one the extractor already gives for a fully
+ * dynamic path: say nothing, and let the gap be visible.
+ *
+ * Note `` `/orders/${id}` `` is unaffected — the `/` before the
+ * expression makes it unambiguously a path segment, and that is most
+ * call sites in a React codebase.
  */
 function templateRoute(node) {
   if (!node || node.type !== 'TemplateLiteral' || node.expressions.length === 0) return null;
   let path = '';
-  node.quasis.forEach((quasi, index) => {
-    path += quasi.value.cooked;
-    if (index < node.expressions.length) path += ':x';
-  });
+  for (const [index, quasi] of node.quasis.entries()) {
+    const chunk = quasi.value.cooked;
+    const question = chunk.indexOf('?');
+    if (question !== -1) {
+      // The path ends here. Anything after it — literal or interpolated —
+      // is a query string.
+      return path + chunk.slice(0, question);
+    }
+    path += chunk;
+    if (index < node.expressions.length) {
+      const trailing = index === node.expressions.length - 1
+        && node.quasis[index + 1].value.cooked === '';
+      if (trailing && !path.endsWith('/')) return null;
+      path += ':x';
+    }
+  }
   return path;
 }
 

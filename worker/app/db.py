@@ -301,4 +301,13 @@ divergences = sa.Table(
     sa.Column("status", sa.String(), nullable=False),
     sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    # Phase 29 history columns; see api/app/db/models.py for what each
+    # is for. Mirrored by hand because worker and api are separate uv
+    # projects - check_schema_drift.py is what keeps the two in step.
+    sa.Column("divergence_key", sa.String(), nullable=False),
+    sa.Column("capture_id", UUID(as_uuid=True), nullable=True),
+    sa.Column("explanation", sa.String(), nullable=True),
+    sa.Column("severity_reason", sa.String(), nullable=True),
+    sa.Column("suppressed_by", sa.String(), nullable=True),
+    sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
 )

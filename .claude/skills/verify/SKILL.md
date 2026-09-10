@@ -30,6 +30,19 @@ that keeps the product honest:
 LLM_PROVIDER=none culprit check
 ```
 
+## What this does not cover
+
+`/verify` runs the local gates on the working tree. It does **not** cover:
+
+- the **merge result** — these gates run on the branch, and `main` has moved
+- the Docker image builds and the blocking Trivy scan
+- Go cross-compilation for every release target
+- frontend type generation from a live OpenAPI dump
+- Linux, from a clean checkout, with no venvs or generated files present
+
+All of that is CI. **Green here is necessary and not sufficient.** Run `/ci`
+before claiming any phase is done.
+
 ## Rules
 
 - **A gate you did not run is not a gate that passed.** Report it as `NOT RUN`

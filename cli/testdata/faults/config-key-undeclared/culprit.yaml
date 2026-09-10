@@ -1,0 +1,16 @@
+version: 1
+
+# A fault fixture. `culprit check` is not run over this tree - the facts
+# it would have extracted are committed alongside in bundle.json, so the
+# eval exercises the divergence engine on a known input rather than on
+# whatever three language toolchains happened to be installed.
+
+components:
+  - name: web
+    kind: frontend
+    connections:
+      - to: orders-api
+        kind: http
+        criticality: on_request_path
+  - name: orders-api
+    kind: service

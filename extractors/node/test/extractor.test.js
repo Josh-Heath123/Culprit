@@ -135,6 +135,29 @@ test('a template path becomes a parameter, not a truncated literal', () => {
   assert.equal(canonicalPath(calls[0].path), '/users/{}/reset');
 });
 
+test('a trailing interpolation after a segment is skipped, not glued on', () => {
+  // `` `/model/graph${query}` `` where query is `?symptom=x`. Gluing the
+  // placeholder on produced `/model/graph{}`, a subject no server route
+  // can ever match — a permanent false positive on a correct repository.
+  // Culprit found this one in its own frontend.
+  const calls = findClientCalls(parseSource('fetch(`/model/graph${query}`);'));
+  assert.deepEqual(calls, [], 'an unresolvable path was reported as a call');
+});
+
+test('a literal query string ends the path', () => {
+  const calls = findClientCalls(parseSource('fetch(`/model/graph?symptom=${s}`);'));
+  assert.equal(calls.length, 1);
+  assert.equal(canonicalPath(calls[0].path), '/model/graph');
+});
+
+test('an interpolation after a slash is still a path segment', () => {
+  // The rule above must not swallow the common case, which is most call
+  // sites in a React codebase.
+  const calls = findClientCalls(parseSource('fetch(`/users/${id}`);'));
+  assert.equal(calls.length, 1);
+  assert.equal(canonicalPath(calls[0].path), '/users/{}');
+});
+
 test('a fully dynamic path is skipped rather than guessed', () => {
   const calls = findClientCalls(parseSource('fetch(url); fetch(BASE + path);'));
   assert.deepEqual(calls, []);

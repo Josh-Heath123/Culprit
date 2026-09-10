@@ -1,0 +1,68 @@
+# The two-component demo: a real FastAPI service and a real React
+# frontend, checked against each other.
+#
+# The component trees are `cli/testdata/fixtures/fastapi-orders` and
+# `cli/testdata/fixtures/react-web`, reused rather than copied. Each has
+# its own single-component `culprit.yaml` for the Phase 28 extraction
+# tests; this one puts them in the same system so there is something to
+# compare. It is what the README's example output comes from, and it runs
+# end to end through the real extractors — no committed fact bundle, no
+# stub.
+version: 1
+
+components:
+  - name: web
+    kind: frontend
+    display_name: Storefront
+    connections:
+      - to: orders-api
+        kind: http
+        criticality: on_request_path
+  - name: orders-api
+    kind: service
+    display_name: Orders API
+    connections:
+      - to: orders-db
+        kind: sql
+        criticality: on_request_path
+  - name: orders-db
+    kind: database
+  # A deliberately faulty component -- see billing/README.md. The other
+  # two are the Phase 28 extraction fixtures, which are correct, and a
+  # corpus of correct fixtures cannot show that the tool finds anything.
+  - name: billing-api
+    kind: service
+    display_name: Billing API
+    connections:
+      - to: billing-db
+        kind: sql
+        criticality: on_request_path
+  - name: billing-db
+    kind: database
+
+extract:
+  extractors:
+    - name: python
+      # Run out of this repository's own extractor project. Each
+      # extractor is launched with its component root as the working
+      # directory, so the path is relative to
+      # cli/testdata/fixtures/fastapi-orders/ - five levels up.
+      command: ["uv", "run", "--project", "../../../../extractors/python", "culprit-extract-python", "--app", "orders_api.main:app"]
+    - name: python-billing
+      # Same depth as the fixture components (cli/testdata/demo/billing),
+      # but a different --app, so it needs its own entry.
+      command: ["uv", "run", "--project", "../../../../extractors/python", "culprit-extract-python", "--app", "main:app"]
+    - name: node
+      # Same idea, without uv: the Node extractor is plain JavaScript.
+      command: ["node", "../../../../extractors/node/src/cli.js", "--client-fn", "apiRequest"]
+  components:
+    orders-api:
+      root: ../fixtures/fastapi-orders
+      extractors: [python]
+    billing-api:
+      root: billing
+      extractors: [python-billing]
+    web:
+      root: ../fixtures/react-web
+      extractors: [node]
+      calls_to: orders-api

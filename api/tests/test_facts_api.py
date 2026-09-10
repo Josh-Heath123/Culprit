@@ -375,8 +375,19 @@ async def test_fact_writer_cannot_touch_the_other_planes_tables(
     """Least privilege, asserted rather than assumed.
 
     `fact-writer` exists so an unattended CI credential cannot do
-    anything but post an INTENT capture. If a later phase widens it
+    anything but post what one CI run found. If a later phase widens it
     instead of adding a role (.claude/rules/database.md), this fails.
+
+    **Phase 29 widened it, deliberately and once, to cover
+    `divergences`.** This test was the gate that caught it, which is what
+    the gate is for — so the list moved rather than the assertion being
+    dropped. The reasoning for the exception is in
+    `api/app/divergences/config.py` and in the migration: divergences are
+    produced by the same run, from the same repository, under the same
+    project token, as the facts they were derived from, so a leaked token
+    that could already write facts gains no new blast radius. The two
+    planes this role must *never* reach are unchanged, and the list of
+    tables it must not touch at all has grown, not shrunk.
     """
     from sqlalchemy import text as sql
     from sqlalchemy.exc import ProgrammingError
@@ -386,14 +397,48 @@ async def test_fact_writer_cannot_touch_the_other_planes_tables(
         role_database_url("fact-writer", "FACT_WRITER_DB_PASSWORD")
     )
     try:
-        for table in ("configured_facts", "readings", "divergences"):
+        # The other two planes. Phase 30 and Phase 31 each get their own
+        # decision about who writes them; this role is not it.
+        for table in ("configured_facts", "readings"):
             with pytest.raises(ProgrammingError, match="permission denied"):
                 async with engine.begin() as conn:
                     await conn.execute(sql(f"SELECT 1 FROM {table} LIMIT 1"))
-        # And it cannot delete what it wrote, either.
+
+        # And everything that is not a finding. This half is the point:
+        # the widening bought `divergences` and nothing else, so a leaked
+        # CI token still cannot read a user, an API key, or the service
+        # registry it might otherwise quietly rewrite.
+        for table in ("users", "api_keys", "components", "postmortems"):
+            with pytest.raises(ProgrammingError, match="permission denied"):
+                async with engine.begin() as conn:
+                    await conn.execute(sql(f"SELECT 1 FROM {table} LIMIT 1"))
+
+        # It cannot delete what it wrote, on either table.
+        for table in ("intent_facts", "divergences"):
+            with pytest.raises(ProgrammingError, match="permission denied"):
+                async with engine.begin() as conn:
+                    await conn.execute(sql(f"DELETE FROM {table}"))
+
+        # What it *can* do, asserted positively so the grant is not
+        # merely absent-of-refusal.
+        async with engine.begin() as conn:
+            await conn.execute(sql("SELECT 1 FROM divergences LIMIT 1"))
+
+        # And the column boundary inside the one table it can write.
+        #
+        # The UPDATE grant names nine columns; `first_seen_at` is
+        # deliberately not one of them, because it is the column that
+        # answers "how long has this been broken" and the whole history
+        # mechanism rests on a repeat sighting being unable to move it.
+        # A bare table grant would leave that as an application
+        # convention; this asserts the database enforces it, which is
+        # what makes it survive a leaked project token.
         with pytest.raises(ProgrammingError, match="permission denied"):
             async with engine.begin() as conn:
-                await conn.execute(sql("DELETE FROM intent_facts"))
+                await conn.execute(sql("UPDATE divergences SET first_seen_at = now()"))
+        with pytest.raises(ProgrammingError, match="permission denied"):
+            async with engine.begin() as conn:
+                await conn.execute(sql("UPDATE divergences SET subject = 'rewritten'"))
     finally:
         await engine.dispose()
 

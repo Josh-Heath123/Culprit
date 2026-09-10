@@ -1,0 +1,5 @@
+{
+  "description": "The API route table could not be read. A call site must NOT become a finding.",
+  "expected": [],
+  "false_positives": 0
+}

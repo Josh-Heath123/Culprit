@@ -49,13 +49,24 @@ type Manifest struct {
 	Version    int                 `yaml:"version"`
 	Components []ManifestComponent `yaml:"components"`
 	Extract    ExtractConfig       `yaml:"extract"`
+	// Phase 29's check-time sections. Parsed and validated here,
+	// consumed by internal/diverge and internal/severity — see policy.go.
+	Invariants        []Invariant        `yaml:"invariants"`
+	Suppress          []Suppression      `yaml:"suppress"`
+	SeverityOverrides []SeverityOverride `yaml:"severity_overrides"`
 }
 
-// ManifestComponent is one component. Only the fields extraction needs.
+// ManifestComponent is one component. Only the fields extraction and
+// comparison need.
 type ManifestComponent struct {
 	Name        string `yaml:"name"`
 	Kind        string `yaml:"kind"`
 	DisplayName string `yaml:"display_name"`
+	// Connections give severity its graph (Phase 29). `culprit intent`
+	// ignores them; `culprit check` cannot work without them, because
+	// "does this subject lie on a request path" is the whole difference
+	// between `breaks_request_path` and `cosmetic`.
+	Connections []ManifestConnection `yaml:"connections"`
 }
 
 // ExtractConfig is the `extract:` section (field 10): extractor commands
@@ -171,6 +182,9 @@ func LoadManifest(path string) (*Manifest, error) {
 			manifest.Version, ManifestVersion)}
 	}
 	if err := manifest.validate(); err != nil {
+		return nil, &ManifestError{Path: path, Message: err.Error()}
+	}
+	if err := manifest.validatePolicy(); err != nil {
 		return nil, &ManifestError{Path: path, Message: err.Error()}
 	}
 	return &manifest, nil
@@ -313,3 +327,7 @@ func (s ExtractorSpec) Wants() []model.Want {
 	sort.Slice(wants, func(i, j int) bool { return wants[i] < wants[j] })
 	return wants
 }
+
+// sortStrings is sort.Strings, named so policy.go can use it without
+// importing sort for one call.
+func sortStrings(values []string) { sort.Strings(values) }

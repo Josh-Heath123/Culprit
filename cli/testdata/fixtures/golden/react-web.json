@@ -10,22 +10,7 @@
     {
       "plane": "INTENT",
       "subject": "config:web/VITE_API_URL",
-      "predicate": "exists",
-      "value": true,
-      "provenance": {
-        "source_kind": "spec",
-        "extractor": "culprit@test",
-        "artefact": ".env.example",
-        "locator": "L1",
-        "confidence_rank": 80
-      },
-      "captured_at": "2026-01-01T00:00:00Z",
-      "capture_id": "00000000-0000-5000-8000-000000000000"
-    },
-    {
-      "plane": "INTENT",
-      "subject": "config:web/VITE_API_URL",
-      "predicate": "value_shape",
+      "predicate": "example_shape",
       "value_shape": {
         "type": "string",
         "length_class": "short",
@@ -44,9 +29,29 @@
     },
     {
       "plane": "INTENT",
-      "subject": "config:web/VITE_SENTRY_DSN",
+      "subject": "config:web/VITE_API_URL",
       "predicate": "exists",
       "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@test",
+        "artefact": ".env.example",
+        "locator": "L1",
+        "confidence_rank": 80
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "00000000-0000-5000-8000-000000000000"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:web/VITE_SENTRY_DSN",
+      "predicate": "example_shape",
+      "value_shape": {
+        "type": "string",
+        "length_class": "empty",
+        "format": "not_applicable",
+        "present": true
+      },
       "provenance": {
         "source_kind": "spec",
         "extractor": "culprit@test",
@@ -60,13 +65,8 @@
     {
       "plane": "INTENT",
       "subject": "config:web/VITE_SENTRY_DSN",
-      "predicate": "value_shape",
-      "value_shape": {
-        "type": "string",
-        "length_class": "empty",
-        "format": "not_applicable",
-        "present": true
-      },
+      "predicate": "exists",
+      "value": true,
       "provenance": {
         "source_kind": "spec",
         "extractor": "culprit@test",

@@ -1,0 +1,41 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/LEGACY_PAYMENTS_FLAG",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.example",
+        "locator": "L4"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/LEGACY_PAYMENTS_FLAG",
+      "predicate": "exists",
+      "value": false,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.staging.example",
+        "locator": "L4"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    }
+  ],
+  "skipped": []
+}

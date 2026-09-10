@@ -1,0 +1,11 @@
+{
+  "description": "A developer asserted a route must exist. It does not. Rank 100 against rank 90.",
+  "expected": [
+    {
+      "subject": "http:orders-api/GET /orders/{}/refunds",
+      "predicate": "exists",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

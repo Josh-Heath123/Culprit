@@ -49,6 +49,11 @@ type Options struct {
 	SkipPlugins bool
 	// Version identifies this binary in provenance and in the bundle.
 	Version string
+	// RepoRelativeArtefacts rewrites each fact's provenance.artefact to
+	// be relative to the manifest directory rather than to the component
+	// root it was extracted from. `culprit check` sets it; `culprit
+	// intent` does not — see rebaseTarget for why the two differ.
+	RepoRelativeArtefacts bool
 }
 
 // builtinReaders is the fixed set, in a fixed order. Order matters for
@@ -159,6 +164,9 @@ func Run(parent context.Context, options Options) (model.CaptureBundle, error) {
 				continue
 			}
 			readerFacts, readerSkips := builtin.run(ctx)
+			if options.RepoRelativeArtefacts {
+				rebaseTarget(readerFacts, target, options.ManifestDir)
+			}
 			facts = append(facts, readerFacts...)
 			skipped = append(skipped, stamp(readerSkips, target.Component)...)
 		}
@@ -205,6 +213,12 @@ func Run(parent context.Context, options Options) (model.CaptureBundle, error) {
 			for index := range result.Facts {
 				result.Facts[index].CaptureID = captureID
 				result.Facts[index].CapturedAt = now
+			}
+			// Rebasing happens here, inside the per-target loop, because
+			// this is the only place that knows which component *produced*
+			// a fact. See rebaseTarget.
+			if options.RepoRelativeArtefacts {
+				rebaseTarget(result.Facts, target, options.ManifestDir)
 			}
 			retargeted, dropped := retargetClientCalls(result.Facts, target)
 			facts = append(facts, retargeted...)

@@ -96,6 +96,14 @@ _EXCLUDED: dict[str, str] = {
         "the others are samples of what real code looks like, which a lint pass "
         "would change. See cli/testdata/fixtures/README.md."
     ),
+    "cli/testdata/demo": (
+        "the demo repository `culprit check` is run against — input data, not "
+        "code. Its `billing` component has two faults planted in it on purpose "
+        "(a column declared on a model and never migrated, a config key read "
+        "and never declared), and a lint pass that 'fixed' either would delete "
+        "the only thing it is there to demonstrate. See "
+        "cli/testdata/demo/billing/README.md."
+    ),
 }
 
 

@@ -1,0 +1,23 @@
+version: 1
+
+# A key nothing reports reading, so the graph rules it `cosmetic` - and
+# an override that says otherwise, because the manifest knows something
+# the extractors cannot see.
+
+components:
+  - name: web
+    kind: frontend
+    connections:
+      - to: orders-api
+        kind: http
+        criticality: on_request_path
+  - name: orders-api
+    kind: service
+
+severity_overrides:
+  - subject: "config:orders-api/LEGACY_PAYMENTS_FLAG"
+    severity: breaks_request_path
+    reason: >-
+      Read by the payments reconciliation cron, which is configured in
+      the scheduler rather than in code, so no extractor can see it. If
+      it is unset, settlement stops.

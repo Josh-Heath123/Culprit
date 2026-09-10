@@ -59,8 +59,18 @@ Written to your stdin, as one JSON object:
 | `db_schema` | Tables and columns the code expects, and the migration revision it heads at. Not a reading of any live database. |
 | `config_keys` | Configuration keys this component reads. **Names and shapes only** — see §6. |
 | `client_calls` | HTTP endpoints this component *calls*. |
-| `test_assertions` | Claims the test suite makes about behaviour. |
+| `test_assertions` | Which parts of the surface the test suite exercises — `exercised_by_test`, not the status codes asserted. See below. |
 | `dependencies` | Declared dependency versions. |
+
+**On `test_assertions`.** Report that a subject is *exercised by a
+test*, not what the test expects of it. A route answers 201 to an admin
+and 403 to a member, and two tests asserting those two codes are both
+correct; emitting them as `status_codes` makes the comparator report two
+true facts as a contradiction, which is what the reference Python
+extractor did until Phase 29 ran it over this repository. The claim that
+survives is the useful one: it still catches a test calling a route the
+application does not serve, and it feeds the coverage report that says
+which parts of a system nothing tests.
 
 A `want` you have never heard of is not an error. Skip it with
 `unsupported want` — that is exactly what a newer orchestrator talking to
@@ -252,7 +262,7 @@ nowhere to put a literal:
 ```json
 {
   "subject": "config:orders-api/DATABASE_URL",
-  "predicate": "value_shape",
+  "predicate": "example_shape",
   "value_shape": {
     "type": "string",
     "length_class": "medium",
@@ -261,6 +271,28 @@ nowhere to put a literal:
   }
 }
 ```
+
+### Say *which kind of shape* it is
+
+`example_shape` above, not `value_shape`. The predicate names the claim,
+and comparison is by `(subject, predicate)` — so two things that are not
+the same claim must not share a predicate name, or the comparator will
+report two true facts as a disagreement.
+
+| Predicate | The claim |
+|---|---|
+| `example_shape` | the shape of a placeholder committed in a `.env.example` or equivalent |
+| `default_shape` | the shape of a fallback the code uses when the key is unset |
+| `value_shape` | still accepted, and nothing in this repository emits it |
+
+This is not a hypothetical. Both were `value_shape` until Phase 29 ran
+the comparator over Culprit's own repository, which reported
+`AGENT_AUTOMATION_TOKEN` as a disagreement between a long opaque
+placeholder in `.env.example` and an empty default in the code. They do
+not disagree. A key can perfectly well have both.
+
+If you are reporting some third kind of shape, give it its own predicate
+rather than reaching for one of these.
 
 | Field | Values |
 |---|---|

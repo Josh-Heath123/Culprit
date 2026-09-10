@@ -71,8 +71,14 @@ func readDotenv(ctx captureContext) ([]model.Fact, []model.Skip) {
 				model.SourceSpec, artefact, lineLocator(index+1), model.RankCommittedSpec)
 			// The shape, never the value. `value` goes out of scope here
 			// and is not referenced again.
+			//
+			// `example_shape`, not `value_shape`: the right-hand side of a
+			// `.env.example` line is a placeholder somebody wrote to show
+			// what belongs there. It is not what the key will hold, and it
+			// is emphatically not the same claim as a default in code.
 			shape := model.ShapeOfString(value)
-			if fact, ok := ctx.configFact(key, shape, provenance); ok {
+			if fact, ok := ctx.configFact(
+				key, model.PredicateExampleShape, shape, provenance); ok {
 				facts = append(facts, fact)
 			}
 			// Separately: the key is expected to exist at all. A

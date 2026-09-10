@@ -55,9 +55,30 @@ const (
 	PredicateMigrationHead  = "migration_head"
 	PredicateVersion        = "version"
 	PredicateReadBy         = "read_by"
-	PredicateValueShape     = "value_shape"
-	PredicateRequired       = "required"
-	PredicateCalls          = "calls"
+	// PredicateValueShape is kept as a name a third-party extractor
+	// may use, but nothing in this repository emits it any more.
+	//
+	// It was one predicate carrying two different claims, and Phase 29
+	// found the resulting false positive on Culprit's own repository:
+	// `.env.example` said AGENT_AUTOMATION_TOKEN had shape
+	// string/opaque/medium, `api/app/auth/config.py` said
+	// string/not_applicable/empty, and the comparator dutifully
+	// reported that they disagreed. They did not. One is the shape of a
+	// *placeholder committed as an example*, the other the shape of a
+	// *default the code falls back to*, and a key can perfectly well
+	// have a long opaque example and an empty default. Comparison is by
+	// (subject, predicate), so two claims that are not the same claim
+	// must not share a predicate name.
+	PredicateValueShape   = "value_shape"
+	PredicateExampleShape = "example_shape"
+	PredicateDefaultShape = "default_shape"
+	PredicateRequired     = "required"
+	PredicateCalls        = "calls"
+	// PredicateExercisedByTest is "a test exercises this route",
+	// deliberately not "and expects this status". See the Python
+	// extractor's extract_test_assertions for the three false
+	// positives on this repository that settled it.
+	PredicateExercisedByTest = "exercised_by_test"
 )
 
 // Skip is one thing an extractor was asked for and could not provide.

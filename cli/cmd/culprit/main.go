@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,26 +31,51 @@ import (
 // is obvious in a bug report instead of claiming to be a release.
 var Version = "dev"
 
-// Exit codes. Named because they are a contract with CI: a script
-// distinguishing "the command failed" from "the command ran and found
-// something" needs them to be stable from the first release.
+// Exit codes — Phase 29 field 7, verbatim: `0` clean, `1` divergences at
+// or above the configured severity, `2` execution error.
 //
-// exitFindings (2) is deliberately reserved and unused this phase.
-// `culprit intent` has no findings to report — that is Phase 29 — and
-// allocating the code now means Phase 29 does not have to renumber
-// anything a user has already written a CI condition against.
+// **This corrects Phase 28, which had 1 and 2 the other way round.** That
+// binary reserved 2 for findings and used 1 for errors, on the reasonable
+// but wrong assumption that "error" is the lower code. The plan is the
+// contract and it says otherwise, and the plan is right: the useful
+// distinction for a CI script is `if culprit check; then` — clean — with
+// 1 meaning "the tool worked and your build has a problem" and 2 meaning
+// "the tool itself could not run", which is a different alert entirely.
+// Nothing depends on the old numbering: `culprit intent` has no findings
+// and Phase 28 is unreleased.
 const (
-	exitOK        = 0
-	exitError     = 1
-	_exitFindings = 2 //nolint:unused // reserved for Phase 29
+	exitOK       = 0
+	exitFindings = 1
+	exitError    = 2
 )
 
 func main() {
 	if err := newRootCommand().Execute(); err != nil {
+		// A findingsError is not a failure of the command; it is the
+		// command's answer. It has already printed its report, so it exits
+		// quietly with the code CI reads rather than printing an error
+		// line that would make a real finding look like a crash.
+		var findings *findingsError
+		if errors.As(err, &findings) {
+			os.Exit(exitFindings)
+		}
 		fmt.Fprintln(os.Stderr, "culprit:", err)
 		os.Exit(exitError)
 	}
 	os.Exit(exitOK)
+}
+
+// findingsError signals "the run succeeded and found something at or
+// above --fail-on". A sentinel error rather than a direct os.Exit from
+// inside RunE, so the cobra command stays testable in-process: a test
+// asserts on the returned error, and only main turns it into a status.
+type findingsError struct {
+	count     int
+	threshold model.Severity
+}
+
+func (e *findingsError) Error() string {
+	return fmt.Sprintf("%d divergence(s) at or above %s", e.count, e.threshold)
 }
 
 func newRootCommand() *cobra.Command {
@@ -67,6 +93,7 @@ This build implements the INTENT plane only. See docs/DIAGNOSTIC_PLAN.md.`,
 		Version:       Version,
 	}
 	root.AddCommand(newIntentCommand())
+	root.AddCommand(newCheckCommand())
 	return root
 }
 

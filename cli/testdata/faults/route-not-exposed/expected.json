@@ -1,0 +1,11 @@
+{
+  "description": "The dashboard calls GET /orders/{}/refunds. The API route table has no such route.",
+  "expected": [
+    {
+      "subject": "http:orders-api/GET /orders/{}/refunds",
+      "predicate": "calls",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

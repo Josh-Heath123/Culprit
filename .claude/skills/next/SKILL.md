@@ -36,6 +36,16 @@ Never make a gate green by weakening it. Widening a `lint-imports` contract,
 adding a `# type: ignore`, skipping a test or widening a Postgres role to make a
 check pass is an escalation (§6), not a fix.
 
+**4b. Prove it on the merge result, in CI.** Run `/ci`. This merges
+`origin/main` into the branch, re-runs the local gates on the merged tree, pushes,
+and watches the pipeline.
+
+This step is not optional and it is not a formality. Local gates run a subset of
+the checks, on a tree that is not what gets merged, on a different operating
+system from CI. A phase whose gates were green locally and whose pipeline is red
+is not a phase that is done — it is a phase that was measured with the wrong
+instrument.
+
 **5. Audit.** Invoke the `phase-auditor` agent to check the acceptance criteria
 by executing them. Then invoke `invariant-auditor` on the branch diff. Both must
 come back clean.
@@ -53,7 +63,12 @@ Report honestly. `NOT RUN` and `NOT TESTABLE AS WRITTEN` are real outcomes and
 belong in the report. A criterion you did not execute is not a criterion that
 passed.
 
-**8. Commit, then stop.** Commit the work on its branch. Then **stop and
+**8. Commit, then stop.** Commit the work on its branch. Use
+`git commit -F <message-file>`.
+
+**A phase is complete only when CI is green on the merge result.** If the
+pipeline is red, the status in §1 is `gates red`, not `complete`, however green
+the local run was. Then **stop and
 summarise.**
 
 ## The rule that matters most

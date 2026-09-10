@@ -29,6 +29,8 @@ from app.auth.config import AUTH_SERVICE_DATABASE_URL  # noqa: E402
 from app.auth.dependencies import require_admin, require_auth  # noqa: E402
 from app.auth.router import router as auth_router  # noqa: E402
 from app.auth.users_router import router as users_router  # noqa: E402
+from app.divergences.config import DIVERGENCE_WRITER_DATABASE_URL  # noqa: E402
+from app.divergences.router import router as divergences_router  # noqa: E402
 from app.errors import install as install_error_handlers  # noqa: E402
 from app.facts.config import FACT_WRITER_DATABASE_URL  # noqa: E402
 from app.facts.router import router as facts_router  # noqa: E402
@@ -94,6 +96,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # max_connections on an Always Free VM to sit idle.
     fact_engine = create_async_engine(FACT_WRITER_DATABASE_URL, pool_size=2, max_overflow=3)
     app.state.fact_session_factory = async_sessionmaker(fact_engine, expire_on_commit=False)
+    # Phase 29: POST /divergences/captures, under the same fact-writer
+    # role (see app/divergences/config.py for why that reuse is
+    # sanctioned rather than a rule broken). Its own engine and its own
+    # session factory, so a transaction in one upload is never visible to
+    # the other.
+    divergence_engine = create_async_engine(
+        DIVERGENCE_WRITER_DATABASE_URL, pool_size=2, max_overflow=3
+    )
+    app.state.divergence_session_factory = async_sessionmaker(
+        divergence_engine, expire_on_commit=False
+    )
     # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
     # /postmortems to enqueue arq jobs by name — this API process never
     # runs arq jobs itself.
@@ -208,3 +221,6 @@ app.include_router(memory_router)
 # so that adding an endpoint here later cannot inherit a credential
 # nobody chose for it.
 app.include_router(facts_router)
+# Phase 29: POST /divergences/captures. Same reasoning as facts_router
+# immediately above -- a project token, declared per route.
+app.include_router(divergences_router)

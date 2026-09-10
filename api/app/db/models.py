@@ -761,3 +761,19 @@ class DivergenceRow(Base):
     status: Mapped[str] = mapped_column(server_default=text("'open'"))
     first_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
     created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+
+    # Phase 29 history columns. `divergence_key` is the finding's
+    # identity - subject, predicate and the two disagreeing sources -
+    # computed identically in Python and Go, and unique, so a repeat
+    # sighting of an unfixed fault updates a row instead of adding one.
+    divergence_key: Mapped[str]
+    capture_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("captures.id", ondelete="CASCADE")
+    )
+    # Stored rather than recomputed: the system model changes, and a
+    # finding should keep saying why it was ranked the way it was when
+    # it was found.
+    explanation: Mapped[str | None]
+    severity_reason: Mapped[str | None]
+    suppressed_by: Mapped[str | None]
+    last_seen_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))

@@ -1,0 +1,78 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/openapi.json",
+        "locator": "$.paths./orders.post"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "status_codes",
+      "value": [
+        "200",
+        "404"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/openapi.json",
+        "locator": "$.paths./orders.post"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/app/main.py",
+        "locator": "L61"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "http:orders-api/POST /orders",
+      "predicate": "status_codes",
+      "value": [
+        "200",
+        "404",
+        "409"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/app/main.py",
+        "locator": "L61"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "fixture"
+    }
+  ],
+  "skipped": []
+}
