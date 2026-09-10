@@ -23,6 +23,6 @@ FROM caddy:2-alpine
 # up whatever's actually current in the repo instead of what shipped in
 # the base image (see .trivyignore for the CVEs this doesn't cover — those
 # are compiled into the caddy binary itself, not an apk package).
-RUN apk update && apk upgrade --no-cache c-ares curl libcurl
+RUN apk update && apk upgrade --no-cache
 COPY --from=build /app/dist /srv
 COPY Caddyfile /etc/caddy/Caddyfile
