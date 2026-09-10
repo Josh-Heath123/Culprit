@@ -55,6 +55,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("AGENT_AUTOMATION_TOKEN", "AI change-capture hook (Phase 21)"),
     ("MCP_READER_DB_PASSWORD", "mcp-reader role (Phase 24)"),
     ("FACT_WRITER_DB_PASSWORD", "fact-writer role (Phase 28)"),
+    ("CAPTURE_WRITER_DB_PASSWORD", "capture-writer role (Phase 30)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
@@ -225,6 +226,16 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["FACT_WRITER_DB_PASSWORD"] = passwords["FACT_WRITER_DB_PASSWORD"]
     env["FACT_WRITER_DATABASE_URL"] = _db_url(
         "fact-writer", passwords["FACT_WRITER_DB_PASSWORD"], "postgres"
+    )
+
+    # Phase 30: capture-writer -- the only role that may INSERT into
+    # configured_facts, used by POST /captures. A separate role from
+    # fact-writer because what a running environment is configured to do
+    # (production included) is a different trust domain from what a
+    # repository says about itself. Required at migration time.
+    env["CAPTURE_WRITER_DB_PASSWORD"] = passwords["CAPTURE_WRITER_DB_PASSWORD"]
+    env["CAPTURE_WRITER_DATABASE_URL"] = _db_url(
+        "capture-writer", passwords["CAPTURE_WRITER_DB_PASSWORD"], "postgres"
     )
 
     # Phase 28: the project token `culprit` presents to POST

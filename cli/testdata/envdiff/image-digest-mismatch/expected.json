@@ -1,0 +1,12 @@
+{
+  "description": "Both environments run ghcr.io/acme/orders:1.4, but the tag was re-pushed between deploys: the digests differ.",
+  "expected": [
+    {
+      "subject": "image:orders-api",
+      "predicate": "digest",
+      "kind": "env_vs_env",
+      "severity": "degrades"
+    }
+  ],
+  "false_positives": 0
+}

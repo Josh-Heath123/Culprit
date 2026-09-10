@@ -256,8 +256,8 @@ break the rule, and a Postgres CHECK constraint refuses the row. A
 capture bundle has to be safe to attach to a bug report *by
 construction*, because that is what people do with them.
 
-Instead of a value, send a `ValueShape` — a closed four-field type with
-nowhere to put a literal:
+Instead of a value, send a `ValueShape` — a closed type with nowhere to
+put a literal:
 
 ```json
 {
@@ -267,7 +267,8 @@ nowhere to put a literal:
     "type": "string",
     "length_class": "medium",
     "format": "dsn",
-    "present": true
+    "present": true,
+    "scheme": "postgresql"
   }
 }
 ```
@@ -300,10 +301,23 @@ rather than reaching for one of these.
 | `length_class` | `not_applicable` `empty` `short` `medium` `long` |
 | `format` | `opaque` `url` `dsn` `email` `hostname` `ip_address` `port` `path` `duration` `booleanish` `numeric` `uuid` `json` `secret` `list` `not_applicable` |
 | `present` | `true` / `false` |
+| `scheme` | *optional* — `postgresql` `mysql` `mariadb` `sqlite` `mssql` `oracle` `mongodb` `redis` `rediss` `memcached` `amqp` `amqps` `kafka` `nats` `http` `https` `ws` `wss` `grpc` `ftp` `sftp` `s3` `gs` `file` `ldap` `ldaps` `smtp` `smtps` `other` `not_applicable` |
 
-Nothing else. An object with a fifth key is rejected — including by
-`encoding/json` on the Go side, which is configured to disallow unknown
-fields precisely so a `"sample"` cannot slip through silently.
+Nothing else, and nothing outside those sets. An object with a sixth key
+is rejected — including by `encoding/json` on the Go side, which is
+configured to disallow unknown fields precisely so a `"sample"` cannot
+slip through silently — and so is a value outside a field's set: every
+field is checked for membership on both sides, so no field can carry a
+string of your choosing.
+
+**`scheme` was added in Phase 30** (a `postgresql` URL in one place and a
+`mysql` one in another is a real fault, and the other four fields could
+not tell them apart). It is the one optional field: leave it out and your
+shape says nothing about schemes, which compares equal to any scheme.
+Send `other` for a scheme outside the list — never the scheme itself.
+The Python extractor's `ValueShape.of()` and the Go CLI's
+`ShapeOfString` fill it in for you. A `culprit` binary from before Phase
+30 refuses the field, so keep extractor and CLI on the same release.
 
 A length *class*, not a length: an exact length is a small leak and no
 comparison needs it. `present: false` is how you say a key is declared

@@ -1,13 +1,22 @@
 """System model admin API (Phase 27, field 9) — mounted at `/model` in
-api/app/main.py behind `require_admin`, the same gate the registry
-router has had since Phase 16.
+api/app/main.py behind `require_admin`, the same gate the Phase 14
+registry router had had since Phase 16.
 
 Reads use the `api-reader` engine already in `app.state`; writes use the
-`registry-admin` engine — see `app/main.py`'s lifespan. The two session
-dependencies are deliberately identical to `app/registry/router.py`'s
-rather than shared with it, because that module is now a compatibility
-shim on its way out (field 9: retained for one release, removed in Phase
-30) and importing from it would make the shim load-bearing.
+`registry-admin` engine — see `app/main.py`'s lifespan.
+
+**Phase 30 (field 6) removed the `/services` alias**, and this is now the
+only surface over components. Two things were served only by the alias
+and moved here with it, onto the same roles they always used:
+
+  * ingest API keys — `POST /model/components/{id}/keys` and
+    `DELETE /model/components/{id}/keys/{key_id}`; a component's keys are
+    listed on `ComponentOut.keys`.
+  * the Phase 19 topology-suggestion queue — `GET
+    /model/topology/suggestions` and `POST .../accept|dismiss`.
+
+Their logic stays in `app/registry/service.py`: neither is part of the
+system model, and moving the URL is not a reason to pretend otherwise.
 """
 
 from collections.abc import AsyncIterator
@@ -51,6 +60,21 @@ from app.model.service import (
     patch_component,
     patch_connection,
     request_path,
+)
+from app.registry.schemas import (
+    KeyCreate,
+    KeyCreateResponse,
+    TopologyEdgeRef,
+    TopologySuggestionsOut,
+)
+from app.registry.service import (
+    UnknownEdge,
+    UnregisteredEndpoint,
+    accept_topology_suggestion,
+    create_key,
+    dismiss_topology_suggestion,
+    list_topology_suggestions,
+    revoke_key,
 )
 
 router = APIRouter(prefix="/model", tags=["model"])
@@ -122,6 +146,31 @@ async def delete_component_endpoint(
     return Response(status_code=204)
 
 
+# --- ingest keys (Phase 14; under /model since Phase 30) --------------
+
+
+@router.post(
+    "/components/{component_id}/keys", response_model=KeyCreateResponse, status_code=201
+)
+async def create_key_endpoint(
+    component_id: UUID, body: KeyCreate, session: AsyncSession = Depends(get_write_session)
+) -> KeyCreateResponse:
+    result = await create_key(session, component_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="component not found")
+    key, api_key = result
+    return KeyCreateResponse(api_key=api_key, key_id=key.id, label=key.label)
+
+
+@router.delete("/components/{component_id}/keys/{key_id}", status_code=204)
+async def revoke_key_endpoint(
+    component_id: UUID, key_id: UUID, session: AsyncSession = Depends(get_write_session)
+) -> Response:
+    if not await revoke_key(session, component_id, key_id):
+        raise HTTPException(status_code=404, detail="key not found")
+    return Response(status_code=204)
+
+
 # --- connections ------------------------------------------------------
 
 
@@ -164,6 +213,38 @@ async def delete_connection_endpoint(
 ) -> Response:
     if not await delete_connection(session, connection_id):
         raise HTTPException(status_code=404, detail="connection not found")
+    return Response(status_code=204)
+
+
+# --- topology suggestions (Phase 19; under /model since Phase 30) -----
+
+
+@router.get("/topology/suggestions", response_model=TopologySuggestionsOut)
+async def list_topology_suggestions_endpoint(
+    session: AsyncSession = Depends(get_read_session),
+) -> TopologySuggestionsOut:
+    return TopologySuggestionsOut(items=await list_topology_suggestions(session))
+
+
+@router.post("/topology/suggestions/accept", status_code=204)
+async def accept_topology_suggestion_endpoint(
+    body: TopologyEdgeRef, session: AsyncSession = Depends(get_write_session)
+) -> Response:
+    try:
+        await accept_topology_suggestion(session, body)
+    except UnknownEdge as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except UnregisteredEndpoint as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/topology/suggestions/dismiss", status_code=204)
+async def dismiss_topology_suggestion_endpoint(
+    body: TopologyEdgeRef, session: AsyncSession = Depends(get_write_session)
+) -> Response:
+    if not await dismiss_topology_suggestion(session, body):
+        raise HTTPException(status_code=404, detail="no observed edge for that pair")
     return Response(status_code=204)
 
 

@@ -206,6 +206,12 @@ captures = sa.Table(
     sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    # Phase 30 (migration e4c1b7a9d2f0): what a CONFIGURED capture was
+    # sealed with and allowed to do. All NULL for an INTENT capture.
+    sa.Column("digest", sa.String(), nullable=True),
+    sa.Column("signed_by", sa.String(), nullable=True),
+    sa.Column("grants", JSONB(), nullable=True),
+    sa.Column("refused", JSONB(), nullable=True),
 )
 
 # No `environment` and no `plane` column, both deliberate: the plane is
@@ -250,8 +256,12 @@ configured_facts = sa.Table(
     # permitted a literal value — ck_configured_facts_value_requires_grant
     # (migration a3d81f6c4b27) enforces that in the database. A config
     # key's content belongs in `value_shape` by default (§2.2).
-    sa.Column("value", JSONB(), nullable=True),
-    sa.Column("value_shape", JSONB(), nullable=True),
+    # none_as_null on both, from Phase 30 -- the first writer. A Python
+    # None must be SQL NULL: `'null'::jsonb IS NULL` is false, so a JSON
+    # null `value` would fail ck_configured_facts_value_requires_grant and
+    # a JSON null `value_shape` would fail the closed-shape check.
+    sa.Column("value", JSONB(none_as_null=True), nullable=True),
+    sa.Column("value_shape", JSONB(none_as_null=True), nullable=True),
     sa.Column("grant_ref", sa.String(), nullable=True),
     sa.Column("source_kind", sa.String(), nullable=False),
     sa.Column("extractor", sa.String(), nullable=False),

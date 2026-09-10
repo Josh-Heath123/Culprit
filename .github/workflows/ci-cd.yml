@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.27"
           cache-dependency-path: cli/go.sum
       - uses: actions/setup-node@v4
         with:
@@ -175,6 +175,15 @@ jobs:
       # drifting.
       - name: go test
         run: cd cli && go test ./...
+
+      # Phase 30 field 13: `culprit diff` end to end against two real
+      # Compose projects -- a real Postgres per environment, real image
+      # digests from a real pull, INTENT from the real extractors. The
+      # `go test ./...` above skips it (it says NOT RUN) because it needs
+      # Docker; ubuntu-latest has Docker, so it runs here. `just
+      # cli-test-docker` is the same thing locally.
+      - name: Compose end-to-end (culprit diff against real containers)
+        run: cd cli && CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run TestEnvironmentDiffAgainstRealContainers -v
 
       # Every released platform, built here rather than only at tag time,
       # so a change that breaks the darwin/arm64 build is caught on the
@@ -221,7 +230,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.27"
           cache-dependency-path: cli/go.sum
       - uses: actions/setup-node@v4
         with:
@@ -283,6 +292,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
@@ -300,6 +310,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
@@ -310,6 +321,33 @@ jobs:
         with:
           sarif_file: culprit.sarif
           category: culprit
+
+  # Phase 30 field 13: "Capture against ... a kind cluster." The
+  # Kubernetes adapter reads a real API server here: a Deployment with a
+  # literal env value, a secretKeyRef, and envFrom over a ConfigMap and a
+  # Secret, whose Pod reports a real image digest. The recorded-output
+  # tests in internal/capture pin the parsing; this pins that the
+  # parsing matches what a cluster actually returns. Its own job because
+  # a cluster takes a minute to come up and a failure here means
+  # something specific.
+  kind-capture:
+    needs: cli
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: cli/go.sum
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: culprit-capture
+      - name: Apply the capture fixture
+        run: |
+          kubectl apply -f cli/testdata/kind/fixture.yaml
+          kubectl -n culprit-capture rollout status deployment/orders-api --timeout=180s
+      - name: Capture it
+        run: cd cli && CULPRIT_KIND_TESTS=1 CULPRIT_KIND_CONTEXT=kind-culprit-capture go test ./internal/capture -run TestKubernetesCaptureAgainstKind -v
 
   test:
     needs: typecheck
@@ -424,6 +462,14 @@ jobs:
           - image: mcp_server
             context: mcp_server
             dockerfile: mcp_server/Dockerfile
+          # Phase 30: the `culprit` binary on distroless, for the optional
+          # capture agent in docker-compose.prod.yml (off by default, under
+          # the `agent` profile). Built, Trivy-scanned and pushed like the
+          # rest, which is the point of building it here rather than
+          # leaving the agent pointing at an image nobody scans.
+          - image: cli
+            context: cli
+            dockerfile: cli/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -445,7 +491,7 @@ jobs:
         if: matrix.image == 'frontend'
         # Same dummy, CI-only values as the pytest (api) step above —
         # app.main imports app.auth.config (JWT_SECRET_KEY, no default)
-        # and, transitively via app.registry.router ->
+        # and, transitively via app.model.router ->
         # app.registry.service -> app.registry.keys ->
         # app.ingest_gateway.auth, app.ingest_gateway.config's
         # INGEST_GATEWAY_DATABASE_URL (also no default) — missing here
@@ -467,6 +513,7 @@ jobs:
           AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
           POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
           FACT_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'

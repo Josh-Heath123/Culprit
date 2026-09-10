@@ -165,7 +165,11 @@ def _intent_row(fact: Fact, bundle: CaptureBundle) -> dict[str, Any]:
         # produces are shape-only (`predicate: value_shape`, no value at
         # all), and storing them with the shape discarded left the
         # response reporting facts it had effectively thrown away.
-        value_shape=fact.value_shape.model_dump() if fact.value_shape else None,
+        # `exclude_none`: a shape from an extractor older than Phase 30 has
+        # no `scheme`, and that is stored as an absent key rather than a JSON
+        # null — one representation of "not classified", as on the
+        # configured_facts path (app/model/captures.py).
+        value_shape=fact.value_shape.model_dump(exclude_none=True) if fact.value_shape else None,
         grant_ref=fact.grant_ref,
         source_kind=str(fact.provenance.source_kind),
         extractor=fact.provenance.extractor,

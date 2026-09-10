@@ -74,6 +74,7 @@ def test_the_generated_registry_matches_the_compose_default() -> None:
         "AUTH_SERVICE_DB_PASSWORD",
         "POSTMORTEM_WRITER_DB_PASSWORD",
         "FACT_WRITER_DB_PASSWORD",
+        "CAPTURE_WRITER_DB_PASSWORD",
         "MCP_READER_DB_PASSWORD",
     ],
 )

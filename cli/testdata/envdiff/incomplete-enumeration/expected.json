@@ -1,0 +1,5 @@
+{
+  "description": "Production loads JWT_SECRET_KEY from a Secret whose keys could not be listed. The capture says so, so the key must not be reported missing.",
+  "expected": [],
+  "false_positives": 0
+}

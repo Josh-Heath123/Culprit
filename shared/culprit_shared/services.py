@@ -25,8 +25,9 @@ own literal copy of the env-var mapping rather than importing this
 module — migrations are historical snapshots and shouldn't depend on
 live/mutable application code; see that migration's own docstring.
 frontend/src/lib/services.ts's old hand-synced mirror of the service
-list is gone entirely (Phase 14): the frontend now fetches services from
-GET /services (see frontend/src/hooks/useServices.ts).
+list is gone entirely (Phase 14): the frontend fetches the registered
+list from the API — GET /model/components since Phase 30 removed the
+/services alias (see frontend/src/hooks/useModel.ts).
 """
 
 #: Which environment variable holds each demo service's ingest-gateway

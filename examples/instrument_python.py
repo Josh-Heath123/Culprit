@@ -25,7 +25,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 
 # Must match a service name you've already registered with Culprit
-# (Settings -> Services, or POST /services) byte-for-byte — see
+# (Settings -> Services, or POST /model/components) byte-for-byte — see
 # docs/INSTRUMENTATION.md §2 for what happens if it doesn't.
 SERVICE_NAME = "your-service-name-here"
 

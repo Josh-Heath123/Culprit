@@ -20,7 +20,11 @@ type divergenceIdentityFixture struct {
 		LeftArtefact   string `json:"left_artefact"`
 		RightExtractor string `json:"right_extractor"`
 		RightArtefact  string `json:"right_artefact"`
-		Identity       string `json:"identity"`
+		// Optional: present only on the Phase 30 cases. Absent decodes to
+		// "", which is exactly an INTENT fact's environment.
+		LeftEnvironment  string `json:"left_environment"`
+		RightEnvironment string `json:"right_environment"`
+		Identity         string `json:"identity"`
 	} `json:"cases"`
 }
 
@@ -46,10 +50,10 @@ func TestDivergenceIdentityMatchesTheSharedFixture(t *testing.T) {
 			divergence := Divergence{
 				Subject:   testCase.Subject,
 				Predicate: testCase.Predicate,
-				Left: Fact{Provenance: Provenance{
+				Left: Fact{Environment: testCase.LeftEnvironment, Provenance: Provenance{
 					Extractor: testCase.LeftExtractor,
 					Artefact:  testCase.LeftArtefact}},
-				Right: Fact{Provenance: Provenance{
+				Right: Fact{Environment: testCase.RightEnvironment, Provenance: Provenance{
 					Extractor: testCase.RightExtractor,
 					Artefact:  testCase.RightArtefact}},
 			}

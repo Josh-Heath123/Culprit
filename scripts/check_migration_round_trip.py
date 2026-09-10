@@ -75,6 +75,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "POSTMORTEM_WRITER_DB_PASSWORD": "round-trip-postmortem-writer",
     "MCP_READER_DB_PASSWORD": "round-trip-mcp-reader",
     "FACT_WRITER_DB_PASSWORD": "round-trip-fact-writer",
+    "CAPTURE_WRITER_DB_PASSWORD": "round-trip-capture-writer",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:
@@ -166,6 +167,32 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             f"SELECT c.id, 'rt-env', '{database_url}', 'value', "
             "       '{\"type\": \"string\", \"length_class\": \"medium\", "
             "         \"format\": \"dsn\", \"present\": true}'::jsonb, "
+            "       'introspection', 'round-trip@0.0.0', now() FROM c",
+        ),
+        (
+            # Phase 30: a shape carrying the optional fifth key, `scheme`,
+            # on a capture carrying its grant set and refusals. The
+            # e4c1b7a9d2f0 downgrade has to strip `scheme` from this row
+            # before the four-key constraint can be recreated over it; with
+            # no such row that UPDATE would run over nothing and the gate
+            # would pass without having exercised it (invariant 10).
+            "configured_facts (with scheme)",
+            "WITH c AS ("
+            "  INSERT INTO captures (plane, environment, extractor, started_at, "
+            "                        digest, grants, refused) "
+            "  VALUES ('CONFIGURED', 'rt-env', 'round-trip@0.0.0', now(), "
+            "          'sha256-round-trip', "
+            "          '[{\"capability\": \"config.read.names\", \"used\": true}]'::jsonb, "
+            "          '[{\"capability\": \"db.metadata.read\", \"check\": \"live schema\", "
+            "             \"reason\": \"not granted\"}]'::jsonb) RETURNING id"
+            ") "
+            "INSERT INTO configured_facts "
+            "(capture_id, environment, subject, predicate, value_shape, "
+            " source_kind, extractor, captured_at) "
+            f"SELECT c.id, 'rt-env', '{database_url}', 'value_shape', "
+            "       '{\"type\": \"string\", \"length_class\": \"medium\", "
+            "         \"format\": \"dsn\", \"present\": true, "
+            "         \"scheme\": \"postgresql\"}'::jsonb, "
             "       'introspection', 'round-trip@0.0.0', now() FROM c",
         ),
     )

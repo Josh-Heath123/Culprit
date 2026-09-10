@@ -175,12 +175,30 @@ _self-check-env *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit check -f ../culprit.yaml {{ARGS}}
 
 # gofmt is the whole lint story for Go -- `go vet` catches the rest.
+# Phase 30: `culprit diff` end to end against two real Compose projects
+# (cli/testdata/demo/environments). Pulls postgres:16-alpine and two
+# alpine images; needs Docker, uv and node. CI runs the same test in the
+# `cli` job.
+cli-test-docker:
+    cd cli && CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run TestEnvironmentDiffAgainstRealContainers -v
+
+# Phase 30: the Kubernetes adapter against a kind cluster. Creates the
+# cluster if it does not exist, applies cli/testdata/kind/fixture.yaml,
+# and runs the capture test against it. Needs kind, kubectl and Docker.
+cli-test-kind:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    kind get clusters | grep -qx culprit-capture || kind create cluster --name culprit-capture --wait 180s
+    kubectl --context kind-culprit-capture apply -f cli/testdata/kind/fixture.yaml
+    kubectl --context kind-culprit-capture -n culprit-capture rollout status deployment/orders-api --timeout=180s
+    cd cli && CULPRIT_KIND_TESTS=1 CULPRIT_KIND_CONTEXT=kind-culprit-capture go test ./internal/capture -run TestKubernetesCaptureAgainstKind -v
+
 cli-lint:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -232,7 +250,7 @@ intent *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit intent -f ../culprit.yaml {{ARGS}}
@@ -314,7 +332,7 @@ create-user *ARGS:
 # frontend-build` and the frontend's Docker build) only worked on a
 # machine that already had a hand-written api/.env.
 generate-types:
-    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
     cd frontend && npm run generate-types
 
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`

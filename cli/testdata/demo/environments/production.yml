@@ -1,0 +1,23 @@
+# Production: three faults, planted on purpose. Each is one of Phase 30's
+# acceptance criteria.
+#
+#   1. JWT_SECRET_KEY is not set. orders_api/config.py reads it with no
+#      default, and orders-api is on the request path from web — so this
+#      is the finding criterion 1 asks for, ranked breaks_request_path.
+#   2. The database is at 0002_add_status, one revision behind the
+#      migration head: no order_lines table (criterion 2).
+#   3. A different image from staging's, so the digests differ
+#      (criterion 3).
+services:
+  orders-api:
+    image: alpine:3.19
+    environment:
+      DATABASE_URL: postgresql://orders:fixture-db-password-planted@orders-db:5432/orders
+      PORT: "8000"
+      REQUEST_TIMEOUT: 30s
+      FEATURE_ASYNC_FULFILMENT: "false"
+      STRIPE_API_KEY: sk_live_fixture_planted_production_0123
+
+  orders-db:
+    volumes:
+      - ./production-db.sql:/docker-entrypoint-initdb.d/schema.sql:ro

@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from culprit_model.capabilities import ALLOWLISTED, Capability
 from culprit_model.graph import (
     Component,
     ComponentKind,
@@ -212,6 +213,91 @@ class ExtractSpec(BaseModel):
     components: dict[str, ComponentExtractSpec] = Field(default_factory=dict)
 
 
+class ComposeEnvSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    project: str = ""
+    files: tuple[str, ...] = ()
+
+
+class KubernetesEnvSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    context: str = ""
+    namespace: str = ""
+
+
+class DatabaseEnvSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The *name* of a variable holding a connection string, never the
+    #: string — the same rule the Go loader enforces.
+    dsn_env: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    name: str = ""
+
+
+class EndpointEnvSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    host: str = Field(pattern=r"^[^/@:\s]+$")
+    port: int = Field(ge=1, le=65535)
+    tls: bool = False
+
+
+class EnvironmentComponentSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    workload: str = ""
+    container: str = ""
+    env_command: str = ""
+    packages: str = ""
+    database: DatabaseEnvSpec | None = None
+    endpoint: EndpointEnvSpec | None = None
+
+
+class EnvironmentSpec(BaseModel):
+    """One entry under `environments:` (Phase 30 field 10).
+
+    **The control plane does not act on any of this**, exactly like
+    `extract:`. Capture runs in the `culprit` binary, in whatever shell
+    can reach the environment; this model exists so `apply-model` accepts
+    a manifest that carries the section and `--export` round-trips it
+    rather than deleting a user's grants. The Go loader
+    (`cli/internal/extract/environments.go`) is the one that validates
+    grants against §2.7 — this checks structure and names, and refuses a
+    connection string where a variable name belongs, which the whole-file
+    credential check would also catch.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    adapter: str = Field(pattern=r"^(compose|kubernetes|process|exec)$")
+    compose: ComposeEnvSpec | None = None
+    kubernetes: KubernetesEnvSpec | None = None
+    exec: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    #: `true`/`false`, or an allowlist for the three per-item capabilities.
+    #: Keyed by the closed §2.7 set — see `_check_grants`.
+    grants: dict[Capability, bool | tuple[str, ...]] = Field(default_factory=dict)
+    components: dict[str, EnvironmentComponentSpec] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_grants(self) -> "EnvironmentSpec":
+        """The Go loader's grant rules, so `apply-model` accepts exactly the
+        manifests `culprit env capture` does. An unknown name (including
+        any `*.write`) already failed the `Capability` key type; here, a
+        per-item capability must be a non-empty list of named items, and
+        every other must be a bool."""
+        for capability, grant in self.grants.items():
+            if capability in ALLOWLISTED:
+                if isinstance(grant, bool) or not grant or any("*" in item for item in grant):
+                    raise ValueError(
+                        f"grants.{capability}: needs an explicit, non-empty list of named items"
+                    )
+            elif not isinstance(grant, bool):
+                raise ValueError(f"grants.{capability}: expected true or false")
+        return self
+
+
 class Manifest(BaseModel):
     """A whole `culprit.yaml`, validated.
 
@@ -228,6 +314,25 @@ class Manifest(BaseModel):
     #: Phase 28. Validated here, carried through load/dump untouched, and
     #: never acted on by the control plane — see ExtractSpec.
     extract: ExtractSpec | None = None
+    #: Phase 30. Same treatment as `extract` — see EnvironmentSpec.
+    environments: dict[str, EnvironmentSpec] | None = None
+
+    @model_validator(mode="after")
+    def _check_environment_components(self) -> "Manifest":
+        """Every component an environment names must be declared here —
+        refused rather than ignored, matching the Go loader, for the reason
+        `_check_extract_references` gives: a silently unmatched name is a
+        capture that quietly looks at nothing."""
+        if not self.environments:
+            return self
+        known = {component.name for component in self.components}
+        for name, spec in self.environments.items():
+            unknown = sorted(set(spec.components) - known)
+            if unknown:
+                raise ValueError(
+                    f"environments.{name}.components: {unknown} are not declared in this file"
+                )
+        return self
 
     @model_validator(mode="after")
     def _check_version(self) -> "Manifest":
@@ -375,7 +480,22 @@ def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     try:
         return Manifest(**raw)
     except ValidationError as exc:
-        raise ManifestError(f"{source}: does not match the culprit.yaml schema:\n{exc}") from exc
+        # Location and message only — never pydantic's default rendering,
+        # which appends `input_value=...` for every error. The Phase 30
+        # invariant audit showed why that matters here: `dsn_env:
+        # postgresql://app@db/orders?password=hunter2` gets past
+        # `_reject_credentials` (which matches the `user:pass@` form) and
+        # then failed the `dsn_env` pattern — and the default message
+        # echoed the whole connection string into `POST /model/apply`'s
+        # 400 and `just apply-model`'s stderr. Standing invariant 11:
+        # error text is output. Same rendering as app/model/envelope.py.
+        where = "\n".join(
+            "  "
+            + ".".join(str(part) for part in error.get("loc", ()))
+            + f": {error.get('msg', 'invalid')}"
+            for error in exc.errors(include_url=False, include_context=False, include_input=False)
+        )
+        raise ManifestError(f"{source}: does not match the culprit.yaml schema:\n{where}") from exc
 
 
 def read_manifest(path: Path) -> Manifest:
@@ -431,6 +551,16 @@ def dump_manifest(manifest: Manifest) -> str:
     # able to say why.
     if manifest.extract is not None:
         document["extract"] = _dump_extract(manifest.extract)
+    # Phase 30: carried whole, for the same reason as `extract` — the
+    # control plane does not store it, and an export that dropped it would
+    # delete a user's grants the first time they round-tripped the file.
+    if manifest.environments is not None:
+        document["environments"] = {
+            name: manifest.environments[name].model_dump(
+                mode="json", exclude_defaults=True, exclude_none=True
+            )
+            for name in sorted(manifest.environments)
+        }
 
     return yaml.safe_dump(
         document,

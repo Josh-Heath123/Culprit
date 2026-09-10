@@ -47,6 +47,11 @@ type Input struct {
 	// default: it is a different question from "what is wrong", and
 	// mixing them would make a clean run look alarming.
 	ShowUnverifiable bool
+	// Captures are the environments a `culprit diff` compared (Phase 30).
+	// Empty for `culprit check`. Their skips join the "not checked" list
+	// and their refusals get a section of their own: field 14's "the
+	// report says which checks were `refused`" is this.
+	Captures []model.CaptureBundle
 }
 
 // Render writes one format.
@@ -73,10 +78,11 @@ func renderText(writer io.Writer, input Input) error {
 
 	if len(open) == 0 {
 		fmt.Fprintf(writer, "No divergences. %d fact(s) compared across %d subject(s).\n",
-			len(input.Bundle.Facts), countSubjects(input.Bundle))
+			totalFacts(input), countSubjects(input.Bundle, input.Captures...))
 		if suppressed > 0 {
 			fmt.Fprintf(writer, "%d finding(s) suppressed by culprit.yaml.\n", suppressed)
 		}
+		reportRefused(writer, input)
 		reportGaps(writer, input)
 		if input.ShowUnverifiable {
 			renderUnverifiableText(writer, input)
@@ -111,11 +117,32 @@ func renderText(writer io.Writer, input Input) error {
 	if suppressed > 0 {
 		fmt.Fprintf(writer, "%d further finding(s) suppressed by culprit.yaml.\n", suppressed)
 	}
+	reportRefused(writer, input)
 	reportGaps(writer, input)
 	if input.ShowUnverifiable {
 		renderUnverifiableText(writer, input)
 	}
 	return nil
+}
+
+// reportRefused prints what an environment capture was not allowed to
+// look at (Phase 30).
+//
+// Its own section, ahead of the gaps, because it is a different kind of
+// gap with a different remedy: a skip is "culprit tried and could not", a
+// refusal is "you have not granted this" — and the reader can fix the
+// second with one line of culprit.yaml.
+func reportRefused(writer io.Writer, input Input) {
+	refusals := allRefusals(input)
+	if len(refusals) == 0 {
+		return
+	}
+	fmt.Fprintf(writer, "\nRefused (%d) — not looked at, because the capability was not granted\n",
+		len(refusals))
+	for _, refusal := range refusals {
+		fmt.Fprintf(writer, "  %-28s %-22s %s\n",
+			truncate(refusal.where, 28), truncate(refusal.Check, 22), refusal.Reason)
+	}
 }
 
 // reportGaps prints what was *not* compared.
@@ -125,15 +152,89 @@ func renderText(writer io.Writer, input Input) error {
 // conclude the rest is fine, which is the failure mode this whole
 // product exists to avoid. The skips come straight from the capture.
 func reportGaps(writer io.Writer, input Input) {
-	if len(input.Bundle.Skipped) == 0 {
+	skips := allSkips(input)
+	if len(skips) == 0 {
 		return
 	}
-	fmt.Fprintf(writer, "\nNot checked (%d) — these are gaps, not clean results\n",
-		len(input.Bundle.Skipped))
-	for _, skip := range input.Bundle.Skipped {
+	fmt.Fprintf(writer, "\nNot checked (%d) — these are gaps, not clean results\n", len(skips))
+	for _, skip := range skips {
 		fmt.Fprintf(writer, "  %-18s %-16s %s\n",
 			truncate(skip.Component, 18), skip.Want, skip.Reason)
 	}
+}
+
+// labelledRefusal is a refusal with the environment it happened in.
+type labelledRefusal struct {
+	model.Refusal
+	Environment string `json:"environment"`
+	where       string
+}
+
+func allRefusals(input Input) []labelledRefusal {
+	var refusals []labelledRefusal
+	for _, capture := range input.Captures {
+		environment := captureEnvironment(capture)
+		for _, refusal := range redactRefusals(capture.Refused) {
+			where := environment
+			if refusal.Component != "" {
+				where += "/" + refusal.Component
+			}
+			refusals = append(refusals, labelledRefusal{
+				Refusal: refusal, Environment: environment, where: where,
+			})
+		}
+	}
+	return refusals
+}
+
+// allSkips is INTENT's skips followed by each capture's, with a capture's
+// component prefixed by its environment so "orders-api could not be
+// read" says *where*.
+func allSkips(input Input) []model.Skip {
+	skips := make([]model.Skip, 0, len(input.Bundle.Skipped))
+	for _, skip := range input.Bundle.Skipped {
+		skip.Reason = model.RedactCredentials(skip.Reason)
+		skips = append(skips, skip)
+	}
+	for _, capture := range input.Captures {
+		environment := captureEnvironment(capture)
+		for _, skip := range capture.Skipped {
+			skip.Component = environment + "/" + skip.Component
+			skip.Reason = model.RedactCredentials(skip.Reason)
+			skips = append(skips, skip)
+		}
+	}
+	return skips
+}
+
+// redactRefusals is the one path a refusal's reason takes into any
+// rendering. Every skip and refusal reason in every format goes through
+// model.RedactCredentials: the CLI writes its own from closed vocabulary,
+// but a loaded envelope's were written by whoever wrote the envelope, and
+// an extractor plugin's skip reasons by whoever wrote the plugin.
+// Standing invariant 11 — one choke point, not one per format.
+func redactRefusals(refusals []model.Refusal) []model.Refusal {
+	redacted := make([]model.Refusal, 0, len(refusals))
+	for _, refusal := range refusals {
+		refusal.Reason = model.RedactCredentials(refusal.Reason)
+		redacted = append(redacted, refusal)
+	}
+	return redacted
+}
+
+func captureEnvironment(capture model.CaptureBundle) string {
+	if capture.Environment != nil {
+		return *capture.Environment
+	}
+	return "?"
+}
+
+func totalFacts(input Input) int {
+	total := len(input.Bundle.Facts)
+	for _, capture := range input.Captures {
+		total += len(capture.Facts)
+	}
+	return total
 }
 
 func renderUnverifiableText(writer io.Writer, input Input) {
@@ -159,6 +260,14 @@ func describeSide(fact model.Fact) string {
 	}
 	if where == "" {
 		where = fact.Provenance.Extractor
+	}
+	// A CONFIGURED fact is labelled with the environment it was read in
+	// rather than a rank: §2.4's ranks are about how much to trust a claim
+	// of what *should* be true, and "what production is set to" is not
+	// that kind of claim. Which environment is the thing a reader needs.
+	if fact.Environment != "" {
+		return fmt.Sprintf("%-42s %s (in %s)",
+			truncate(renderValue(fact), 42), where, fact.Environment)
 	}
 	return fmt.Sprintf("%-42s %s (rank %d)",
 		truncate(renderValue(fact), 42), where, fact.Provenance.ConfidenceRank)
@@ -187,10 +296,25 @@ func describeSide(fact model.Fact) string {
 func renderValue(fact model.Fact) string {
 	if fact.ValueShape != nil {
 		shape := *fact.ValueShape
+		// A shape built outside the closed sets is not rendered field by
+		// field: until Phase 30 the Go side did not check membership, and
+		// a `format` holding a DSN would have been printed verbatim here.
+		// Decoding now refuses one; this refuses to print one regardless.
+		if !shape.Valid() {
+			return "(an unrecognised shape, not shown)"
+		}
 		if !shape.Present {
 			return "absent"
 		}
-		return fmt.Sprintf("%s/%s/%s", shape.Type, shape.Format, shape.LengthClass)
+		format := string(shape.Format)
+		// The scheme is what explains a "postgresql against mysql"
+		// finding; without it both sides would read `string/dsn/medium`
+		// and the reader could not see why they differ. A closed enum, so
+		// printing it cannot print a value.
+		if shape.Scheme != "" && shape.Scheme != model.SchemeNotApplicable {
+			format += "(" + string(shape.Scheme) + ")"
+		}
+		return fmt.Sprintf("%s/%s/%s", shape.Type, format, shape.LengthClass)
 	}
 	if kind, _, err := model.ParseSubject(fact.Subject); err == nil && kind == model.KindConfig {
 		// A bool is the one value a config fact may legitimately carry
@@ -219,6 +343,19 @@ type jsonReport struct {
 	Divergences  []jsonDivergence       `json:"divergences"`
 	NotChecked   []model.Skip           `json:"not_checked"`
 	Unverifiable []diverge.Unverifiable `json:"unverifiable,omitempty"`
+	// Phase 30: one entry per environment a diff compared. Omitted for
+	// `culprit check`, so its JSON contract is unchanged.
+	Environments []jsonEnvironment `json:"environments,omitempty"`
+}
+
+// jsonEnvironment is what a reader needs to judge a capture: which one it
+// was, what it was allowed to look at, and what it was refused.
+type jsonEnvironment struct {
+	Name      string          `json:"name"`
+	CaptureID string          `json:"capture_id"`
+	Facts     int             `json:"facts"`
+	Grants    []model.Grant   `json:"grants"`
+	Refused   []model.Refusal `json:"refused"`
 }
 
 type jsonSummary struct {
@@ -253,15 +390,22 @@ type jsonSide struct {
 	Artefact  string `json:"artefact,omitempty"`
 	Locator   string `json:"locator,omitempty"`
 	Rank      int    `json:"confidence_rank"`
+	// Plane and Environment say which side of a Phase 30 finding this
+	// is. Plane is always present; Environment only for a CONFIGURED
+	// side, so an INTENT-only report is unchanged apart from the plane.
+	Plane       string `json:"plane"`
+	Environment string `json:"environment,omitempty"`
 }
 
 func side(fact model.Fact) jsonSide {
 	return jsonSide{
-		Value:     renderValue(fact),
-		Extractor: fact.Provenance.Extractor,
-		Artefact:  fact.Provenance.Artefact,
-		Locator:   fact.Provenance.Locator,
-		Rank:      fact.Provenance.ConfidenceRank,
+		Value:       renderValue(fact),
+		Extractor:   fact.Provenance.Extractor,
+		Artefact:    fact.Provenance.Artefact,
+		Locator:     fact.Provenance.Locator,
+		Rank:        fact.Provenance.ConfidenceRank,
+		Plane:       string(fact.Plane),
+		Environment: fact.Environment,
 	}
 }
 
@@ -270,10 +414,26 @@ func buildJSON(input Input) jsonReport {
 		Version:     input.Version,
 		CaptureID:   input.Bundle.CaptureID,
 		Divergences: []jsonDivergence{},
-		NotChecked:  input.Bundle.Skipped,
+		NotChecked:  allSkips(input),
 	}
 	if report.NotChecked == nil {
 		report.NotChecked = []model.Skip{}
+	}
+	for _, capture := range input.Captures {
+		environment := jsonEnvironment{
+			Name:      captureEnvironment(capture),
+			CaptureID: capture.CaptureID,
+			Facts:     len(capture.Facts),
+			Grants:    capture.Grants,
+			Refused:   redactRefusals(capture.Refused),
+		}
+		if environment.Grants == nil {
+			environment.Grants = []model.Grant{}
+		}
+		if environment.Refused == nil {
+			environment.Refused = []model.Refusal{}
+		}
+		report.Environments = append(report.Environments, environment)
 	}
 	if input.ShowUnverifiable {
 		report.Unverifiable = input.Result.Unverifiable
@@ -282,8 +442,8 @@ func buildJSON(input Input) jsonReport {
 		}
 	}
 
-	report.Summary.Facts = len(input.Bundle.Facts)
-	report.Summary.Subjects = countSubjects(input.Bundle)
+	report.Summary.Facts = totalFacts(input)
+	report.Summary.Subjects = countSubjects(input.Bundle, input.Captures...)
 	report.Summary.UnverifiableSubjects = len(input.Result.Unverifiable)
 
 	for _, finding := range input.Result.Divergences {
@@ -344,6 +504,25 @@ type sarifLog struct {
 type sarifRun struct {
 	Tool    sarifTool     `json:"tool"`
 	Results []sarifResult `json:"results"`
+	// Invocations carry what the run did *not* look at — refusals and
+	// gaps — as tool execution notifications (SARIF 2.1.0 §3.20.21). The
+	// first version of the Phase 30 SARIF output had none: a diff with no
+	// grants at all produced an empty, clean-looking log while the text
+	// report listed twelve refusals. That is "I was not allowed to look"
+	// presented as "I looked and found nothing", in the format most likely
+	// to be read by a machine that will not go and check the text. Found
+	// by the Phase 30 phase audit.
+	Invocations []sarifInvocation `json:"invocations,omitempty"`
+}
+
+type sarifInvocation struct {
+	ExecutionSuccessful        bool                `json:"executionSuccessful"`
+	ToolExecutionNotifications []sarifNotification `json:"toolExecutionNotifications"`
+}
+
+type sarifNotification struct {
+	Level   string    `json:"level"`
+	Message sarifText `json:"message"`
 }
 
 type sarifTool struct {
@@ -454,6 +633,22 @@ func renderSARIF(writer io.Writer, input Input) error {
 		if finding.Left.Provenance.ConfidenceRank < finding.Right.Provenance.ConfidenceRank {
 			location = finding.Left
 		}
+		// Phase 30: a CONFIGURED side has no file — its artefact is
+		// "compose:orders-api" — and GitHub silently drops an annotation
+		// whose path does not resolve. So an environment finding is
+		// annotated on its INTENT side, the file in the repository that
+		// makes the claim the environment fails, and an env-against-env
+		// finding (no INTENT side at all) falls back to culprit.yaml.
+		if location.Plane != model.PlaneIntent {
+			switch {
+			case finding.Left.Plane == model.PlaneIntent:
+				location = finding.Left
+			case finding.Right.Plane == model.PlaneIntent:
+				location = finding.Right
+			default:
+				location = model.Fact{}
+			}
+		}
 
 		results = append(results, sarifResult{
 			RuleID: ruleID,
@@ -471,18 +666,40 @@ func renderSARIF(writer io.Writer, input Input) error {
 	}
 	sort.Slice(ruleList, func(i, j int) bool { return ruleList[i].ID < ruleList[j].ID })
 
+	run := sarifRun{
+		Tool: sarifTool{Driver: sarifDriver{
+			Name:           "Culprit",
+			Version:        input.Version,
+			InformationURI: "https://culprit.co.za",
+			Rules:          ruleList,
+		}},
+		Results: results,
+	}
+	var notifications []sarifNotification
+	for _, refusal := range allRefusals(input) {
+		notifications = append(notifications, sarifNotification{
+			Level: "warning",
+			Message: sarifText{Text: fmt.Sprintf("Refused, not looked at: %s %s — %s",
+				refusal.where, refusal.Check, refusal.Reason)},
+		})
+	}
+	for _, skip := range allSkips(input) {
+		notifications = append(notifications, sarifNotification{
+			Level: "note",
+			Message: sarifText{Text: fmt.Sprintf("Not checked: %s %s — %s",
+				skip.Component, skip.Want, skip.Reason)},
+		})
+	}
+	if len(notifications) > 0 {
+		run.Invocations = []sarifInvocation{{
+			ExecutionSuccessful: true, ToolExecutionNotifications: notifications,
+		}}
+	}
+
 	document := sarifLog{
 		Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
 		Version: "2.1.0",
-		Runs: []sarifRun{{
-			Tool: sarifTool{Driver: sarifDriver{
-				Name:           "Culprit",
-				Version:        input.Version,
-				InformationURI: "https://culprit.co.za",
-				Rules:          ruleList,
-			}},
-			Results: results,
-		}},
+		Runs:    []sarifRun{run},
 	}
 
 	encoder := json.NewEncoder(writer)
@@ -585,7 +802,14 @@ func renderJUnit(writer io.Writer, input Input) error {
 		})
 		suite.Failures++
 	}
-	for _, skip := range input.Bundle.Skipped {
+	for _, refusal := range allRefusals(input) {
+		suite.Cases = append(suite.Cases, junitCase{
+			Name:      refusal.where + " " + refusal.Check,
+			ClassName: "culprit.refused",
+			Skipped:   &junitSkipped{Message: refusal.Reason},
+		})
+	}
+	for _, skip := range allSkips(input) {
 		suite.Cases = append(suite.Cases, junitCase{
 			Name:      skip.Component + " " + skip.Want,
 			ClassName: "culprit.not_checked",
@@ -624,10 +848,12 @@ func openFindings(divergences []model.Divergence) []model.Divergence {
 	return open
 }
 
-func countSubjects(bundle model.CaptureBundle) int {
+func countSubjects(bundle model.CaptureBundle, more ...model.CaptureBundle) int {
 	subjects := map[string]bool{}
-	for _, fact := range bundle.Facts {
-		subjects[fact.Subject] = true
+	for _, each := range append([]model.CaptureBundle{bundle}, more...) {
+		for _, fact := range each.Facts {
+			subjects[fact.Subject] = true
+		}
 	}
 	return len(subjects)
 }

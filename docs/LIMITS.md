@@ -265,16 +265,28 @@ Three consequences worth knowing before you depend on it:
   true`. A bool has two inhabitants and cannot carry a credential. Every
   other type needs a grant, numbers included: a numeric API key is a real
   thing.
-- **The shape is coarse, and that costs you real findings.** There is no
-  `scheme` field, so a `DATABASE_URL` pointing at `postgresql://` in
-  staging and `mysql://` in production has the *same shape* and no
-  divergence is visible. Same for a hostname change, a port change, or
-  any two secrets of similar length. Shape comparison catches "set versus
-  unset", "empty versus populated", "a DSN where a bare hostname was
-  expected" and "credential-shaped where it should not be" — not
-  "pointing at the wrong thing". The field set was fixed by decision
-  (docs/HANDOFF.md §2, 2026-09-09); widening it is an architecture
-  decision, not an implementation one.
+- **The shape is coarse, and that costs you real findings.** Phase 30
+  added `scheme` (docs/HANDOFF.md §2, resolving Q7), from a closed list —
+  `postgresql`, `mysql`, `redis`, `rediss`, `https`, … and `other` — so a
+  `DATABASE_URL` pointing at `postgresql://` in staging and `mysql://` in
+  production is now a visible difference. A hostname change, a port
+  change, a different database name on the same server, or any two
+  secrets of similar length still have the *same shape*. Shape comparison
+  catches set versus unset, empty versus populated, a different kind of
+  value, a different scheme and a credential baked into a URL — not
+  "pointing at a different host". An unrecognised scheme is `other`, so
+  two different unrecognised schemes compare equal.
+- **Length is compared only as empty-or-not.** Two environments' URLs
+  differ in length because they name different hosts, so "short against
+  medium" is never a finding. A key that is set but blank against one
+  that is populated is.
+- **A shape from before Phase 30 has no `scheme`**, and compares equal to
+  any scheme — "did not say" is not "disagrees". Stored rows are not
+  backfilled. An extractor emitting `scheme` cannot be read by a
+  pre-Phase-30 `culprit` binary (it refuses the unknown field and drops
+  that extractor's whole answer); neither side has been released, so no
+  published pair is affected, but keep the CLI and the extractors on the
+  same release.
 - **`intent_facts` carries the same three constraints now.** Phase 28
   gave it `value_shape` and `grant_ref` too, because an INTENT extractor
   reading `.env.example` or an `os.environ.get("PORT", "8000")` default
@@ -284,9 +296,17 @@ Three consequences worth knowing before you depend on it:
   with the shape discarded while the response reported them saved. That
   matters more than the `configured_facts` version: `intent_facts` is the
   table an unattended CI credential can actually INSERT into today.
-- **The grant mechanism itself does not exist yet.** `grant_ref` is a
-  free-text column; nothing validates that the grant it names is real,
-  because capability grants are Phase 31's work. Phase 28 closed the
+- **A `grant_ref` is checked against the capture's own grants — on
+  `POST /captures` only.** Phase 30 made every CONFIGURED fact name the
+  grant that permitted reading it (`db.metadata.read` for a column list,
+  `config.read.values:orders-api/LOG_LEVEL` for a value), and `POST
+  /captures` refuses a fact whose grant the capture does not list, or a
+  config value whose grant is not its own key's. That is checked against
+  the grant list *in the capture*, which the capture's signature covers
+  when there is one; nothing checks that list against the `culprit.yaml`
+  the capture claims to have run under. `intent_facts` (`POST
+  /facts/captures`) has no grant list to check against, so there
+  `grant_ref` is still only required to be non-blank. Phase 28 closed the
   cheapest half of that — a blank or whitespace-only `grant_ref` is now
   refused by both the type and a second CHECK
   (`ck_configured_facts_grant_ref_not_blank`) — but any *non-blank*
@@ -303,8 +323,10 @@ Three consequences worth knowing before you depend on it:
   cycle succeeds and leaves contentless facts behind. Back up first
   (`scripts/backup.sh`). Rows with no stored value round-trip cleanly.
 
-The tables remain empty until Phase 27, so none of this affects a running
-deployment yet.
+`configured_facts` is written for the first time in Phase 30, by `POST
+/captures`. Downgrading past its migration (e4c1b7a9d2f0) strips every
+stored `scheme` from both fact tables and drops the captures' grant sets
+and refusal lists, silently — back up first.
 
 ## `culprit.yaml` export is a canonical form, not your file back
 
@@ -348,43 +370,27 @@ gives identical bytes, and re-applying one reports no changes. Phase 27's
 acceptance criterion "apply, export, diff is empty" is true of a file
 already in canonical form, and true *semantically* of any file.
 
-## The `/services` API is an alias, and it flattens the model
+## The `/services` API is gone
 
-Everything under `/services` still works after Phase 27, and is what the
-dashboard's service list, `docs/INSTRUMENTATION.md` and any script you
-wrote against it still call. It is a translation layer over
-`components`/`connections`, retained for one release and removed in Phase
-30.
+Phase 27 kept `/services*` for one release as a translation layer over
+`components`/`connections`; Phase 30 removed it, and every path under it
+now returns 404. Anything written against it — a script, an old copy of
+`docs/INSTRUMENTATION.md` — needs `/model/*` instead: `POST
+/model/components` to register (it still returns the first ingest key,
+once), `POST /model/components/{id}/keys` and `DELETE
+/model/components/{id}/keys/{key_id}` for key rotation, `POST
+/model/connections` where you used `depends_on`, and `GET
+/model/topology/suggestions` plus `.../accept|dismiss` for trace-inferred
+edges. A component's keys are listed on `ComponentOut.keys` (metadata
+only — never a hash or a plaintext key).
 
-It cannot express the model, and silently narrows it:
-
-- **`depends_on` shows only `http` connections.** A `sql` connection to a
-  database, a `message` connection to a queue or a `cache` connection
-  simply does not appear in a `GET /services` response. They exist, they
-  are in the graph, and correlation reads them — this surface just has
-  nowhere to put them.
-- **`PATCH /services/{id}` with `depends_on` rewrites only the `http`
-  edges.** That is deliberate: a legacy client that has never heard of
-  connection kinds must not delete a `sql` edge it cannot see. The
-  consequence is that the old API can no longer fully describe a
-  component's connections, so a script that "sets" `depends_on` is setting
-  a subset.
-- **Everything it creates is `kind: service`.** The old shape has no field
-  for a component's kind, and inferring one from the name would be a
-  guess. Correct it in **Settings → Services**, via
-  `PATCH /model/components/{id}`, or by declaring it in `culprit.yaml`.
-- **A legacy `depends_on` write flattens `declared_by` to
-  `culprit_yaml`.** `PATCH /services/{id}` rewrites that component's
-  `http` edges, and the old shape cannot say where an edge came from — so
-  an edge that had been an *accepted topology suggestion* comes back
-  labelled as hand-declared. That matters because `apply_model` treats
-  `culprit_yaml` edges as owned by the manifest and removes ones the file
-  no longer lists, while leaving accepted suggestions alone. An accepted
-  suggestion touched by a legacy PATCH can therefore be removed by a
-  later `apply` that would previously have spared it. Use
-  `PATCH /model/connections/{id}` instead, which preserves provenance.
-
-Use `/model/*` for anything new.
+The removal also retired the alias's three distortions: `depends_on`
+showing only `http` edges, a legacy `depends_on` PATCH rewriting only
+`http` edges, and that PATCH flattening an accepted suggestion's
+`declared_by` to `culprit_yaml`. An accepted suggestion is still created
+as an `http` connection — trace inference cannot tell the kind — so
+reclassify it with `PATCH /model/connections/{id}`, which keeps its
+provenance.
 
 ## Migrated connections are `http`, declared, and unclassified
 
@@ -738,13 +744,14 @@ fixtures. Miss one and that project's tests fail at container setup with a
 Same root cause as `worker/app/db.py` hand-mirroring `api`'s ORM. Unlike
 that one, there is no drift checker for it yet.
 
-## `culprit check` compares intent against intent, and nothing else
+## `culprit check` compares intent against intent
 
-Every fact the CLI can produce is on the INTENT plane, so every finding
-it can report is an `intent_conflict`: two things your repository says
-about itself that do not agree. It does not know what your staging
-environment is configured to do (Phase 30) or what actually happened in
-production (Phase 31).
+Every fact `culprit check` reads is on the INTENT plane, so every finding
+it reports is an `intent_conflict`: two things your repository says about
+itself that do not agree. What an environment is actually configured to
+do is `culprit diff`'s question (Phase 30), and what actually happened in
+production is Phase 31's. `check` never reads an environment, and a
+manifest growing an `environments:` section does not change that.
 
 That is a real limit and it is also most of the value. Two sources of
 intent disagreeing is usually itself the bug, and it is detectable in a
@@ -848,14 +855,21 @@ fast enough to run on every commit, which a corpus needing `uv` and
 
 ## The CLI does not upload anything
 
-`POST /divergences/captures` exists and stores history, but no version of
-the `culprit` binary calls it — the binary links no HTTP client at all,
-and a test asserts that its check pipeline links no networking package
-whatsoever. Uploading is deliberately deferred to Phase 30, where network
-access arrives with the capability model that should gate it.
+`POST /divergences/captures` and `POST /captures` exist and store
+history, but no version of the `culprit` binary calls either: it links no
+HTTP client at all, and a test asserts that its check pipeline links no
+networking package whatsoever. Phase 29 deferred uploading "to Phase 30,
+where network access arrives with the capability model"; Phase 30's plan
+listed the endpoints and not an uploader, and adding an HTTP client to
+the binary was not something to do by implication. It is still deferred.
 
-Until then, history is populated by posting to the endpoint yourself
-(`culprit check --format json` gives you the findings).
+Until then, history is populated by posting yourself:
+`culprit check --format json` for findings, and for a capture the
+envelope `culprit env capture` writes, verbatim:
+
+    curl -X POST https://culprit.example.com/api/captures \
+      -H "Authorization: Bearer $CULPRIT_PROJECT_TOKEN" \
+      -H "Content-Type: application/json" --data @production.capture.json
 
 ## Findings are never closed automatically
 
@@ -864,3 +878,196 @@ have checked a subset of components, or extraction may have been skipped
 for one entirely. Inferring "it is fixed" from "I did not see it" is the
 same mistake the comparator refuses to make about facts. Resolution
 arrives with verification, in Phase 32.
+
+## `culprit diff` reads environments through `docker` and `kubectl`
+
+The Compose and Kubernetes adapters run the `docker` and `kubectl` you
+already have, with your own contexts and credentials, rather than
+linking Docker's SDK or client-go into the binary. The released binary can
+therefore capture a Compose project or a cluster with nothing extra built
+in — and cannot without those two commands on `PATH`. The JSON that
+`docker inspect` and `kubectl get -o json` print is a contract Culprit now
+depends on; a field those tools rename is a capture that silently has
+less in it, and the recorded-output tests are what would notice.
+
+Deliberately different from the plan, which named the SDKs behind
+optional build tags: behind build tags the downloadable binary would have
+captured nothing, and both SDKs are HTTP clients in a binary whose tests
+assert it links none.
+
+## The `exec` adapter needs `env -0` or JSON, not `printenv`
+
+A command read by the `exec` adapter must print NUL-delimited `KEY=VALUE`
+pairs (`env -0`, `printenv -0`) or a JSON object of strings. Plain
+line-delimited output — what `printenv` and `heroku config --shell` print
+by default — is refused, with a reason, and nothing from it is kept. A
+multi-line value such as a PEM key prints across several lines, and the
+last line of a base64 block (`QUJDREVGRw==`) is indistinguishable from an
+assignment: read line by line, a fragment of a secret became a variable
+*name*, and names are never masked. Found by the Phase 30 invariant
+audit. Keys that are not valid variable names are dropped from every
+adapter, and when that happens in `exec` output the environment is
+marked incompletely enumerated, so nothing is judged missing from it.
+
+## What an environment has that the code never mentions is not a finding
+
+`PATH`, `HOSTNAME`, `KUBERNETES_SERVICE_HOST`, a table an old migration
+left behind: an environment always holds more than the repository
+declares, and reporting every extra would bury the one missing
+`DATABASE_URL` under forty that are fine. So absence is judged in one
+direction only — something INTENT says must exist, missing from an
+environment. The cost is real: a genuinely stray production table, or a
+variable set in production that nothing reads any more, is not reported.
+
+Between two environments, a key one sets and the other does not *is*
+reported — but only for keys INTENT does not mention (those are judged
+against INTENT instead), and ranked `cosmetic` when nothing reads the
+key, because nothing can break for want of it.
+
+## Where the code has an answer, environments are compared with the code, not with each other
+
+If the migrations say the head is `0003` and production says `0002`, that
+is one finding — production against the code. "Staging and production
+disagree about the migration head" is not reported as well: it is the
+same fault said worse, because it no longer says which side is wrong.
+Environments are compared directly only on questions the repository does
+not answer — image digests, installed package versions, the shape of a
+key nothing declares.
+
+## An environment that could not be seen whole is never evidence of absence
+
+When a Kubernetes Deployment loads variables with `envFrom` from a
+ConfigMap or Secret that `kubectl` cannot read, the capture records that
+the environment was not enumerated completely, and **no key is reported
+missing from it** — including one that genuinely is. "I could not see
+all of it" must never become "it is not there". A variable set by
+`valueFrom` is known to exist but has an unknown shape, and an unknown
+shape compares on presence alone.
+
+A Secret loaded with `envFrom` contributes its key names only: Culprit
+lists them through a `kubectl` template that never prints the data, so
+it cannot say whether a secret-sourced key is empty or what kind of value
+it holds.
+
+## Only the first replica is read
+
+When a Compose service runs several containers, the one first by name is
+read and the capture records how many there were. Replicas that disagree
+with each other — a rolling deploy caught halfway — are not detected.
+For Kubernetes the Deployment's own spec is read, so every replica is
+described by the same template; the image digest comes from the first Pod
+by name that reports one.
+
+## Live schema: columns and nullability, Postgres and Alembic only
+
+`db.metadata.read` compares which tables and columns exist and whether
+each column is nullable. It does **not** compare column types:
+`information_schema` says `character varying` where SQLAlchemy says
+`VARCHAR(255)`, and every column would be a false disagreement. A column
+that changed type is invisible here.
+
+Only Postgres is read, and only Alembic's `alembic_version` is understood
+as a migration version. The table list comes from `pg_catalog`, so any
+role can read a complete schema; the version needs `SELECT` on
+`alembic_version`, and without it the capture says the version was not
+read. Views, partitions and the TimescaleDB catalogues are not listed.
+The database a component's tables are compared under is `<component>-db`
+unless `database.name` says otherwise — the name the Python extractor
+uses on the INTENT side, which is what makes the two meet.
+
+## Installed versions are compared between environments, not against what you declared
+
+`pip freeze` says `fastapi==0.115.4`; `pyproject.toml` says
+`fastapi>=0.115`. Deciding whether one satisfies the other means PEP 440
+and semver ranges inside a comparator that knows nothing about any
+domain, so installed versions are a separate claim, `installed_version`,
+compared only environment against environment. "Production runs a
+version your constraint forbids" is not detected.
+
+## Network checks: one endpoint per component, and a class rather than a date
+
+A component may declare one `endpoint`. Its certificate is reported as
+`valid`, `expires_within_30_days`, `expired`, `untrusted` or
+`handshake_failed` — never the expiry date, because two environments'
+certificates expire on different days as a matter of course. The 30-day
+threshold is fixed. These checks stop at a DNS lookup, a TCP handshake or
+a TLS handshake: whether the application behind the port actually
+answers is Phase 31's probes, not this.
+
+## A signature says the capture is unaltered, not who made it
+
+`culprit env capture --sign-key` signs the envelope with Ed25519, and
+`culprit diff` and `POST /captures` refuse one that does not verify. The
+public key travels in the envelope, so a signature proves the capture has
+not changed since whoever held that key signed it — not who that was.
+Culprit keeps no list of trusted keys; `captures.signed_by` stores the key
+id so you can check it against yours. An unsigned envelope still carries
+a SHA-256, which catches corruption and nothing more.
+
+**Signing is optional, which is a deviation from the plan.** Phase 30
+field 7 says "a capture is a signed, timestamped bundle"; a capture is
+signed only when you pass `--sign-key`, because a signature needs a key
+the user holds and Culprit will not invent one for them. By default an
+envelope is hashed, not signed — so it can be edited (refusals dropped, a
+fact changed) and re-hashed, and `culprit diff` and `POST /captures` will
+accept it. Neither can be told to require a signature yet.
+
+## `GET /captures/diff` is a snapshot diff, not the engine
+
+The API compares two stored captures fact by fact: which answers differ,
+which exist on one side only. It has no INTENT, no severity and no
+suppressions — those need the repository, and live in `culprit diff`. The
+two share the shape-equivalence rule and the rule that a config value is
+never rendered, held by `shared/tests/shape_conformance.json`.
+
+## The capture agent sees the api's configuration, and through the api's own role
+
+The optional agent in `docker-compose.prod.yml` uses the `process`
+adapter with the same `.env.prod` the api reads, so what it captures is
+the api's configuration; the worker's and ingest-gateway's differ only by
+the two variables the compose file remaps. It reads the live schema as
+`api-reader`, which has no `SELECT` on `alembic_version`, so a production
+capture reports the migration version as unread until you give it a role
+that can. It is one-shot and prints to stdout: there is no agent daemon
+in this release.
+
+It is given all of `.env.prod`, because the `process` adapter reads the
+environment it runs in — so its capture lists the *names and shapes* of
+every variable in that file (the superuser password, every role
+password, the JWT key) and attributes them all to `culprit-api`. Values
+are never read without `config.read.values`, and the root `culprit.yaml`
+grants none; the names are what `config.read.names` means.
+
+## The Go CLI needs Go 1.25 or later to build
+
+The patched releases of pgx (a memory-safety CVE, fixed in 5.9.0) and of
+`golang.org/x/text` require Go 1.25, so `cli/go.mod` now declares it and
+CI builds with Go 1.27. Go 1.24 is past its support window: a binary
+built with it carries standard-library CVEs that will not be fixed, which
+the image scan now catches.
+
+## Where a stored value is guarded by code rather than by the database
+
+Four places the Phase 30 invariant audit named, each a real residual risk
+rather than a defect, and each a design decision for later rather than a
+patch:
+
+- **`api-reader` can read a granted literal.** It has `SELECT` on
+  `configured_facts`, including `value`, because non-config facts (a
+  digest, a column list) keep their payload there. What stops a granted
+  config value reaching the dashboard is the API's one serialiser,
+  `fact_out`, and the test that plants a value and asserts no endpoint
+  returns it — not a column grant or a masking view.
+- **"A config value's grant is its own key's" is checked by `POST
+  /captures`, not by Postgres.** Every CONFIGURED fact names *some* grant,
+  so `ck_configured_facts_value_requires_grant` is always satisfied; a
+  writer that bypassed the endpoint could store a config value under the
+  `config.read.names` grant.
+- **Non-config values are not type-checked on upload.** A capture built by
+  hand — by someone holding the project token — could put arbitrary text
+  in `dns_resolves` or `digest`, and `GET /captures/{id}` would render it.
+  The CLI never produces one.
+- **Grant items are compared exactly.** An allowlist item names
+  `<component>/<KEY>` as written in `culprit.yaml`; a component written
+  in a different case from the model's canonical (lower-case) name is
+  refused on upload rather than matched. It fails closed.

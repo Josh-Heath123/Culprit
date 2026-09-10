@@ -1,0 +1,213 @@
+{
+  "protocol": 1,
+  "plane": "CONFIGURED",
+  "environment": "staging",
+  "extractor": "culprit@dev",
+  "capture_id": "staging-fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "dsn",
+        "present": true,
+        "scheme": "postgresql"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "opaque",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PORT",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PORT",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "port",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PATH",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PATH",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "path",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "image:orders-api",
+      "predicate": "reference",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": "ghcr.io/acme/orders:1.4",
+      "grant_ref": "deploy.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "image:orders-api",
+      "predicate": "digest",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "grant_ref": "deploy.metadata.read"
+    }
+  ],
+  "skipped": [],
+  "meta": {
+    "adapter": "compose"
+  },
+  "grants": [
+    {
+      "capability": "config.read.names",
+      "used": true
+    },
+    {
+      "capability": "db.metadata.read",
+      "used": true
+    },
+    {
+      "capability": "deploy.metadata.read",
+      "used": true
+    }
+  ],
+  "refused": []
+}

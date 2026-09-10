@@ -101,6 +101,11 @@ func (f Fact) Validate() error {
 			f.Plane, f.Environment)
 	}
 
+	if f.ValueShape != nil && !f.ValueShape.Valid() {
+		// Named by field only, never by value — see ValueShape.UnmarshalJSON.
+		return fmt.Errorf("value_shape carries a value outside its closed vocabulary")
+	}
+
 	kind, _, err := ParseSubject(f.Subject)
 	if err != nil {
 		// Left alone deliberately: that is BuildSubject's error to

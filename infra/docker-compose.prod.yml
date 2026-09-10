@@ -119,6 +119,38 @@ services:
       # is reachable only through here.
       - ingest-gateway
 
+  # Phase 30: the optional capture agent. **Off by default** — it has a
+  # profile, so `docker compose up` and deploy.sh never start it, and
+  # nothing pulls its image unless the profile is named. Run it by hand,
+  # once, when you want a capture of this deployment:
+  #
+  #     docker compose -f docker-compose.prod.yml --env-file .env.prod \
+  #       --profile agent run --rm -T culprit-agent > production.capture.json
+  #
+  # It is one-shot (Phase 30 field 17: no agent daemon), reads only what
+  # culprit.yaml's `environments.production` grants (copy the repository's
+  # culprit.yaml next to this file first), and prints a sealed envelope to
+  # stdout — names and shapes of the api's configuration, never values,
+  # plus the live schema from pg_catalog. Stdout rather than a mounted
+  # directory: the image runs as distroless's nonroot user, which cannot
+  # write to a root-owned host directory, and a capture needs no write
+  # access to anything. It gets the same
+  # env_file as the api because the `process` adapter captures the
+  # environment it runs in, which is how it sees the api's configuration
+  # without the Docker socket: mounting that would give a capture tool root
+  # on the host, for a job that needs none of it.
+  culprit-agent:
+    image: ${IMAGE_REGISTRY:-ghcr.io/josh-heath123/culprit}/cli:${IMAGE_TAG:-latest}
+    profiles: ["agent"]
+    restart: "no"
+    env_file: .env.prod
+    command: ["env", "capture", "production", "-f", "/culprit/culprit.yaml"]
+    volumes:
+      - ./culprit.yaml:/culprit/culprit.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:

@@ -122,19 +122,83 @@ func enumerates(fact model.Fact) bool {
 }
 
 // Compare produces findings from one capture.
+//
+// Phase 29's entry point, kept exactly: an INTENT bundle compared against
+// itself. It is CompareAll over one bundle.
 func Compare(bundle model.CaptureBundle, options Options) Result {
+	return CompareAll([]model.CaptureBundle{bundle}, options)
+}
+
+// CompareAll produces findings across several captures: one INTENT
+// capture and any number of CONFIGURED ones, one per environment
+// (Phase 30).
+//
+// # Scopes
+//
+// Every fact sits in a *scope*: INTENT, or CONFIGURED in one named
+// environment. The same two rules apply within and across scopes, and
+// the pair of scopes a finding joins is what names its kind — see
+// model.KindFor. Nothing below knows what an environment variable, a
+// column or an image digest is, which is what keeps this D7's generic
+// comparator rather than a pile of per-plane special cases.
+//
+//   - **Within INTENT**, exactly Phase 29's behaviour: `intent_conflict`.
+//   - **INTENT against an environment**: the best INTENT answer to a
+//     question against that environment's answer (`intent_vs_configured`),
+//     and an INTENT claim that a thing exists against an environment
+//     that enumerated its kind of thing and does not have it.
+//   - **Environment against environment**: two environments answering the
+//     same question differently (`env_vs_env`), and one having a thing
+//     the other enumerated and lacks.
+//   - **Never within one environment.** A capture is one snapshot of one
+//     environment; two facts inside it are not two witnesses.
+//
+// # The one direction absence is never judged in
+//
+// An environment having something INTENT never mentions — `PATH`,
+// `HOSTNAME`, a table an old migration left behind — is not reported. An
+// environment is a superset of what the code declares as a matter of
+// course, and treating every variable the base image sets as a finding
+// would bury the one missing `DATABASE_URL` under forty that are fine.
+// This is a statement about planes, not about any domain: INTENT says
+// what must be there, and an environment's extras are not a claim that
+// anything is wrong. It is recorded in docs/LIMITS.md, because it does
+// mean a genuinely stray production table is not found this way.
+func CompareAll(bundles []model.CaptureBundle, options Options) Result {
 	now := options.Now
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 
-	groups := groupBySubjectPredicate(bundle.Facts)
-	coverage := buildCoverage(bundle)
+	intent := model.CaptureBundle{Plane: model.PlaneIntent}
+	var configured []model.CaptureBundle
+	for _, bundle := range bundles {
+		if bundle.Plane == model.PlaneConfigured {
+			configured = append(configured, bundle)
+			continue
+		}
+		intent.Facts = append(intent.Facts, bundle.Facts...)
+		intent.Skipped = append(intent.Skipped, bundle.Skipped...)
+		if intent.CaptureID == "" {
+			intent.CaptureID = bundle.CaptureID
+		}
+	}
+	sort.SliceStable(configured, func(i, j int) bool {
+		return environmentOf(configured[i]) < environmentOf(configured[j])
+	})
+
+	groups := groupBySubjectPredicate(intent.Facts)
+	coverage := buildCoverage(intent)
 
 	result := Result{Divergences: []model.Divergence{}, Unverifiable: []Unverifiable{}}
 	result.Divergences = append(result.Divergences, conflicts(groups, now)...)
-	result.Divergences = append(result.Divergences, absences(bundle, coverage, now)...)
-	result.Unverifiable = unverifiable(bundle, groups)
+	result.Divergences = append(result.Divergences, absences(intent, coverage, now)...)
+	result.Unverifiable = unverifiable(intent, groups)
+
+	if len(configured) > 0 {
+		result.Divergences = append(result.Divergences, crossScopeConflicts(intent, configured, now)...)
+		result.Divergences = append(result.Divergences, crossScopeAbsences(intent, configured, now)...)
+	}
 
 	sortDivergences(result.Divergences)
 	sort.Slice(result.Unverifiable, func(i, j int) bool {
@@ -406,14 +470,20 @@ func absentFrom(reference *referenceSet, claim model.Fact) model.Fact {
 	// that has nothing to do with the finding. The artefact is right and
 	// is what matters: "this file does not mention it".
 	provenance.Locator = ""
+	// The plane and environment are the *reference's*: the absence is a
+	// claim that source makes. Within INTENT that is the same plane as the
+	// claim, as it always was; across scopes it is the environment that
+	// lacks the thing, which is what makes the finding's kind and identity
+	// name that environment.
 	return model.Fact{
-		Plane:      claim.Plane,
-		Subject:    claim.Subject,
-		Predicate:  claim.Predicate,
-		Value:      false,
-		Provenance: provenance,
-		CapturedAt: reference.sample.CapturedAt,
-		CaptureID:  reference.sample.CaptureID,
+		Plane:       reference.sample.Plane,
+		Subject:     claim.Subject,
+		Predicate:   claim.Predicate,
+		Value:       false,
+		Environment: reference.sample.Environment,
+		Provenance:  provenance,
+		CapturedAt:  reference.sample.CapturedAt,
+		CaptureID:   reference.sample.CaptureID,
 	}
 }
 
@@ -499,18 +569,31 @@ func sameSource(left, right model.Fact) bool {
 		left.Provenance.Artefact == right.Provenance.Artefact
 }
 
+// shapesEqual compares two shapes as ValueShape.Equivalent defines it —
+// not struct equality. Two environments' URLs differ in length because
+// they name different hosts, and a shape whose type is unknown disagrees
+// with nothing about its content; reporting either as a divergence would
+// be the noise that gets a tool's threshold turned off. See
+// shared/tests/shape_conformance.json for every case.
 func shapesEqual(left, right *model.ValueShape) bool {
 	if left == nil || right == nil {
 		return left == right
 	}
-	return *left == *right
+	return left.Equivalent(*right)
 }
 
+// sourceLabel names a fact's source for an explanation. A CONFIGURED
+// fact's artefact ("compose:orders-api") is only meaningful with the
+// environment it was read in, so that leads.
 func sourceLabel(fact model.Fact) string {
+	label := fact.Provenance.Extractor
 	if fact.Provenance.Artefact != "" {
-		return fact.Provenance.Artefact
+		label = fact.Provenance.Artefact
 	}
-	return fact.Provenance.Extractor
+	if fact.Environment != "" {
+		return fact.Environment + " (" + label + ")"
+	}
+	return label
 }
 
 func describeSubject(kind model.SubjectKind, parts model.Parts) string {
@@ -540,6 +623,15 @@ func sortDivergences(divergences []model.Divergence) {
 		if left.Predicate != right.Predicate {
 			return left.Predicate < right.Predicate
 		}
-		return left.Right.Provenance.Extractor < right.Right.Provenance.Extractor
+		if left.Right.Provenance.Extractor != right.Right.Provenance.Extractor {
+			return left.Right.Provenance.Extractor < right.Right.Provenance.Extractor
+		}
+		// Environments break the last tie, so "missing in production" and
+		// "missing in staging" come out in the same order every run. Empty
+		// for every INTENT finding, so Phase 29's order is untouched.
+		if left.Left.Environment != right.Left.Environment {
+			return left.Left.Environment < right.Left.Environment
+		}
+		return left.Right.Environment < right.Right.Environment
 	})
 }

@@ -1,0 +1,12 @@
+{
+  "description": "Staging sets FEATURE_BETA_CHECKOUT; production does not; nothing in the repository mentions it. Reported, and cosmetic - nothing reads it.",
+  "expected": [
+    {
+      "subject": "config:orders-api/FEATURE_BETA_CHECKOUT",
+      "predicate": "exists",
+      "kind": "env_vs_env",
+      "severity": "cosmetic"
+    }
+  ],
+  "false_positives": 0
+}

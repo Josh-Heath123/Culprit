@@ -54,6 +54,7 @@ from app.model.schemas import (
     ConnectionPatch,
 )
 from app.registry.keys import generate_api_key, hash_api_key
+from app.registry.schemas import KeyOut
 
 
 class ComponentNameTaken(Exception):
@@ -89,7 +90,21 @@ class SelfConnection(Exception):
 # --- transforms -------------------------------------------------------
 
 
+def _key_out(key: ApiKey) -> KeyOut:
+    return KeyOut(
+        id=key.id,
+        label=key.label,
+        created_at=key.created_at,
+        last_used_at=key.last_used_at,
+        revoked=key.revoked_at is not None,
+    )
+
+
 def component_out(component: Component) -> ComponentOut:
+    """Requires `api_keys` to be loaded already (`selectinload`), as every
+    query in this module that feeds it does. An async session cannot
+    lazy-load, so a caller that forgets fails loudly with
+    `MissingGreenlet` rather than returning a component with no keys."""
     return ComponentOut(
         id=component.id,
         name=component.name,
@@ -100,6 +115,7 @@ def component_out(component: Component) -> ComponentOut:
         environment_scope=component.environment_scope,
         labels=component.labels,
         disabled=component.disabled_at is not None,
+        keys=[_key_out(key) for key in component.api_keys],
         created_at=component.created_at,
     )
 
@@ -156,7 +172,9 @@ async def list_components(session: AsyncSession) -> list[ComponentOut]:
     components = (
         (
             await session.execute(
-                select(Component).order_by(Component.sort_order, Component.name)
+                select(Component)
+                .options(selectinload(Component.api_keys))
+                .order_by(Component.sort_order, Component.name)
             )
         )
         .scalars()

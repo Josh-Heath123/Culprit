@@ -4,6 +4,8 @@
 
 import { getToken, setToken } from "@/lib/auth";
 import type {
+  ComponentCreate,
+  ComponentCreateResponse,
   ComponentOut,
   ComponentPatch,
   ComponentsOut,
@@ -20,11 +22,6 @@ import type {
   PostmortemCreate,
   PostmortemOut,
   PostmortemPatch,
-  ServiceCreate,
-  ServiceCreateResponse,
-  ServiceOut,
-  ServicePatch,
-  ServicesOut,
   TopologyEdgeRef,
   TopologySuggestionsOut,
   UserOut,
@@ -129,7 +126,7 @@ export function resetUserPassword(id: string, newPassword: string): Promise<void
   });
 }
 
-/** Soft delete (disabled_at) — same semantics as deleteService, never
+/** Soft delete (disabled_at) — same semantics as deleteComponent, never
  * deletes the row (api/app/auth/users_router.py::delete_user_endpoint). */
 export function deleteUser(id: string): Promise<void> {
   return request<void>(`/users/${id}`, { method: "DELETE" });
@@ -147,72 +144,69 @@ export function regenerateRootCause(id: string): Promise<{ status: string; incid
   return request(`/incidents/${id}/regenerate-root-cause`, { method: "POST" });
 }
 
-// Phase 14 (registry) — Phase 16 moved every /services endpoint,
-// including GET, onto require_admin (api/app/main.py) — a member's
-// token gets 403 here now, not just from writes.
-export function fetchServices(): Promise<ServicesOut> {
-  return request<ServicesOut>("/services");
-}
-
-export function createService(body: ServiceCreate): Promise<ServiceCreateResponse> {
-  return request<ServiceCreateResponse>("/services", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function patchService(id: string, body: ServicePatch): Promise<ServiceOut> {
-  return request<ServiceOut>(`/services/${id}`, { method: "PATCH", body: JSON.stringify(body) });
-}
-
-/** Soft delete (default) or, with `purge`, a hard delete of the
- * registration + its keys — never of telemetry history either way (see
- * api/app/registry/service.py::delete_service). */
-export function deleteService(id: string, purge = false): Promise<void> {
-  return request<void>(`/services/${id}${purge ? "?purge=true" : ""}`, { method: "DELETE" });
-}
-
-export function createKey(serviceId: string, label: string | null): Promise<KeyCreateResponse> {
-  return request<KeyCreateResponse>(`/services/${serviceId}/keys`, {
-    method: "POST",
-    body: JSON.stringify({ label }),
-  });
-}
-
-export function revokeKey(serviceId: string, keyId: string): Promise<void> {
-  return request<void>(`/services/${serviceId}/keys/${keyId}`, { method: "DELETE" });
-}
-
-// Phase 19: topology inference — suggestions only, never applied
-// automatically; accept/dismiss are the only things that change what
-// correlation actually does (api/app/registry/service.py).
-export function fetchTopologySuggestions(): Promise<TopologySuggestionsOut> {
-  return request<TopologySuggestionsOut>("/services/topology/suggestions");
-}
-
-export function acceptTopologySuggestion(edge: TopologyEdgeRef): Promise<void> {
-  return request<void>("/services/topology/suggestions/accept", {
-    method: "POST",
-    body: JSON.stringify(edge),
-  });
-}
-
-export function dismissTopologySuggestion(edge: TopologyEdgeRef): Promise<void> {
-  return request<void>("/services/topology/suggestions/dismiss", {
-    method: "POST",
-    body: JSON.stringify(edge),
-  });
-}
-
-// Phase 27: the system model. The /services functions above still work
-// (they are served by a thin alias router) but cannot express a
-// component's kind or a connection's kind and criticality — those exist
-// only here.
+// Phase 27: the system model. Every endpoint here is under
+// require_admin (api/app/main.py) — a member's token gets 403, reads
+// included. Phase 30 removed the /services alias these replaced; the
+// ingest-key and topology-suggestion calls below moved under /model with
+// it.
 export function fetchComponents(): Promise<ComponentsOut> {
   return request<ComponentsOut>("/model/components");
+}
+
+/** Creates a component and issues its first ingest key — returned once,
+ * here, and never retrievable again. */
+export function createComponent(body: ComponentCreate): Promise<ComponentCreateResponse> {
+  return request<ComponentCreateResponse>("/model/components", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function patchComponent(id: string, body: ComponentPatch): Promise<ComponentOut> {
   return request<ComponentOut>(`/model/components/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+}
+
+/** Soft delete (default) or, with `purge`, a hard delete of the
+ * component + its keys and connections — never of telemetry history
+ * either way (see api/app/model/service.py::delete_component). */
+export function deleteComponent(id: string, purge = false): Promise<void> {
+  return request<void>(`/model/components/${id}${purge ? "?purge=true" : ""}`, {
+    method: "DELETE",
+  });
+}
+
+export function createKey(componentId: string, label: string | null): Promise<KeyCreateResponse> {
+  return request<KeyCreateResponse>(`/model/components/${componentId}/keys`, {
+    method: "POST",
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function revokeKey(componentId: string, keyId: string): Promise<void> {
+  return request<void>(`/model/components/${componentId}/keys/${keyId}`, { method: "DELETE" });
+}
+
+// Phase 19: topology inference — suggestions only, never applied
+// automatically; accept/dismiss are the only things that change what
+// correlation actually does (api/app/registry/service.py).
+export function fetchTopologySuggestions(): Promise<TopologySuggestionsOut> {
+  return request<TopologySuggestionsOut>("/model/topology/suggestions");
+}
+
+export function acceptTopologySuggestion(edge: TopologyEdgeRef): Promise<void> {
+  return request<void>("/model/topology/suggestions/accept", {
+    method: "POST",
+    body: JSON.stringify(edge),
+  });
+}
+
+export function dismissTopologySuggestion(edge: TopologyEdgeRef): Promise<void> {
+  return request<void>("/model/topology/suggestions/dismiss", {
+    method: "POST",
+    body: JSON.stringify(edge),
   });
 }
 

@@ -1,0 +1,20 @@
+{
+  "description": "Production's database is at 0002: behind the migration head, missing the order_lines table the code maps and the migrations create.",
+  "expected": [
+    {
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "kind": "intent_vs_configured",
+      "environment": "production",
+      "severity": "breaks_request_path"
+    },
+    {
+      "subject": "schema:orders-api-db/public.order_lines",
+      "predicate": "columns",
+      "kind": "intent_vs_configured",
+      "environment": "production",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

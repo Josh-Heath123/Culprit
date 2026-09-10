@@ -152,7 +152,10 @@ def test_a_default_becomes_a_shape_never_a_value() -> None:
     shape = shapes[0]["value_shape"]
     assert shape["format"] == "duration"
     assert shape["type"] == "string"
-    assert set(shape) == {"type", "length_class", "format", "present"}
+    # Phase 30 (Q7): the fifth field, `scheme`. A duration has none, and
+    # says so rather than leaving the key out.
+    assert set(shape) == {"type", "length_class", "format", "present", "scheme"}
+    assert shape["scheme"] == "not_applicable"
     assert shapes[0].get("value") is None
 
 

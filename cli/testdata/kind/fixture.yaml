@@ -1,0 +1,69 @@
+# Phase 30 field 13: "Capture against ... a kind cluster."
+#
+# One Deployment exercising every way the Kubernetes adapter learns about
+# an environment variable: a literal `value:`, a `valueFrom` secretKeyRef,
+# and `envFrom` over both a ConfigMap and a Secret. Applied by the
+# `kind-capture` CI job and by `just cli-test-kind`; read back by
+# cli/internal/capture/kind_test.go.
+#
+# The Secret's values are planted: the test asserts none of them reaches
+# the capture. The adapter lists a Secret's *keys* through a kubectl
+# go-template and never asks for its data, so they cannot.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: culprit-capture
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orders-config
+  namespace: culprit-capture
+data:
+  LOG_LEVEL: info
+  STRIPE_URL: https://api.stripe.com
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orders-secrets
+  namespace: culprit-capture
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: kind-fixture-jwt-planted
+  STRIPE_API_KEY: sk_live_kind_fixture_planted_0123
+  DATABASE_URL: postgresql://orders:kind-fixture-db-password-planted@db:5432/orders
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-api
+  namespace: culprit-capture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-api
+  template:
+    metadata:
+      labels:
+        app: orders-api
+    spec:
+      containers:
+        - name: api
+          image: alpine:3.20
+          command: ["sleep", "3600"]
+          env:
+            - name: PORT
+              value: "8000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: orders-secrets
+                  key: DATABASE_URL
+          envFrom:
+            - configMapRef:
+                name: orders-config
+            - secretRef:
+                name: orders-secrets
+              prefix: SECRET_

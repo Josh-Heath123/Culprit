@@ -1,0 +1,13 @@
+{
+  "description": "Production does not set JWT_SECRET_KEY, which orders-api reads with no default. orders-api is on the request path from web.",
+  "expected": [
+    {
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "kind": "intent_vs_configured",
+      "environment": "production",
+      "severity": "breaks_request_path"
+    }
+  ],
+  "false_positives": 0
+}

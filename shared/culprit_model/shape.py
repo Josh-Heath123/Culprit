@@ -29,14 +29,21 @@ That is the whole API for turning a real value into a shape: `of()` looks
 at a value and returns a classification, and the value it looked at is
 not reachable from what it returns.
 
-**What is deliberately lost.** §2.2's older illustrative example was
-`{"type": "url", "scheme": "postgresql", "host_resolves": true}`. There
-is no `scheme` here. The decision register (2026-09-09, resolving Q5)
-fixes the field set at `type`, `length_class`, `format`, `present`, and
-widening it is an architecture decision, not an implementation one. The
-cost is real and is recorded in `docs/LIMITS.md`: a `DATABASE_URL`
-pointing at `postgresql://` in staging and `mysql://` in production has
-the same shape, so that divergence is invisible to shape comparison.
+**`scheme`, the fifth field (Phase 30, resolving Q7).** §2.2's older
+illustrative example was `{"type": "url", "scheme": "postgresql",
+"host_resolves": true}`, and the first version of this type left `scheme`
+out: a `DATABASE_URL` pointing at `postgresql://` in staging and
+`mysql://` in production had the same shape, so the divergence was
+invisible. The architecture session decided (docs/HANDOFF.md §2,
+2026-09-09) that it belongs in the type **as a closed enum** — never the
+scheme string, since a free string can always carry a secret. The same
+rule now governs every future field: if it cannot be expressed as a
+closed set or a bounded numeric class, it does not belong here.
+
+`scheme` is optional on the wire and `None` means "not classified",
+unlike the other four. See `ValueShape.scheme` for why that asymmetry is
+honest rather than a loophole, and `equivalent()` for how comparison
+treats it.
 
 Deterministic and dependency-free — see `.claude/rules/determinism.md`.
 """
@@ -169,10 +176,83 @@ _SHORT_MAX = 16
 _MEDIUM_MAX = 128
 
 
+class ValueScheme(StrEnum):
+    """The scheme of a URL- or DSN-shaped value, from a closed set.
+
+    `OTHER` is the honest answer for a scheme outside the set; the scheme
+    itself is never recorded. Kept identical to `ValueScheme` in
+    `cli/internal/model/shape.go`, held there by
+    `shared/tests/shape_conformance.json`.
+    """
+
+    NOT_APPLICABLE = "not_applicable"
+    POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
+    MARIADB = "mariadb"
+    SQLITE = "sqlite"
+    MSSQL = "mssql"
+    ORACLE = "oracle"
+    MONGODB = "mongodb"
+    REDIS = "redis"
+    #: TLS-or-not is a real difference between two environments, so
+    #: `rediss` is not folded onto `redis` (nor `https` onto `http`).
+    REDISS = "rediss"
+    MEMCACHED = "memcached"
+    AMQP = "amqp"
+    AMQPS = "amqps"
+    KAFKA = "kafka"
+    NATS = "nats"
+    HTTP = "http"
+    HTTPS = "https"
+    WS = "ws"
+    WSS = "wss"
+    GRPC = "grpc"
+    FTP = "ftp"
+    SFTP = "sftp"
+    S3 = "s3"
+    GS = "gs"
+    FILE = "file"
+    LDAP = "ldap"
+    LDAPS = "ldaps"
+    SMTP = "smtp"
+    SMTPS = "smtps"
+    OTHER = "other"
+
+
+#: The aliases a real scheme travels under, folded onto the closed set.
+#: `postgres://` and `postgresql://` are one scheme with two spellings.
+_SCHEME_ALIASES: dict[str, ValueScheme] = {
+    "postgres": ValueScheme.POSTGRESQL,
+    "sqlite3": ValueScheme.SQLITE,
+    "sqlserver": ValueScheme.MSSQL,
+}
+
+#: Only the scheme is read: nothing after `://` can influence the answer.
+_SCHEME_PATTERN = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*)://")
+
+
+def classify_scheme(text: str) -> ValueScheme:
+    """The scheme class of a string. Pure, total, never echoes its input.
+
+    A driver suffix is dropped before lookup: `postgresql+asyncpg` is
+    SQLAlchemy choosing a driver, not a different kind of database.
+    """
+    match = _SCHEME_PATTERN.match(text.strip())
+    if match is None:
+        return ValueScheme.NOT_APPLICABLE
+    scheme = match.group(1).lower().split("+", 1)[0]
+    if scheme in _SCHEME_ALIASES:
+        return _SCHEME_ALIASES[scheme]
+    try:
+        return ValueScheme(scheme)
+    except ValueError:
+        return ValueScheme.OTHER
+
+
 class ValueShape(BaseModel):
     """What a value is, with no room for what it says.
 
-    Four fields, every one closed. `extra="forbid"` and `frozen=True`
+    Five fields, every one closed. `extra="forbid"` and `frozen=True`
     together mean neither a caller nor a deserialiser can add a fifth —
     `ValueShape(**{"type": "url", "sample": "postgres://..."})` raises,
     which is the specific attack the Phase 27 audit demonstrated against
@@ -202,6 +282,14 @@ class ValueShape(BaseModel):
     #: exists in .env.example and is unset in staging") and needs to be
     #: expressible without inventing a fake value to describe.
     present: bool
+    #: Phase 30 (Q7). **Optional, and `None` means "not classified"** —
+    #: the one field allowed a default. The other four are required
+    #: because a default would be an answer the extractor never gave; a
+    #: missing `scheme` is not that. A protocol-1 extractor written before
+    #: the field existed says nothing about schemes, `None` records
+    #: exactly that, and `equivalent()` treats "said nothing" as
+    #: disagreeing with nothing. The constructors below always set it.
+    scheme: ValueScheme | None = None
 
     @classmethod
     def absent(cls) -> "ValueShape":
@@ -210,6 +298,7 @@ class ValueShape(BaseModel):
             type=ValueType.NULL,
             length_class=LengthClass.NOT_APPLICABLE,
             format=ValueFormat.NOT_APPLICABLE,
+            scheme=ValueScheme.NOT_APPLICABLE,
             present=False,
         )
 
@@ -225,6 +314,7 @@ class ValueShape(BaseModel):
             type=ValueType.UNKNOWN,
             length_class=LengthClass.NOT_APPLICABLE,
             format=ValueFormat.NOT_APPLICABLE,
+            scheme=ValueScheme.NOT_APPLICABLE,
             present=True,
         )
 
@@ -243,6 +333,7 @@ class ValueShape(BaseModel):
                 length_class=LengthClass.NOT_APPLICABLE,
                 format=ValueFormat.BOOLEANISH,
                 present=True,
+                scheme=ValueScheme.NOT_APPLICABLE,
             )
         if isinstance(value, int):
             return cls(
@@ -250,6 +341,7 @@ class ValueShape(BaseModel):
                 length_class=LengthClass.NOT_APPLICABLE,
                 format=ValueFormat.NUMERIC,
                 present=True,
+                scheme=ValueScheme.NOT_APPLICABLE,
             )
         if isinstance(value, float):
             return cls(
@@ -257,6 +349,7 @@ class ValueShape(BaseModel):
                 length_class=LengthClass.NOT_APPLICABLE,
                 format=ValueFormat.NUMERIC,
                 present=True,
+                scheme=ValueScheme.NOT_APPLICABLE,
             )
         if isinstance(value, (list, tuple, set, frozenset)):
             return cls(
@@ -264,6 +357,7 @@ class ValueShape(BaseModel):
                 length_class=_length_class(len(value)),
                 format=ValueFormat.LIST,
                 present=True,
+                scheme=ValueScheme.NOT_APPLICABLE,
             )
         if isinstance(value, dict):
             return cls(
@@ -271,6 +365,7 @@ class ValueShape(BaseModel):
                 length_class=_length_class(len(value)),
                 format=ValueFormat.JSON,
                 present=True,
+                scheme=ValueScheme.NOT_APPLICABLE,
             )
         text = str(value)
         return cls(
@@ -278,6 +373,38 @@ class ValueShape(BaseModel):
             length_class=_length_class(len(text)),
             format=classify_format(text),
             present=True,
+            scheme=classify_scheme(text),
+        )
+
+    def equivalent(self, other: "ValueShape") -> bool:
+        """Whether two shapes describe the same *kind* of value.
+
+        Not equality, in three deliberate ways: length class is compared
+        only as empty-or-not (two environments' URLs differ in length
+        because they name different hosts); an `UNKNOWN` type compares on
+        presence alone ("a comparison against UNKNOWN is not a
+        divergence"); and an unclassified scheme compares with anything.
+        Presence, type, format and a classified scheme must match.
+
+        Kept identical to `ValueShape.Equivalent` in
+        `cli/internal/model/shape.go` by `shared/tests/shape_conformance.json`.
+        """
+        if self.present != other.present:
+            return False
+        if not self.present:
+            return True
+        if ValueType.UNKNOWN in (self.type, other.type):
+            return True
+        if self.type != other.type or self.format != other.format:
+            return False
+        if (
+            self.scheme is not None
+            and other.scheme is not None
+            and self.scheme != other.scheme
+        ):
+            return False
+        return (self.length_class == LengthClass.EMPTY) == (
+            other.length_class == LengthClass.EMPTY
         )
 
 

@@ -3,16 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchComponents, fetchConnections } from "@/lib/api";
 import type { ComponentOut, ConnectionOut } from "@/lib/types";
 
-/** Phase 27: the system model, replacing the flat service list as what
- * Settings actually renders.
+/** Phase 27: the system model — what Settings renders, what the
+ * timeline draws its lanes from, and what the empty state names.
  *
- * Same conventions as useServices.ts, which this sits beside rather than
- * replaces: `/services` is a thin alias kept for one release (Phase 27
- * field 9) and other parts of the app still read it. Editing the model
- * is a rare, deliberate admin action, so a 30s poll is plenty — and
- * every mutation in SettingsServices.tsx invalidates these keys
- * directly, so the person who made the change sees it immediately
- * regardless of the interval.
+ * Phase 30 removed the `/services` alias and the useServices hook that
+ * read it; everything that used to read the flat service list reads
+ * this. Editing the model is a rare, deliberate admin action, so a 30s
+ * poll is plenty — and every mutation in SettingsServices.tsx
+ * invalidates the `["model"]` keys directly, so the person who made the
+ * change sees it immediately regardless of the interval.
  */
 export function useComponents() {
   const query = useQuery({

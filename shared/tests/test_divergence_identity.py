@@ -20,9 +20,14 @@ FIXTURE = Path(__file__).parent / "divergence_identity_conformance.json"
 CASES = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]
 
 
-def _fact(subject: str, predicate: str, extractor: str, artefact: str) -> Fact:
+def _fact(
+    subject: str, predicate: str, extractor: str, artefact: str, environment: str = ""
+) -> Fact:
+    # A fact with an environment is CONFIGURED by definition (§0.2): the
+    # model refuses an INTENT fact that carries one.
     return Fact(
-        plane=Plane.INTENT,
+        plane=Plane.CONFIGURED if environment else Plane.INTENT,
+        environment=environment or None,
         subject=subject,
         predicate=predicate,
         value=True,
@@ -46,10 +51,12 @@ def test_identity_matches_the_shared_fixture(case: dict) -> None:
         left=_fact(
             case["subject"], case["predicate"],
             case["left_extractor"], case["left_artefact"],
+            case.get("left_environment", ""),
         ),
         right=_fact(
             case["subject"], case["predicate"],
             case["right_extractor"], case["right_artefact"],
+            case.get("right_environment", ""),
         ),
     )
     assert divergence.identity() == case["identity"]

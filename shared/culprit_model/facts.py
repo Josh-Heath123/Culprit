@@ -309,13 +309,19 @@ class Divergence(BaseModel):
         identity that drift apart produce duplicate history nobody
         notices.
         """
-        return "|".join(
-            (
-                self.subject,
-                self.predicate,
-                self.left.provenance.extractor,
-                self.left.provenance.artefact or "",
-                self.right.provenance.extractor,
-                self.right.provenance.artefact or "",
-            )
-        )
+        parts = [
+            self.subject,
+            self.predicate,
+            self.left.provenance.extractor,
+            self.left.provenance.artefact or "",
+            self.right.provenance.extractor,
+            self.right.provenance.artefact or "",
+        ]
+        # Phase 30: a source is also *where* it read from. "Staging lacks
+        # DATABASE_URL" and "production lacks DATABASE_URL" differ only
+        # in environment, and would otherwise share a key and overwrite
+        # each other on upload. Appended only when either side has one,
+        # so every INTENT-only identity already stored is unchanged.
+        if self.left.environment or self.right.environment:
+            parts += [self.left.environment or "", self.right.environment or ""]
+        return "|".join(parts)

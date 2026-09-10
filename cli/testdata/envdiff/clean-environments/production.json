@@ -1,0 +1,309 @@
+{
+  "protocol": 1,
+  "plane": "CONFIGURED",
+  "environment": "production",
+  "extractor": "culprit@dev",
+  "capture_id": "production-fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "value_shape",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "long",
+        "format": "dsn",
+        "present": true,
+        "scheme": "postgresql"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "value_shape",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value_shape": {
+        "type": "unknown",
+        "length_class": "not_applicable",
+        "format": "not_applicable",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PORT",
+      "predicate": "exists",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PORT",
+      "predicate": "value_shape",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "port",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PATH",
+      "predicate": "exists",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PATH",
+      "predicate": "value_shape",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "path",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": [
+        "0003_add_order_lines"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": [
+        "cancelled_at",
+        "customer_email",
+        "id",
+        "placed_at",
+        "status",
+        "total_cents"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.orders.cancelled_at",
+      "predicate": "nullable",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": true,
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.alembic_version",
+      "predicate": "columns",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": [
+        "version_num"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.order_lines",
+      "predicate": "columns",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": [
+        "id",
+        "order_id",
+        "quantity",
+        "sku"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "image:orders-api",
+      "predicate": "reference",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": "ghcr.io/acme/orders:1.4",
+      "grant_ref": "deploy.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "image:orders-api",
+      "predicate": "digest",
+      "environment": "production",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "compose:orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "production-fixture",
+      "value": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "grant_ref": "deploy.metadata.read"
+    }
+  ],
+  "skipped": [],
+  "meta": {
+    "adapter": "compose"
+  },
+  "grants": [
+    {
+      "capability": "config.read.names",
+      "used": true
+    },
+    {
+      "capability": "db.metadata.read",
+      "used": true
+    },
+    {
+      "capability": "deploy.metadata.read",
+      "used": true
+    }
+  ],
+  "refused": []
+}

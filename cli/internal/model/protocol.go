@@ -149,6 +149,47 @@ type CaptureBundle struct {
 	// Meta is free-form, non-secret run context — the source root, the
 	// component names looked at, the CLI version. Never config values.
 	Meta map[string]string `json:"meta,omitempty"`
+	// Grants and Refused are Phase 30's field 7: "a capture is a signed,
+	// timestamped bundle of CONFIGURED facts plus the grant set that
+	// produced it, so a reader can tell what was *not* looked at".
+	//
+	// Both omitted for an INTENT capture, which reads no environment and
+	// so exercises no capability — that keeps every Phase 28 golden
+	// bundle byte-identical.
+	Grants  []Grant   `json:"grants,omitempty"`
+	Refused []Refusal `json:"refused,omitempty"`
+}
+
+// Grant is one capability the capture ran under (§2.7), with the
+// allowlist for the capabilities that take one.
+//
+// Recorded whether or not it was used: the question a reader of a
+// bug-report attachment is asking is "what was this tool *allowed* to
+// look at", and a grant that was never exercised is part of the answer.
+type Grant struct {
+	Capability string   `json:"capability"`
+	Allow      []string `json:"allow,omitempty"`
+	Used       bool     `json:"used"`
+}
+
+// Refusal is one check that did not happen because the capability it
+// needs was not granted — §2.6's `refused` verdict, for a capture.
+//
+// A refusal is never an omission. "I could not check X because you have
+// not granted Y" is a feature of the report, and the alternative — a
+// fact that is simply not there — reads as "nothing wrong with X".
+//
+// Every field is built from closed vocabulary or from names the manifest
+// declares (a capability, a component, a check name). Never from an
+// error message, and never from anything the environment returned:
+// standing invariant 11 says error text is output, and the only way to
+// be sure a reason cannot carry a value is to never build one from text
+// the tool did not write.
+type Refusal struct {
+	Capability string `json:"capability"`
+	Component  string `json:"component,omitempty"`
+	Check      string `json:"check"`
+	Reason     string `json:"reason"`
 }
 
 // SkipsFromFailure turns one extractor failure into a skip per requested

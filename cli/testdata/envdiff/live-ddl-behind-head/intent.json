@@ -1,0 +1,85 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "intent-fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "value": [
+        "0003_add_order_lines"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/migrations/versions",
+        "locator": ""
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "value": [
+        "cancelled_at",
+        "customer_email",
+        "id",
+        "placed_at",
+        "status",
+        "total_cents"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/orders_api/main.py",
+        "locator": "public.orders"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.order_lines",
+      "predicate": "columns",
+      "value": [
+        "id",
+        "order_id",
+        "quantity",
+        "sku"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/orders_api/main.py",
+        "locator": "public.order_lines"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.orders.cancelled_at",
+      "predicate": "nullable",
+      "value": true,
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/orders_api/main.py",
+        "locator": "public.orders.cancelled_at"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    }
+  ],
+  "skipped": []
+}

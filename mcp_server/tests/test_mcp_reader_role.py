@@ -56,6 +56,9 @@ _MIGRATION_ROLE_PASSWORDS = {
     # conftest, which is the same reason worker/app/db.py hand-mirrors
     # api's ORM.
     "FACT_WRITER_DB_PASSWORD": "test-fact-writer-password",
+    # Phase 30: capture-writer, the eleventh role-creating migration's
+    # password. Same triplication, same reason.
+    "CAPTURE_WRITER_DB_PASSWORD": "test-capture-writer-password",
 }
 
 

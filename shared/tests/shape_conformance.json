@@ -1,0 +1,115 @@
+{
+  "why": [
+    "Two implementations of one classifier, held together by a file - the same",
+    "arrangement subject_conformance.json uses. The Go CLI shapes a value when",
+    "it captures an environment (cli/internal/model/shape.go); the Python",
+    "extractor shapes one when it reads a default in code, and the API compares",
+    "stored shapes when it diffs two captures (shared/culprit_model/shape.py).",
+    "If the two disagreed about what 'the same kind of value' means, the CLI's",
+    "diff and the API's diff of the same two captures would report different",
+    "things, and neither would error.",
+    "",
+    "schemes: the Phase 30 scheme classifier (resolving Q7). The scheme is a",
+    "closed enum; an unrecognised one is 'other', never the scheme itself.",
+    "",
+    "equivalence: when two shapes describe the same kind of value. Not struct",
+    "equality - length class is compared only as empty-or-not, an unknown type",
+    "compares on presence alone, and an unclassified (absent) scheme compares",
+    "with anything. Each case says why."
+  ],
+  "schemes": [
+    {"input": "postgresql://orders:hunter2@db.internal:5432/orders", "scheme": "postgresql"},
+    {"input": "postgres://db/orders", "scheme": "postgresql"},
+    {"input": "postgresql+asyncpg://db/orders", "scheme": "postgresql"},
+    {"input": "POSTGRESQL://DB/ORDERS", "scheme": "postgresql"},
+    {"input": "mysql+pymysql://db/orders", "scheme": "mysql"},
+    {"input": "mongodb+srv://cluster0.example.net/app", "scheme": "mongodb"},
+    {"input": "redis://cache:6379/0", "scheme": "redis"},
+    {"input": "rediss://cache:6380/0", "scheme": "rediss"},
+    {"input": "https://api.example.com/v1", "scheme": "https"},
+    {"input": "http://localhost:8000", "scheme": "http"},
+    {"input": "amqps://broker/vhost", "scheme": "amqps"},
+    {"input": "s3://bucket/key", "scheme": "s3"},
+    {"input": "  https://padded.example.com  ", "scheme": "https"},
+    {"input": "cockroachdb://db/orders", "scheme": "other"},
+    {"input": "hunter2secretvalue://looks-like-a-url", "scheme": "other"},
+    {"input": "db.internal:5432", "scheme": "not_applicable"},
+    {"input": "8000", "scheme": "not_applicable"},
+    {"input": "", "scheme": "not_applicable"},
+    {"input": "not a url at all", "scheme": "not_applicable"}
+  ],
+  "equivalence": [
+    {
+      "why": "identical shapes",
+      "left": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "right": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "equivalent": true
+    },
+    {
+      "why": "two environments' URLs name different hosts, so their lengths differ - that is not a disagreement",
+      "left": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "right": {"type": "string", "length_class": "long", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "equivalent": true
+    },
+    {
+      "why": "present-but-empty against populated is a real misconfiguration",
+      "left": {"type": "string", "length_class": "empty", "format": "not_applicable", "present": true, "scheme": "not_applicable"},
+      "right": {"type": "string", "length_class": "short", "format": "opaque", "present": true, "scheme": "not_applicable"},
+      "equivalent": false
+    },
+    {
+      "why": "set against unset is the commonest real finding there is",
+      "left": {"type": "string", "length_class": "medium", "format": "url", "present": true, "scheme": "https"},
+      "right": {"type": "null", "length_class": "not_applicable", "format": "not_applicable", "present": false, "scheme": "not_applicable"},
+      "equivalent": false
+    },
+    {
+      "why": "two unset keys agree, whatever else their shapes say",
+      "left": {"type": "null", "length_class": "not_applicable", "format": "not_applicable", "present": false, "scheme": "not_applicable"},
+      "right": {"type": "null", "length_class": "not_applicable", "format": "not_applicable", "present": false},
+      "equivalent": true
+    },
+    {
+      "why": "Q7's own example: the application's postgresql against the environment's mysql",
+      "left": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "right": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "mysql"},
+      "equivalent": false
+    },
+    {
+      "why": "TLS-or-not is a real difference and is not folded away",
+      "left": {"type": "string", "length_class": "medium", "format": "url", "present": true, "scheme": "redis"},
+      "right": {"type": "string", "length_class": "medium", "format": "url", "present": true, "scheme": "rediss"},
+      "equivalent": false
+    },
+    {
+      "why": "an extractor from before Phase 30 says nothing about schemes, and saying nothing is not disagreeing",
+      "left": {"type": "string", "length_class": "medium", "format": "dsn", "present": true},
+      "right": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "mysql"},
+      "equivalent": true
+    },
+    {
+      "why": "a credential baked into a URL in one environment and not the other is a finding",
+      "left": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "right": {"type": "string", "length_class": "medium", "format": "url", "present": true, "scheme": "postgresql"},
+      "equivalent": false
+    },
+    {
+      "why": "a number in one environment and a string in the other",
+      "left": {"type": "integer", "length_class": "not_applicable", "format": "numeric", "present": true},
+      "right": {"type": "string", "length_class": "short", "format": "numeric", "present": true},
+      "equivalent": false
+    },
+    {
+      "why": "a set key whose value could not be read disagrees with nothing about its content",
+      "left": {"type": "unknown", "length_class": "not_applicable", "format": "not_applicable", "present": true, "scheme": "not_applicable"},
+      "right": {"type": "string", "length_class": "medium", "format": "dsn", "present": true, "scheme": "postgresql"},
+      "equivalent": true
+    },
+    {
+      "why": "but an unreadable key that is set still disagrees with one that is unset",
+      "left": {"type": "unknown", "length_class": "not_applicable", "format": "not_applicable", "present": true},
+      "right": {"type": "null", "length_class": "not_applicable", "format": "not_applicable", "present": false},
+      "equivalent": false
+    }
+  ]
+}

@@ -15,7 +15,8 @@
         "type": "string",
         "length_class": "short",
         "format": "path",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",
@@ -50,7 +51,8 @@
         "type": "string",
         "length_class": "empty",
         "format": "not_applicable",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",

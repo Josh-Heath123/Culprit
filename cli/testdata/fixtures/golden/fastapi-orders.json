@@ -31,7 +31,8 @@
         "type": "string",
         "length_class": "medium",
         "format": "dsn",
-        "present": true
+        "present": true,
+        "scheme": "postgresql"
       },
       "provenance": {
         "source_kind": "spec",
@@ -81,7 +82,8 @@
         "type": "string",
         "length_class": "short",
         "format": "booleanish",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",
@@ -116,7 +118,8 @@
         "type": "string",
         "length_class": "short",
         "format": "opaque",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",
@@ -166,7 +169,8 @@
         "type": "string",
         "length_class": "short",
         "format": "port",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",
@@ -216,7 +220,8 @@
         "type": "string",
         "length_class": "short",
         "format": "duration",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",
@@ -251,7 +256,8 @@
         "type": "string",
         "length_class": "empty",
         "format": "not_applicable",
-        "present": true
+        "present": true,
+        "scheme": "not_applicable"
       },
       "provenance": {
         "source_kind": "spec",

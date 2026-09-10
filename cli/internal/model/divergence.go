@@ -13,16 +13,13 @@ import (
 
 // DivergenceKind names which two planes disagreed.
 //
-// **Phase 29 emits exactly one of these: INTENT_CONFLICT.** Every fact
-// the CLI can produce today is on the INTENT plane, so every
-// disagreement it can find is between two intent sources. The other
-// kinds need CONFIGURED (Phase 30) or OBSERVED (Phase 31) facts to
-// exist, and emitting one before then would be a claim about a plane
-// nothing has read.
-//
-// That is not a limitation worth apologising for. §0.3 makes the point
-// directly: two sources of intent disagreeing is *usually itself the
-// bug*, and it is detectable before anything is deployed.
+// Phase 29 emitted exactly one of these, INTENT_CONFLICT, because every
+// fact the CLI could produce was on the INTENT plane. Phase 30 adds the
+// CONFIGURED plane and with it INTENT_VS_CONFIGURED ("the code reads
+// DATABASE_URL; production does not set it") and ENV_VS_ENV ("staging
+// and production run different image digests"). The OBSERVED kinds wait
+// for Phase 31, and emitting one before then would be a claim about a
+// plane nothing has read. See KindFor.
 type DivergenceKind string
 
 const (
@@ -143,13 +140,50 @@ type Divergence struct {
 // `shared/culprit_model/facts.py`**, held there by
 // `shared/tests/divergence_identity_conformance.json`, which both
 // languages read.
+//
+// # Environments, from Phase 30
+//
+// A source is also *where* it read from. "Staging lacks DATABASE_URL"
+// and "production lacks DATABASE_URL" are two findings with the same
+// subject, predicate, extractors and artefacts, and without the
+// environments in the identity they would collide on upload exactly the
+// way two artefacts did before — one real fault overwriting another.
+//
+// Appended only when either side has one, so every INTENT-only identity
+// Phase 29 ever computed — every row already in `divergences` — is
+// byte-for-byte unchanged.
 func (d Divergence) ID() string {
-	return strings.Join([]string{
+	parts := []string{
 		d.Subject,
 		d.Predicate,
 		d.Left.Provenance.Extractor,
 		d.Left.Provenance.Artefact,
 		d.Right.Provenance.Extractor,
 		d.Right.Provenance.Artefact,
-	}, "|")
+	}
+	if d.Left.Environment != "" || d.Right.Environment != "" {
+		parts = append(parts, d.Left.Environment, d.Right.Environment)
+	}
+	return strings.Join(parts, "|")
+}
+
+// KindFor names which two planes a pair of facts sits on.
+//
+// Derived rather than chosen by the comparator, so the comparator stays
+// generic (D7): it compares facts and this says what the comparison
+// *was*. Two CONFIGURED facts from one environment are never compared
+// with each other — a capture is one snapshot of one environment — so
+// that pair has no kind and the second result is false.
+func KindFor(left, right Fact) (DivergenceKind, bool) {
+	switch {
+	case left.Plane == PlaneIntent && right.Plane == PlaneIntent:
+		return KindIntentConflict, true
+	case left.Plane == PlaneIntent && right.Plane == PlaneConfigured,
+		left.Plane == PlaneConfigured && right.Plane == PlaneIntent:
+		return KindIntentVsConfigured, true
+	case left.Plane == PlaneConfigured && right.Plane == PlaneConfigured &&
+		left.Environment != right.Environment:
+		return KindEnvVsEnv, true
+	}
+	return "", false
 }

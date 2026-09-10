@@ -197,6 +197,22 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 		if !c.referencedConfigKeys[divergence.Subject] {
 			return model.SeverityCosmetic, "no source reports this key being read"
 		}
+		// Phase 30: a key set in both places, to a different *kind* of
+		// value — a DSN in staging and a bare hostname in production, a
+		// postgresql URL against a mysql one, or two different granted
+		// values. That is worth a finding and it is not, by itself, proof
+		// that a request breaks: which side is right is exactly what the
+		// comparison cannot say. Only set-versus-unset (and set-but-empty,
+		// which breaks a request the same way) goes on to the request-path
+		// rules below.
+		if !presenceDiffers(divergence) {
+			if divergence.Predicate == capturePredicateValue {
+				return model.SeverityDegrades,
+					"the key is read and set in both, to different values"
+			}
+			return model.SeverityDegrades,
+				"the key is read and set in both, but to a different kind of value"
+		}
 		// A key the code has a fallback for cannot break a request by
 		// being unset — the request is served, with the default. It may
 		// well be served *wrongly*, which is why this is `degrades` and
@@ -238,13 +254,82 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 		return model.SeverityDegrades, "a schema mismatch fails the queries that use it"
 
 	case model.KindDep:
+		// Two environments running different installed versions of one
+		// package is the textbook "works in staging" cause, and more than
+		// cosmetic. It is still not proof a request breaks.
+		if divergence.Kind == model.KindEnvVsEnv {
+			return model.SeverityDegrades,
+				"the two environments have different versions of this package installed"
+		}
 		// A dependency-version disagreement is real but rarely breaks a
 		// request by itself.
 		return model.SeverityCosmetic, "a declared dependency version, not a runtime path"
 
+	case model.KindImage:
+		// Phase 30. Two environments running different builds of one
+		// component, or a running image that is not the one declared. It
+		// explains a great many "works in staging" reports and breaks
+		// nothing by itself, so it is `degrades` whatever the graph says.
+		if divergence.Kind == model.KindEnvVsEnv {
+			return model.SeverityDegrades, fmt.Sprintf(
+				"the two environments run different builds of %s", component)
+		}
+		return model.SeverityDegrades, fmt.Sprintf(
+			"%s is running an image other than the one declared", component)
+
+	case model.KindComponent:
+		// Phase 30: facts about a component as deployed — its live
+		// migration version, and whether its endpoint resolves, accepts a
+		// connection and presents a valid certificate.
+		name := parts["name"]
+		if !c.graph.declared[name] {
+			return model.SeverityUnknown, fmt.Sprintf(
+				"%s is not declared in culprit.yaml, so its place in the system is unknown", name)
+		}
+		if divergence.Predicate == capturePredicateTLS {
+			// Which side is right is not something a comparison can say — a
+			// self-signed staging certificate against a valid production
+			// one is usually intended — so a certificate difference is
+			// never ranked as a broken path on its own.
+			return model.SeverityDegrades,
+				"the certificate differs in class between the two sides"
+		}
+		if c.graph.onRequestPath[name] {
+			return model.SeverityBreaksRequestPath, fmt.Sprintf(
+				"%s, and this is a fact about it as deployed", c.graph.why[name])
+		}
+		return model.SeverityDegrades, fmt.Sprintf(
+			"%s is declared but not reachable along an on_request_path edge", name)
+
 	default:
 		return model.SeverityUnknown, "no severity rule covers this subject kind"
 	}
+}
+
+// The capture predicates severity has an opinion about. Spelled here
+// rather than imported: internal/capture links the network stack, and
+// severity sits inside `culprit check`'s pipeline, which must not.
+const (
+	capturePredicateValue = "value"
+	capturePredicateTLS   = "tls_certificate"
+)
+
+// presenceDiffers reports whether a config finding is about whether the
+// key is *set* — present against absent, or present-but-empty against
+// populated — rather than about what it is set to.
+//
+// Everything that is not a shape or a granted value comparison is a
+// presence question: an absence finding (`read_by`, `exists`) says one
+// side lacks the key entirely.
+func presenceDiffers(divergence model.Divergence) bool {
+	left, right := divergence.Left.ValueShape, divergence.Right.ValueShape
+	if left != nil && right != nil {
+		if left.Present != right.Present {
+			return true
+		}
+		return (left.LengthClass == model.LengthEmpty) != (right.LengthClass == model.LengthEmpty)
+	}
+	return divergence.Predicate != capturePredicateValue
 }
 
 // Apply classifies every divergence in place.

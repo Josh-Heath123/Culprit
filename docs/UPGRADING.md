@@ -62,6 +62,18 @@ without it. `CULPRIT_PROJECT_TOKEN` is optional and **unset means
 `POST /facts/captures` refuses every request**, which is the correct
 default for an install that is not uploading captures.
 
+**Phase 30 adds two more:**
+
+```
+CAPTURE_WRITER_DB_PASSWORD=<generate one>
+CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://capture-writer:<same password>@postgres:5432/culprit
+```
+
+Both required: the migration creating the `capture-writer` role will not
+run without the password, and the api will not start without the URL.
+`POST /captures` authenticates with the same `CULPRIT_PROJECT_TOKEN` as
+`POST /facts/captures`, so unset still means it refuses every request.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

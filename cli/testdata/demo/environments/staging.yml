@@ -1,0 +1,15 @@
+# Staging: configured correctly, and at the migration head.
+services:
+  orders-api:
+    image: alpine:3.20
+    environment:
+      DATABASE_URL: postgresql://orders:fixture-db-password-planted@orders-db:5432/orders
+      JWT_SECRET_KEY: fixture-jwt-signing-key-planted-staging
+      PORT: "8000"
+      REQUEST_TIMEOUT: 30s
+      FEATURE_ASYNC_FULFILMENT: "false"
+      STRIPE_API_KEY: sk_test_fixture_planted_staging_0123
+
+  orders-db:
+    volumes:
+      - ./staging-db.sql:/docker-entrypoint-initdb.d/schema.sql:ro

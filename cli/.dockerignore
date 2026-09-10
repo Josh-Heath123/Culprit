@@ -1,0 +1,5 @@
+# Build context for cli/Dockerfile. The binary is built inside the image;
+# local build outputs and test fixtures are not needed by it.
+bin/
+dist/
+testdata/

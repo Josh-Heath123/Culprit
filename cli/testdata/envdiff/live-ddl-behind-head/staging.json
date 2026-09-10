@@ -1,0 +1,125 @@
+{
+  "protocol": 1,
+  "plane": "CONFIGURED",
+  "environment": "staging",
+  "extractor": "culprit@dev",
+  "capture_id": "staging-fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "CONFIGURED",
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": [
+        "0003_add_order_lines"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": [
+        "cancelled_at",
+        "customer_email",
+        "id",
+        "placed_at",
+        "status",
+        "total_cents"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.orders.cancelled_at",
+      "predicate": "nullable",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.alembic_version",
+      "predicate": "columns",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": [
+        "version_num"
+      ],
+      "grant_ref": "db.metadata.read"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "schema:orders-api-db/public.order_lines",
+      "predicate": "columns",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "postgres:orders-api-db"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": [
+        "id",
+        "order_id",
+        "quantity",
+        "sku"
+      ],
+      "grant_ref": "db.metadata.read"
+    }
+  ],
+  "skipped": [],
+  "meta": {
+    "adapter": "compose"
+  },
+  "grants": [
+    {
+      "capability": "config.read.names",
+      "used": true
+    },
+    {
+      "capability": "db.metadata.read",
+      "used": true
+    },
+    {
+      "capability": "deploy.metadata.read",
+      "used": true
+    }
+  ],
+  "refused": []
+}

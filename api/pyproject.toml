@@ -24,6 +24,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "culprit-shared",
     "pyyaml>=6.0",
+    "cryptography>=43",
 ]
 
 [tool.uv]

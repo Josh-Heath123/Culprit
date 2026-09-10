@@ -1,0 +1,5 @@
+{
+  "description": "Two correctly configured environments that differ only in ways that are not faults: URL lengths, an extra variable in both, a secret read by reference in one. Must stay empty.",
+  "expected": [],
+  "false_positives": 0
+}

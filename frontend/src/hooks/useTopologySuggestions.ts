@@ -7,7 +7,7 @@ import {
 } from "@/lib/api";
 import type { TopologyEdgeRef, TopologySuggestionOut } from "@/lib/types";
 
-/** Same 30s-poll convention as useServices.ts — a rare, deliberate admin
+/** Same 30s-poll convention as useModel.ts — a rare, deliberate admin
  * action, not something another tab needs to see within seconds. */
 export function useTopologySuggestions() {
   const query = useQuery({
@@ -26,9 +26,10 @@ export function useAcceptTopologySuggestion() {
     mutationFn: (edge: TopologyEdgeRef) => acceptTopologySuggestion(edge),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["topology-suggestions"] });
-      // Accepting inserts a service_dependencies row directly (Phase 14) —
-      // the services list's own `depends_on` field just became stale.
-      queryClient.invalidateQueries({ queryKey: ["services"] });
+      // Accepting inserts a `connections` row (declared_by
+      // accepted_suggestion) — the model's connection list just became
+      // stale.
+      queryClient.invalidateQueries({ queryKey: ["model"] });
     },
   });
 }

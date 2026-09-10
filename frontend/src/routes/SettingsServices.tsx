@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useServices } from "@/hooks/useServices";
 import {
   useAcceptTopologySuggestion,
   useDismissTopologySuggestion,
@@ -14,13 +13,12 @@ import {
 } from "@/hooks/useTopologySuggestions";
 import { connectionsBySource, useComponents, useConnections } from "@/hooks/useModel";
 import {
+  createComponent,
   createConnection,
   createKey,
-  createService,
   deleteConnection,
   patchComponent,
   patchConnection,
-  patchService,
   revokeKey,
 } from "@/lib/api";
 import type {
@@ -29,7 +27,6 @@ import type {
   ConnectionKind,
   ConnectionOut,
   Criticality,
-  ServiceOut,
   TopologySuggestionOut,
 } from "@/lib/types";
 
@@ -75,8 +72,9 @@ const CRITICALITY_LABEL: Record<Criticality, string> = {
 
 const SERVICE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/;
 
-/** Registered once, then never retrievable again (api/app/registry/schemas.py's
- * ServiceCreateResponse/KeyCreateResponse) — this modal is the only place a
+/** Registered once, then never retrievable again (api/app/model/schemas.py's
+ * ComponentCreateResponse, api/app/registry/schemas.py's KeyCreateResponse)
+ * — this modal is the only place a
  * plaintext key is ever shown, so it has to be unmissable and say so
  * plainly, not just close quietly like every other dialog in the app. */
 function NewKeyDialog({
@@ -124,30 +122,61 @@ function NewKeyDialog({
   );
 }
 
-function AddServiceForm({ existing }: { existing: ServiceOut[] }) {
+/** Registers a component, then declares its `http` connections to the
+ * ones ticked under "Depends on".
+ *
+ * Two steps, not one: `POST /model/components` does not take
+ * connections (the `/services` alias's `depends_on` did, until Phase 30
+ * removed it). The order matters for one reason — the new component's
+ * ingest key is returned exactly once, by the first call. So the key is
+ * shown whatever happens to the connections, and a connection that fails
+ * is reported by name rather than swallowing a key the operator will
+ * never see again. */
+function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [kind, setKind] = useState<ComponentKind>("service");
   const [metrics, setMetrics] = useState("");
   const [dependsOn, setDependsOn] = useState<string[]>([]);
   const [issuedKey, setIssuedKey] = useState<{ serviceName: string; apiKey: string } | null>(null);
+  const [failedConnections, setFailedConnections] = useState<string[]>([]);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      createService({
+    mutationFn: async () => {
+      const created = await createComponent({
         name,
         display_name: displayName.trim() || null,
-        depends_on: dependsOn,
+        kind,
         monitored_metrics: metrics
           .split(",")
           .map((m) => m.trim())
           .filter(Boolean),
-      }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["services"] });
-      setIssuedKey({ serviceName: result.service.name, apiKey: result.api_key });
+        sort_order: 0,
+      });
+      const failed: string[] = [];
+      for (const target of dependsOn) {
+        try {
+          await createConnection({
+            from_component: created.component.name,
+            to_component: target,
+            kind: "http",
+            criticality: "unknown",
+            declared_by: "culprit_yaml",
+          });
+        } catch {
+          failed.push(target);
+        }
+      }
+      return { created, failed };
+    },
+    onSuccess: ({ created, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["model"] });
+      setIssuedKey({ serviceName: created.component.name, apiKey: created.api_key });
+      setFailedConnections(failed);
       setName("");
       setDisplayName("");
+      setKind("service");
       setMetrics("");
       setDependsOn([]);
     },
@@ -164,7 +193,7 @@ function AddServiceForm({ existing }: { existing: ServiceOut[] }) {
         }}
         className="flex flex-col gap-3 rounded-md border border-border p-4"
       >
-        <p className="text-sm font-semibold text-foreground">Register a service</p>
+        <p className="text-sm font-semibold text-foreground">Register a component</p>
 
         <div className="flex flex-col gap-1">
           <label htmlFor="new-service-name" className="text-xs font-medium text-muted-foreground">
@@ -196,6 +225,24 @@ function AddServiceForm({ existing }: { existing: ServiceOut[] }) {
         </div>
 
         <div className="flex flex-col gap-1">
+          <label htmlFor="new-service-kind" className="text-xs font-medium text-muted-foreground">
+            Kind
+          </label>
+          <select
+            id="new-service-kind"
+            className="self-start rounded-md border border-border bg-background px-2 py-1 text-xs"
+            value={kind}
+            onChange={(event) => setKind(event.target.value as ComponentKind)}
+          >
+            {COMPONENT_KINDS.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
           <label htmlFor="new-service-metrics" className="text-xs font-medium text-muted-foreground">
             Monitored metrics, comma-separated (blank = score every metric seen)
           </label>
@@ -209,22 +256,24 @@ function AddServiceForm({ existing }: { existing: ServiceOut[] }) {
 
         {existing.length > 0 ? (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Depends on</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Depends on (declared as <code>http</code> connections, unclassified — change either below)
+            </span>
             <div className="flex flex-wrap gap-3">
-              {existing.map((service) => (
-                <label key={service.id} className="flex items-center gap-1.5 text-xs text-foreground">
+              {existing.map((component) => (
+                <label key={component.id} className="flex items-center gap-1.5 text-xs text-foreground">
                   <input
                     type="checkbox"
-                    checked={dependsOn.includes(service.name)}
+                    checked={dependsOn.includes(component.name)}
                     onChange={(event) =>
                       setDependsOn((current) =>
                         event.target.checked
-                          ? [...current, service.name]
-                          : current.filter((n) => n !== service.name),
+                          ? [...current, component.name]
+                          : current.filter((n) => n !== component.name),
                       )
                     }
                   />
-                  {service.name}
+                  {component.name}
                 </label>
               ))}
             </div>
@@ -233,12 +282,18 @@ function AddServiceForm({ existing }: { existing: ServiceOut[] }) {
 
         {mutation.isError ? (
           <p className="font-mono text-xs text-destructive">
-            {mutation.error instanceof Error ? mutation.error.message : "Couldn't create service."}
+            {mutation.error instanceof Error ? mutation.error.message : "Couldn't create component."}
+          </p>
+        ) : null}
+        {failedConnections.length > 0 ? (
+          <p className="font-mono text-xs text-destructive">
+            Created, but these connections were not: {failedConnections.join(", ")}. Add them
+            below.
           </p>
         ) : null}
 
         <Button type="submit" size="sm" className="self-start" disabled={!nameValid || mutation.isPending}>
-          {mutation.isPending ? "Creating…" : "Create service"}
+          {mutation.isPending ? "Creating…" : "Create component"}
         </Button>
       </form>
 
@@ -274,9 +329,6 @@ function ConnectionsPanel({
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["model"] });
-    // The /services alias derives `depends_on` from http connections, so
-    // anything that changes an edge changes that view too.
-    queryClient.invalidateQueries({ queryKey: ["services"] });
   }
 
   const add = useMutation({
@@ -287,8 +339,8 @@ function ConnectionsPanel({
         kind,
         criticality,
         // A human declaring an edge here has the same provenance as one
-        // written in culprit.yaml (see registry/service.py's
-        // _legacy_connection). It is also the server's default; the
+        // written in culprit.yaml — a person wrote it down unprompted.
+        // It is also the server's default; the
         // generated type requires it because the field has a default.
         declared_by: "culprit_yaml",
       }),
@@ -430,14 +482,12 @@ function ConnectionsPanel({
   );
 }
 
-function ServiceRow({
-  service,
+function ComponentRow({
   component,
   connections,
   components,
 }: {
-  service: ServiceOut;
-  component: ComponentOut | undefined;
+  component: ComponentOut;
   connections: ConnectionOut[];
   components: ComponentOut[];
 }) {
@@ -445,23 +495,21 @@ function ServiceRow({
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["services"] });
     queryClient.invalidateQueries({ queryKey: ["model"] });
   }
 
   const setKind = useMutation({
-    mutationFn: (next: ComponentKind) =>
-      patchComponent(service.id, { kind: next }),
+    mutationFn: (next: ComponentKind) => patchComponent(component.id, { kind: next }),
     onSuccess: invalidate,
   });
 
   const toggleDisabled = useMutation({
-    mutationFn: () => patchService(service.id, { disabled: !service.disabled }),
+    mutationFn: () => patchComponent(component.id, { disabled: !component.disabled }),
     onSuccess: invalidate,
   });
 
   const issueKey = useMutation({
-    mutationFn: () => createKey(service.id, null),
+    mutationFn: () => createKey(component.id, null),
     onSuccess: (result) => {
       invalidate();
       setIssuedKey(result.api_key);
@@ -469,7 +517,7 @@ function ServiceRow({
   });
 
   const revoke = useMutation({
-    mutationFn: (keyId: string) => revokeKey(service.id, keyId),
+    mutationFn: (keyId: string) => revokeKey(component.id, keyId),
     onSuccess: invalidate,
   });
 
@@ -477,11 +525,11 @@ function ServiceRow({
     <div className="flex flex-col gap-2 rounded-md border border-border p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm text-foreground">{service.name}</span>
-          {service.display_name ? (
-            <span className="text-xs text-muted-foreground">{service.display_name}</span>
+          <span className="font-mono text-sm text-foreground">{component.name}</span>
+          {component.display_name ? (
+            <span className="text-xs text-muted-foreground">{component.display_name}</span>
           ) : null}
-          {service.disabled ? <Badge variant="outline">disabled</Badge> : null}
+          {component.disabled ? <Badge variant="outline">disabled</Badge> : null}
         </div>
         <div className="flex items-center gap-2">
           {/* Phase 27: a component is a service, a database, a queue...
@@ -489,9 +537,9 @@ function ServiceRow({
               here because the alternative is that everything migrated
               from the old registry stays labelled `service` forever. */}
           <select
-            aria-label={`Kind of ${service.name}`}
+            aria-label={`Kind of ${component.name}`}
             className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-            value={component?.kind ?? "service"}
+            value={component.kind}
             onChange={(event) => setKind.mutate(event.target.value as ComponentKind)}
             disabled={setKind.isPending}
           >
@@ -507,28 +555,25 @@ function ServiceRow({
             onClick={() => toggleDisabled.mutate()}
             disabled={toggleDisabled.isPending}
           >
-            {service.disabled ? "Enable" : "Disable"}
+            {component.disabled ? "Enable" : "Disable"}
           </Button>
         </div>
       </div>
 
-      {component ? (
-        <ConnectionsPanel
-          component={component}
-          connections={connections}
-          components={components}
-        />
-      ) : null}
+      <ConnectionsPanel component={component} connections={connections} components={components} />
       <p className="text-xs text-muted-foreground">
         monitored metrics:{" "}
-        {service.monitored_metrics.length > 0 ? service.monitored_metrics.join(", ") : "all"}
+        {component.monitored_metrics.length > 0 ? component.monitored_metrics.join(", ") : "all"}
       </p>
 
       <div className="flex flex-col gap-1">
-        {service.keys.map((key) => (
+        {component.keys.map((key) => (
           <div key={key.id} className="flex items-center justify-between gap-2 font-mono text-xs">
             <span className={key.revoked ? "text-muted-foreground line-through" : "text-foreground"}>
-              {key.label ?? "(unlabeled)"} · created {new Date(key.created_at).toLocaleDateString()}
+              {key.label ?? "(unlabeled)"}
+              {/* Nullable at the database (a server default, no NOT
+                  NULL), so the API says so — see KeyOut. */}
+              {key.created_at ? ` · created ${new Date(key.created_at).toLocaleDateString()}` : ""}
               {key.last_used_at ? ` · last used ${new Date(key.last_used_at).toLocaleDateString()}` : ""}
             </span>
             {!key.revoked ? (
@@ -556,7 +601,7 @@ function ServiceRow({
       </Button>
 
       {issuedKey ? (
-        <NewKeyDialog serviceName={service.name} apiKey={issuedKey} onClose={() => setIssuedKey(null)} />
+        <NewKeyDialog serviceName={component.name} apiKey={issuedKey} onClose={() => setIssuedKey(null)} />
       ) : null}
     </div>
   );
@@ -585,7 +630,7 @@ function TopologySuggestionRow({ suggestion }: { suggestion: TopologySuggestionO
       {!bothRegistered ? (
         <p className="text-xs text-muted-foreground">
           {!suggestion.from_service_registered ? suggestion.from_service : suggestion.to_service}{" "}
-          isn't a registered service yet — register it above before accepting this dependency.
+          isn't a registered component yet — register it above before accepting this dependency.
         </p>
       ) : null}
 
@@ -636,15 +681,14 @@ function TopologySuggestions() {
 }
 
 export function SettingsServices() {
-  const { services, isPending, isError } = useServices();
-  // Phase 27: the page still lists via /services (keys and the create
-  // form live there), but a component's kind and its typed connections
-  // exist only on /model — so both are read, and every mutation
-  // invalidates both query keys.
-  const { components } = useComponents();
+  // Phase 30: read entirely from /model. Until then the page listed via
+  // the /services alias (which was the only shape carrying keys) and read
+  // /model beside it for kinds and typed connections; ComponentOut now
+  // carries keys itself, so there is one list and one query key to
+  // invalidate.
+  const { components, isPending, isError } = useComponents();
   const { connections } = useConnections();
 
-  const componentByName = new Map(components.map((component) => [component.name, component]));
   const outgoing = connectionsBySource(connections);
 
   return (
@@ -658,18 +702,17 @@ export function SettingsServices() {
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 overflow-y-auto p-6">
-        <AddServiceForm existing={services} />
+        <AddServiceForm existing={components} />
 
-        {isPending ? <p className="text-xs text-muted-foreground">Loading services…</p> : null}
-        {isError ? <p className="text-xs text-destructive">Couldn't load services.</p> : null}
+        {isPending ? <p className="text-xs text-muted-foreground">Loading components…</p> : null}
+        {isError ? <p className="text-xs text-destructive">Couldn't load components.</p> : null}
 
         <div className="flex flex-col gap-3">
-          {services.map((service) => (
-            <ServiceRow
-              key={service.id}
-              service={service}
-              component={componentByName.get(service.name)}
-              connections={outgoing.get(service.name) ?? []}
+          {components.map((component) => (
+            <ComponentRow
+              key={component.id}
+              component={component}
+              connections={outgoing.get(component.name) ?? []}
               components={components}
             />
           ))}

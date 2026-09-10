@@ -66,3 +66,41 @@ extract:
       root: ../fixtures/react-web
       extractors: [node]
       calls_to: orders-api
+
+# Phase 30: two environments to capture and diff — see
+# environments/compose.yml. `culprit diff staging production` from this
+# directory, with both Compose projects up, reproduces docs/demos/phase-30.md.
+#
+# The grants are what they would be for a real deployment someone
+# trusts culprit with the shape of: names and shapes of config, image
+# metadata, and schema metadata. Not config values, not the network.
+environments:
+  staging:
+    adapter: compose
+    compose:
+      project: culprit-demo-staging
+      files: [environments/compose.yml, environments/staging.yml]
+    grants:
+      config.read.names: true
+      deploy.metadata.read: true
+      db.metadata.read: true
+    components:
+      orders-api:
+        database:
+          # The *name* of a variable in the shell culprit runs in, holding
+          # a connection string to this environment's database. Never the
+          # connection string: culprit.yaml is committed.
+          dsn_env: CULPRIT_DEMO_STAGING_DB_URL
+  production:
+    adapter: compose
+    compose:
+      project: culprit-demo-production
+      files: [environments/compose.yml, environments/production.yml]
+    grants:
+      config.read.names: true
+      deploy.metadata.read: true
+      db.metadata.read: true
+    components:
+      orders-api:
+        database:
+          dsn_env: CULPRIT_DEMO_PRODUCTION_DB_URL

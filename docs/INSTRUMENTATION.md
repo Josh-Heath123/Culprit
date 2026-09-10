@@ -7,14 +7,15 @@ API key.
 
 ## 1. Register the service and get a key
 
-Every service needs a row in Culprit's service registry before it can
-authenticate at all — there's no open/anonymous ingest path. Either:
+Every service needs a component row in Culprit's system model before it
+can authenticate at all — there's no open/anonymous ingest path. Either:
 
-- **Settings → Services** in the dashboard: register a service, copy the
-  API key it shows you once (it is never shown again), or
+- **Settings → Services** in the dashboard: register a component, copy
+  the API key it shows you once (it is never shown again), or
 - `POST {base}/model/components` with an admin session token (see
-  `api/app/model/router.py`; the older `POST {base}/services` still works
-  and is kept for one release), or
+  `api/app/model/router.py`). A further key for an existing component is
+  `POST {base}/model/components/{id}/keys`. The older `POST
+  {base}/services` was removed in Phase 30 and now returns 404, or
 - a committed `culprit.yaml` applied with `just apply-model` (see
   `api/scripts/apply_model.py`, and `demo-services/culprit.yaml` for a
   worked example — this is the right option if you're onboarding several

@@ -600,6 +600,20 @@ class Capture(Base):
     started_at: Mapped[datetime] = mapped_column(timestamptz)
     finished_at: Mapped[datetime | None] = mapped_column(timestamptz)
     created_at: Mapped[datetime] = mapped_column(timestamptz, server_default=text("now()"))
+    #: Phase 30 (migration e4c1b7a9d2f0) — field 7's "signed, timestamped
+    #: bundle ... plus the grant set that produced it, so a reader can tell
+    #: what was *not* looked at". All NULL for an INTENT capture, which
+    #: reads no environment and exercises no grant.
+    #:
+    #: `digest` is the SHA-256 of the exact sealed payload, recomputed on
+    #: receipt; `signed_by` the key id of a *verified* Ed25519 signature,
+    #: NULL when unsigned. `grants` and `refused` are stored whole, because
+    #: a capture that found nothing wrong with a database it was never
+    #: allowed to look at must still say so when read back next month.
+    digest: Mapped[str | None]
+    signed_by: Mapped[str | None]
+    grants: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
+    refused: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class IntentFact(Base):
@@ -676,10 +690,19 @@ class ConfiguredFact(Base):
     #: database (ck_configured_facts_value_requires_grant, migration
     #: a3d81f6c4b27), not by whichever extractor happens to write the row.
     #: §2.2: the default home for a config key's content is `value_shape`.
-    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(JSONB)
-    #: Type, length class, format class — e.g.
-    #: {"type": "url", "scheme": "postgresql", "host_resolves": true}.
-    value_shape: Mapped[dict | None] = mapped_column(JSONB)
+    #:
+    #: `none_as_null=True` from Phase 30, the table's first writer: a
+    #: Python None must be SQL NULL, because `'null'::jsonb IS NULL` is
+    #: false and a JSON null here would fail the very grant constraint the
+    #: column exists to satisfy. The trap IntentFact.value_shape documents.
+    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB(none_as_null=True)
+    )
+    #: The closed `culprit_model.ValueShape` — type, length class, format
+    #: class, presence and (Phase 30) an optional scheme, e.g.
+    #: {"type": "string", "length_class": "medium", "format": "dsn",
+    #:  "present": true, "scheme": "postgresql"}.
+    value_shape: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     grant_ref: Mapped[str | None]
     source_kind: Mapped[str]
     extractor: Mapped[str]

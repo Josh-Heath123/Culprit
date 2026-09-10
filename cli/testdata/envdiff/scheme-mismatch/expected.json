@@ -1,0 +1,12 @@
+{
+  "description": "Staging's DATABASE_URL is a postgresql DSN; production's is a mysql one. Same shape in every other respect.",
+  "expected": [
+    {
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "value_shape",
+      "kind": "env_vs_env",
+      "severity": "degrades"
+    }
+  ],
+  "false_positives": 0
+}

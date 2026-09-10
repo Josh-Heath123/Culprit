@@ -48,6 +48,9 @@ _IMPORT_TIME_DEFAULTS = {
         "postgresql+asyncpg://postmortem-writer:test@localhost:5432/test"
     ),
     "FACT_WRITER_DATABASE_URL": "postgresql+asyncpg://fact-writer:test@localhost:5432/test",
+    "CAPTURE_WRITER_DATABASE_URL": (
+        "postgresql+asyncpg://capture-writer:test@localhost:5432/test"
+    ),
     "CULPRIT_PROJECT_TOKEN": "test-project-token",
 }
 for _name, _value in _IMPORT_TIME_DEFAULTS.items():
@@ -72,6 +75,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "POSTMORTEM_WRITER_DB_PASSWORD": "test-postmortem-writer-password",
     "MCP_READER_DB_PASSWORD": "test-mcp-reader-password",
     "FACT_WRITER_DB_PASSWORD": "test-fact-writer-password",
+    "CAPTURE_WRITER_DB_PASSWORD": "test-capture-writer-password",
 }
 
 

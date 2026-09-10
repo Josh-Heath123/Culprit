@@ -54,6 +54,9 @@ type Manifest struct {
 	Invariants        []Invariant        `yaml:"invariants"`
 	Suppress          []Suppression      `yaml:"suppress"`
 	SeverityOverrides []SeverityOverride `yaml:"severity_overrides"`
+	// Phase 30: how to reach each environment, and what culprit may look
+	// at there. See environments.go.
+	Environments map[string]EnvironmentSpec `yaml:"environments"`
 }
 
 // ManifestComponent is one component. Only the fields extraction and
@@ -185,6 +188,9 @@ func LoadManifest(path string) (*Manifest, error) {
 		return nil, &ManifestError{Path: path, Message: err.Error()}
 	}
 	if err := manifest.validatePolicy(); err != nil {
+		return nil, &ManifestError{Path: path, Message: err.Error()}
+	}
+	if err := manifest.validateEnvironments(); err != nil {
 		return nil, &ManifestError{Path: path, Message: err.Error()}
 	}
 	return &manifest, nil

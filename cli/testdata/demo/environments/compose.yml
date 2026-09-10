@@ -1,0 +1,39 @@
+# Two small environments for the Phase 30 demonstration — `staging` and
+# `production` — run as two Compose projects from this base file plus one
+# override each (staging.yml, production.yml).
+#
+# orders-api is a stand-in: an alpine container that sleeps, carrying the
+# environment a real deployment of cli/testdata/fixtures/fastapi-orders
+# would carry. Capture reads configuration and metadata and never sends a
+# request into the system (Phase 30 field 17), so a workload that serves
+# nothing is exactly as capturable as one that does — and it keeps the
+# fixture to two small images.
+#
+# orders-db is a real Postgres whose schema each environment's .sql file
+# creates as a given Alembic revision would have left it: staging at the
+# migration head, production one revision behind.
+#
+# The passwords below are fixture values for a throwaway local container,
+# published only on 127.0.0.1. They are also the planted "secrets" the
+# end-to-end test searches every rendered report for.
+
+services:
+  orders-api:
+    command: ["sleep", "3600"]
+    depends_on:
+      orders-db:
+        condition: service_healthy
+
+  orders-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: fixture-db-password-planted
+      POSTGRES_DB: orders
+    ports:
+      - "127.0.0.1::5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      interval: 1s
+      timeout: 3s
+      retries: 60

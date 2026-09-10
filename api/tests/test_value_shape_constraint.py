@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
-from culprit_model.shape import LengthClass, ValueFormat, ValueShape, ValueType
+from culprit_model.shape import LengthClass, ValueFormat, ValueScheme, ValueShape, ValueType
 from culprit_model.subjects import build
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -207,3 +207,61 @@ async def test_an_ungranted_value_is_still_refused(connection: AsyncConnection) 
     """
     with pytest.raises(IntegrityError, match="value_requires_grant"):
         await _insert(connection, value=f'"{LEAKED}"')
+
+
+# --- Phase 30: `scheme`, the optional fifth key (migration e4c1b7a9d2f0) ----
+
+
+async def test_every_scheme_culprit_model_can_produce_is_accepted(
+    db_engine: AsyncEngine,
+) -> None:
+    """Member for member, for the same reason as the test above — the
+    migration writes the schemes out as literals, and this is what keeps
+    that copy honest. Also why scripts/coupled_files.yaml pairs shape.py
+    with e4c1b7a9d2f0 now."""
+    for scheme in ValueScheme:
+        shape = ValueShape(
+            type=ValueType.STRING,
+            length_class=LengthClass.MEDIUM,
+            format=ValueFormat.URL,
+            present=True,
+            scheme=scheme,
+        )
+        async with db_engine.begin() as connection:
+            await _insert(connection, value_shape=shape.model_dump_json())
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        pytest.param(
+            '{"type": "string", "length_class": "medium", "format": "dsn", '
+            f'"present": true, "scheme": "{LEAKED}"}}',
+            id="a DSN in scheme",
+        ),
+        pytest.param(
+            '{"type": "string", "length_class": "medium", "format": "dsn", '
+            '"present": true, "scheme": "cockroachdb"}',
+            id="a scheme outside the closed set",
+        ),
+        pytest.param(
+            '{"type": "string", "length_class": "medium", "format": "dsn", '
+            f'"present": true, "scheme": "postgresql", "sample": "{LEAKED}"}}',
+            id="a sixth key alongside the five",
+        ),
+    ],
+)
+async def test_scheme_is_closed_too(connection: AsyncConnection, shape: str) -> None:
+    with pytest.raises(IntegrityError, match="value_shape_is_closed"):
+        await _insert(connection, value_shape=shape)
+
+
+async def test_a_shape_without_a_scheme_is_still_accepted(connection: AsyncConnection) -> None:
+    """A protocol-1 extractor from before Phase 30 omits the key; that is
+    a shape that did not classify its scheme, not a malformed one."""
+    await _insert(
+        connection,
+        value_shape=(
+            '{"type": "string", "length_class": "medium", "format": "dsn", "present": true}'
+        ),
+    )

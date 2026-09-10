@@ -12,19 +12,23 @@ So this file attempts it, six ways, including the exact payload the Phase
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from culprit_model import build
+from culprit_model.errors import safe_message
 from culprit_model.facts import Fact, Provenance
 from culprit_model.planes import ConfidenceRank, Plane, SourceKind
 from culprit_model.protocol import CaptureBundle, Predicate
 from culprit_model.shape import (
     LengthClass,
     ValueFormat,
+    ValueScheme,
     ValueShape,
     ValueType,
     classify_format,
+    classify_scheme,
 )
 from pydantic import ValidationError
 
@@ -71,12 +75,19 @@ def test_value_shape_fields_are_all_closed() -> None:
     """No field of a ValueShape accepts free text.
 
     Asserted over the model's own fields rather than by naming them, so
-    adding a fifth field that *is* free text fails here instead of
-    quietly reopening the hole this type exists to close.
+    adding a field that *is* free text fails here instead of quietly
+    reopening the hole this type exists to close.
+
+    It did its job in Phase 30: adding `scheme` turned this red until the
+    allowed set named `ValueScheme | None` explicitly. That is the
+    intended workflow — a new field is a decision someone has to write
+    down here, not something that slips in. `ValueScheme | None` is a
+    closed enum plus the absence of one; neither half can hold a string.
     """
+    allowed = (ValueType, LengthClass, ValueFormat, bool, ValueScheme | None)
     for name, field in ValueShape.model_fields.items():
         annotation = field.annotation
-        assert annotation in (ValueType, LengthClass, ValueFormat, bool), (
+        assert annotation in allowed, (
             f"ValueShape.{name} is annotated {annotation!r} — every field must be a "
             "closed enum or a bool, or a literal config value can be carried in it"
         )
@@ -280,3 +291,52 @@ def test_an_extractor_skip_reason_cannot_carry_a_value() -> None:
 
     skip = Skip(want="config_keys", reason=safe_message(caught.value))
     assert LEAKED_DSN not in skip.model_dump_json()
+
+
+# --- Phase 30: scheme and equivalence, against the shared fixture -------
+#
+# The Go half is cli/internal/model/shape_test.go, reading the same file.
+# The CLI's diff and the API's diff of the same two captures must agree
+# about what "the same kind of value" means, and two implementations of
+# one rule stay in step only when a file holds them there.
+
+_SHAPE_FIXTURE = json.loads(
+    (Path(__file__).parent / "shape_conformance.json").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize(
+    "case",
+    _SHAPE_FIXTURE["schemes"],
+    ids=[c["input"] or "<empty>" for c in _SHAPE_FIXTURE["schemes"]],
+)
+def test_scheme_matches_the_shared_fixture(case: dict) -> None:
+    assert classify_scheme(case["input"]) == ValueScheme(case["scheme"])
+
+
+@pytest.mark.parametrize(
+    "case", _SHAPE_FIXTURE["equivalence"], ids=[c["why"] for c in _SHAPE_FIXTURE["equivalence"]]
+)
+def test_equivalence_matches_the_shared_fixture(case: dict) -> None:
+    left = ValueShape(**case["left"])
+    right = ValueShape(**case["right"])
+    assert left.equivalent(right) is case["equivalent"]
+    assert right.equivalent(left) is case["equivalent"], "equivalence must be symmetric"
+
+
+def test_scheme_is_a_closed_enum_and_cannot_carry_a_dsn() -> None:
+    """Q7's condition for adding the field at all: a closed set cannot
+    carry a secret. Proved by attempting it, like everything else here."""
+    with pytest.raises(ValidationError) as caught:
+        ValueShape(
+            type=ValueType.STRING,
+            length_class=LengthClass.MEDIUM,
+            format=ValueFormat.DSN,
+            present=True,
+            scheme=LEAKED_DSN,  # pyright: ignore[reportArgumentType]
+        )
+    assert "hunter2" not in safe_message(caught.value)
+
+
+def test_an_unrecognised_scheme_is_other_not_the_scheme() -> None:
+    assert classify_scheme("hunter2://host/db") is ValueScheme.OTHER

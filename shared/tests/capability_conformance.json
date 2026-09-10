@@ -1,0 +1,30 @@
+{
+  "why": [
+    "The section 2.7 capability vocabulary, read by both implementations:",
+    "cli/internal/capability (which parses and enforces grants) and",
+    "shared/culprit_model/capabilities.py (which validates what a capture says",
+    "it ran under, and what apply-model accepts). A capability one side knows",
+    "and the other does not is a grant that means something in the CLI and is",
+    "refused - or worse, accepted as free text - by the API.",
+    "",
+    "allowlist: true means the capability is granted per item, as a list, and",
+    "`true` is refused for it. No *.write capability exists."
+  ],
+  "capabilities": [
+    {"name": "model.read", "allowlist": false},
+    {"name": "repo.read", "allowlist": false},
+    {"name": "config.read.names", "allowlist": false},
+    {"name": "config.read.values", "allowlist": true},
+    {"name": "db.metadata.read", "allowlist": false},
+    {"name": "db.rows.read", "allowlist": true},
+    {"name": "net.dns.resolve", "allowlist": false},
+    {"name": "net.tcp.connect", "allowlist": false},
+    {"name": "net.tls.inspect", "allowlist": false},
+    {"name": "net.http.outbound", "allowlist": false},
+    {"name": "telemetry.logs.read", "allowlist": false},
+    {"name": "telemetry.metrics.read", "allowlist": false},
+    {"name": "telemetry.traces.read", "allowlist": false},
+    {"name": "deploy.metadata.read", "allowlist": false},
+    {"name": "process.exec.allowlist", "allowlist": true}
+  ]
+}

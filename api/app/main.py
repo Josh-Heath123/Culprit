@@ -38,12 +38,13 @@ from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E40
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
 from app.memory.router import router as memory_router  # noqa: E402
+from app.model.capture_config import CAPTURE_WRITER_DATABASE_URL  # noqa: E402
+from app.model.captures_router import router as captures_router  # noqa: E402
 from app.model.router import router as model_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
 from app.postmortems.router import router as postmortems_router  # noqa: E402
 from app.registry.config import REGISTRY_ADMIN_DATABASE_URL  # noqa: E402
-from app.registry.router import router as registry_router  # noqa: E402
 
 configure_observability("culprit-api")
 
@@ -61,9 +62,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine(API_READER_DATABASE_URL)
     app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
     # Phase 14: a second engine, under registry-admin, only for the
-    # registry router's writes (POST/PATCH/DELETE /services and its keys
-    # sub-routes). api-reader (above) stays read-only and is what
-    # GET /services still uses — see app/registry/router.py.
+    # model router's writes (component/connection writes, ingest keys,
+    # accepting or dismissing a topology suggestion). api-reader (above)
+    # stays read-only and is what every GET /model/* uses — see
+    # app/model/router.py. Phase 30 removed the /services alias that
+    # first used this engine; the role and its env var keep their names.
     registry_engine = create_async_engine(REGISTRY_ADMIN_DATABASE_URL)
     app.state.registry_session_factory = async_sessionmaker(registry_engine, expire_on_commit=False)
     # Phase 16: a third engine, under auth-service, for /auth/login,
@@ -107,6 +110,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.divergence_session_factory = async_sessionmaker(
         divergence_engine, expire_on_commit=False
     )
+    # Phase 30: POST /captures, under capture-writer -- INSERT on
+    # captures/configured_facts and nothing else, a new role rather than a
+    # third reuse of fact-writer (see app/model/capture_config.py). The
+    # two GETs under /captures stay on api-reader above. Capped like the
+    # other CI-facing pools: captures are occasional, not interactive.
+    # hide_parameters: a failing insert must not log its bound parameters,
+    # which for an allowlisted config key include the granted literal.
+    capture_engine = create_async_engine(
+        CAPTURE_WRITER_DATABASE_URL, pool_size=2, max_overflow=3, hide_parameters=True
+    )
+    app.state.capture_session_factory = async_sessionmaker(capture_engine, expire_on_commit=False)
     # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
     # /postmortems to enqueue arq jobs by name — this API process never
     # runs arq jobs itself.
@@ -118,6 +132,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await auth_engine.dispose()
     await postmortem_engine.dispose()
     await fact_engine.dispose()
+    await divergence_engine.dispose()
+    await capture_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -150,8 +166,9 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOW_ORIGINS,
-    # Phase 14: the registry router (app/registry/router.py) is the
-    # first thing in this API to use PATCH/DELETE at all — every route
+    # Phase 14: the registry router (since replaced by
+    # app/model/router.py) was the first thing in this API to use
+    # PATCH/DELETE at all — every route
     # before it was GET/POST only, so this list was never exercised
     # against them. Without this, the frontend's Settings > Services
     # page would 405 on every disable/enable, revoke, or update, purely
@@ -199,11 +216,10 @@ app.include_router(incidents_router, dependencies=[Depends(require_auth)])
 # only line either router needed to change.
 # Phase 27: the system model (/model/components, /model/connections,
 # /model/graph, /model/apply). Same admin gate and the same two engines
-# the registry router uses -- app/model/router.py is the real surface,
-# and registry_router below is now a thin /services alias over it,
-# retained for one release and removed in Phase 30 (that phase field 9).
+# the Phase 14 registry router used. Phase 30 (field 6) removed that
+# router's /services alias; ingest keys and topology suggestions, the two
+# things only it served, moved under /model with it.
 app.include_router(model_router, dependencies=[Depends(require_admin)])
-app.include_router(registry_router, dependencies=[Depends(require_admin)])
 app.include_router(users_router, dependencies=[Depends(require_admin)])
 # Phase 18: not admin-only, unlike registry/users above — any
 # authenticated team member may read and write postmortems.
@@ -224,3 +240,6 @@ app.include_router(facts_router)
 # Phase 29: POST /divergences/captures. Same reasoning as facts_router
 # immediately above -- a project token, declared per route.
 app.include_router(divergences_router)
+# Phase 30: /captures. POST takes the project token, the two GETs a user
+# session -- declared per route, as above, for the same reason.
+app.include_router(captures_router)

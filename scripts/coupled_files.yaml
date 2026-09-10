@@ -27,4 +27,12 @@ pairs:
   # forbid the second, and the first is already gated harder: each
   # implementation's own test suite reads the fixture, so a change that
   # breaks conformance fails that language's tests immediately.
-  - [shared/culprit_model/shape.py, api/migrations/versions/d1f4a9c73b60_value_shape_and_fact_writer.py]
+  #
+  # Retargeted in Phase 30 from d1f4a9c73b60 to e4c1b7a9d2f0, when `scheme`
+  # joined the type and the constraint was rebuilt. The pair names the
+  # migration that *currently defines* the vocabulary, because that is the
+  # file that has to move with the type; a historical migration already
+  # applied in production is a snapshot and is never edited to satisfy
+  # this check. The next migration to rebuild the constraint retargets it
+  # again, in the same commit.
+  - [shared/culprit_model/shape.py, api/migrations/versions/e4c1b7a9d2f0_environment_capture.py]

@@ -30,8 +30,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from culprit_model.capabilities import ALLOWLISTED, Capability
 from culprit_model.facts import Fact
 from culprit_model.planes import Plane
+from culprit_model.redaction import looks_like_credential
 
 #: Bumped only for a breaking change to the request/response shape. An
 #: extractor that does not understand the protocol version it is handed
@@ -181,6 +183,50 @@ class ExtractorResponse(BaseModel):
     skipped: tuple[Skip, ...] = ()
 
 
+class Grant(BaseModel):
+    """One capability a CONFIGURED capture ran under (Phase 30, §2.7).
+
+    Recorded whether or not it was used: a reader of a capture attached
+    to a bug report is asking what the tool was *allowed* to look at, and
+    a grant never exercised is part of that answer. The Go mirror is
+    `model.Grant` in `cli/internal/model/protocol.go`.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: A §2.7 name from the closed set — a grant list naming
+    #: `db.schema.write` is refused, not stored and served back.
+    capability: Capability
+    allow: tuple[str, ...] = ()
+    used: bool
+
+    @model_validator(mode="after")
+    def _allowlist_matches_the_capability(self) -> "Grant":
+        """A per-item capability names its items; any other names none."""
+        if self.capability in ALLOWLISTED and not self.allow:
+            raise ValueError(f"{self.capability} is granted per item and names none")
+        if self.capability not in ALLOWLISTED and self.allow:
+            raise ValueError(f"{self.capability} is not granted per item")
+        return self
+
+
+class Refusal(BaseModel):
+    """One check a capture did not perform because its capability was not
+    granted — §2.6's `refused`, for a capture.
+
+    A refusal is never an omission: "I could not check X because you have
+    not granted Y" is part of what a capture says. Built by the CLI from
+    closed vocabulary and manifest names only (standing invariant 11).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    capability: Capability
+    component: str | None = None
+    check: str
+    reason: str
+
+
 class CaptureBundle(BaseModel):
     """One extraction run, whole: what was asked, what came back, what did not.
 
@@ -207,6 +253,31 @@ class CaptureBundle(BaseModel):
     #: Free-form, non-secret run context — the source root, the component
     #: names looked at, the CLI version. Never config values.
     meta: dict[str, str] = Field(default_factory=dict)
+    #: Phase 30 field 7: the grant set a CONFIGURED capture ran under and
+    #: the checks it was refused, "so a reader can tell what was *not*
+    #: looked at". Empty for an INTENT capture, which reads no environment.
+    grants: tuple[Grant, ...] = ()
+    refused: tuple[Refusal, ...] = ()
+
+    @model_validator(mode="after")
+    def _free_text_carries_no_credential(self) -> "CaptureBundle":
+        """Skip reasons, refusal reasons and `meta` values are free text,
+        and a capture file is something anyone can edit and re-hash. The
+        CLI builds all three from closed vocabulary; a credential-shaped
+        one was written by hand, and storing it would put it in front of
+        every reader of `GET /captures/{id}`. Refused by field and index,
+        never by content (invariant 11). The CLI refuses the same envelope
+        when it opens one (`capture.Open`)."""
+        for index, skip in enumerate(self.skipped):
+            if looks_like_credential(skip.reason):
+                raise ValueError(f"skipped.{index}.reason carries credential-shaped text")
+        for index, refusal in enumerate(self.refused):
+            if looks_like_credential(refusal.reason):
+                raise ValueError(f"refused.{index}.reason carries credential-shaped text")
+        for name, value in self.meta.items():
+            if looks_like_credential(value):
+                raise ValueError(f"meta.{name} carries credential-shaped text")
+        return self
 
     @model_validator(mode="after")
     def _facts_are_on_the_bundles_plane(self) -> "CaptureBundle":

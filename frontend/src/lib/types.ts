@@ -18,25 +18,21 @@ export type IncidentStatus = IncidentSummary["status"];
 export type RootCauseStatus = IncidentSummary["root_cause_status"];
 export type Confidence = NonNullable<IncidentSummary["root_cause_confidence"]>;
 
-// Phase 14: service registry.
-export type ServiceOut = components["schemas"]["ServiceOut"];
-export type ServicesOut = components["schemas"]["ServicesOut"];
-export type ServiceCreate = components["schemas"]["ServiceCreate"];
-export type ServiceCreateResponse = components["schemas"]["ServiceCreateResponse"];
-export type ServicePatch = components["schemas"]["ServicePatch"];
+// Phase 14/19: ingest keys and topology suggestions — served under
+// /model since Phase 30, which removed the /services alias and every
+// Service* shape with it.
 export type TopologySuggestionOut = components["schemas"]["TopologySuggestionOut"];
 export type TopologySuggestionsOut = components["schemas"]["TopologySuggestionsOut"];
 export type TopologyEdgeRef = components["schemas"]["TopologyEdgeRef"];
 export type KeyOut = components["schemas"]["KeyOut"];
 export type KeyCreateResponse = components["schemas"]["KeyCreateResponse"];
 
-// Phase 27: the system model. `/services*` above is a thin alias kept
-// for one release (Phase 27 field 9) and removed in Phase 30 — new UI
-// should read these, which are the only shapes that carry a component's
+// Phase 27: the system model — the only shapes that carry a component's
 // kind or a connection's kind and criticality at all.
 export type ComponentOut = components["schemas"]["ComponentOut"];
 export type ComponentsOut = components["schemas"]["ComponentsOut"];
 export type ComponentCreate = components["schemas"]["ComponentCreate"];
+export type ComponentCreateResponse = components["schemas"]["ComponentCreateResponse"];
 export type ComponentPatch = components["schemas"]["ComponentPatch"];
 export type ConnectionOut = components["schemas"]["ConnectionOut"];
 export type ConnectionsOut = components["schemas"]["ConnectionsOut"];

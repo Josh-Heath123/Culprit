@@ -1,13 +1,13 @@
 // Command culprit is the Culprit CLI and, from Phase 31, the probe agent
 // (D2 — one static binary, two subcommands).
 //
-// Phase 28 ships exactly one working subcommand: `culprit intent`, which
-// builds an INTENT fact set for a repository and prints it. It compares
-// nothing, opens no socket, and reads no environment (field 17). The
-// entire value proposition of this phase is that a developer can run one
-// command in a checkout with nothing installed and get a truthful
-// inventory of what their system claims to be, including an explicit
-// list of what could not be established and why.
+// `culprit intent` (Phase 28) prints what a repository says the system is
+// supposed to do; `culprit check` (Phase 29) compares that with itself.
+// Neither opens a socket or reads an environment. `culprit env capture`
+// and `culprit diff` (Phase 30) are the first commands that do — reading
+// a running environment's configuration under the capability grants
+// `culprit.yaml` declares for it, once, and never sending a request into
+// the system under test.
 package main
 
 import (
@@ -87,13 +87,18 @@ INTENT (what it is supposed to do), CONFIGURED (what an environment is
 set up to do) and OBSERVED (what actually happened) — and reports where
 they diverge.
 
-This build implements the INTENT plane only. See docs/DIAGNOSTIC_PLAN.md.`,
+This build implements the INTENT plane (culprit intent, culprit check)
+and the CONFIGURED plane (culprit env capture, culprit diff). See
+docs/DIAGNOSTIC_PLAN.md, and docs/PERMISSIONS.md before granting it
+access to an environment.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       Version,
 	}
 	root.AddCommand(newIntentCommand())
 	root.AddCommand(newCheckCommand())
+	root.AddCommand(newEnvCommand())
+	root.AddCommand(newDiffCommand())
 	return root
 }
 

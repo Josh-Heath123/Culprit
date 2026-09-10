@@ -15,8 +15,10 @@ from uuid import UUID
 from culprit_model.graph import ComponentKind, ConnectionKind, Criticality, DeclaredBy
 from pydantic import BaseModel, ConfigDict, Field
 
-#: Same pattern as app/model/manifest.py's COMPONENT_NAME_PATTERN and the
-#: pre-Phase-27 registry's SERVICE_NAME_PATTERN — must match the OTel
+from app.registry.schemas import KeyOut
+
+#: Same pattern as app/model/manifest.py's COMPONENT_NAME_PATTERN (and
+#: the Phase 14 registry's SERVICE_NAME_PATTERN before it) — must match the OTel
 #: `service.name` resource attribute byte-for-byte.
 COMPONENT_NAME_PATTERN = r"^[a-z0-9][a-z0-9._-]{0,62}$"
 
@@ -37,6 +39,12 @@ class ComponentOut(BaseModel):
     environment_scope: list[str]
     labels: dict[str, Any]
     disabled: bool
+    #: The component's ingest keys — metadata only, revoked ones
+    #: included (see KeyOut). Phase 30 moved this here from the removed
+    #: `/services` alias's `ServiceOut`, which was the only shape that
+    #: carried it; without it Settings → Services had no way to list or
+    #: revoke a key once the alias was gone.
+    keys: list[KeyOut] = Field(default_factory=list)
     created_at: datetime | None
 
 
@@ -59,7 +67,7 @@ class ComponentCreate(BaseModel):
 
 class ComponentCreateResponse(BaseModel):
     """`api_key` is returned exactly once, here — never retrievable again
-    (only a new key can be issued via POST /services/{id}/keys)."""
+    (only a new key can be issued, via POST /model/components/{id}/keys)."""
 
     component: ComponentOut
     api_key: str

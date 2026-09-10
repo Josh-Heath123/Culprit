@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
 
-import { useServices } from "@/hooks/useServices";
+import { useComponents } from "@/hooks/useModel";
 
-/** Built from the actually-registered service list (Phase 14: GET
- * /services, not a hardcoded three-name array), matching the terse,
+/** Built from the actually-registered component list (GET
+ * /model/components since Phase 30; GET /services before it, and a
+ * hardcoded three-name array before Phase 14), matching the terse,
  * specific voice of the LLM narratives (Section 3): state exactly what
  * was checked and found nothing, not that something is broken.
  * Deliberately doesn't claim a time window ("in the last 4 hours") this
@@ -11,8 +12,8 @@ import { useServices } from "@/hooks/useServices";
  * open-ended incident_candidate, not a windowed slice, so the copy stays
  * honest about what "empty" here actually means. */
 export function EmptyState() {
-  const { services } = useServices();
-  const active = services.filter((s) => !s.disabled);
+  const { components } = useComponents();
+  const active = components.filter((c) => !c.disabled);
 
   if (active.length === 0) {
     return (

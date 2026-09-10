@@ -1,0 +1,196 @@
+{
+  "protocol": 1,
+  "plane": "INTENT",
+  "environment": null,
+  "extractor": "culprit@dev",
+  "capture_id": "intent-fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.example",
+        "locator": "L2"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.example",
+        "locator": "L3"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "exists",
+      "value": true,
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/.env.example",
+        "locator": "L4"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "read_by",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 60,
+        "artefact": "api/orders_api/config.py",
+        "locator": "L5"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/JWT_SECRET_KEY",
+      "predicate": "read_by",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 60,
+        "artefact": "api/orders_api/config.py",
+        "locator": "L6"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "read_by",
+      "value": true,
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 60,
+        "artefact": "api/orders_api/config.py",
+        "locator": "L7"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "config:orders-api/PORT",
+      "predicate": "default_shape",
+      "provenance": {
+        "source_kind": "static",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 60,
+        "artefact": "api/orders_api/config.py",
+        "locator": "L9"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "port",
+        "present": true,
+        "scheme": "not_applicable"
+      }
+    },
+    {
+      "plane": "INTENT",
+      "subject": "component:orders-api",
+      "predicate": "migration_head",
+      "value": [
+        "0003_add_order_lines"
+      ],
+      "provenance": {
+        "source_kind": "spec",
+        "extractor": "culprit@dev",
+        "confidence_rank": 80,
+        "artefact": "api/migrations/versions",
+        "locator": ""
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.orders",
+      "predicate": "columns",
+      "value": [
+        "cancelled_at",
+        "customer_email",
+        "id",
+        "placed_at",
+        "status",
+        "total_cents"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/orders_api/main.py",
+        "locator": "public.orders"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.order_lines",
+      "predicate": "columns",
+      "value": [
+        "id",
+        "order_id",
+        "quantity",
+        "sku"
+      ],
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/orders_api/main.py",
+        "locator": "public.order_lines"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    },
+    {
+      "plane": "INTENT",
+      "subject": "schema:orders-api-db/public.orders.cancelled_at",
+      "predicate": "nullable",
+      "value": true,
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit-extract-python@0.1.0",
+        "confidence_rank": 90,
+        "artefact": "api/orders_api/main.py",
+        "locator": "public.orders.cancelled_at"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "intent-fixture"
+    }
+  ],
+  "skipped": []
+}

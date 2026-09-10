@@ -1,70 +1,38 @@
+"""HTTP shapes for the two things `app/registry/` still owns: ingest API
+keys and the Phase 19 topology-suggestion queue.
+
+Everything that described a *service* — `ServiceOut`, `ServiceCreate`,
+`ServicePatch` and the `depends_on` list — went with the `/services`
+alias in Phase 30 (field 6). A component is described by
+`app/model/schemas.py`'s `ComponentOut` now, which carries its keys as a
+list of the `KeyOut` below. The endpoints these shapes belong to are
+mounted under `/model` by `app/model/router.py`.
+"""
+
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
-
-#: Must match the OTel `service.name` resource attribute byte-for-byte
-#: (see docs/SELF_HOSTED_PLAN.md Phase 14) — reject anything that would
-#: produce a confusing mismatch (uppercase, spaces, leading punctuation).
-SERVICE_NAME_PATTERN = r"^[a-z0-9][a-z0-9._-]{0,62}$"
+from pydantic import BaseModel
 
 
 class KeyOut(BaseModel):
+    """An ingest key's metadata. Never its hash and never its plaintext —
+    see api/tests/test_model_api.py's string-search assertion, which
+    exists specifically because a schema-only review would not catch a
+    field like `key_hash` being added back in later."""
+
     id: UUID
     label: str | None
-    created_at: datetime
+    #: Nullable because the column is: `api_keys.created_at` has a
+    #: server default and no NOT NULL (`ApiKey.created_at` in
+    #: app/db/models.py; .claude/rules/database.md, "Nullability is part
+    #: of the schema"). The
+    #: `/services` alias claimed `datetime` and papered over the
+    #: difference with a type-ignore; the honest type costs the
+    #: dashboard one null check.
+    created_at: datetime | None
     last_used_at: datetime | None
     revoked: bool
-
-
-class ServiceOut(BaseModel):
-    """Never include key_hash or any plaintext key material — see
-    api/tests/test_registry_api.py's string-search assertion, which
-    exists specifically because a schema-only review wouldn't catch a
-    field like `keys[].key_hash` being added back in later."""
-
-    id: UUID
-    name: str
-    display_name: str | None
-    sort_order: int
-    monitored_metrics: list[str]
-    disabled: bool
-    depends_on: list[str]
-    keys: list[KeyOut]
-    created_at: datetime | None
-
-
-class ServicesOut(BaseModel):
-    items: list[ServiceOut]
-
-
-class ServiceCreate(BaseModel):
-    name: str = Field(pattern=SERVICE_NAME_PATTERN)
-    display_name: str | None = None
-    depends_on: list[str] = Field(default_factory=list)
-    monitored_metrics: list[str] = Field(default_factory=list)
-
-
-class ServiceCreateResponse(BaseModel):
-    """`api_key` is returned exactly once, here — never retrievable again
-    (not even by an admin; only a new key can be issued via
-    POST /services/{id}/keys)."""
-
-    service: ServiceOut
-    api_key: str
-
-
-class ServicePatch(BaseModel):
-    """All fields optional; only the ones actually present in the request
-    body are applied (see api/app/registry/service.py's use of
-    `exclude_unset=True`) — a PATCH that omits `display_name` must leave
-    it alone, not null it out."""
-
-    display_name: str | None = None
-    sort_order: int | None = None
-    monitored_metrics: list[str] | None = None
-    depends_on: list[str] | None = None
-    disabled: bool | None = None
 
 
 class KeyCreate(BaseModel):
@@ -72,16 +40,23 @@ class KeyCreate(BaseModel):
 
 
 class KeyCreateResponse(BaseModel):
+    """`api_key` is returned exactly once, here — never retrievable again,
+    not even by an admin. Losing it means issuing another."""
+
     api_key: str
     key_id: UUID
     label: str | None
 
 
 class TopologySuggestionOut(BaseModel):
-    """A machine-observed edge (Phase 19, Option A) not yet declared in
-    service_dependencies and not dismissed. `*_registered` lets the UI
+    """A machine-observed edge (Phase 19, Option A) not yet declared as a
+    connection of any kind and not dismissed. `*_registered` lets the UI
     show which endpoint(s) would block acceptance — see
-    app/registry/service.py's UnregisteredEndpoint."""
+    app/registry/service.py's UnregisteredEndpoint.
+
+    The field names still say `service` because `observed_service_edges`
+    does: the ingest gateway records the OTel `service.name` on each side
+    of a CLIENT span, which is a component name by another name."""
 
     from_service: str
     to_service: str

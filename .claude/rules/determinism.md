@@ -28,6 +28,13 @@ model" is always the shortest path and always looks fine in a demo.
   `cli/cmd/culprit/check_test.go` asserts it against `go list -deps`. A package
   that does not link a socket cannot open one, which is a stronger guarantee
   than any list of vendor names.
+- Environment capture and the permission model (`cli/internal/capture/`,
+  `cli/internal/capability/`, Phase 30). Capture is the first package in the
+  binary that opens sockets — to a database, a resolver, an endpoint's TLS
+  handshake — and it does so deterministically, under a named grant, with no
+  LLM anywhere; it lives outside `internal/check` precisely so the check
+  pipeline's no-networking assertion still holds. The Python snapshot diff
+  (`shared/culprit_model/capture_diff.py`) is pure.
 - Probe execution and readings (`cli/internal/probe/`)
 - Fault isolation (`cli/internal/isolate/`)
 - Verification (`cli/internal/verify/`)

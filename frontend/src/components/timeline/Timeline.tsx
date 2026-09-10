@@ -5,9 +5,9 @@ import { Group } from "@visx/group";
 import { scaleBand, scaleTime } from "@visx/scale";
 
 import { useElementSize } from "@/hooks/useElementSize";
-import { useServices } from "@/hooks/useServices";
+import { useComponents } from "@/hooks/useModel";
 import { markRadiusFor, severityColorVar, severityFor } from "@/lib/severity";
-import type { IncidentSummary, ServiceOut } from "@/lib/types";
+import type { ComponentOut, IncidentSummary } from "@/lib/types";
 
 interface TimelineProps {
   incidents: IncidentSummary[];
@@ -16,7 +16,7 @@ interface TimelineProps {
 }
 
 interface TimelineChartProps extends TimelineProps {
-  services: ServiceOut[];
+  services: ComponentOut[];
   width: number;
   height: number;
 }
@@ -31,7 +31,9 @@ const LANE_PADDING = 0.35;
  * dimensions. */
 export function Timeline(props: TimelineProps) {
   const { ref, width, height } = useElementSize<HTMLDivElement>();
-  const { services } = useServices();
+  // One lane per registered component. GET /services served exactly
+  // this list (every component, whatever its kind) until Phase 30.
+  const { components: services } = useComponents();
   return (
     <div ref={ref} className="h-full w-full min-h-64">
       {width > 0 && height > 0 ? (

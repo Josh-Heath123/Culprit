@@ -11,7 +11,13 @@
     "A source is an extractor AND an artefact. Keying on the extractor alone",
     "made two genuinely different findings about one (subject, predicate) share",
     "a key - see the 'same extractor, different artefacts' cases below, which",
-    "are the ones this fixture exists for."
+    "are the ones this fixture exists for.",
+    "",
+    "From Phase 30 a source is also WHERE it read from. A CONFIGURED fact carries",
+    "an environment, and the identity appends both sides' environments - but only",
+    "when either is non-empty, so every INTENT-only identity (every row Phase 29",
+    "ever stored) is unchanged. The last three cases are the ones this is for:",
+    "the same missing key in staging and in production must be two findings."
   ],
   "cases": [
     {
@@ -83,6 +89,42 @@
       "right_extractor": "culprit@dev",
       "right_artefact": "",
       "identity": "component:orders-api|migration_head|culprit-extract-python@0.1.0||culprit@dev|"
+    },
+    {
+      "name": "intent against configured: a key production does not set",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "read_by",
+      "left_extractor": "culprit-extract-python@0.1.0",
+      "left_artefact": "api/app/config.py",
+      "left_environment": "",
+      "right_extractor": "culprit@dev",
+      "right_artefact": "compose:orders-api",
+      "right_environment": "production",
+      "identity": "config:orders-api/DATABASE_URL|read_by|culprit-extract-python@0.1.0|api/app/config.py|culprit@dev|compose:orders-api||production"
+    },
+    {
+      "name": "the same key missing in staging - must not collide with production",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "read_by",
+      "left_extractor": "culprit-extract-python@0.1.0",
+      "left_artefact": "api/app/config.py",
+      "left_environment": "",
+      "right_extractor": "culprit@dev",
+      "right_artefact": "compose:orders-api",
+      "right_environment": "staging",
+      "identity": "config:orders-api/DATABASE_URL|read_by|culprit-extract-python@0.1.0|api/app/config.py|culprit@dev|compose:orders-api||staging"
+    },
+    {
+      "name": "environment against environment: an image digest",
+      "subject": "image:orders-api",
+      "predicate": "digest",
+      "left_extractor": "culprit@dev",
+      "left_artefact": "compose:orders-api",
+      "left_environment": "staging",
+      "right_extractor": "culprit@dev",
+      "right_artefact": "compose:orders-api",
+      "right_environment": "production",
+      "identity": "image:orders-api|digest|culprit@dev|compose:orders-api|culprit@dev|compose:orders-api|staging|production"
     }
   ]
 }

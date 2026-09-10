@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 from culprit_model.planes import Plane
 from culprit_model.protocol import CaptureBundle
+from culprit_model.shape import ValueScheme
 from culprit_model.subjects import SubjectError, SubjectKind, parse
 
 GOLDEN = (
@@ -97,7 +98,7 @@ def test_no_golden_bundle_carries_a_config_value(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", _golden_files(), ids=lambda p: p.stem)
-def test_every_value_shape_is_the_closed_four_field_form(path: Path) -> None:
+def test_every_value_shape_is_the_closed_five_field_form(path: Path) -> None:
     """The Go `ValueShape` marshals to exactly what the Python one accepts.
 
     Checked against the raw JSON rather than the parsed model: pydantic
@@ -110,7 +111,15 @@ def test_every_value_shape_is_the_closed_four_field_form(path: Path) -> None:
         shape = fact.get("value_shape")
         if shape is None:
             continue
-        assert set(shape) == {"type", "length_class", "format", "present"}, (
+        # Phase 30 (Q7) added a fifth field, `scheme`. It is optional on the
+        # wire — a protocol-1 extractor from before it existed omits it —
+        # but the Go CLI's constructors always set it, so a Go-emitted
+        # shape must carry exactly the five, with `scheme` from the closed
+        # set. Stricter than the four-field version, not looser.
+        assert set(shape) == {"type", "length_class", "format", "present", "scheme"}, (
             f"{path.name}: {fact['subject']} has a value_shape with keys "
             f"{sorted(shape)}"
+        )
+        assert shape["scheme"] in {member.value for member in ValueScheme}, (
+            f"{path.name}: {fact['subject']} has a scheme outside the closed set"
         )

@@ -5,9 +5,9 @@ test_registry_api.py.
 
 Builds a test app mounting auth_router (self-service, no router-level
 gate — /login must stay reachable unauthenticated) alongside
-users_router AND registry_router, both under require_admin — the
+users_router AND the model router, both under require_admin — the
 acceptance criterion this file proves isn't just "admin CRUD works," it's
-"a member's token gets 403 from POST /services too," i.e. require_admin
+"a member's token gets 403 from POST /model/components too," i.e. require_admin
 actually enforces across every router it's applied to, not just the one
 this file happens to be named after.
 """
@@ -56,7 +56,7 @@ async def client(
     from app.auth.dependencies import require_admin
     from app.auth.router import router as auth_router
     from app.auth.users_router import router as users_router
-    from app.registry.router import router as registry_router
+    from app.model.router import router as model_router
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     read_engine = create_async_engine(api_reader_url)
@@ -69,7 +69,7 @@ async def client(
     app.state.registry_session_factory = async_sessionmaker(registry_engine, expire_on_commit=False)
     app.include_router(auth_router)
     app.include_router(users_router, dependencies=[Depends(require_admin)])
-    app.include_router(registry_router, dependencies=[Depends(require_admin)])
+    app.include_router(model_router, dependencies=[Depends(require_admin)])
 
     with TestClient(app) as test_client:
         yield test_client
@@ -194,7 +194,7 @@ def test_member_gets_403_from_get_users(client: TestClient) -> None:
     assert response.status_code == 403
 
 
-def test_member_gets_403_from_post_services(client: TestClient) -> None:
+def test_member_gets_403_from_the_model_router(client: TestClient) -> None:
     """The acceptance criterion this whole file is really about: a
     member's token is rejected the same way (403, admin required) from
     a *different* router that also moved onto require_admin, not just
@@ -202,8 +202,11 @@ def test_member_gets_403_from_post_services(client: TestClient) -> None:
     member_token = _create_and_login(
         client, username="registry-blocked-member", password="a-decent-password-1", role="member"
     )
+    # POST /model/components since Phase 30 — the /services alias this
+    # test was first written against is gone, and the gate it proves
+    # moved with the router that replaced it.
     response = client.post(
-        "/services",
+        "/model/components",
         json={"name": "blocked-service"},
         headers={"Authorization": f"Bearer {member_token}"},
     )

@@ -565,6 +565,8 @@ async def test_a_value_shape_survives_the_round_trip(
         "length_class": "medium",
         "format": "dsn",
         "present": True,
+        # Phase 30 (Q7): the scheme survives the round trip too.
+        "scheme": "postgresql",
     }
 
 

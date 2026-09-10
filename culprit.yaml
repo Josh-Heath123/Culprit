@@ -113,3 +113,31 @@ extract:
     # instance have no source of their own) and a real gap for the
     # worker, which has routes-equivalent surface — arq job names — that
     # no extractor in this phase knows how to read.
+
+# Phase 30: Culprit's own production, as the optional capture agent in
+# infra/docker-compose.prod.yml sees it. The `process` adapter reads the
+# environment the agent is started with — the same infra/.env.prod the api
+# reads — so what it captures is the api's configuration, as names and
+# shapes. Run on the VM with
+#
+#     docker compose -f docker-compose.prod.yml --env-file .env.prod \
+#       --profile agent run --rm culprit-agent
+#
+# and diff the envelope it writes against a staging capture (or an
+# earlier one) with `culprit diff`. docs/PERMISSIONS.md explains each
+# grant below.
+environments:
+  production:
+    adapter: process
+    grants:
+      config.read.names: true
+      db.metadata.read: true
+    components:
+      culprit-api:
+        database:
+          # The api's own read-only connection. The table list comes from
+          # pg_catalog, which any role can read; api-reader has no SELECT
+          # on alembic_version, so the capture says the migration version
+          # was not read rather than guessing it.
+          dsn_env: API_READER_DATABASE_URL
+          name: culprit-api-db

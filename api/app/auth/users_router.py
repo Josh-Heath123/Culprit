@@ -1,6 +1,7 @@
 """Admin user management (Phase 16) — mounted at /users in
 api/app/main.py, gated by require_admin (not the plain require_auth
-/auth/* and /services use) — see app/auth/dependencies.py.
+/auth/* uses; /model/* shares this stricter gate) — see
+app/auth/dependencies.py.
 """
 
 from collections.abc import AsyncIterator
