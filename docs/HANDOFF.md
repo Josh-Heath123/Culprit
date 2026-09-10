@@ -14,6 +14,12 @@ twice.
 - **Both read the whole file first.** It is committed, so `git log docs/HANDOFF.md`
   is the decision history.
 
+**CI is part of the gate set.** A phase is not complete until CI is green on the
+**merge result** — `origin/main` merged into the branch — not on the branch
+alone. Local `/verify` covers neither: it runs a subset of the checks, on a tree
+that is not what gets merged, on Windows rather than Linux. Run `/ci` before
+reporting any phase complete.
+
 **Committing.** Use `git commit -F <message-file>`. The
 `-m "$(cat <<'EOF' ...)"` form triggers a permission prompt on command
 substitution every single time — that is the permission system working correctly,

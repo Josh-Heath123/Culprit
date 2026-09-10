@@ -286,6 +286,11 @@ function ConnectionsPanel({
         to_component: target,
         kind,
         criticality,
+        // A human declaring an edge here has the same provenance as one
+        // written in culprit.yaml (see registry/service.py's
+        // _legacy_connection). It is also the server's default; the
+        // generated type requires it because the field has a default.
+        declared_by: "culprit_yaml",
       }),
     onSuccess: () => {
       invalidate();
@@ -321,7 +326,7 @@ function ConnectionsPanel({
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground">&rarr;</span>
                 <span className="font-mono text-foreground">{connection.to_component}</span>
-                <Badge variant="secondary">{connection.kind}</Badge>
+                <Badge variant="default">{connection.kind}</Badge>
                 <Badge
                   variant={connection.criticality === "on_request_path" ? "default" : "outline"}
                 >

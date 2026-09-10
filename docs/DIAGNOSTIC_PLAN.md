@@ -634,6 +634,21 @@ prior plans and extended:
     point — one serialiser that structurally cannot render a secret, applied to
     every outbound string, with error messages, skip reasons, probe
     `inconclusive`/`refused` reasons and log lines all inside its scope.
+12. **Gates run on the merge result and in CI, not on the branch and not only
+    locally.** Added 2026-09-10 after Phase 29's gates were green locally and CI
+    failed on merge. Two distinct gaps, both instances of invariant 9 applied to
+    the gate set itself rather than to lint roots:
+    - **The tree that was tested is not the tree that gets merged.** Every phase
+      branch is cut from a `main` that then moves underneath it. Local gates ran
+      on the branch; the merge result was never run at all. Before reporting a
+      phase complete, merge `origin/main` into the branch and re-run everything.
+    - **CI is a superset of the local gates and a different environment.** It
+      builds five images, Trivy-scans them, cross-compiles Go, generates frontend
+      types from a live OpenAPI dump, and does it on Linux from a clean checkout
+      — against a repository with no `.gitattributes` and unset `core.autocrlf`,
+      where a file can pass on Windows and fail on Linux. `/verify` cannot see
+      any of that, so a phase is not verified until CI is green on the merge
+      result.
 
 ---
 

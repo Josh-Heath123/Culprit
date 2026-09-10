@@ -160,6 +160,14 @@ jobs:
           fi
       - name: go vet
         run: cd cli && go vet ./...
+      # Before `go test`, not after: internal/check's end-to-end test runs
+      # the real Node extractor, which imports @babel/parser. Without its
+      # node_modules it dies on import, the pipeline turns that into a
+      # Skip (by design), and the frontend's facts silently vanish. The
+      # Python extractor needs no equivalent: `uv run --project` syncs on
+      # first use.
+      - name: Install the Node extractor's dependencies
+        run: cd extractors/node && npm ci
       # Includes the golden-file tests over the fixture corpus and the
       # conformance tests against shared/tests/*.json -- the same two
       # fixtures the Python and JavaScript implementations read, which is
@@ -184,7 +192,7 @@ jobs:
       - name: pyright (culprit-extract-python)
         run: cd extractors/python && uv run pyright
       - name: node --test (culprit-extract-node)
-        run: cd extractors/node && npm ci && npm test
+        run: cd extractors/node && npm test
 
   # Culprit checks Culprit (Phase 29 field 5).
   #
@@ -226,6 +234,10 @@ jobs:
         run: |
           cd api && uv sync --all-extras
           cd ../frontend && npm ci
+          # The root culprit.yaml runs the Node extractor from frontend/,
+          # but its @babel/parser resolves from extractors/node/, not from
+          # frontend/node_modules.
+          cd ../extractors/node && npm ci
 
       # `continue-on-error`, deliberately, and only on this step.
       #
