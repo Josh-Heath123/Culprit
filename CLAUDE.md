@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Phases 0–29 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 30 is on `main` (`c5ce4eb`, pushed directly, no PR) but **CI is red** — `build (frontend)` (Trivy: CVEs in upstream Caddy) and `self-check` (SARIF upload on a private repo), both pre-dating Phase 30 — so it is not complete and has not deployed. A fix for the first (Caddy rebuilt from source) is staged, uncommitted; the second waits on `docs/HANDOFF.md` §3 Q14. Phase 31 is next once CI is green
+## Status: Phases 0–30 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 30 is merged (PR #17, `888eb22`) and every test, build and scan job is green, but **`deploy` is red**, so it is not complete: **production has not deployed since Phase 13** — the VM's `.env.prod` lacks every secret added since then and pulls the pre-rename `ghcr.io/josh-heath123/view/*` images (`docs/HANDOFF.md` §3 Q15, a human on the VM). Phase 31 is next once the deploy is green or Q15 takes deploy out of the gate
 
 Updated 2026-09-11. Update this section the moment it changes — a stale status line is worse than none, and this section was four phases stale until Phase 26 repaired it, which is exactly the cost being warned about.
 
@@ -10,7 +10,7 @@ Updated 2026-09-11. Update this section the moment it changes — a stale status
 
 **Plan of record: `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35).** Culprit is being rewritten from an incident-correlation copilot into a diagnostic engine built on three planes of truth — INTENT (what the system is supposed to do), CONFIGURED (what an environment is set up to do), OBSERVED (what actually happened) — with divergence between them as the finding. Read §1 (architectural decisions D1–D8), §2 (the core model) and the specific phase section you are working on; not the whole file. The earlier plans are historical: `docs/IMPLEMENTATION_PLAN.md` covers Phases 0–12 (the original single-VM build), `docs/SELF_HOSTED_PLAN.md` Phases 13–20 (the self-hosted-product pivot), `docs/AI_NATIVE_PLAN.md` Phases 21–25.
 
-Merged into `main` and deployed to `https://culprit.co.za`:
+Merged into `main` (only Phases 0–13 are actually deployed to `https://culprit.co.za` — every deploy since Phase 14 has failed on the VM, see `docs/HANDOFF.md` §3 Q15):
 
 - **Phases 0–12** — the original build, through CI/CD and the first deploy. (Phase 12, the polish pass, was superseded and never done as its own phase; its gaps were picked up inside 13–17.)
 - **Phases 13–20** — the self-hosted pivot: frontend routing and a real 404 (13), the service registry replacing hardcoded demo services (14), a public ingest path plus `docs/INSTRUMENTATION.md` (15), multi-user auth replacing the single operator account (16), `just quickstart` and `docs/INSTALL.md` (17), the postmortem write path (18), trace-based topology inference (19), release engineering and the repo rename to `Culprit` (20).

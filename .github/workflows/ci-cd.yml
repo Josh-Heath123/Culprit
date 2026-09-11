@@ -282,7 +282,6 @@ jobs:
       # technique, and same reason, as the stop hook's exclusion list.
       - name: culprit check (this repository)
         id: check
-        continue-on-error: true
         env:
           JWT_SECRET_KEY: culprit-intent-extraction-placeholder
           AGENT_AUTOMATION_TOKEN: culprit-intent-extraction-placeholder
