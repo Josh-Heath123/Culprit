@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: Phases 0–29 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 30 is implemented and staged on `phase-30-env-capture` but **not committed** (commit denied by the permission system) and **CI has not run on it**. Phase 31 is next once it is
+## Status: Phases 0–29 merged. Phase 25 cancelled. Current work is the diagnostic-engine rewrite, `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Phase 30 is on `main` (`c5ce4eb`, pushed directly, no PR) but **CI is red** — `build (frontend)` (Trivy: CVEs in upstream Caddy) and `self-check` (SARIF upload on a private repo), both pre-dating Phase 30 — so it is not complete and has not deployed. A fix for the first (Caddy rebuilt from source) is staged, uncommitted; the second waits on `docs/HANDOFF.md` §3 Q14. Phase 31 is next once CI is green
 
-Updated 2026-09-10. Update this section the moment it changes — a stale status line is worse than none, and this section was four phases stale until Phase 26 repaired it, which is exactly the cost being warned about.
+Updated 2026-09-11. Update this section the moment it changes — a stale status line is worse than none, and this section was four phases stale until Phase 26 repaired it, which is exactly the cost being warned about.
 
 **Read `docs/HANDOFF.md` first, every session.** It is the state carrier between the architecture conversation and the implementation session: §1 says which phase is current and whether the gates are green, §2 is the decisions register, §3 holds open questions Claude Code must surface rather than answer, §4 is the phase ledger, §5 is the last run report. This file describes the repository; `HANDOFF.md` describes where the work is.
 
@@ -22,7 +22,7 @@ Merged into `main` and deployed to `https://culprit.co.za`:
 
 **Phase 27 (the system model) is merged.** It replaced `services`/`service_dependencies` with `components`/`connections`/`contracts` — see architecture point 19.
 
-**Phases 28 and 29 are merged** (PR #15, PR #16) — see architecture points 20 and 21. **Phase 30 (environment capture and cross-environment diff) is implemented and staged on `phase-30-env-capture`, uncommitted, with CI not yet run** — see architecture point 22. **Merging it needs two new lines in the VM's `infra/.env.prod` first** (`CAPTURE_WRITER_DB_PASSWORD`, `CAPTURE_WRITER_DATABASE_URL` — docs/UPGRADING.md): the migration and the api both refuse to start without them. As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
+**Phases 28 and 29 are merged** (PR #15, PR #16) — see architecture points 20 and 21. **Phase 30 (environment capture and cross-environment diff) is on `main` as `c5ce4eb`, with CI red on two pre-existing failures and nothing deployed** — see architecture point 22 and `docs/HANDOFF.md` §1. **Deploying it needs two new lines in the VM's `infra/.env.prod` first** (`CAPTURE_WRITER_DB_PASSWORD`, `CAPTURE_WRITER_DATABASE_URL` — docs/UPGRADING.md): the migration and the api both refuse to start without them. As with every phase, don't assume `main` reflects any of this until it is merged; check `docs/HANDOFF.md` §1, `git status` and `git log <branch> --oneline`.
 
 **Still genuinely outstanding, and not something a session can finish on its own:** the `ghcr.io` packages (`api`/`worker`/`frontend`/`mcp_server`, and from Phase 30 `cli`) still default to **private** under `GITHUB_TOKEN`. Flipping them to public needs a human with repo admin access in the GitHub UI (Packages → each package → Package settings → Change visibility); the `gh` CLI token in this environment lacks `read:packages`/`write:packages`. Until that happens, `docs/SELF_HOSTED_PLAN.md` Phase 20's first acceptance criterion ("a machine with no GitHub account can `docker compose pull` every image") is not met, whatever else claims otherwise.
 
