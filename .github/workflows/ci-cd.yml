@@ -315,12 +315,13 @@ jobs:
           cd cli
           go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
 
-      - name: Upload SARIF
+      - name: Upload SARIF as a build artifact
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: culprit.sarif
-          category: culprit
+          name: culprit-sarif
+          path: culprit.sarif
+          if-no-files-found: error
 
   # Phase 30 field 13: "Capture against ... a kind cluster." The
   # Kubernetes adapter reads a real API server here: a Deployment with a
