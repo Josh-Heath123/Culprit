@@ -1090,14 +1090,26 @@ versions the Caddy release itself asked for, so a pin that is later
 *older* than Caddy's own requirement would silently downgrade it —
 drop each pin once the Caddy release you are on already satisfies it.
 
-## Culprit's own SARIF upload needs code scanning on this repository
+## Culprit's own pull requests get no SARIF annotations
 
 `culprit check --format sarif` works, and the `self-check` CI job writes a
-valid file. Uploading it to GitHub — which is what turns findings into
-pull-request annotations — needs code scanning enabled on the repository.
-This repository is private, and on a private personal repository that is
-a paid feature; the upload step has failed on every run since Phase 29
-added it. So the pull-request annotations described for Phase 29 have
-never actually appeared on Culprit's own pull requests. A user's public
-repository, or a private one with GitHub Code Security, is not affected.
-Open as `docs/HANDOFF.md` §3 Q14.
+valid file. Uploading it to GitHub's code scanning — which is what turns
+findings into pull-request annotations — needs code scanning enabled on
+the repository, and this repository is private, where that is a paid
+feature. The upload failed on every run from Phase 29 until 2026-09-11,
+when it was replaced (`63cea12`, `docs/HANDOFF.md` §3 Q14) by
+`actions/upload-artifact`: the SARIF file is now kept as a build
+artifact named `culprit-sarif`, and the step fails if the file was not
+written.
+
+So the pull-request annotations described for Phase 29 have never
+appeared on Culprit's own pull requests, and still do not. A finding
+from the self-check is visible only in that job's log (the second,
+human-readable run) or by downloading the artifact — and because the
+check step is `continue-on-error` by design, a finding does not turn the
+job red either. On Culprit's own repository, a self-check finding can
+therefore go unnoticed on a green pull request; the gate that *does*
+fail the build is the exact false-positive corpus in the `cli` job.
+A user's public repository, or a private one with GitHub Code Security,
+can still upload SARIF and get annotations; that path is simply not
+exercised by Culprit's own CI any more.
