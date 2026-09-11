@@ -1,5 +1,13 @@
 # Vulnerabilities accepted, not fixed — reviewed 2026-08-04.
 #
+# 2026-09-11: frontend/Dockerfile now rebuilds caddy from source on a
+# current Go toolchain, and the frontend image scans clean with NO ignore
+# file at all. The five entries below no longer protect the image they
+# were written for. They are left in place only because this file is
+# root-level and applies to every image in the build matrix (api, worker,
+# mcp_server, cli), whose scans were cancelled in CI before this change
+# and have not been re-checked without it. Delete them once they are.
+#
 # All five below are compiled into the `caddy` binary itself (Go stdlib,
 # golang.org/x/text, and grpc-go), inside the official caddy:2-alpine
 # Docker image (frontend/Dockerfile). They are not Alpine apk packages, so

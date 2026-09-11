@@ -17,12 +17,29 @@ ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
 
+# Caddy, rebuilt from source. The binary in the published caddy:2-alpine
+# image is compiled with whatever Go toolchain and module versions it
+# shipped with, and on 2026-09-11 Trivy found 12 CRITICAL/HIGH CVEs in it
+# (Go stdlib, golang.org/x/crypto, golang.org/x/net, grpc) with no newer
+# upstream image to move to. Building the same Caddy release on a current
+# toolchain with those modules pinned forward removes them instead of
+# accepting them in .trivyignore. Same Go as cli/Dockerfile. When bumping
+# CADDY_VERSION, drop any --replace the new release already satisfies.
+FROM golang:1.27-alpine AS caddy
+ARG CADDY_VERSION=v2.11.4
+RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
+RUN CGO_ENABLED=0 xcaddy build ${CADDY_VERSION} --output /usr/bin/caddy \
+      --replace golang.org/x/crypto=golang.org/x/crypto@v0.57.0 \
+      --replace golang.org/x/net=golang.org/x/net@v0.59.0 \
+      --replace google.golang.org/grpc=google.golang.org/grpc@v1.83.2
+
 FROM caddy:2-alpine
 # c-ares/curl/libcurl in the published caddy:2-alpine image lag Alpine's
 # own patched package index — re-running apk upgrade at build time picks
 # up whatever's actually current in the repo instead of what shipped in
-# the base image (see .trivyignore for the CVEs this doesn't cover — those
-# are compiled into the caddy binary itself, not an apk package).
+# the base image. The caddy binary itself is replaced below, from the
+# stage above.
 RUN apk update && apk upgrade --no-cache
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=build /app/dist /srv
 COPY Caddyfile /etc/caddy/Caddyfile

@@ -37,11 +37,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) |
-| Current phase | **30 — Environment capture and cross-environment diff** (implemented, not complete: uncommitted, CI not run) |
-| Status | Phase 30 implemented; every local gate green on the merge-result tree; both audits' findings fixed. **Not complete by invariant 12**: `git commit` was denied, so nothing is pushed and CI has not run. Phase 29 is merged (PR #16). |
-| Branch | `phase-30-env-capture` — **staged, not committed**. Cut from `origin/main` `a407542`, which has not moved, so the staged tree is the merge result. Commit message: `scratchpad/commit-msg.txt`. Do not stage `shared/uv.lock` (a stray this session created). |
-| Blocking questions | **None for Phase 30.** New non-blocking Q9–Q13 in §3 (Go surface size, uploader and required signatures, structural guards for granted values, probe overlap). **Deploy prerequisite before merge:** `CAPTURE_WRITER_*` in the VM's `.env.prod`. |
-| Last gate run | 2026-09-10, all local gates green on the merge-result tree, including Compose and kind end-to-end, cross-compile and Trivy run locally. CI NOT RUN. Twelve defects found and fixed, five by running against real systems, seven by the audits (§5). |
+| Current phase | **30 — Environment capture and cross-environment diff** — status **`gates red`** (on `main`; CI red; one fix staged, one decision pending — Q14) |
+| Status | Phase 30 committed as `c5ce4eb` and pushed **directly to `main`** (no PR). CI run 34499505671 is **red** on two jobs, both pre-dating Phase 30 and neither caused by its code: `build (frontend)` fails the Trivy scan on 12 CVEs (1 CRITICAL) compiled into upstream `caddy:2-alpine`'s binary, red since 2026-09-09; `self-check` fails at "Upload SARIF" (`Resource not accessible by integration`), red since Phase 29 added it, and has never passed — the repo is private, the job lacks `actions: read`, and code scanning is not enabled. Deploy was skipped, so the VM does not run Phase 30. **Not complete by invariant 12.** |
+| Branch | `phase-30-env-capture` = `origin/main` = `c5ce4eb`, plus the **staged, uncommitted** Caddy fix (`frontend/Dockerfile`, `.trivyignore` note, LIMITS, this file, CLAUDE.md). `git commit -F` was denied twice on 2026-09-11, so nothing is pushed and no PR exists. Message: `scratchpad/commit-caddy.txt` in session `40d640d0`, reproduced in §5. Do not stage `shared/uv.lock` (a stray). |
+| Blocking questions | **Q14 (§3) blocks completion** — the `self-check` SARIF upload, a decision about the repository. The frontend Trivy failure is *not* a question any more: fixed by building Caddy from source (staged, verified locally, CI not run). **Deploy hazard:** the first green `main` run deploys Phase 30, so `CAPTURE_WRITER_*` must be in the VM's `.env.prod` *before* the fix merges. Deploy needs only `build`, not `self-check`, so the Caddy fix alone is enough to trigger it. Non-blocking Q9–Q13 unchanged. |
+| Last gate run | 2026-09-11, `/ci` on `c5ce4eb`: every local gate green (lint, typecheck, lint-imports, schema drift, `just test`, coupled files, self-check incl. `LLM_PROVIDER=none` — 987 facts/435 subjects locally vs 878/370 in CI, unexplained). CI: lint, typecheck, cli, test, migration-round-trip, kind-capture, build(cli) PASS; self-check, build(frontend) FAIL; build(api/worker/mcp_server) cancelled; deploy skipped. The 2026-09-10 "Trivy run locally" green did not match CI's result. |
 
 Phase 25 (memory visualisation) is **cancelled**. Do not implement it.
 
@@ -309,6 +309,31 @@ against the capture's own grant list. If the architecture session would
 rather narrow the CHECK to `config:` subjects (as `intent_facts`' is),
 that is a one-migration change.
 
+**Q14 — How should the `self-check` job's SARIF reach GitHub?** (Raised by
+`/ci` on 2026-09-11. **BLOCKS Phase 30's completion** under invariant 12:
+CI cannot be green while it fails.) The `self-check` job's last step,
+`github/codeql-action/upload-sarif@v3`, fails with `Resource not
+accessible by integration`, and has failed on every run since Phase 29
+added it — it has never passed. The `culprit check` steps before it
+succeed and write a valid SARIF file. Two causes, stacked: the job's
+`permissions:` block (`ci-cd.yml` ~222–228) grants `contents: read` and
+`security-events: write` but not `actions: read`, which upload-sarif
+needs on a private repository; and behind that, `code-scanning/analyses`
+returns 403 `Code scanning is not enabled for this repository` — on a
+private personal repository that is a paid feature. Adding `actions: read`
+alone would only move the failure. The options, each a human's call:
+- **Make the repository public.** Code scanning is free; fits the MIT,
+  self-hosted direction and the still-outstanding public ghcr.io packages.
+  Irreversible in practice (the history is published).
+- **Keep it private and pay for GitHub Code Security.**
+- **Keep it private and publish `culprit.sarif` with
+  `actions/upload-artifact` instead,** dropping the claim that Culprit's
+  own pull requests get annotations. This removes a step that fails, so by
+  the `/ci` rule it is not Claude Code's to do unilaterally.
+Whichever is chosen, also add `actions: read` and move `upload-sarif` to
+v4 (v3 is deprecated in December 2026). Claude Code has not touched the
+job. `docs/LIMITS.md` states the gap in the meantime.
+
 ---
 
 ## §4. Phase ledger
@@ -323,7 +348,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 27 | The system model (the circuit) | **complete, pending commit** | Signed off 2026-09-09. Found two defects in the plan itself (field 11's networkx contradiction, criterion 2 unsatisfiable) and four real regressions in its own work, including `--export` laundering `declared_by` so a later apply could delete an accepted topology suggestion. Correlation ignoring `connections.kind` correctly deferred — now carried into Phase 32. |
 | 28 | CLI, extractor protocol, intent extraction | **complete, pending commit** | Signed off 2026-09-09. Three audit rounds, eight defects, all found and fixed — including a chain where three fixes each introduced the next leak. That chain produced standing invariant 11. Publication deferred to Phase 29. |
 | 29 | The divergence engine | **complete** | Merged (PR #16). Publication still deliberately not done — §4's own condition (a confirmed finding in a project neither written nor controlled by us) has not been met. |
-| 30 | Environment capture and cross-env diff | **in progress — uncommitted, CI not run** | All four acceptance criteria met on real systems (criterion 4 after the audits failed it, correctly). Complete once committed and CI is green on the merge result. |
+| 30 | Environment capture and cross-env diff | **gates red** | All four acceptance criteria met on real systems (criterion 4 after the audits failed it, correctly). On `main` as `c5ce4eb` (pushed directly, no PR). CI red on two jobs that pre-date it: frontend Trivy (fix staged, 2026-09-11) and `self-check` SARIF upload (Q14). |
 | 31 | Probes | not started | Reconcile with Phase 30's passive DNS/TCP/TLS capture facts (Q12). |
 | 32 | Fault isolation and the Investigation | not started | — |
 | 33 | Production agent and permission model | not started | — |
@@ -346,6 +371,89 @@ as its own commit, not folded into a phase.
 ## §5. Last run
 
 Claude Code overwrites this section at the end of every `/next`.
+
+```
+Run:          2026-09-11, /ci then /next — Phase 30, gates red. Phase 31
+              NOT started.
+Status:       gates red. Phase 30 is NOT complete (invariant 12).
+
+WHAT /ci FOUND
+  Phase 30 had been committed (c5ce4eb) and pushed straight to main, not
+  via a PR, so origin/main == the branch and "merge origin/main" was a
+  no-op: the tree tested IS the merge result. CI run 34499505671 on it:
+    PASS  lint, typecheck, cli, test, migration-round-trip, kind-capture,
+          build(cli)
+    FAIL  build(frontend) — Trivy: 12 CRITICAL/HIGH in usr/bin/caddy
+          (gobinary) from caddy:2-alpine. Red since 2026-09-09 (masked
+          by tsc errors in Phases 27-28). Last green 2026-08-10.
+    FAIL  self-check — "Upload SARIF": Resource not accessible by
+          integration. Never passed since Phase 29 added it. -> Q14.
+    CANCELLED build(api, worker, mcp_server) — so their Trivy status on
+          current main is UNKNOWN.
+    SKIPPED deploy — the VM does not run Phase 30.
+  Neither failure is Phase 30 code. The 2026-09-10 report's "Trivy run
+  locally, PASS" covered cli and api only, not frontend.
+
+LOCAL GATES on c5ce4eb (all PASS)
+  lint, typecheck, lint-imports, check-schema-drift, just test (832+86+
+  21+31), check_coupled_files (vs origin/main: vacuous, base == HEAD; re-
+  run vs a407542: PASS), check-invariants, self-check 0 divergences,
+  LLM_PROVIDER=none self-check. Self-check sees 987 facts / 435 subjects
+  locally vs 878 / 370 in CI — unexplained; likely locally-present
+  generated files. Worth a look: the dogfood gate is not seeing the
+  same thing in CI as on a dev machine.
+
+WHAT THIS RUN CHANGED (staged, NOT committed)
+  frontend/Dockerfile   new `caddy` stage: xcaddy v0.4.7 builds Caddy
+                        v2.11.4 on golang:1.27-alpine (cli/'s toolchain)
+                        with x/crypto v0.57.0, x/net v0.59.0, grpc
+                        v1.83.2 via --replace; copied over /usr/bin/caddy.
+  .trivyignore          a dated note: its five caddy entries no longer
+                        protect the frontend; delete once api/worker/
+                        mcp_server/cli are re-scanned without them. No
+                        entry added or removed.
+  docs/LIMITS.md        +2 sections: Caddy pinned by hand; Culprit's own
+                        SARIF upload needs code scanning.
+  HANDOFF.md, CLAUDE.md status corrected (they said "uncommitted, CI not
+                        run" after it had been pushed to main); Q14.
+
+  Verified locally (Trivy 0.72, fresh DB, same flags as CI):
+    rebuilt frontend image, NO ignore file   -> 0 CRITICAL/HIGH (alpine 0,
+                                                usr/bin/caddy 0)
+    mutation: upstream caddy:2-alpine at CI's
+    digest sha256:5f5c8640...                -> 17 HIGH in usr/bin/caddy
+    caddy version v2.11.4, `caddy validate` on our Caddyfile: Valid,
+    132 standard modules (stock build).
+  NOT verified: CI on the fix (nothing pushed); the image actually
+  serving the dashboard end to end.
+
+COMMITTED:    NO. `git commit -F <file>` denied twice. Message file:
+              scratchpad/commit-caddy.txt (session 40d640d0). Not pushed,
+              no PR — and CI only runs on pull_request to main or pushes
+              to main/tags, so a branch push alone would not run it.
+
+AUDITS:       phase-auditor / invariant-auditor NOT re-run: no Phase 30
+              code changed since both came back clean (below). The change
+              is one Dockerfile stage and docs.
+
+NOTICED, NOT ACTED ON
+  - core.autocrlf is `true` (system gitconfig), not unset as CLAUDE.md
+    says. Every Dockerfile in HEAD is CRLF; CI builds them fine.
+  - upload-sarif@v3 is deprecated December 2026 (bump with Q14).
+  - `self-check`'s first culprit-check step has continue-on-error: true
+    (by design, for SARIF), so its exit code is invisible in step status.
+
+TO FINISH PHASE 30 — a human
+  1. Commit the staged work (message above), push, open a PR to main.
+     CI on the PR tests the fix without deploying.
+  2. Decide Q14 (SARIF) — the run stays red until then.
+  3. Before merging: CAPTURE_WRITER_* into the VM's infra/.env.prod.
+     Deploy depends only on `build`, so merging the Caddy fix deploys
+     Phase 30 even while self-check is red.
+```
+
+Previous run, same phase (2026-09-10) — the implementation report; its
+acceptance-criteria verdicts still stand:
 
 ```
 Phase:        30 — Environment capture and cross-environment diff

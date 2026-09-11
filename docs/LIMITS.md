@@ -1071,3 +1071,33 @@ patch:
   `<component>/<KEY>` as written in `culprit.yaml`; a component written
   in a different case from the model's canonical (lower-case) name is
   refused on upload rather than matched. It fails closed.
+
+## The dashboard's Caddy is built from source, and pinned by hand
+
+The `frontend` image no longer ships the `caddy` binary from the published
+`caddy:2-alpine` image. On 2026-09-11 that binary carried 12 CRITICAL/HIGH
+CVEs (Go stdlib, `golang.org/x/crypto`, `golang.org/x/net`, grpc) with no
+newer upstream image to move to, so `frontend/Dockerfile` rebuilds the same
+Caddy release with `xcaddy` on the Go toolchain `cli/` uses, with those
+three modules pinned forward by `--replace`.
+
+The cost is that Caddy security fixes no longer arrive by themselves. A
+new Caddy release, or a new CVE in a module it depends on, reaches the
+image only when someone bumps `CADDY_VERSION` or a `--replace` line. The
+image scan in CI is what tells you it is time, and `.trivyignore` is not
+the answer when it does. The `--replace` pins also override whatever
+versions the Caddy release itself asked for, so a pin that is later
+*older* than Caddy's own requirement would silently downgrade it —
+drop each pin once the Caddy release you are on already satisfies it.
+
+## Culprit's own SARIF upload needs code scanning on this repository
+
+`culprit check --format sarif` works, and the `self-check` CI job writes a
+valid file. Uploading it to GitHub — which is what turns findings into
+pull-request annotations — needs code scanning enabled on the repository.
+This repository is private, and on a private personal repository that is
+a paid feature; the upload step has failed on every run since Phase 29
+added it. So the pull-request annotations described for Phase 29 have
+never actually appeared on Culprit's own pull requests. A user's public
+repository, or a private one with GitHub Code Security, is not affected.
+Open as `docs/HANDOFF.md` §3 Q14.
