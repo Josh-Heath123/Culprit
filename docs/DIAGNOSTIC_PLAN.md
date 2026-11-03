@@ -9,6 +9,12 @@ the whole file.
 **Phase 25 (memory visualisation) is cancelled.** It was never built and the
 new direction supersedes it. Do not implement it.
 
+**Three phases were inserted on 2026-11-03.** Phase 31.1 closes Phase 31's
+probe loop. Phases 31.2 and 32.1 fold in the productisation brief
+(`docs/PRODUCTISATION.md`): 31.2 presents what already works, before Phase 32;
+32.1 builds the design system and the interface around investigations, after
+it. The order is 31 → 31.1 → 31.2 → 32 → 32.1 → 33 → 34 → 35.
+
 **This plan evolves the existing repository. There is no new repository.**
 Every phase below names the existing files it modifies. Where something is
 removed, the reason is stated; nothing is removed merely because the product
@@ -180,6 +186,27 @@ not sunk cost.
 where PyPy/Rust extensions are insufficient — unlikely before thousands of
 components.
 
+**Amended 2026-11-03 — where analysis actually lives.** The choice above says
+all analysis stays in Python. The plan's own Phase 29 moved comparison and
+severity into the Go binary, deliberately, because `culprit check` must work in
+a pull request with no account and no network; Phase 32 puts the isolation walk
+there too. Checked 2026-11-03: no comparison, severity or isolation logic exists
+in Python — `api/`, `worker/` and `shared/` carry the divergence kinds as enums
+and nothing more. So D1 stands for storage and serving, and the boundary that
+actually holds is:
+
+- **Go (`cli/`)** — everything that runs where the developer, the CI job or the
+  agent is: extraction orchestration and the artefact readers, environment
+  capture, comparison, severity, probes, and isolation.
+- **Python (`api/`, `worker/`)** — everything that persists, serves or
+  aggregates over time: storage, the HTTP API, auth, the dashboard's backend,
+  telemetry ingest, the anomaly scorer and the narrator.
+- **Both** — the model (`Fact`, `Reading`, subject URIs), held together by
+  conformance fixtures that both languages read. This is the only logic
+  permitted to exist twice.
+
+D2's revisit triggers police this boundary.
+
 ### D2 — The CLI and the probe agent are a single Go binary
 
 **Chosen.** A new top-level `cli/` module, written in Go, producing one static
@@ -212,6 +239,23 @@ rather than midway through it.
 **Revisit if.** By the end of Phase 29 the Go surface has grown past ~6k lines or
 is absorbing logic that belongs in the control plane. That is a signal the
 boundary is wrong, not that the language is.
+
+**Amended 2026-11-03 — the size trigger is retired.** The trigger above fired
+long ago: the Go surface was 13,496 non-test lines at Phase 31, against ~6k.
+Line count was a weak proxy. The surface grew because the analysis engine lives
+in Go (D1, amended), not because control-plane logic leaked into it. The
+trade-off paragraph's premise — a small agent that changes slowly — is no
+longer true and should not be relied on: the Go side is the core of the
+product, and its maintenance cost is the real cost of this decision.
+**Revisit if, instead:**
+
+1. any logic other than the shared model is implemented in both languages —
+   the boundary is in the wrong place, and one side must go;
+2. the binary gains persistent storage or a listening server (the agent is
+   outbound-only, Phase 33);
+3. Python gains probe execution, a second comparator or a second isolation
+   walk — the likeliest route being a dashboard-initiated investigation
+   (Phase 32, "Added 2026-11-03").
 
 ### D3 — Intent extractors are subprocess plugins running in the target's own runtime
 
@@ -342,6 +386,21 @@ it as a goal; it must be a build failure, not a goal.
 **The test that keeps it honest:** `culprit check` and `culprit diagnose` must
 produce complete, correct output with `LLM_PROVIDER=none`. That is a CI job, not
 an aspiration.
+
+**Amended 2026-11-03 — the network boundary is per package, and it is an
+allowlist.** Phase 31 replaced the binary-wide ban on linking `net/http`,
+because probes must make HTTP requests under `net.http.outbound` (§2.7).
+Ratified: the binary may speak HTTP; the packages that compute findings may
+not. But the test as built, `TestOnlyTheProbePackageMayLinkAnHTTPClient`, lists
+six packages that must not link `net`, `net/http` or `crypto/tls` — so
+`internal/capability`, `internal/render` and every package created later are
+unchecked by default, and Phase 32's `internal/isolate` would be one of them.
+That is a check that looks like a gate and isn't (standing invariant 9).
+**The rule of record:** only `internal/probe` may link `net/http`; only
+`internal/probe` and `internal/capture` may link `net` or `crypto/tls`; every
+other package under `cli/internal/` may link none of them, enumerated with
+`go list ./internal/...` so that a new package is covered the day it exists.
+Fixed in Phase 31.1.
 
 ---
 
@@ -588,7 +647,12 @@ prior plans and extended:
    narration — now CI-enforced across every deterministic package (D8).
 2. `worker/app/db.py` and `api/app/db/models.py` must not drift —
    `scripts/check_schema_drift.py` remains a CI gate.
-3. Least privilege per job. Add a role, never widen one.
+3. Least privilege per job. A new job, a new trust domain or a new write
+   surface gets a new role, and a role's write grants are never widened. A read
+   grant may be added to an existing role only for a table its *same* job needs
+   beside one it already reads, with the justification written in the migration
+   and the downgrade revoking it. (Clarified 2026-11-03, accepting Phase 31's
+   `anomaly-detector` SELECT on `connections`.)
 4. Migrations are historical snapshots and do not import mutable app code.
 5. Secrets never enter CI.
 6. Every new deterministic package is added to the `lint-imports` contract in the
@@ -1191,9 +1255,10 @@ that guesses.
 **14. Acceptance criteria.**
 - With the demo stack running, `culprit probe connection:order-service->inventory-service`
   returns readings for reachability, TLS, route conformance and impedance.
-- Blocking the network path between two containers flips exactly the reachability
-  probe to `fail` while both components' own health probes stay `pass` — the
-  broken-relationship case, demonstrated.
+- *(Reworded 2026-11-03 — see the review below.)* With the `culprit` binary run
+  inside container A, blocking the network path from A to B flips exactly A's
+  reachability probe for B to `fail`, while both components' own health probes,
+  taken from the host, stay `pass` — the broken-relationship case, demonstrated.
 - Every probe returns `inconclusive` with a reason rather than a guess when its
   preconditions are unmet.
 - No probe in the catalogue declares `effect: mutate`; manifest validation
@@ -1208,6 +1273,229 @@ order.
 **17. Do NOT implement yet.** No automatic probe selection — this phase runs
 probes a human or a script names. No fault trees. No synthetic transactions
 against write endpoints, in this or any later phase of this plan.
+
+**Architecture review, 2026-11-03.** Every item the Phase 31 run report left
+open, decided:
+
+- **Criterion 2** is reworded above. A probe sees the network from wherever the
+  binary runs; that location is the vantage point, and the reading records it
+  in `agent_id`. A probe run on the host cannot see a partition between two
+  containers, so the criterion now says where the binary runs. How the path is
+  blocked is the implementer's choice, provided neither container is stopped.
+  Demonstrated in Phase 31.1.
+- **The network boundary** moved from binary-wide to per package — ratified,
+  and tightened into an allowlist (D8, amended).
+- **`anomaly-detector` SELECT on `connections`** — accepted; standing
+  invariant 3 clarified to say what it means.
+- **Four endpoints share `CULPRIT_PROJECT_TOKEN`**, not three as the run report
+  said: `POST /readings`, `/facts/captures`, `/divergences/captures` and
+  `/model/captures`. Deferred to Phase 33 as an acceptance criterion. While one
+  CI job holds the token for all four, splitting it buys nothing; it becomes a
+  hole when a probe runner sits on a production host.
+- **Field 13** — table-driven cases with a coverage gate meet "each probe gets a
+  fixture". On-disk fixture directories were not meant.
+- **Field 9** — `POST /probes/{id}/run` returns an honest 503 naming the local
+  command until Phase 33's agent transport exists. Accepted.
+- **Field 4** — the impedance attribution rule (a peer attribute; else exactly
+  one declared inbound connection; else emit nothing) is the rule of record.
+- **Q12** — capture's passive DNS/TCP/TLS checks and `probe.net.*` both exist,
+  because a probe must be able to answer `inconclusive` and a capture records
+  yes or no. Accepted, with the duplication cost stated in LIMITS.
+- **`request.Expectation` is never populated, and the database, config and
+  dependency probes have no data source in the CLI.** This is the important
+  one. The comparison the planes exist for is not yet connected for probes, and
+  Phase 32 selects probes by what they discriminate against an expectation.
+  Phase 31.1 does it, before Phase 32.
+- **The D2 revisit trigger** fired, and was replaced (D1 and D2, amended).
+
+---
+
+### Phase 31.1 — Close the probe loop
+
+**1. Objective.** Make `culprit probe` compare a reading against what the
+system declares, end to end; give the database, config and dependency probes a
+data source; and demonstrate Phase 31's criteria against the running demo stack.
+
+**2. Why this phase exists.** Phase 31 built the machinery honestly and left
+its central comparison unconnected: `request.Expectation` is never populated,
+so `expected_source` is always null and every manifest's `expected_from` is
+inert. Five probes return `inconclusive` from the CLI because nothing
+constructs their data source. A probe that cannot compare against intent is a
+measurement with no reference, and Phase 32's isolation walk depends on exactly
+that comparison.
+
+**3. Architectural changes.** None to the model. `culprit probe` resolves
+expectations from the same extraction `culprit check` already runs.
+
+**4. Components to create.**
+- Expectation resolution. For each probe request, take the INTENT facts that
+  `culprit check`'s extraction produces for the same `culprit.yaml` — the same
+  extractors, not a second extraction path — select those whose subject and
+  predicate match the manifest's `produces`, and populate `request.Expectation`
+  with the highest `confidence_rank` (§2.4). The reading's `expected_source` is
+  that fact's provenance. Where two INTENT facts disagree, the probe still uses
+  the highest-ranked one and the reading names the conflict: rank picks a
+  default, it never discards (§0.3). Where a manifest says
+  `expected_from: CONFIGURED`, the source is the Phase 30 capture of the named
+  environment.
+- Data sources for `probe.db.connect`, `probe.db.schema_conformance`,
+  `probe.config.present` and `probe.dep.version`. The database client reuses
+  what `internal/capture` already uses (pgx) rather than adding a second one;
+  config and installed versions are read through the Phase 30 capture adapters.
+  Each stays gated on the capabilities its manifest already declares.
+- The network boundary test inverted to an allowlist (D8, amended).
+
+**5. Existing components to modify.** `cli/cmd/culprit/probe.go`,
+`cli/internal/probe/`, `cli/cmd/culprit/check_test.go`, the demo stack's
+compose file (the static binary mounted into the containers criterion 2
+needs), `demo-services/culprit.yaml` (grants for the `local` environment),
+`.claude/rules/database.md` (to standing invariant 3's clarified wording),
+`docs/PROBES.md`, and `docs/LIMITS.md`, whose "Six probes have no data source"
+section lists five.
+
+**6. Existing components to remove.** None.
+
+**7. Interfaces/contracts.** `ProbeManifest` and `Reading` unchanged. If
+populating expectations needs a change to either, stop and escalate (handoff
+§6).
+
+**8. Data models.** None. No migration.
+
+**9. APIs.** None.
+
+**10. Configuration.** Nothing new in the schema. The demo's `culprit.yaml`
+grants what the newly wired probes need in `local`.
+
+**11. Dependencies.** None new.
+
+**12. Security.** A database probe reads metadata, never rows (§0.4). The DSN it
+uses is a credential: it reaches the probe from the environment, by the name
+`culprit.yaml` gives, and never appears in a reading, a reason, an error or a
+log line. Redaction stays at `model.RedactReading`, the one choke point. A test
+asserts that a fixture DSN's password is absent from the text and JSON output
+of a *failing* database probe, because failure is where credentials escape
+(standing invariant 11).
+
+**13. Testing.** The existing pass, fail and inconclusive fixtures for every
+newly wired probe, plus at least one run of each against the real demo stack,
+reported. A test that `expected_source` is set whenever a matching INTENT fact
+exists, and that the probe returns `inconclusive` with a reason when none does.
+The allowlist mutation-tested by adding a package that links `net/http`: red,
+with no edit to the test.
+
+**14. Acceptance criteria.**
+- Phase 31's criterion 1, against the running demo stack. A reading whose
+  verdict is `inconclusive` counts only if its reason is true — for impedance,
+  that the worker produces it.
+- Phase 31's criterion 2, as reworded.
+- With a route the demo both declares and serves,
+  `probe.http.route_conformance` returns `pass` with `expected_source` naming
+  the declaring artefact; with the declaration changed to disagree with what is
+  served, it returns `fail`. INTENT against OBSERVED, end to end.
+- `probe.db.schema_conformance` against the demo database returns `pass`, and
+  returns `fail` naming the column after a column the migrations declare is
+  dropped by hand.
+- No fixture credential appears in any reading, in text or in JSON.
+- A new package under `cli/internal/` that links `net/http` turns the boundary
+  test red with no edit to the test.
+
+**15. Definition of done.** Above, plus `docs/PROBES.md` and `docs/LIMITS.md`
+saying what is now wired, what still is not, and why. The run report replaces
+the whole of the handoff's §5: earlier reports live in git history, and every
+`/next` loads that file.
+
+**16. Connects to next phase.** Phase 31.2 can show probes comparing against
+intent; Phase 32 selects probes by what they discriminate.
+
+**17. Do NOT implement yet.** No probe selection, no fault trees, no new probes,
+no new capabilities, no agent transport, and no change to how impedance is
+produced.
+
+---
+
+### Phase 31.2 — Present what works
+
+**1. Objective.** Make the repository explain itself to a first-time visitor —
+a developer, an interviewer, a recruiter — using only what works today, and
+remove anything in the interface that pretends otherwise.
+
+**2. Why this phase exists.** `docs/PRODUCTISATION.md` (Malcolm, 2026-11-03)
+asks for a product someone can open and understand at once, with nothing shown
+that does not work. It is folded into this plan rather than run as one
+overhaul, because the web UI today is the incident copilot that Phase 32
+replaces: restyling it now would be done twice, and a demo of it would show the
+half of Culprit being retired. What is finished and demonstrable now is the
+CLI. This phase presents that, and makes the existing UI honest without
+redesigning it. Phase 32.1 does the interface.
+
+**3. Architectural changes.** None.
+
+**4. Components to create.**
+- `README.md`, rebuilt to `docs/PRODUCTISATION.md` §6's structure and centred
+  on the CLI: the problem, who has it, and why it matters; `check`, `diff` and
+  `probe` with real output; how it works — three planes, facts, divergences,
+  probes, readings — with an architecture diagram and a data-flow diagram in
+  Mermaid, which GitHub renders; the stack by role, listing only what is used;
+  the architecture and the reasons behind it (D1–D8, in plain language);
+  installation, configuration and one worked end-to-end example; testing — the
+  `just` recipes and what each covers; project structure; future work as the
+  remaining phases, stated as plans. The current README's strongest material —
+  the real `check` output, the self-check story, "Not checked is not filler" —
+  is kept, not rewritten for its own sake. The web UI is described as what it
+  is and not showcased. No video link until a video exists.
+- Terminal captures for the README, generated from real runs by a command
+  committed in the repository, so anyone can regenerate them.
+
+**5. Existing components to modify.** `README.md`; `docs/INSTALL.md` and any
+setup document the README points to; frontend files only where the truth pass
+(field 13) finds something broken.
+
+**6. Existing components to remove.** Any UI element that does nothing, calls
+an API that no longer exists (Phase 27 removed `/services`), or presents
+hard-coded data as real — removed, where it cannot be fixed small.
+
+**7. Interfaces/contracts.** None.
+
+**8. Data models.** None.
+
+**9. APIs.** None.
+
+**10. Configuration.** None.
+
+**11. Dependencies.** None new.
+
+**12. Security.** Captures, examples and diagrams contain no real hostnames,
+tokens, keys or DSNs — synthetic values only, as for extraction (D3).
+
+**13. Testing.** The setup instructions are followed literally from a fresh
+clone in a temporary directory, not the working tree, and every step that
+needed something the README did not say is fixed in the README. The frontend
+truth pass: every route, link, button and form exercised against a running
+stack, with the browser console and network log read on each.
+
+**14. Acceptance criteria.**
+- Every command in the README's setup and usage sections was run from a fresh
+  clone and produced what the README shows; the run report lists them.
+- Every image in the README was produced from a real run by a committed command.
+- The `phase-auditor`, given the README and the code but not this phase's
+  transcript, finds no claim the code does not support.
+- Every route loads with zero console errors and zero failed requests, and no
+  control does nothing.
+- Both diagrams render on GitHub.
+- `culprit.co.za` is linked only if the VM remediation is verified done; until
+  then it is not linked at all.
+
+**15. Definition of done.** Above, plus `docs/LIMITS.md` updated for anything
+the truth pass removed or found.
+
+**16. Connects to next phase.** Phase 32 builds the product's centre; Phase 32.1
+designs around it and adds the screenshots and video this phase deliberately
+leaves out.
+
+**17. Do NOT implement yet.** No visual redesign, no design system, no new UI
+features, no new dependencies, no demonstration video, and no publication —
+`v0.1.0`, PyPI and npm still wait for a confirmed finding in a project neither
+written nor controlled by us (§5).
 
 ---
 
@@ -1301,6 +1589,125 @@ push.
 it does not change the user's system. No verification loop yet. No production
 agent.
 
+**Added 2026-11-03.**
+- **Where the walk runs.** In the binary, always (D1 and D2, amended). Until
+  Phase 33, an investigation is opened by `culprit diagnose`, which runs the
+  walk and uploads the result; the dashboard displays it. A dashboard control
+  that *opens* an investigation needs a binary to hand the symptom to, and is
+  not built before Phase 33. When it is, the control plane hands the symptom to
+  an agent and stores the tree that comes back. Python never re-implements the
+  walk.
+- **`internal/isolate` does not import `internal/probe`.** It takes a probe
+  runner through an interface that `cmd/culprit` supplies, so the isolation
+  package links no network package and the D8 boundary holds with no exception.
+- **Network-partition faults need a vantage point.** The fault library's
+  partition cases (field 13) run with the binary inside the source container,
+  as Phase 31.1 established. Where the walk cannot place a probe where it needs
+  one, the tree records that branch as unexplored — the same treatment as
+  `refused`.
+- **Build the Investigation view functionally, on the existing component
+  library.** The visual system arrives in Phase 32.1; do not design it twice.
+
+---
+
+### Phase 32.1 — Design system and the investigation-first interface
+
+**1. Objective.** Give Culprit one coherent, premium interface, centred on
+what the product does — investigations, divergences, readings — and verify it
+end to end at every screen size.
+
+**2. Why this phase exists.** `docs/PRODUCTISATION.md` §2, §4, §7 and §8.
+Sequenced after Phase 32 so that the screen the product is centred on exists
+before it is designed.
+
+**3. Architectural changes.** None to the backend. The frontend gains one
+design-token layer (Tailwind v4 theme variables); the existing `components/ui`
+library is refined onto it; pages stop styling themselves.
+
+**4. Components to create.**
+- Tokens. Midnight black dominant; electric blue as the primary accent
+  (actions, interactive elements, key data); cantaloupe orange as a sparing
+  secondary accent; clean white for primary text; greys for secondary text,
+  borders and depth. Status colours — the four verdicts and the four severities
+  — are their own token set, never distinguished by colour alone, and orange is
+  not used decoratively anywhere it could be read as a status. A type scale on
+  the Inter and JetBrains Mono already installed; spacing, radius, shadow and
+  surface tokens.
+- Glass, restrained. Translucent, blurred surfaces for layered elements —
+  navigation, dialogs, popovers, cards that sit over content — and never on
+  dense data such as tables and fault trees, where readability wins.
+- The component set refined: buttons, cards, form controls, navigation, the
+  dialogs and tooltips already built on Radix, status indicators, and the visx
+  charts.
+- Every surviving route redesigned, with the Investigation view as the
+  centrepiece: the fault tree with its boundary marked, every edge expandable to
+  the readings that established it, and the confidence rubric shown as four
+  booleans, never as a score (§2.9).
+- Loading (skeletons), empty, error and success states on every data view.
+- Responsive at 375, 768, 1280 and 1920 px — adapted, not shrunk. Visible focus
+  states, full keyboard operation, semantic HTML, and `prefers-reduced-motion`
+  honoured.
+- End-to-end tests of the main journeys against the compose stack, in CI: sign
+  in, open an investigation, expand an edge to its readings, view divergences,
+  manage settings. The README's screenshots are captured by the same suite at
+  fixed sizes, so they can only show what works.
+- Demonstration video materials following `docs/PRODUCTISATION.md` §7's five
+  parts: a script, a scene-by-scene storyboard and a recording checklist, with
+  the CLI segments recorded as real terminal sessions and the UI segments taken
+  from the running stack. Malcolm records the narration. The README links the
+  video once it exists, not before.
+- A final review by an agent that has not seen the work, reading the repository
+  as a recruiter and as a senior engineer would; findings fixed or listed in the
+  run report.
+
+**5. Existing components to modify.** `frontend/src/` throughout; `README.md`
+(screenshots, and the video once it exists).
+
+**6. Existing components to remove.** Styling that bypasses the tokens. Any
+incident-era screen still present for Phase 32's one-release read-only period is
+labelled as what it is, not restyled as if current.
+
+**7. Interfaces/contracts.** None.
+
+**8. Data models.** None.
+
+**9. APIs.** None new. A view with no API behind it is not built; if a screen
+seems to need an endpoint that does not exist, escalate rather than add one.
+
+**10. Configuration.** None.
+
+**11. Dependencies.** An end-to-end browser test runner, if the frontend has
+none — the only addition expected. Any other new dependency, and in particular
+a second component, chart, animation or CSS library, is an escalation.
+
+**12. Security.** Screenshots and recordings use synthetic data only.
+
+**13. Testing.** The end-to-end journeys above, in CI. A contrast check over
+every text-and-background token pair. A gate that fails on raw colour values or
+arbitrary values in page components, mutation-tested (standing invariant 10).
+
+**14. Acceptance criteria.**
+- Every page styles itself through tokens only: the gate above is green, and
+  was shown red by a deliberate raw colour.
+- The end-to-end journeys pass in CI, with zero console errors and zero failed
+  requests.
+- Every text-and-background pair meets WCAG 2.2 AA, and the main journey can be
+  completed by keyboard alone.
+- Every route is checked at the four widths, with screenshots in the run report.
+- With `LLM_PROVIDER=none` the interface is complete: only prose summaries are
+  absent, and their absence is shown plainly, not as an error.
+- The README's screenshots come from the test suite.
+
+**15. Definition of done.** Above, plus the video materials committed and
+`docs/LIMITS.md` updated.
+
+**16. Connects to next phase.** Phase 33 adds agents and grants; their settings
+screen is built on this system from the start.
+
+**17. Do NOT implement yet.** No backend feature added to fill a screen. No
+marketing site. No publication. Nothing that makes a screen look complete when
+the thing behind it is not.
+
 ---
 
 ### Phase 33 — The production agent and the permission model
@@ -1375,6 +1782,17 @@ environment where the fault was found.
 
 **17. Do NOT implement yet.** No write capabilities. No remediation execution. No
 multi-tenant control plane — one install still serves one team.
+
+**Added 2026-11-03 (Phase 31 review) — readings are written with the agent's
+own credential.** Four write endpoints accept `CULPRIT_PROJECT_TOKEN` today:
+`POST /readings`, `/facts/captures`, `/divergences/captures` and
+`/model/captures`. That costs nothing while one CI job holds the token for all
+four; it becomes a hole the day a probe runner sits on a production host, which
+is this phase. **Acceptance criterion added:** `POST /readings` accepts an
+agent's credential and nothing else; a reading's `agent_id` is taken from that
+credential, never from the request body; and the project token is scoped to the
+three capture endpoints. If something other than an agent writes readings by
+then, it gets its own scoped credential, not the project token.
 
 ---
 
@@ -1594,4 +2012,6 @@ Stated explicitly so they can be corrected rather than discovered.
   artefact.** If the priority is a portfolio piece, reorder: Phase 31 and 32 are
   the impressive ones and Phase 30 could be deferred. Say so before Phase 28
   starts, because the ordering below optimises for a usable product early.
+  *(2026-11-03: still product first. The portfolio requirements are folded in
+  as Phases 31.2 and 32.1, not by reordering.)*
 - **Single-tenant, single-VM deployment remains acceptable** through Phase 35.

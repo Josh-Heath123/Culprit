@@ -35,7 +35,19 @@ model" is always the shortest path and always looks fine in a demo.
   LLM anywhere; it lives outside `internal/check` precisely so the check
   pipeline's no-networking assertion still holds. The Python snapshot diff
   (`shared/culprit_model/capture_diff.py`) is pure.
-- Probe execution and readings (`cli/internal/probe/`)
+- Probe execution and readings (`cli/internal/probe/`). Phase 31 made this
+  the **one** package in the binary that links `net/http`, because
+  `probe.http.*` and `probe.auth.propagation` exist to ask a running
+  service a question under `net.http.outbound`. The blanket "the binary
+  links no `net/http`" assertion was therefore replaced by a per-package
+  one (`cli/cmd/culprit/check_test.go`,
+  `TestOnlyTheProbePackageMayLinkAnHTTPClient`): every package that
+  *computes a finding* — `check`, `diverge`, `severity`, `report`,
+  `extract`, `model` — still links none, which is the property that was
+  ever actually load-bearing. Probes are deterministic: a verdict is
+  computed from what came back on the wire against an expectation that
+  came from a Fact. Nothing is judged, and the HTTP client has no method
+  that can send a body.
 - Fault isolation (`cli/internal/isolate/`)
 - Verification (`cli/internal/verify/`)
 - Subject construction and canonicalisation (`shared/culprit_model/`)

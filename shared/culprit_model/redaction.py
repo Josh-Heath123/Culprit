@@ -27,3 +27,16 @@ _CREDENTIAL = re.compile(
 
 def looks_like_credential(text: str) -> bool:
     return _CREDENTIAL.search(text) is not None
+
+
+def redact_credentials(text: str) -> str:
+    """Replace anything credential-shaped with a marker.
+
+    The Python half of `model.RedactCredentials` in Go, with the same
+    marker so a redacted string reads identically whichever side produced
+    it. Detection alone was enough while the only use was *refusing* a
+    capture; Phase 31 needs the replacing form, because a reading
+    legitimately carries a caller's URL and the credential inside it has
+    to come out rather than take the whole reading with it.
+    """
+    return _CREDENTIAL.sub("[redacted]", text)

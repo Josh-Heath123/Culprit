@@ -44,6 +44,8 @@ from app.model.router import router as model_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
 from app.postmortems.router import router as postmortems_router  # noqa: E402
+from app.readings.config import PROBE_WRITER_DATABASE_URL  # noqa: E402
+from app.readings.router import router as readings_router  # noqa: E402
 from app.registry.config import REGISTRY_ADMIN_DATABASE_URL  # noqa: E402
 
 configure_observability("culprit-api")
@@ -121,6 +123,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         CAPTURE_WRITER_DATABASE_URL, pool_size=2, max_overflow=3, hide_parameters=True
     )
     app.state.capture_session_factory = async_sessionmaker(capture_engine, expire_on_commit=False)
+    # Phase 31: POST /readings, under probe-writer -- INSERT on readings
+    # and nothing else, a new role again rather than the third reuse
+    # .claude/rules/database.md warns about (see app/readings/config.py).
+    # GET /probes needs no database at all, and neither does the run
+    # endpoint, which refuses. Capped like the other agent-facing pools.
+    # hide_parameters for the same reason the capture engine sets it: a
+    # failing insert must not log its bound parameters, and a reading's
+    # `measured` and `evidence` are the JSONB a third-party probe's output
+    # arrives in. Phase 30 shipped this engine's sibling without it and
+    # the audit caught it; the same omission here would be the same defect.
+    probe_engine = create_async_engine(
+        PROBE_WRITER_DATABASE_URL, pool_size=2, max_overflow=3, hide_parameters=True
+    )
+    app.state.probe_writer_session_factory = async_sessionmaker(
+        probe_engine, expire_on_commit=False
+    )
     # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
     # /postmortems to enqueue arq jobs by name — this API process never
     # runs arq jobs itself.
@@ -134,6 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await fact_engine.dispose()
     await divergence_engine.dispose()
     await capture_engine.dispose()
+    await probe_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -243,3 +262,8 @@ app.include_router(divergences_router)
 # Phase 30: /captures. POST takes the project token, the two GETs a user
 # session -- declared per route, as above, for the same reason.
 app.include_router(captures_router)
+# Phase 31: /readings and /probes. Same per-route rule -- POST /readings
+# takes the project token a probe runner holds, the two /probes routes a
+# user session. POST /probes/{id}/run answers 503: probes run in the
+# culprit binary, and this API has no agent transport until Phase 33.
+app.include_router(readings_router)

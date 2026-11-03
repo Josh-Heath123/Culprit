@@ -1090,6 +1090,15 @@ versions the Caddy release itself asked for, so a pin that is later
 *older* than Caddy's own requirement would silently downgrade it —
 drop each pin once the Caddy release you are on already satisfies it.
 
+The pin set therefore changes with each bump, and the list above is a
+snapshot of 2026-09-11, not the current one. As of 2026-11-03 the image
+builds Caddy v2.11.7, whose own `go.mod` satisfies the original
+`x/crypto` and grpc pins (both dropped), and pins only `golang.org/x/net`
+v0.60.0 and `github.com/go-jose/go-jose/v4` v4.1.6. `frontend/Dockerfile`
+is the record of what is pinned and why. To see what a release asks for
+before deciding a pin, read its `go.mod`
+(`go mod download -json github.com/caddyserver/caddy/v2@<version>`).
+
 ## Culprit's own pull requests get no SARIF annotations
 
 `culprit check --format sarif` works, and the `self-check` CI job writes a
@@ -1105,11 +1114,244 @@ written.
 So the pull-request annotations described for Phase 29 have never
 appeared on Culprit's own pull requests, and still do not. A finding
 from the self-check is visible only in that job's log (the second,
-human-readable run) or by downloading the artifact — and because the
-check step is `continue-on-error` by design, a finding does not turn the
-job red either. On Culprit's own repository, a self-check finding can
-therefore go unnoticed on a green pull request; the gate that *does*
-fail the build is the exact false-positive corpus in the `cli` job.
-A user's public repository, or a private one with GitHub Code Security,
-can still upload SARIF and get annotations; that path is simply not
-exercised by Culprit's own CI any more.
+human-readable run) or by downloading the artifact. Since `60e53fd` the
+check step is no longer `continue-on-error`, so a self-check finding does
+now fail the job — but it is still never annotated onto the diff, so
+finding out *what* it was means opening the log or the artifact. A user's
+public repository, or a private one with GitHub Code Security, can still
+upload SARIF and get annotations; that path is simply not exercised by
+Culprit's own CI any more.
+
+## Probes run what you name them to run
+
+`culprit probe` executes the probes you ask for, against the target you
+give it. It does not choose probes, order them, stop early when one
+answers the question, or build a fault tree from the results. Selection
+and isolation are the next phase's work, and shipping half of it here
+would have produced a tool that looks like it is reasoning when it is
+iterating a list.
+
+Practically: if you do not pass `-p`, every probe in the catalogue runs
+against your target, and most of them will return `inconclusive` because
+their inputs were not supplied. That is honest but noisy. Name the probes
+you want.
+
+## Six probes have no data source in the CLI
+
+`culprit probe` wires a real network client and a real HTTP client, and
+nothing else. `probe.db.connect`, `probe.db.schema_conformance`,
+`probe.config.present`, `probe.dep.version` and `probe.edge.impedance`
+each need a data source the CLI does not yet construct — a database
+client, a config reader, a package reader, a metrics reader — so from
+the command line they return `inconclusive` with a reason naming the
+missing source. They are honest about it, and they are not usable.
+
+The catalogue lists them because the manifest, the capability gate, the
+verdict logic and the fixtures are all real and tested against fakes;
+what is missing is the wiring. `probe.edge.impedance` is the exception
+worth knowing: its readings **are** produced, by
+`worker/app/anomaly/job.py`, which has the telemetry the CLI does not.
+And it cannot simply be wired in the CLI, because reading impedance would
+mean calling the API, and the binary deliberately links no HTTP client
+outside `internal/probe`'s outbound path.
+
+## Probes run from wherever you run them, not from where the caller sits
+
+`docs/PROBES.md` opens by framing the question as "can A actually reach B,
+*from where A sits*". The shipped CLI answers a narrower question: can
+**this process, on this host**, reach B.
+
+That distinction matters as soon as the network is not flat. A probe run
+on a laptop against two containers reaches both through their published
+ports, so a partition *between* them is invisible to it. A probe run on
+a CI runner sees CI's network, not production's. Nothing in
+`probe.Request` names a vantage point, and no probe shells into a
+container to run from inside it.
+
+The consequence for Phase 31's own acceptance criterion 2 — "blocking
+the network path between two containers flips exactly the reachability
+probe to fail while both components' health probes stay pass" — is that
+it cannot be demonstrated with a host-run probe. Either probes gain a
+vantage point (running the static binary inside the container under an
+allowlisted `exec`, which is what "from where A sits" actually requires),
+or the criterion needs rewording. That is an open decision.
+
+## A probe's inputs come from you, not from the model
+
+The endpoint a network probe dials, the URL an HTTP probe requests, the
+DSN a database probe connects with, the token an auth probe inspects —
+all arrive as `--input key=value`. Culprit does not derive them from
+`culprit.yaml`'s component definitions in this release, so a probe whose
+input you did not supply returns `inconclusive` rather than guessing a
+hostname. Wiring the system model into probe inputs automatically is
+worthwhile and is not done.
+
+## Refused, filtered and slow are not the same, and only one is a failure
+
+`probe.net.tcp_connect` returns `fail` when a connection is **actively
+refused**, because that is definitive. When the connection times out —
+a dropped packet, a firewall that blackholes, a host that is simply slow
+— it returns `inconclusive`, because none of those prove the port is
+closed.
+
+This is deliberate and it has a cost: a genuinely dead service behind a
+packet-dropping firewall reads as "I could not tell" rather than "this is
+broken". Reporting it as a failure would be a guess, and a guess that
+reads like a measurement is the failure mode this whole architecture
+exists to avoid. Raise `--timeout` if your network is slow enough that
+this is a nuisance.
+
+## The same three network checks exist twice
+
+`culprit env capture` reads DNS, TCP and TLS for a component's declared
+endpoint and records them as CONFIGURED facts. `probe.net.dns_resolve`,
+`probe.net.tcp_connect` and `probe.net.tls_validity` do the same three
+operations and return OBSERVED readings with a verdict.
+
+Both are kept on purpose — `docs/PROBES.md` explains what each is for,
+and the deciding difference is that a probe must be able to answer
+"inconclusive" where a capture answers yes or no. But the consequence is
+that the low-level resolve, dial and handshake code now exists in two
+packages, `cli/internal/capture` and `cli/internal/probe`. That is two
+places to audit and two places a change has to be made. Collapsing them
+means changing `internal/capture`'s interface, which Phase 31 did not own.
+
+## The `culprit` binary can now make HTTP requests
+
+Until Phase 31 the binary linked no HTTP client at all, and a test
+asserted it on the grounds that it had nothing to talk to. Probes make
+that false: `probe.http.*` and `probe.auth.propagation` exist to ask a
+running service a question, under the `net.http.outbound` grant.
+
+What replaced that assertion is narrower but sharper — `internal/check`,
+`internal/diverge`, `internal/severity`, `internal/report`,
+`internal/extract` and `internal/model` are each asserted to link no
+`net/http`, so the packages that *compute findings* still cannot open a
+socket. `internal/probe` is the one package permitted a client, its
+client has no method that can send a body or use a verb other than `GET`
+and `OPTIONS`, and none of it runs without a grant. But the honest
+statement is that the binary's network posture changed in this release,
+and a reader who trusted the old blanket claim should know it.
+
+## HTTP probes read field names, never bodies
+
+`probe.http.schema_conformance` reports which declared top-level fields
+are present in a JSON response. It does not compare types, nested
+structure, arrays' element shapes, or any value. A response body on a
+real system is user data, so nothing beyond the top-level key set reaches
+a reading.
+
+Also: responses are parsed only up to **1 MiB**, only when the
+`Content-Type` mentions JSON, and redirects are followed at most **3**
+times. A service that answers with a larger document, a non-JSON
+content type, or a longer redirect chain yields `inconclusive`.
+
+## Route conformance asks with OPTIONS for anything but GET
+
+`probe.http.route_conformance` issues a `GET` when the declared method is
+`GET`, and an `OPTIONS` otherwise — because issuing the declared method
+would mean sending a `POST`, `PUT` or `DELETE` at somebody's running
+system, which this plan forbids outright.
+
+Many services do not implement `OPTIONS` meaningfully. Against those, a
+non-GET route reports `inconclusive` rather than confirming the route
+exists. That is the correct answer and it is also a real gap: Culprit
+cannot verify a write route's existence without writing, and it will not
+write.
+
+## `probe.auth.token_shape` understands JWTs
+
+It reads a three-segment JWT's payload for `aud`, `iss`, `exp` and `nbf`.
+An opaque token, a SAML assertion, a session cookie or a signed token in
+any other format is `inconclusive` — it cannot be structurally inspected.
+The signature is **never verified**: Culprit does not hold your signing
+keys and is not an authentication service. A token with a valid audience
+and a forged signature passes this probe.
+
+## Impedance is attributed to a connection by a stated rule
+
+`probe.edge.impedance` reports how far a connection's latency or error
+rate is from its own history. But telemetry arrives keyed by *service*,
+not by connection, so `worker/app/anomaly/job.py` has to decide which
+edge a service's metric describes. The rule, in order:
+
+1. If the metric's `attributes` name a peer (`peer.service`,
+   `peer_service` or `server.address`) and that peer is a known
+   component, attribute the reading to `service -> peer`.
+2. Otherwise, if the service has **exactly one** declared inbound
+   connection, attribute it to that one.
+3. Otherwise, emit **no** impedance reading.
+
+Rule 2 is an approximation: it credits a callee's aggregate latency to
+its single caller, which is right when there is one caller and wrong the
+moment a second appears — at which point rule 3 takes over and readings
+stop rather than becoming misleading. A service with several callers
+produces no impedance readings at all unless its metrics carry peer
+attributes. Instrument for rule 1 if you want per-edge impedance on a
+fan-in service.
+
+## Impedance needs 30 observations and calls 3 sigma unusual
+
+Below **30 samples** on a connection, `probe.edge.impedance` returns
+`inconclusive` rather than a verdict — a z-score over a handful of points
+is arithmetic, not evidence. At or above **3.0** standard deviations it
+returns `fail`. Both numbers are fixed constants, not configurable, and
+the threshold matches `worker/app/anomaly/scorer.py`'s so that "is this
+unusual" has one answer in this system rather than two.
+
+Deviation from usual is not the same as wrong. A connection that has been
+slow for months is unremarkable to this probe, and a deliberate change
+that shifts a baseline reads as a failure until the scorer catches up.
+
+The worker writes **one impedance reading per (connection, metric) per
+scoring batch**, not one per metric row. The scorer's state is cumulative,
+so a batch of 2000 rows for one metric is 2000 restatements of a single
+measurement; storing them all would put your raw metric event rate into a
+90-day hypertable. The consequence worth knowing: during a catch-up batch
+covering a long window, an intermediate spike does not survive as a
+reading. It does survive as an `anomalies` row, which is the record that
+exists for that purpose.
+
+## The control plane cannot run a probe
+
+`POST /probes/{id}/run` returns `503`. Probes execute in the `culprit`
+binary, where the environment is, and no agent transport exists to reach
+one from the API — that is Phase 33's work. The endpoint validates the
+probe id and tells you the equivalent local command. It is an honest
+not-yet-available rather than a stub that fabricates a reading, but if
+you were expecting to trigger probes from the dashboard, you cannot.
+
+Relatedly, `GET /probes` serves the catalogue from a committed JSON file
+that mirrors the Go one. The mirror is checked for validity but the two
+can still drift in content; the binary is the authority.
+
+## The credential heuristic in a reading is a net, not a proof
+
+A `Reading`'s evidence is refused at construction if it looks like a
+credential and is not marked redacted. "Looks like" is
+`looks_like_credential`, which matches known shapes — DSNs with inline
+passwords, PEM headers, AWS keys, GitHub tokens, JWTs, `sk-` keys. It is
+pattern matching, so a novel or unusual key format passes it. One known
+gap: the `sk-` pattern requires the remainder to be alphanumeric, so a
+hyphenated variant such as `sk-live-abcdef0123456789` is not matched.
+
+What is actually true, stated precisely, because an earlier draft of this
+section overclaimed it and the Phase 31 audit caught the overclaim:
+
+- The built-in probes never copy a **secret-bearing** input — a `dsn`, a
+  `token` — into a reading. `probe.db.connect` reports `connected:
+  true|false` and nothing else; the auth probes report audience, issuer
+  and expiry, and a test greps their entire serialised output for the
+  token and each of its segments.
+- They **do** copy a `url`, `host`, `key`, `package` and `table` into
+  `measured`, so a human can see what was measured. A URL is the one of
+  those that routinely carries credentials.
+- So every reading is passed through `RedactCredentials` once, by the
+  runner, *before the reading exists as a value* — and again on the
+  `POST /readings` ingest path, because that endpoint accepts readings
+  from outside the CLI's guarantee. For a `url`, the pattern heuristic is
+  therefore load-bearing, not a backstop.
+
+Which means the gap above is real: a credential in a URL in a shape the
+pattern does not match reaches a reading, and `api-reader` can read the
+90-day store it lands in.

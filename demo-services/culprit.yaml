@@ -88,3 +88,40 @@ components:
 # real layout, which is what acceptance criterion 1 is about. This file
 # stays what it has always been: the demo system's *topology*, applied
 # with `just apply-model`.
+
+# --- Phase 31: probing the running demo stack -------------------------
+#
+# `environments:` exists here so Phase 31's acceptance criterion 1 is an
+# executable command rather than a description:
+#
+#   just demo-up   # or: just quickstart
+#   cd cli && go run ./cmd/culprit probe \
+#       'connection:order-service->inventory-service' \
+#       -f ../demo-services/culprit.yaml --env local
+#
+# Without it, `--env` cannot be passed, nothing is granted, and every
+# probe correctly refuses — which is the permission model working, and
+# also a demonstration of nothing. The audit of this phase found exactly
+# that.
+#
+# `local` grants only the four read capabilities the network and HTTP
+# probes need, against a stack on this machine. It grants no
+# config.read.values, no db.rows.read, and there is no *.write
+# capability to grant. `adapter: process` because the probe reads its
+# own environment; probes dial from wherever the CLI runs, which for a
+# local Compose stack is the published ports (see docs/LIMITS.md,
+# "Probes run from wherever you run them").
+environments:
+  local:
+    adapter: process
+    # One component, because `process` captures the environment culprit
+    # itself runs in and that belongs to exactly one. It does not limit
+    # what can be probed: a probe's target comes from the command line,
+    # and the grants below apply to the environment, not to this entry.
+    components:
+      order-service: {}
+    grants:
+      net.dns.resolve: true
+      net.tcp.connect: true
+      net.tls.inspect: true
+      net.http.outbound: true

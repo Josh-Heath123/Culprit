@@ -174,11 +174,41 @@ For a component's declared `endpoint` (a host and a port):
   handshake is a TCP connection first. Closed immediately after the
   certificate is presented; no HTTP request is made.
 
-### `model.read`, `repo.read`, `net.http.outbound`, `telemetry.logs.read`, `telemetry.metrics.read`, `telemetry.traces.read`
+### `net.http.outbound`
 
-Named by the plan for later phases (probes, the production agent). No
-code in this release uses them; granting one changes nothing and is
-recorded as unused.
+**Used since Phase 31.** This is the one grant that lets Culprit make an
+application request to your running service, and it is what
+`probe.http.reachable`, `probe.http.route_conformance`,
+`probe.http.schema_conformance` and `probe.auth.propagation` need.
+
+What it permits is deliberately narrow: `GET` and `OPTIONS` only. The
+HTTP client has no method that can send a body and no way to express any
+other verb, so no probe can write to your system under any grant — there
+is no `*.write` capability and no `effect: mutate` probe. Responses are
+read for their status, content type and top-level JSON **field names**;
+no response body is kept. At most 3 redirects are followed and at most
+1 MiB is parsed.
+
+Withhold it and every HTTP probe reports `refused`, naming this grant.
+
+### `repo.read`, `telemetry.metrics.read`
+
+**Used since Phase 31.** `probe.dep.version` needs `repo.read` to compare
+an installed dependency version against the declared one;
+`probe.edge.impedance` needs `telemetry.metrics.read` to read the
+deviation the anomaly scorer has already computed for a connection.
+
+Both are read-only, and neither is wired to a source in the shipped CLI
+yet — see `docs/LIMITS.md`, "Six probes have no data source in the CLI".
+Granting them today therefore changes nothing in practice, but they are
+no longer unused *by the model*, and a future release will make them
+live without changing this document.
+
+### `model.read`, `telemetry.logs.read`, `telemetry.traces.read`
+
+Named by the plan for later phases (the production agent). No code in
+this release uses them; granting one changes nothing and is recorded as
+unused.
 
 ## How Culprit reaches an environment
 
