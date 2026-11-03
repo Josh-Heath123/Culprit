@@ -438,6 +438,11 @@ jobs:
       contents: read
       packages: write
     strategy:
+      # Every image is built and scanned in the same run. With the
+      # default (true) the first failing scan cancels the rest, so
+      # findings in different images surfaced one image per run.
+      # Nothing is loosened: each scan still fails its own job.
+      fail-fast: false
       matrix:
         # api/ and worker/ both depend on shared/ (culprit-shared, a
         # path dependency — see api/Dockerfile's comment), which is

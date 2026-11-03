@@ -105,6 +105,115 @@ as its own commit, not folded into a phase.
 Claude Code overwrites this section at the end of every `/next`.
 
 ```
+AMBIENT FAILURE — 2026-11-03, not caused by Phase 31
+CI run:       41659196946 on 3937484 (phase-31-probes) — RED.
+              Only `build (api)` failed: Trivy, 10 findings (2 CRITICAL),
+              all in three pinned dependencies with new advisories:
+                PyJWT    2.13.0     (6 CVEs + GHSA-pxh4-856f-4h89; fixed 2.14.0)
+                certifi  2026.7.22  (GHSA-6q48-6c7w-9gw2, emSign roots; fixed 2026.10.18)
+                urllib3  2.7.0      (CVE-2026-97687, -97689; fixed 2.8.0)
+              lint, typecheck, cli, migration-round-trip, test, kind-capture,
+              self-check: success. build mcp_server/frontend/worker/cli:
+              CANCELLED by the matrix failing fast — their scans never ran.
+              deploy: skipped.
+
+Upgraded (uv lock --upgrade-package pyjwt --upgrade-package certifi
+--upgrade-package urllib3; nothing else moved — lockfile diff checked):
+  api/uv.lock, worker/uv.lock, mcp_server/uv.lock
+      pyjwt 2.13.0 -> 2.15.1, certifi 2026.7.22 -> 2026.10.23,
+      urllib3 2.7.0 -> 2.8.0
+  demo-services/uv.lock
+      certifi 2026.7.22 -> 2026.10.23, urllib3 2.7.0 -> 2.8.0
+  uv resolved the newest release, so PyJWT is 2.15.1, past the 2.14.0
+  fix. No Trivy ignore, allowlist or severity change.
+
+PyJWT: api is its only direct importer (app/auth/security.py,
+  dependencies.py). test_auth.py + test_users_api.py: 22 passed. No test
+  needed changing. One InsecureKeyLengthWarning (test_auth.py:145 signs
+  with the deliberately-wrong 12-byte "wrong-secret") — present on
+  2.13.0 too, a warning not a rejection; left alone.
+
+STILL RED once the cancelled jobs run — reproduced locally by building
+each image with --pull and scanning with CI's exact Trivy (0.70.0,
+CRITICAL,HIGH, --ignore-unfixed). NOT fixed: outside this change's
+mandate ("no other upgrades"), and two are major-version bumps:
+  worker      aiohttp 3.14.3->3.14.4, pillow 12.3.0->13.0.0 (CRITICAL),
+              filelock 3.32.2->4.2.1, pyasn1 0.6.4->0.6.5      (36 findings)
+  mcp_server  aiohttp, pillow, filelock as above                (32)
+  frontend    the caddy binary: go-jose/v4 4.1.4->4.1.6,
+              klauspost/compress 1.18.6->1.18.7, x/net 0.59.0->0.60.0
+              (3 HIGH). CORRECTION (second pass): this binary is NOT
+              the published caddy:2-alpine one — frontend/Dockerfile
+              already rebuilds Caddy from source with --replace pins
+              (LIMITS "The dashboard's Caddy is built from source"), so
+              these were stale pins in code we control, not an upstream
+              base-image item as first written here.
+  api, cli    clean (0).
+  Local caveat: an un-pulled python:3.12-slim (Debian 13.6, Aug) shows
+  56 OS findings in every Python image; CI pulls 13.7, which shows 0.
+
+/verify on this tree:
+  lint, typecheck, lint-imports, check-schema-drift, coupled files
+  (--base origin/main): PASS. worker 101, mcp_server 21, cli, extractors
+  python 31 / node 22: PASS. api: 884 passed, 1 failed + 4 errors, all
+  OSError [WinError 64] in test_model_api.py; that file passes 24/24 on
+  rerun. Cause: this Windows host's Docker Desktop port forward drops
+  ~3-4% of host->container connections, reproduced with a bare
+  asyncpg.connect and no repo code. Linux CI is the deciding run.
+
+SECOND PASS — 2026-11-03, after 335aa3b (PR #19) went red on Trivy in
+mcp_server (aiohttp, filelock, pillow): the predicted next image.
+  fail-fast: false on the build job's strategy (.github/workflows/
+    ci-cd.yml). The first failing scan used to cancel the other four,
+    so findings surfaced one image per run. No scan loosened; each
+    still fails its own job, and all six images now report per run.
+  worker/uv.lock, mcp_server/uv.lock (uv lock --upgrade-package for
+    exactly aiohttp, pillow, filelock, pyasn1; no constraint blocked
+    any, so no parent package was upgraded):
+      aiohttp   3.14.3 -> 3.14.5
+      pillow    12.3.0 -> 13.0.0   (major; via voyageai 0.5.0)
+      filelock  3.32.2 -> 4.2.7    (major; via huggingface-hub/tokenizers)
+      pyasn1    0.6.4  -> 0.6.5    (worker only; via google-auth)
+      yarl      1.24.5 -> 1.25.1   (forced: aiohttp 3.14.5 requires
+                                    yarl>=1.25.1)
+    voyageai is the only direct consumer (worker/app/rag/embeddings.py,
+    embed_job.py, mcp_server/tools.py); nothing imports PIL or filelock.
+    All 26 voyageai modules import cleanly on the new versions in both
+    projects.
+  frontend/Dockerfile: CADDY_VERSION v2.11.4 -> v2.11.7. v2.11.7's own
+    go.mod already requires x/crypto v0.57.0 and grpc v1.83.2, so those
+    two --replace pins were dropped (LIMITS: a pin older than the
+    release's own requirement silently downgrades it). It brings
+    klauspost/compress 1.20.1. It still asks for x/net v0.59.0 and
+    go-jose/v4 v4.1.5, so they are pinned: x/net v0.60.0, go-jose/v4
+    v4.1.6. Go builder (golang:1.27-alpine) and caddy:2-alpine base
+    unchanged. docs/LIMITS.md: the procedure is unchanged, but its
+    description of the pin set was a 2026-09-11 snapshot; a paragraph
+    now gives the current set and how to read a release's go.mod.
+  Not touched: no .trivyignore, no severity change, no ignore of a
+  fixable vulnerability.
+
+  Local image scans: NOT COMPLETED. All six images (the five CI builds
+  plus demo-services) built with --pull, exit 0, frontend included.
+  The fresh-DB Trivy 0.70.0 scan then died downloading the DB ("write
+  /root/.cache/trivy/db/trivy.db: read-only file system"), and Docker
+  Desktop went down with it (API 500, no recovery within 5 min). Stopped
+  on the human's instruction: with fail-fast off, CI scans all images
+  in one run and is the gate. demo-services is not in CI's matrix, so
+  no run scans it.
+
+  /verify (second pass): lint, typecheck, lint-imports,
+  check-schema-drift, coupled files: PASS. cli, extractors python 31 /
+  node 22, culprit check (both forms): PASS. worker 89 passed + 12
+  errors; mcp_server 4 passed + 17 errors. Every error is
+  docker.errors.APIError 500 (no container could start). NOT RUN as a
+  result: test_rag_retrieval.py (7), test_link_job.py (5),
+  mcp_server test_tools.py (9), test_mcp_reader_role.py (8) — the
+  first and third being the tests nearest voyageai. api: NOT RUN
+  (Docker down; its lockfile is unchanged since the first pass).
+```
+
+```
 Phase:        31 — Probes
 Branch:       phase-31-probes, cut from phase-30-env-capture at
               origin/main = bb73a9b. origin/main has not moved since, so

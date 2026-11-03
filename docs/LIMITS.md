@@ -1090,6 +1090,15 @@ versions the Caddy release itself asked for, so a pin that is later
 *older* than Caddy's own requirement would silently downgrade it —
 drop each pin once the Caddy release you are on already satisfies it.
 
+The pin set therefore changes with each bump, and the list above is a
+snapshot of 2026-09-11, not the current one. As of 2026-11-03 the image
+builds Caddy v2.11.7, whose own `go.mod` satisfies the original
+`x/crypto` and grpc pins (both dropped), and pins only `golang.org/x/net`
+v0.60.0 and `github.com/go-jose/go-jose/v4` v4.1.6. `frontend/Dockerfile`
+is the record of what is pinned and why. To see what a release asks for
+before deciding a pin, read its `go.mod`
+(`go mod download -json github.com/caddyserver/caddy/v2@<version>`).
+
 ## Culprit's own pull requests get no SARIF annotations
 
 `culprit check --format sarif` works, and the `self-check` CI job writes a
