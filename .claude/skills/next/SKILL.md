@@ -17,7 +17,8 @@ Repository state:
 ## Procedure
 
 **1. Read the handoff.** `docs/HANDOFF.md` §1 gives the current phase and status;
-§2 is the decisions register; §3 is open questions; §4 has the phase brief.
+§3 is the open-questions inbox; §4 has the phase brief. Decisions of record live
+in `docs/DIAGNOSTIC_PLAN.md` §1 and §3, not in the handoff.
 
 **2. Check for blockers before doing anything.**
 

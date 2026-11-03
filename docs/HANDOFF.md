@@ -12,10 +12,14 @@ twice.
 - **Claude Code writes** §4 status transitions and §5 (Last run). Where a brief
   is wrong or under-specified against the real code, it surfaces that and stops
   (§6) rather than deciding it.
-- **The decisions register and the open-questions list were retired 2026-09-12.**
-  Architectural decisions of record are `docs/DIAGNOSTIC_PLAN.md` §1 (D1–D8);
-  everything the retired §2/§3 held is in `git log docs/HANDOFF.md`, which is the
-  decision history.
+- **The decisions register was retired 2026-09-12.** Decisions of record are
+  `docs/DIAGNOSTIC_PLAN.md` §1 (D1–D8, with their dated amendments) and §3's
+  standing invariants; their history is `git log` on both files.
+- **§3 is an inbox of open questions, restored 2026-11-03.** Unresolved items
+  only. Claude Code adds one when it escalates (§6) and stops on any marked
+  blocking; the architecture session deletes it when answered and records the
+  answer in the plan. It came back because without it, a question raised in a
+  run report — the D2 revisit trigger — had nowhere to live and was dropped.
 - **Both read the whole file first.**
 
 **CI is part of the gate set.** A phase is not complete until CI is green on the
@@ -40,12 +44,23 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) |
+| Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
 | Current phase | **31 — Probes** — status **`gates red`**: every local gate is green, but **CI has not run** (the work is staged, not committed), so invariant 12 is unsatisfied and the phase is **not complete** |
 | Previous phase | **30 — Environment capture and cross-environment diff: complete**, signed off 2026-09-12. Merged via PR #17 (`888eb22`) and PR #18 (`bb73a9b`). Both auditors clean 2026-09-10; its code is untouched since. |
 | Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
 | Branch | `phase-31-probes`, cut from `phase-30-env-capture` at `origin/main` = `bb73a9b`. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** The decisions register (§2) and open-questions list (§3) were retired 2026-09-12; see the protocol note above. Q15 was resolved before retirement — both halves, recorded in §5. |
+| Blocking questions | **None.** Open questions are in §3. |
+
+---
+
+## §3. Open questions
+
+Unresolved items only. Numbering continues from the retired list, so a number
+is never reused.
+
+| # | Question | Raised | Blocks |
+|---|---|---|---|
+| Q16 | **Where did the VM remediation land?** Is SSH access to `culprit-vm` restored, and has anything changed on it since 2026-09-12? The answer decides whether Phase 31.2's README may link `culprit.co.za`, and the VM must deploy green before Phase 33. | 2026-11-03, architecture | Nothing yet — Phase 31.2's live link, then Phase 33 |
 
 ---
 
@@ -63,8 +78,11 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 29 | The divergence engine | **complete** | Merged (PR #16). Publication still deliberately not done — §4's own condition (a confirmed finding in a project neither written nor controlled by us) has not been met. |
 | 30 | Environment capture and cross-env diff | **complete** | Signed off 2026-09-12. Both audits clean 2026-09-10; the deploy failure is not attributable to it, and deploy left the phase gate the same day (§1). |
 | — | **VM remediation** | **do this, as Phase 30's real-world test** | A human, on `culprit-vm`. **1.** `scripts/backup.sh` first — the next deploy runs every migration from Phase 14 through 30 in one go, including Phase 27's `services`→`components` rename, against a database that has seen none of them. **2.** Before editing anything by hand, run `culprit env capture` against the VM and `culprit diff` it against `.env.prod.example`. If Phase 30 does not report the missing role passwords and the wrong `IMAGE_REGISTRY` as `breaks_request_path`, that is a Phase 30 gap and a better bug report than any fixture. **3.** Then apply the fix: `IMAGE_REGISTRY=ghcr.io/josh-heath123/culprit`, plus every missing key. **4.** `gh run rerun <id> --failed`, and read the deploy job, not the run's colour. |
-| 31 | Probes | **gates red** | Built and locally green; **CI NOT RUN** (nothing committed, so invariant 12 is unsatisfied) — not complete. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) |
-| 32 | Fault isolation and the Investigation | not started | — |
+| 31 | Probes | **gates red** | Built and locally green; **CI NOT RUN** (nothing committed, so invariant 12 is unsatisfied) — not complete. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) **Review 2026-11-03:** every open item decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31. To complete: the human commits, then `/ci` green on the merge result, then merge. |
+| 31.1 | Close the probe loop | not started | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Start only once Phase 31 is complete and merged; cut `phase-31.1-probe-loop` from the new `origin/main`. Order within the phase: the boundary allowlist first (small, and it must exist before anything else lands under `cli/internal/`), then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 31.2 | Present what works | not started | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.2, with `docs/PRODUCTISATION.md` as its requirements — §5, §6 and §10 apply now; the redesign (§2) and the video (§7) belong to Phase 32.1. Present only what works. The web UI is made honest here, not restyled. |
+| 32 | Fault isolation and the Investigation | not started | Read `DIAGNOSTIC_PLAN.md` Phase 32, including "Added 2026-11-03". The full brief is written when 31.2 is complete. |
+| 32.1 | Design system and the investigation-first interface | not started | Folded in from `docs/PRODUCTISATION.md` on 2026-11-03. The full brief is written when Phase 32 is complete. |
 | 33 | Production agent and permission model | not started | — |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
@@ -911,8 +929,8 @@ KNOWN GAPS, STATED PLAINLY
 
 ## §6. Escalate to the architecture session when
 
-Do not guess on any of these. Stop, write the question into §5's run report, and
-stop. (Before 2026-09-12 these went into §3, which has been retired.)
+Do not guess on any of these. Stop, add the question to §3 marked as blocking,
+explain it in §5's run report, and stop.
 
 - The plan's stated interface, data model or acceptance criterion turns out to be
   wrong or under-specified against the real code.
@@ -922,3 +940,6 @@ stop. (Before 2026-09-12 these went into §3, which has been retired.)
 - A decision of record would have to be reversed — `docs/DIAGNOSTIC_PLAN.md` §1
   (D1–D8), or one recorded in an earlier run report.
 - Two intent sources disagree in a way the plan does not describe how to rank.
+- Presenting, describing, screenshotting or recording the product would mean
+  showing something that does not exist or does not work
+  (`docs/PRODUCTISATION.md`, standard 3).
