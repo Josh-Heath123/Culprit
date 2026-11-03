@@ -42,6 +42,12 @@ CORRELATION_DATABASE_URL = require_env(
 ROOT_CAUSE_DATABASE_URL = require_env(
     "ROOT_CAUSE_DATABASE_URL", hint="root-cause-writer; see worker/.env.example"
 )
+# Phase 31: the OBSERVED plane. anomaly-detector has INSERT on
+# `anomalies` and deliberately nothing on `readings`, so the impedance
+# readings app/anomaly/job.py emits go through their own role.
+PROBE_WRITER_DATABASE_URL = require_env(
+    "PROBE_WRITER_DATABASE_URL", hint="probe-writer; see worker/.env.example"
+)
 
 #: Still defaulted, deliberately: an unreachable Redis is a loud,
 #: immediate connection error at the point of use, not a silent
@@ -59,6 +65,15 @@ async def startup(ctx: dict) -> None:
     # separate least-privilege DB role from the stream consumer above.
     ctx["anomaly_redis"] = redis.from_url(REDIS_URL)
     ctx["anomaly_engine"] = create_async_engine(ANOMALY_DATABASE_URL)
+
+    # Used by the same job, for its second output. A separate engine, not
+    # a second connection on the one above, because they run as different
+    # roles -- the point of the split is that the scoring role cannot
+    # write a reading and the probe role cannot read a metric.
+    # hide_parameters, as api/app/main.py's probe engine sets it: a failing
+    # insert must not log its bound parameters, and a reading's `measured`
+    # is JSONB built from telemetry.
+    ctx["probe_engine"] = create_async_engine(PROBE_WRITER_DATABASE_URL, hide_parameters=True)
 
     # Correlation needs no Redis state of its own — it re-derives
     # everything from Postgres each run (anomalies + what's already
@@ -81,6 +96,7 @@ async def shutdown(ctx: dict) -> None:
     await ctx["engine"].dispose()
     await ctx["anomaly_redis"].aclose()
     await ctx["anomaly_engine"].dispose()
+    await ctx["probe_engine"].dispose()
     await ctx["correlation_engine"].dispose()
     await ctx["rag_engine"].dispose()
     await ctx["rag_pool"].aclose()

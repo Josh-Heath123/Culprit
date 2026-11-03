@@ -87,10 +87,11 @@ INTENT (what it is supposed to do), CONFIGURED (what an environment is
 set up to do) and OBSERVED (what actually happened) — and reports where
 they diverge.
 
-This build implements the INTENT plane (culprit intent, culprit check)
-and the CONFIGURED plane (culprit env capture, culprit diff). See
-docs/DIAGNOSTIC_PLAN.md, and docs/PERMISSIONS.md before granting it
-access to an environment.`,
+This build implements the INTENT plane (culprit intent, culprit check),
+the CONFIGURED plane (culprit env capture, culprit diff) and the
+OBSERVED plane (culprit probe). See docs/DIAGNOSTIC_PLAN.md,
+docs/PROBES.md for what each probe asks of a running system, and
+docs/PERMISSIONS.md before granting it access to an environment.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       Version,
@@ -99,6 +100,7 @@ access to an environment.`,
 	root.AddCommand(newCheckCommand())
 	root.AddCommand(newEnvCommand())
 	root.AddCommand(newDiffCommand())
+	root.AddCommand(newProbeCommand())
 	return root
 }
 

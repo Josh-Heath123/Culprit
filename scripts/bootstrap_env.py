@@ -56,6 +56,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("MCP_READER_DB_PASSWORD", "mcp-reader role (Phase 24)"),
     ("FACT_WRITER_DB_PASSWORD", "fact-writer role (Phase 28)"),
     ("CAPTURE_WRITER_DB_PASSWORD", "capture-writer role (Phase 30)"),
+    ("PROBE_WRITER_DB_PASSWORD", "probe-writer role (Phase 31)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
@@ -236,6 +237,16 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["CAPTURE_WRITER_DB_PASSWORD"] = passwords["CAPTURE_WRITER_DB_PASSWORD"]
     env["CAPTURE_WRITER_DATABASE_URL"] = _db_url(
         "capture-writer", passwords["CAPTURE_WRITER_DB_PASSWORD"], "postgres"
+    )
+
+    # Phase 31: probe-writer -- the only role that may INSERT into
+    # readings, used by POST /readings and by the worker's anomaly job.
+    # A separate role again rather than a reuse: a credential that posts
+    # readings is one that already had reach into a running environment.
+    # Required at migration time.
+    env["PROBE_WRITER_DB_PASSWORD"] = passwords["PROBE_WRITER_DB_PASSWORD"]
+    env["PROBE_WRITER_DATABASE_URL"] = _db_url(
+        "probe-writer", passwords["PROBE_WRITER_DB_PASSWORD"], "postgres"
     )
 
     # Phase 28: the project token `culprit` presents to POST

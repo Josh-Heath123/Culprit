@@ -1,0 +1,186 @@
+{
+  "why": [
+    "The section 2.6 Reading and ProbeManifest vocabulary, read by both",
+    "implementations: cli/internal/model (which builds readings in the probe",
+    "runner) and shared/culprit_model/readings.py (which validates what the",
+    "API is asked to store). A verdict one side can emit and the other",
+    "refuses is a reading that vanishes between the probe and the database.",
+    "",
+    "Written before the Go side exists, deliberately, for the same reason",
+    "subject_conformance.json was: two implementations reconciled after the",
+    "fact agree on whatever they both happened to do, not on what was",
+    "specified. Add a case here, not to one language's test file.",
+    "",
+    "`rejected` cases must fail validation in BOTH languages. Each names the",
+    "invariant it exists to hold, so a future reader can tell a deliberate",
+    "refusal from an accident of parsing."
+  ],
+  "verdicts": [
+    {"name": "pass", "needs_reason": false},
+    {"name": "fail", "needs_reason": false},
+    {"name": "inconclusive", "needs_reason": true},
+    {"name": "refused", "needs_reason": true}
+  ],
+  "effects": [
+    {"name": "inspect", "allowed": true},
+    {"name": "observe", "allowed": true},
+    {"name": "interrogate", "allowed": true},
+    {"name": "mutate", "allowed": false}
+  ],
+  "costs": ["cheap", "metered", "intrusive"],
+  "manifests_accepted": [
+    {
+      "id": "probe.net.tcp_connect",
+      "version": 1,
+      "effect": "inspect",
+      "capabilities": ["net.tcp.connect"],
+      "timeout_ms": 2000,
+      "expected_from": "CONFIGURED",
+      "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "tcp_connects"}],
+      "discriminates": [],
+      "cost": "cheap"
+    },
+    {
+      "id": "probe.edge.impedance",
+      "version": 1,
+      "effect": "observe",
+      "capabilities": ["telemetry.metrics.read"],
+      "timeout_ms": 30000,
+      "expected_from": null,
+      "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "impedance"}],
+      "discriminates": [],
+      "cost": "cheap"
+    }
+  ],
+  "manifests_rejected": [
+    {
+      "why": "effect: mutate fails manifest validation, section 2.6, no exceptions",
+      "manifest": {
+        "id": "probe.db.truncate", "version": 1, "effect": "mutate",
+        "capabilities": [], "timeout_ms": 1000
+      }
+    },
+    {
+      "why": "a probe id must be probe.<group>.<name>",
+      "manifest": {
+        "id": "tcp_connect", "version": 1, "effect": "inspect",
+        "capabilities": [], "timeout_ms": 1000
+      }
+    },
+    {
+      "why": "a reading cannot be its own expectation - baseline is not truth",
+      "manifest": {
+        "id": "probe.net.ping", "version": 1, "effect": "inspect",
+        "capabilities": [], "timeout_ms": 1000, "expected_from": "OBSERVED"
+      }
+    },
+    {
+      "why": "timeout must be positive - a zero timeout is a probe that cannot run",
+      "manifest": {
+        "id": "probe.net.ping", "version": 1, "effect": "inspect",
+        "capabilities": [], "timeout_ms": 0
+      }
+    },
+    {
+      "why": "no *.write capability exists to be named",
+      "manifest": {
+        "id": "probe.db.write_row", "version": 1, "effect": "inspect",
+        "capabilities": ["db.rows.write"], "timeout_ms": 1000
+      }
+    }
+  ],
+  "readings_accepted": [
+    {
+      "why": "an ordinary passing reading",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect", "probe_version": 1,
+        "target": "connection:order-service->inventory-service",
+        "environment": "staging", "verdict": "pass",
+        "measured": {"connected": true}, "evidence": [],
+        "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli",
+        "grants_used": ["net.tcp.connect"]
+      }
+    },
+    {
+      "why": "refused names no grant, because nothing was used",
+      "reading": {
+        "probe_id": "probe.net.tls_validity", "probe_version": 1,
+        "target": "component:orders-api", "environment": "prod",
+        "verdict": "refused", "reason": "net.tls.inspect is not granted",
+        "measured": {}, "evidence": [], "taken_at": "2026-09-12T10:00:00Z",
+        "agent_id": "culprit-cli", "grants_used": []
+      }
+    },
+    {
+      "why": "credential-shaped evidence is fine when marked redacted",
+      "reading": {
+        "probe_id": "probe.auth.token_shape", "probe_version": 1,
+        "target": "auth:web->orders-api/audience", "environment": "staging",
+        "verdict": "fail", "measured": {"audience": "wrong-api"},
+        "evidence": [{"kind": "token", "value": "<redacted>", "redacted": true}],
+        "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli",
+        "grants_used": []
+      }
+    }
+  ],
+  "readings_rejected": [
+    {
+      "why": "inconclusive without a reason is a probe that guesses",
+      "reading": {
+        "probe_id": "probe.net.dns_resolve", "probe_version": 1,
+        "target": "component:orders-api", "environment": "staging",
+        "verdict": "inconclusive", "measured": {}, "evidence": [],
+        "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli"
+      }
+    },
+    {
+      "why": "refused without a reason hides which grant was missing",
+      "reading": {
+        "probe_id": "probe.net.dns_resolve", "probe_version": 1,
+        "target": "component:orders-api", "environment": "staging",
+        "verdict": "refused", "measured": {}, "evidence": [],
+        "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli"
+      }
+    },
+    {
+      "why": "a target must be a subject URI, never a hand-formatted string",
+      "reading": {
+        "probe_id": "probe.net.dns_resolve", "probe_version": 1,
+        "target": "the orders api", "environment": "staging",
+        "verdict": "pass", "measured": {}, "evidence": [],
+        "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli"
+      }
+    },
+    {
+      "why": "unredacted credential-shaped evidence would leak into a bug report",
+      "reading": {
+        "probe_id": "probe.auth.token_shape", "probe_version": 1,
+        "target": "auth:web->orders-api/audience", "environment": "staging",
+        "verdict": "fail", "measured": {}, "evidence": [
+          {"kind": "token", "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl", "redacted": false}
+        ],
+        "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli"
+      }
+    },
+    {
+      "why": "a refused reading that claims it used a grant contradicts itself",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect", "probe_version": 1,
+        "target": "component:orders-api", "environment": "staging",
+        "verdict": "refused", "reason": "not granted", "measured": {},
+        "evidence": [], "taken_at": "2026-09-12T10:00:00Z",
+        "agent_id": "culprit-cli", "grants_used": ["net.tcp.connect"]
+      }
+    },
+    {
+      "why": "a reading cannot expire before it was taken",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect", "probe_version": 1,
+        "target": "component:orders-api", "environment": "staging",
+        "verdict": "pass", "measured": {}, "evidence": [],
+        "taken_at": "2026-09-12T10:00:00Z", "expires_at": "2026-09-12T09:00:00Z",
+        "agent_id": "culprit-cli"
+      }
+    }
+  ]
+}

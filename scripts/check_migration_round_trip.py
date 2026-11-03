@@ -76,6 +76,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "MCP_READER_DB_PASSWORD": "round-trip-mcp-reader",
     "FACT_WRITER_DB_PASSWORD": "round-trip-fact-writer",
     "CAPTURE_WRITER_DB_PASSWORD": "round-trip-capture-writer",
+    "PROBE_WRITER_DB_PASSWORD": "round-trip-probe-writer",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:

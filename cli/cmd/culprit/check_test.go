@@ -208,7 +208,64 @@ func TestNoModelProviderIsLinkedIntoTheBinary(t *testing.T) {
 			t.Errorf("the culprit binary links %q", provider)
 		}
 	}
-	if strings.Contains(listing, "\nnet/http\n") {
-		t.Error("the culprit binary links net/http; it has nothing to talk to")
+}
+
+// TestOnlyTheProbePackageMayLinkAnHTTPClient replaces a binary-wide grep
+// for `net/http` that stood until Phase 31.
+//
+// That assertion rested on a premise — "the binary has nothing to talk
+// to" — which probes make false on purpose. `probe.http.reachable`,
+// `probe.http.route_conformance`, `probe.http.schema_conformance` and
+// `probe.auth.propagation` exist to ask a running service a question,
+// and §2.7 provisions `net.http.outbound` for exactly that. Keeping the
+// old assertion would have meant not building the phase.
+//
+// What replaces it is deliberately *stronger* per package rather than
+// weaker overall. The property that mattered was never "this binary
+// cannot speak HTTP" — it was "the deterministic core cannot open a
+// socket, so it cannot reach a model provider or anything else". That is
+// now asserted of each core package by name. `internal/probe` is the one
+// package permitted an HTTP client, it is gated on a capability the
+// operator grants per environment, and its client has no method that can
+// send a body.
+func TestOnlyTheProbePackageMayLinkAnHTTPClient(t *testing.T) {
+	// Every package that computes a finding. None of them may reach the
+	// network by any route, directly or transitively.
+	deterministicCore := []string{
+		"internal/check",
+		"internal/diverge",
+		"internal/severity",
+		"internal/report",
+		"internal/extract",
+		"internal/model",
+	}
+
+	// The same three names TestTheCheckPathCannotMakeANetworkCall uses,
+	// not just net/http. Five of the six packages below are already inside
+	// internal/check's dependency graph and so are already held to all
+	// three by that test; internal/report is not, and checking only
+	// net/http here would have let it gain `net` and `crypto/tls` — enough
+	// to open a TLS socket and speak HTTP by hand — with every test still
+	// green. Named by the Phase 31 invariant audit.
+	forbidden := map[string]string{
+		"net":        "it would be able to open a socket",
+		"net/http":   "it would be able to make an HTTP request",
+		"crypto/tls": "it would be able to open a TLS connection",
+	}
+
+	for _, pkg := range deterministicCore {
+		output, err := exec.Command("go", "list", "-deps",
+			"github.com/josh-heath123/culprit/cli/"+pkg).Output()
+		if err != nil {
+			t.Skipf("go list is unavailable in this environment: %v", err)
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			if reason, bad := forbidden[strings.TrimSpace(line)]; bad {
+				t.Errorf("%s links %s: %s. The deterministic core computes "+
+					"findings and must not be able to open a socket; a network "+
+					"client belongs in internal/probe, behind net.http.outbound.",
+					pkg, strings.TrimSpace(line), reason)
+			}
+		}
 	}
 }

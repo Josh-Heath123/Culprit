@@ -23,6 +23,10 @@ WORKER_DATABASE_URLS = [
     "ANOMALY_DATABASE_URL",
     "CORRELATION_DATABASE_URL",
     "ROOT_CAUSE_DATABASE_URL",
+    # Phase 31. Fifth, and required for the same reason as the other
+    # four: a worker that starts without it would score metrics and
+    # silently write no readings, which looks like "nothing to report".
+    "PROBE_WRITER_DATABASE_URL",
 ]
 
 

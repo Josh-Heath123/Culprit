@@ -10,14 +10,17 @@ paths:
 
 ## Least privilege
 
-One Postgres role per job. Twelve exist: `ingestion-writer`, `api-reader`,
+One Postgres role per job. Thirteen exist: `ingestion-writer`, `api-reader`,
 `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`,
 `registry-admin`, `auth-service`, `postmortem-writer`, `mcp-reader`,
 `fact-writer`, `capture-writer` (Phase 30 — INSERT on `captures` and
 `configured_facts`, SELECT on `captures`, nothing else; a new role rather than
 the third reuse of `fact-writer` this file warns about, because what a running
 environment is configured to do is a different trust domain from what a
-repository says about itself).
+repository says about itself), `probe-writer` (Phase 31 — INSERT on `readings`
+and nothing else, not even SELECT on it; a new role again, because a credential
+that can post readings is one that already had reach into a running environment,
+which is a wider starting position than either of the two above).
 
 **If a component needs a write the current roles cannot do, add a role. Do not
 widen an existing one.** A role is reused only when the new surface is genuinely

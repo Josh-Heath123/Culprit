@@ -1,0 +1,259 @@
+[
+  {
+    "id": "probe.auth.propagation",
+    "version": 1,
+    "effect": "interrogate",
+    "capabilities": ["net.http.outbound"],
+    "inputs": {
+      "type": "object",
+      "required": ["url", "token"],
+      "properties": {
+        "url": {"type": "string"},
+        "token": {"type": "string"}
+      }
+    },
+    "timeout_ms": 15000,
+    "expected_from": "INTENT",
+    "produces": [
+      {"subject_template": "auth:{from}->{to}/propagation", "predicate": "token_accepted"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.auth.token_shape",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": [],
+    "inputs": {
+      "type": "object",
+      "required": ["token"],
+      "properties": {
+        "token": {"type": "string"},
+        "expect_audience": {"type": "string"},
+        "expect_issuer": {"type": "string"}
+      }
+    },
+    "timeout_ms": 2000,
+    "expected_from": "INTENT",
+    "produces": [
+      {"subject_template": "auth:{from}->{to}/audience", "predicate": "token_claims"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.config.present",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["config.read.names"],
+    "inputs": {
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": {"type": "string"}
+      }
+    },
+    "timeout_ms": 5000,
+    "expected_from": "INTENT",
+    "produces": [
+      {"subject_template": "config:{component}/{key}", "predicate": "is_set"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.db.connect",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["db.metadata.read"],
+    "inputs": {
+      "type": "object",
+      "required": ["dsn"],
+      "properties": {
+        "dsn": {"type": "string"}
+      }
+    },
+    "timeout_ms": 10000,
+    "expected_from": "CONFIGURED",
+    "produces": [
+      {"subject_template": "connection:{from}->{to}", "predicate": "database_connects"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.db.schema_conformance",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["db.metadata.read"],
+    "inputs": {
+      "type": "object",
+      "required": ["dsn", "table", "expect_columns"],
+      "properties": {
+        "dsn": {"type": "string"},
+        "schema": {"type": "string"},
+        "table": {"type": "string"},
+        "expect_columns": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "timeout_ms": 15000,
+    "expected_from": "INTENT",
+    "produces": [
+      {"subject_template": "schema:{database}/{schema}.{table}", "predicate": "columns"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.dep.version",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["repo.read"],
+    "inputs": {
+      "type": "object",
+      "required": ["package"],
+      "properties": {
+        "package": {"type": "string"},
+        "expect_version": {"type": "string"}
+      }
+    },
+    "timeout_ms": 10000,
+    "expected_from": "INTENT",
+    "produces": [
+      {"subject_template": "dep:{component}/{package}", "predicate": "version"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.edge.impedance",
+    "version": 1,
+    "effect": "observe",
+    "capabilities": ["telemetry.metrics.read"],
+    "inputs": {
+      "type": "object",
+      "properties": {}
+    },
+    "timeout_ms": 15000,
+    "produces": [
+      {"subject_template": "connection:{from}->{to}", "predicate": "impedance"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.http.reachable",
+    "version": 1,
+    "effect": "interrogate",
+    "capabilities": ["net.http.outbound"],
+    "inputs": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {"type": "string"}
+      }
+    },
+    "timeout_ms": 10000,
+    "expected_from": "CONFIGURED",
+    "produces": [
+      {"subject_template": "component:{component}", "predicate": "http_reachable"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.http.route_conformance",
+    "version": 1,
+    "effect": "interrogate",
+    "capabilities": ["net.http.outbound"],
+    "inputs": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {"type": "string"},
+        "method": {"type": "string"}
+      }
+    },
+    "timeout_ms": 15000,
+    "expected_from": "INTENT",
+    "produces": [
+      {"subject_template": "http:{component}/{method} {path}", "predicate": "route_exists"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.http.schema_conformance",
+    "version": 1,
+    "effect": "interrogate",
+    "capabilities": ["net.http.outbound"],
+    "inputs": {
+      "type": "object",
+      "required": ["url", "expect_fields"],
+      "properties": {
+        "url": {"type": "string"},
+        "expect_fields": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "timeout_ms": 15000,
+    "expected_from": "INTENT",
+    "produces": [
+      {
+        "subject_template": "http:{component}/{method} {path}#response.body",
+        "predicate": "response_fields"
+      }
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.net.dns_resolve",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["net.dns.resolve"],
+    "inputs": {
+      "type": "object",
+      "required": ["host"],
+      "properties": {
+        "host": {"type": "string"}
+      }
+    },
+    "timeout_ms": 5000,
+    "expected_from": "CONFIGURED",
+    "produces": [
+      {"subject_template": "component:{component}", "predicate": "dns_resolves"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.net.tcp_connect",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["net.tcp.connect"],
+    "inputs": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": {"type": "string"},
+        "port": {"type": "integer"}
+      }
+    },
+    "timeout_ms": 5000,
+    "expected_from": "CONFIGURED",
+    "produces": [
+      {"subject_template": "connection:{from}->{to}", "predicate": "tcp_connects"}
+    ],
+    "cost": "cheap"
+  },
+  {
+    "id": "probe.net.tls_validity",
+    "version": 1,
+    "effect": "inspect",
+    "capabilities": ["net.tls.inspect", "net.tcp.connect"],
+    "inputs": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": {"type": "string"},
+        "port": {"type": "integer"}
+      }
+    },
+    "timeout_ms": 10000,
+    "expected_from": "CONFIGURED",
+    "produces": [
+      {"subject_template": "component:{component}", "predicate": "tls_certificate"}
+    ],
+    "cost": "cheap"
+  }
+]

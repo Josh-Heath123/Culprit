@@ -74,6 +74,20 @@ run without the password, and the api will not start without the URL.
 `POST /captures` authenticates with the same `CULPRIT_PROJECT_TOKEN` as
 `POST /facts/captures`, so unset still means it refuses every request.
 
+**Phase 31 adds two more:**
+
+```
+PROBE_WRITER_DB_PASSWORD=<generate one>
+PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://probe-writer:<same password>@postgres:5432/culprit
+```
+
+Both required, and the URL is read by **two** processes, not one: the api
+(for `POST /readings`) and the worker (whose anomaly job now emits an
+impedance reading beside each score). Neither starts without it, and the
+migration creating the `probe-writer` role will not run without the
+password. `POST /readings` authenticates with the same
+`CULPRIT_PROJECT_TOKEN`, so unset still means it refuses every request.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release
