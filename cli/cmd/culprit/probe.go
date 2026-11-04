@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/josh-heath123/culprit/cli/internal/capability"
+	"github.com/josh-heath123/culprit/cli/internal/capture"
+	"github.com/josh-heath123/culprit/cli/internal/check"
 	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 	"github.com/josh-heath123/culprit/cli/internal/probe"
@@ -40,6 +43,9 @@ func newProbeCommand() *cobra.Command {
 		timeout      time.Duration
 		list         bool
 		agentID      string
+		capturePath  string
+		noPlugins    bool
+		pluginTime   time.Duration
 	)
 
 	command := &cobra.Command{
@@ -85,7 +91,11 @@ Examples:
 					target, err)
 			}
 
-			manifest, err := extract.LoadManifest(manifestPath)
+			resolved, err := resolveManifestPath(manifestPath)
+			if err != nil {
+				return err
+			}
+			manifest, err := extract.LoadManifest(resolved)
 			if err != nil {
 				return err
 			}
@@ -95,6 +105,40 @@ Examples:
 				return err
 			}
 			ledger := capability.NewLedger(grants)
+
+			// What the readings are measured against (Phase 31.1). INTENT
+			// comes from the very pipeline `culprit check` runs — the same
+			// extractors and invariants, not a second extraction path — so
+			// a probe and a check cannot disagree about what the code
+			// declares. CONFIGURED comes from a Phase 30 capture, when one
+			// is given.
+			intent, err := check.Run(command.Context(), check.Options{
+				ManifestPath:  resolved,
+				Now:           captureTime(),
+				PluginTimeout: pluginTime,
+				SkipPlugins:   noPlugins,
+				Version:       Version,
+			})
+			if err != nil {
+				return err
+			}
+			factSets := [][]model.Fact{intent.Bundle.Facts}
+			if capturePath != "" {
+				verified, err := capture.ReadEnvelope(capturePath)
+				if err != nil {
+					return err
+				}
+				captured := ""
+				if verified.Bundle.Environment != nil {
+					captured = *verified.Bundle.Environment
+				}
+				if captured != environment {
+					return fmt.Errorf(
+						"%s is a capture of environment %q, and these readings are about %q",
+						capturePath, captured, environment)
+				}
+				factSets = append(factSets, verified.Bundle.Facts)
+			}
 
 			inputs, err := parseInputs(inputPairs)
 			if err != nil {
@@ -115,16 +159,39 @@ Examples:
 				})
 			}
 
+			deps := probe.Deps{
+				Network: probe.NewRealNetwork(timeout),
+				HTTP:    probe.NewRealHTTPClient(timeout),
+				Now:     time.Now,
+			}
+			// The database, config and dependency probes read the named
+			// environment through the Phase 30 capture machinery. Without
+			// --env there is no environment to read, and they say so.
+			// Impedance has no source here on purpose: it is produced by
+			// the worker (docs/PROBES.md), and field 17 of Phase 31.1 keeps
+			// it that way.
+			if environment != "" {
+				sources := &probe.Sources{
+					Environment: environment,
+					Spec:        manifest.Environments[environment],
+					ManifestDir: filepath.Dir(resolved),
+					Grants:      grants,
+					Ledger:      ledger,
+					Runner:      capture.ExecRunner{Timeout: timeout},
+					Reader:      capture.PostgresReader{Timeout: timeout},
+				}
+				deps.Database = sources.Database()
+				deps.Config = sources.Config()
+				deps.Packages = sources.Packages()
+			}
+
 			runner := probe.NewRunner(probe.Options{
-				Catalogue: catalogue,
-				Ledger:    ledger,
-				AgentID:   agentID,
-				Overrides: overridesFrom(manifest),
-				Deps: probe.Deps{
-					Network: probe.NewRealNetwork(timeout),
-					HTTP:    probe.NewRealHTTPClient(timeout),
-					Now:     time.Now,
-				},
+				Catalogue:    catalogue,
+				Ledger:       ledger,
+				AgentID:      agentID,
+				Overrides:    overridesFrom(manifest),
+				Deps:         deps,
+				Expectations: probe.NewExpectations(factSets...),
 			})
 			readings := runner.Run(command.Context(), requests)
 
@@ -166,6 +233,13 @@ Examples:
 		"list the probe catalogue and exit")
 	command.Flags().StringVar(&agentID, "agent-id", "culprit-cli",
 		"identifies who took these readings")
+	command.Flags().StringVar(&capturePath, "capture", "",
+		"a sealed capture of --env (culprit env capture -o), used as the CONFIGURED "+
+			"expectation for probes measured against configuration")
+	command.Flags().BoolVar(&noPlugins, "no-plugins", false,
+		"resolve expectations from the built-in artefact readers only, skipping extractor plugins")
+	command.Flags().DurationVar(&pluginTime, "plugin-timeout", extract.DefaultPluginTimeout,
+		"how long any one extractor plugin may run before it is skipped")
 
 	return command
 }

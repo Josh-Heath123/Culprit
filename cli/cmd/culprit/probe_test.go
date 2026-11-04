@@ -144,8 +144,7 @@ func TestProbeRejectsAMalformedInput(t *testing.T) {
 func TestProbeJSONOutputCarriesRefusals(t *testing.T) {
 	path := writeProbeFixture(t)
 	stdout, err := run(t, "probe", "component:orders-api", "-f", path,
-		"--env", "staging", "-p", "probe.db.connect", "--format", "json",
-		"--input", "dsn=postgresql://reader@db/orders")
+		"--env", "staging", "-p", "probe.db.connect", "--format", "json", "--no-plugins")
 	if err != nil {
 		t.Fatalf("probe: %v", err)
 	}
@@ -179,5 +178,67 @@ func TestRepeatingAnInputBuildsAList(t *testing.T) {
 	}
 	if inputs["url"] != "http://x/y" {
 		t.Errorf("a single value should not become a list, got %#v", inputs["url"])
+	}
+}
+
+// A fixture whose database is reached the way field 12 requires: by the
+// name culprit.yaml gives (`dsn_env`), never by a DSN on the command line.
+const databaseProbeFixture = `version: 1
+components:
+  - name: orders-api
+    kind: service
+environments:
+  staging:
+    adapter: process
+    components:
+      orders-api:
+        database:
+          dsn_env: CULPRIT_TEST_ORDERS_DSN
+          name: orders-db
+    grants:
+      db.metadata.read: true
+`
+
+// TestAFailingDatabaseProbeNeverPrintsTheDSN is Phase 31.1 field 12's
+// required test: "a fixture DSN's password is absent from the text and
+// JSON output of a *failing* database probe, because failure is where
+// credentials escape" (standing invariant 11).
+//
+// It runs the real command end to end — culprit.yaml, the environment
+// variable it names, the capture PostgresReader — against a port nothing
+// listens on, so both probes genuinely fail to reach the database rather
+// than being refused before they try. Both formats are checked, because
+// Phase 31's own audit found a password in the one format nobody looked
+// at.
+func TestAFailingDatabaseProbeNeverPrintsTheDSN(t *testing.T) {
+	const password = "hunter2-fixture-password"
+	const dsn = "postgresql://orders_reader:" + password + "@127.0.0.1:1/orders"
+	t.Setenv("CULPRIT_TEST_ORDERS_DSN", dsn)
+
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	if err := os.WriteFile(path, []byte(databaseProbeFixture), 0o600); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+
+	for _, format := range []string{"text", "json"} {
+		stdout, err := run(t, "probe", "schema:orders-db/public.orders", "-f", path,
+			"--env", "staging", "--no-plugins", "--format", format,
+			"-p", "probe.db.connect", "-p", "probe.db.schema_conformance",
+			"--timeout", "3s")
+
+		var findings *findingsError
+		if !errors.As(err, &findings) {
+			t.Fatalf("%s: want a failing reading (exit 1), got err=%v\n%s", format, err, stdout)
+		}
+		for _, needle := range []string{password, dsn, "orders_reader"} {
+			if strings.Contains(stdout, needle) {
+				t.Errorf("%s output carries %q:\n%s", format, needle, stdout)
+			}
+		}
+		// The failure must still say what failed, or the test passes for
+		// a report that says nothing.
+		if !strings.Contains(stdout, "orders-db") {
+			t.Errorf("%s output does not name the database it failed to reach:\n%s", format, stdout)
+		}
 	}
 }

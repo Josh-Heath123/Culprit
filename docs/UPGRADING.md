@@ -1,8 +1,12 @@
 # Upgrading a running install
 
 For a real-VM install (`docs/INSTALL.md`) or self-managed Docker Compose
-deployment. The local quickstart (`just quickstart`) doesn't need this —
-tear it down and re-run it instead.
+deployment. The local quickstart (`just quickstart`) mostly doesn't need
+this — tear it down and re-run it instead — **except** that re-running reuses
+an existing `infra/.env.prod`, so one generated before a phase that added a
+database role is missing that role's password and the bootstrap migration
+refuses to run. `docs/LIMITS.md` ("Every service now refuses to start without
+its database URL") says what to do.
 
 ## The order, and why it's fixed
 

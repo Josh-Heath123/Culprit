@@ -117,8 +117,7 @@ func (authTokenShape) Run(ctx context.Context, request Request, deps Deps) Outco
 	if len(problems) > 0 {
 		return Outcome{
 			Verdict: model.VerdictFail, Measured: measured, Expected: expected,
-			ExpectedSource: provenanceOf(request.Expectation),
-			Reason:         "the token will not be accepted: " + strings.Join(problems, "; "),
+			Reason: "the token will not be accepted: " + strings.Join(problems, "; "),
 		}
 	}
 	if !hasAudience && !hasIssuer {
@@ -128,7 +127,6 @@ func (authTokenShape) Run(ctx context.Context, request Request, deps Deps) Outco
 	}
 	return Outcome{
 		Verdict: model.VerdictPass, Measured: measured, Expected: expected,
-		ExpectedSource: provenanceOf(request.Expectation),
 	}
 }
 

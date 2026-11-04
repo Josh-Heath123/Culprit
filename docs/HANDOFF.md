@@ -45,10 +45,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
-| Current phase | **31 — Probes** — status **`gates red`**: every local gate is green, but **CI has not run** (the work is staged, not committed), so invariant 12 is unsatisfied and the phase is **not complete** |
-| Previous phase | **30 — Environment capture and cross-environment diff: complete**, signed off 2026-09-12. Merged via PR #17 (`888eb22`) and PR #18 (`bb73a9b`). Both auditors clean 2026-09-10; its code is untouched since. |
-| Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
-| Branch | `phase-31-probes`, cut from `phase-30-env-capture` at `origin/main` = `bb73a9b`. Do not stage `shared/uv.lock`. |
+| Current phase | **31.1 — Close the probe loop** — status `in progress`, **awaiting the human's commit and then `/ci`**. Every field-14 criterion executed against the running demo stack and passed (criterion 7's CI half excepted); both audits clean; every local gate green, Docker-backed suites included (§5). Not `complete`: CI on the merge result has not run, because CI needs a commit and the human commits. Brief in §4. |
+| Previous phase | **31 — Probes: complete**, signed off 2026-11-03 by the architecture session. Merged via PR #19 (`a3f110a`). CI green on every job on the merge result, after two ambient dependency fixes (`335aa3b`, `96ac919`; §5). Criteria 3 and 4 met; 1 and 2 carried into 31.1 by the review in `DIAGNOSTIC_PLAN.md`. |
+| Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. Merging PR #19 pushed `a3f110a` to `main`, so `deploy` runs there, and is expected to fail as before until Q16 is resolved. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
+| Branch | `phase-31.1-probe-loop`, cut from `origin/main` = `a3f110a`; its first commit is the Phase 31 sign-off. Do not stage `shared/uv.lock`. |
 | Blocking questions | **None.** Open questions are in §3. |
 
 ---
@@ -78,14 +78,25 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 29 | The divergence engine | **complete** | Merged (PR #16). Publication still deliberately not done — §4's own condition (a confirmed finding in a project neither written nor controlled by us) has not been met. |
 | 30 | Environment capture and cross-env diff | **complete** | Signed off 2026-09-12. Both audits clean 2026-09-10; the deploy failure is not attributable to it, and deploy left the phase gate the same day (§1). |
 | — | **VM remediation** | **do this, as Phase 30's real-world test** | A human, on `culprit-vm`. **1.** `scripts/backup.sh` first — the next deploy runs every migration from Phase 14 through 30 in one go, including Phase 27's `services`→`components` rename, against a database that has seen none of them. **2.** Before editing anything by hand, run `culprit env capture` against the VM and `culprit diff` it against `.env.prod.example`. If Phase 30 does not report the missing role passwords and the wrong `IMAGE_REGISTRY` as `breaks_request_path`, that is a Phase 30 gap and a better bug report than any fixture. **3.** Then apply the fix: `IMAGE_REGISTRY=ghcr.io/josh-heath123/culprit`, plus every missing key. **4.** `gh run rerun <id> --failed`, and read the deploy job, not the run's colour. |
-| 31 | Probes | **gates red** | Built and locally green; **CI NOT RUN** (nothing committed, so invariant 12 is unsatisfied) — not complete. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) **Review 2026-11-03:** every open item decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31. To complete: the human commits, then `/ci` green on the merge result, then merge. |
-| 31.1 | Close the probe loop | not started | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Start only once Phase 31 is complete and merged; cut `phase-31.1-probe-loop` from the new `origin/main`. Order within the phase: the boundary allowlist first (small, and it must exist before anything else lands under `cli/internal/`), then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 31 | Probes | **complete** | **Signed off 2026-11-03** (architecture session): merged via PR #19 (`a3f110a`), CI green on every job after two ambient dependency fixes (`335aa3b`, `96ac919`). Criteria 3 and 4 met; 1 and 2 carried into 31.1. History — as of 2026-09-12: built and locally green; CI not run. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) **Review 2026-11-03:** every open item decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31. To complete: the human commits, then `/ci` green on the merge result, then merge. |
+| 31.1 | Close the probe loop | **in progress — criteria met locally, CI not run** | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Phase 31 is merged; the branch `phase-31.1-probe-loop` is cut from `origin/main` = `a3f110a`, with the sign-off as its first commit. Order within the phase: the two gate repairs first — the boundary allowlist (it must exist before anything else lands under `cli/internal/`) and the emptied `.trivyignore` — then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 31.2 | Present what works | not started | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.2, with `docs/PRODUCTISATION.md` as its requirements — §5, §6 and §10 apply now; the redesign (§2) and the video (§7) belong to Phase 32.1. Present only what works. The web UI is made honest here, not restyled. |
 | 32 | Fault isolation and the Investigation | not started | Read `DIAGNOSTIC_PLAN.md` Phase 32, including "Added 2026-11-03". The full brief is written when 31.2 is complete. |
 | 32.1 | Design system and the investigation-first interface | not started | Folded in from `docs/PRODUCTISATION.md` on 2026-11-03. The full brief is written when Phase 32 is complete. |
 | 33 | Production agent and permission model | not started | — |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
+
+**Standing task, not a phase — new advisories should be found on `main`, not
+mid-phase.** Three times now — OpenSSL in September, then PyJWT, certifi and
+urllib3, then aiohttp, Pillow, filelock, pyasn1 and the Caddy build, both on
+2026-11-03 — advisories published against pinned dependencies while a phase
+sat waiting blocked that phase's CI. Add a weekly `schedule:` trigger that runs
+the build-and-scan job on `main` (the image push and `deploy` steps already
+require `github.event_name == 'push'`, so a scheduled run cannot publish or
+deploy). A red scheduled run is then fixed in its own small pull request.
+Dependabot security updates, a repository setting Malcolm can turn on, would
+open those pull requests by themselves. Its own commit, not folded into a phase.
 
 **Standing task, not a phase — `CLAUDE.md` size budget.** It is 37.2 KB
 (~9.3k tokens loaded every session) and grew during Phase 26. Phase 26's
@@ -102,937 +113,185 @@ as its own commit, not folded into a phase.
 
 ## §5. Last run
 
-Claude Code overwrites this section at the end of every `/next`.
+Claude Code overwrites this section at the end of every `/next`. Earlier
+reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-AMBIENT FAILURE — 2026-11-03, not caused by Phase 31
-CI run:       41659196946 on 3937484 (phase-31-probes) — RED.
-              Only `build (api)` failed: Trivy, 10 findings (2 CRITICAL),
-              all in three pinned dependencies with new advisories:
-                PyJWT    2.13.0     (6 CVEs + GHSA-pxh4-856f-4h89; fixed 2.14.0)
-                certifi  2026.7.22  (GHSA-6q48-6c7w-9gw2, emSign roots; fixed 2026.10.18)
-                urllib3  2.7.0      (CVE-2026-97687, -97689; fixed 2.8.0)
-              lint, typecheck, cli, migration-round-trip, test, kind-capture,
-              self-check: success. build mcp_server/frontend/worker/cli:
-              CANCELLED by the matrix failing fast — their scans never ran.
-              deploy: skipped.
-
-Upgraded (uv lock --upgrade-package pyjwt --upgrade-package certifi
---upgrade-package urllib3; nothing else moved — lockfile diff checked):
-  api/uv.lock, worker/uv.lock, mcp_server/uv.lock
-      pyjwt 2.13.0 -> 2.15.1, certifi 2026.7.22 -> 2026.10.23,
-      urllib3 2.7.0 -> 2.8.0
-  demo-services/uv.lock
-      certifi 2026.7.22 -> 2026.10.23, urllib3 2.7.0 -> 2.8.0
-  uv resolved the newest release, so PyJWT is 2.15.1, past the 2.14.0
-  fix. No Trivy ignore, allowlist or severity change.
-
-PyJWT: api is its only direct importer (app/auth/security.py,
-  dependencies.py). test_auth.py + test_users_api.py: 22 passed. No test
-  needed changing. One InsecureKeyLengthWarning (test_auth.py:145 signs
-  with the deliberately-wrong 12-byte "wrong-secret") — present on
-  2.13.0 too, a warning not a rejection; left alone.
-
-STILL RED once the cancelled jobs run — reproduced locally by building
-each image with --pull and scanning with CI's exact Trivy (0.70.0,
-CRITICAL,HIGH, --ignore-unfixed). NOT fixed: outside this change's
-mandate ("no other upgrades"), and two are major-version bumps:
-  worker      aiohttp 3.14.3->3.14.4, pillow 12.3.0->13.0.0 (CRITICAL),
-              filelock 3.32.2->4.2.1, pyasn1 0.6.4->0.6.5      (36 findings)
-  mcp_server  aiohttp, pillow, filelock as above                (32)
-  frontend    the caddy binary: go-jose/v4 4.1.4->4.1.6,
-              klauspost/compress 1.18.6->1.18.7, x/net 0.59.0->0.60.0
-              (3 HIGH). CORRECTION (second pass): this binary is NOT
-              the published caddy:2-alpine one — frontend/Dockerfile
-              already rebuilds Caddy from source with --replace pins
-              (LIMITS "The dashboard's Caddy is built from source"), so
-              these were stale pins in code we control, not an upstream
-              base-image item as first written here.
-  api, cli    clean (0).
-  Local caveat: an un-pulled python:3.12-slim (Debian 13.6, Aug) shows
-  56 OS findings in every Python image; CI pulls 13.7, which shows 0.
-
-/verify on this tree:
-  lint, typecheck, lint-imports, check-schema-drift, coupled files
-  (--base origin/main): PASS. worker 101, mcp_server 21, cli, extractors
-  python 31 / node 22: PASS. api: 884 passed, 1 failed + 4 errors, all
-  OSError [WinError 64] in test_model_api.py; that file passes 24/24 on
-  rerun. Cause: this Windows host's Docker Desktop port forward drops
-  ~3-4% of host->container connections, reproduced with a bare
-  asyncpg.connect and no repo code. Linux CI is the deciding run.
-
-SECOND PASS — 2026-11-03, after 335aa3b (PR #19) went red on Trivy in
-mcp_server (aiohttp, filelock, pillow): the predicted next image.
-  fail-fast: false on the build job's strategy (.github/workflows/
-    ci-cd.yml). The first failing scan used to cancel the other four,
-    so findings surfaced one image per run. No scan loosened; each
-    still fails its own job, and all six images now report per run.
-  worker/uv.lock, mcp_server/uv.lock (uv lock --upgrade-package for
-    exactly aiohttp, pillow, filelock, pyasn1; no constraint blocked
-    any, so no parent package was upgraded):
-      aiohttp   3.14.3 -> 3.14.5
-      pillow    12.3.0 -> 13.0.0   (major; via voyageai 0.5.0)
-      filelock  3.32.2 -> 4.2.7    (major; via huggingface-hub/tokenizers)
-      pyasn1    0.6.4  -> 0.6.5    (worker only; via google-auth)
-      yarl      1.24.5 -> 1.25.1   (forced: aiohttp 3.14.5 requires
-                                    yarl>=1.25.1)
-    voyageai is the only direct consumer (worker/app/rag/embeddings.py,
-    embed_job.py, mcp_server/tools.py); nothing imports PIL or filelock.
-    All 26 voyageai modules import cleanly on the new versions in both
-    projects.
-  frontend/Dockerfile: CADDY_VERSION v2.11.4 -> v2.11.7. v2.11.7's own
-    go.mod already requires x/crypto v0.57.0 and grpc v1.83.2, so those
-    two --replace pins were dropped (LIMITS: a pin older than the
-    release's own requirement silently downgrades it). It brings
-    klauspost/compress 1.20.1. It still asks for x/net v0.59.0 and
-    go-jose/v4 v4.1.5, so they are pinned: x/net v0.60.0, go-jose/v4
-    v4.1.6. Go builder (golang:1.27-alpine) and caddy:2-alpine base
-    unchanged. docs/LIMITS.md: the procedure is unchanged, but its
-    description of the pin set was a 2026-09-11 snapshot; a paragraph
-    now gives the current set and how to read a release's go.mod.
-  Not touched: no .trivyignore, no severity change, no ignore of a
-  fixable vulnerability.
-
-  Local image scans: NOT COMPLETED. All six images (the five CI builds
-  plus demo-services) built with --pull, exit 0, frontend included.
-  The fresh-DB Trivy 0.70.0 scan then died downloading the DB ("write
-  /root/.cache/trivy/db/trivy.db: read-only file system"), and Docker
-  Desktop went down with it (API 500, no recovery within 5 min). Stopped
-  on the human's instruction: with fail-fast off, CI scans all images
-  in one run and is the gate. demo-services is not in CI's matrix, so
-  no run scans it.
-
-  /verify (second pass): lint, typecheck, lint-imports,
-  check-schema-drift, coupled files: PASS. cli, extractors python 31 /
-  node 22, culprit check (both forms): PASS. worker 89 passed + 12
-  errors; mcp_server 4 passed + 17 errors. Every error is
-  docker.errors.APIError 500 (no container could start). NOT RUN as a
-  result: test_rag_retrieval.py (7), test_link_job.py (5),
-  mcp_server test_tools.py (9), test_mcp_reader_role.py (8) — the
-  first and third being the tests nearest voyageai. api: NOT RUN
-  (Docker down; its lockfile is unchanged since the first pass).
-```
-
-```
-Phase:        31 — Probes
-Branch:       phase-31-probes, cut from phase-30-env-capture at
-              origin/main = bb73a9b. origin/main has not moved since, so
-              the working tree IS the merge result and every local gate
-              below ran on it.
-Run:          2026-09-12, /next. Phase 32 NOT started.
-Committed:    NO — by protocol, not by failure. The header of this file
-              now says the human commits; this run staged everything and
-              wrote the message. See COMMITTING below.
-CI:           NOT RUN. Nothing can be pushed without a commit, so
-              invariant 12 (green CI on the merge result) is NOT
-              satisfied and this phase is NOT complete. What only CI
-              exercises is listed under GATES.
-
-ARRIVAL STATE — docs/HANDOFF.md had been truncated
-  The file lost §2 (decisions register, 24 rows) and §3 (open questions
-  Q1-Q14) in an uncommitted edit: +17/-356 lines. Four surviving
-  references pointed at the deleted sections (§1's "see §2", §4's
-  "(Q12)", §6's "write the question into §3", the protocol header), and
-  the §1 table was broken mid-row. Claude Code asked rather than
-  guessing; the human answered THE DELETION WAS INTENDED. So §2/§3 are
-  retired deliberately, and this run fixed only what dangled:
-    - protocol header now says where decisions of record live
-      (DIAGNOSTIC_PLAN §1 D1-D8; the rest in `git log docs/HANDOFF.md`)
-    - §1 table repaired, now reads Phase 31 in progress
-    - §4's Phase 31 brief has Q12's text INLINED verbatim — it is this
-      phase's actual mandate and would otherwise have been lost
-    - §6 now says to write escalations into §5
-  Historical §5 reports still mention §2/§3; left alone, they describe
-  what was true when written.
-
-WHAT WAS BUILT
-
-  shared/culprit_model/readings.py   Reading, ProbeManifest, Verdict,
-                                     Effect, Cost, Evidence, Produces.
-                                     Five invariants enforced ON THE TYPE:
-                                     effect: mutate cannot be constructed;
-                                     inconclusive/refused require a reason;
-                                     a target must parse as a subject URI;
-                                     a refused reading cannot claim a grant;
-                                     unredacted credential-shaped evidence
-                                     is refused.
-  cli/internal/model/reading.go      the Go half, same rules.
-  shared/tests/reading_conformance.json
-                                     written FIRST, read by both languages
-                                     (27 Python + 8 Go tests), including
-                                     11 must-be-rejected cases.
-  cli/internal/probe/                the runtime (2,175 non-test lines):
-                                     manifest validator, capability-gated
-                                     runner (timeout, bounded concurrency,
-                                     deterministic ordering), Deps as
-                                     narrow interfaces, RealNetwork,
-                                     RealHTTPClient, and 13 probes.
-  cli/cmd/culprit/probe.go           `culprit probe [target]`, `--list`,
-                                     -p/--input/--env/--format, same exit
-                                     codes as every other command.
-  cli/internal/extract/probes.go     culprit.yaml's `probes:` section —
-                                     enable/disable (reason required),
-                                     timeout override, environments.
-                                     Capabilities deliberately NOT
-                                     configurable here.
-  cli/internal/report/readings.go    text rendering, redacted at one point.
-  api/app/readings/                  POST /readings (project token,
-                                     probe-writer), GET /probes (catalogue
-                                     mirror), POST /probes/{id}/run -> 503.
-  migration a9d2c40f7e18             13th role `probe-writer`: INSERT on
-                                     readings and NOTHING else, not even
-                                     SELECT. api-reader gains SELECT.
-  worker/app/anomaly/job.py          impedance readings keyed by connection
-                                     subject, written under probe-writer
-                                     through a second engine.
-                                     scorer.py and state.py are
-                                     BYTE-IDENTICAL (field 5) — verified
-                                     with `git diff --exit-code`.
-  docs/PROBES.md                     field 15, every probe's inputs,
-                                     effect, capabilities and failure
-                                     conditions, plus the Q12 answer.
-
-THE ONE REAL CONFLICT — an enforced invariant was changed on purpose
-
-  Phase 31 field 4 mandates probe.http.reachable, route_conformance,
-  schema_conformance and auth.propagation. All make HTTP requests.
-  `TestNoModelProviderIsLinkedIntoTheBinary` asserted the binary links
-  no net/http, on the stated grounds that it "has nothing to talk to".
-  That premise is what this phase falsifies, deliberately: §2.7 has
-  provisioned `net.http.outbound` since the plan was written, and
-  docs/PERMISSIONS.md already said it was "named by the plan for later
-  phases (probes)".
-
-  Resolution taken, which is the one that test's own failure message
-  prescribes ("it belongs in its own package with its own capability
-  gate — not linked into the comparator"):
-    - the net/http clause was removed from the binary-wide grep
-    - TestOnlyTheProbePackageMayLinkAnHTTPClient added, asserting
-      PER PACKAGE that internal/{check,diverge,severity,report,extract,
-      model} link no net/http — finer-grained than what it replaces
-    - TestTheCheckPathCannotMakeANetworkCall is UNCHANGED and passes
-    - the LLM-provider name check is UNCHANGED and passes
-  Mutation-tested: adding internal/probe to the guarded list turns the
-  new assertion red, naming the package.
-  This is a change in the product's network posture and is written up
-  in LIMITS, PROBES.md, CLAUDE.md and .claude/rules/determinism.md.
-  It is the item on this branch most deserving of human review.
-
-Q12 — ANSWERED: both exist, and why
-  The §4 brief said Phase 31 must "either re-site [capture's passive
-  DNS/TCP/TLS checks] as probes or state that both exist and why".
-  Answer: both exist. The deciding difference is the return type —
-  capture answers yes/no because it records what an environment is
-  configured as; a probe must be able to answer `inconclusive`, which
-  is a verdict it is REQUIRED to be able to reach. Collapsing them
-  means changing internal/capture's interface, which this phase does
-  not own, and field 6 says remove nothing. Cost, stated in PROBES.md
-  and LIMITS: the dial/resolve/handshake primitives now exist in two
-  packages. (An earlier intention to share one mechanism was abandoned
-  after reading the interface — recorded here because it was stated
-  aloud before it was checked.)
-
-AUDITS — both run, both adversarial, both found real defects
-
-  invariant-auditor: 2 violations + 1 decision. All acted on.
-   V1 BLOCKING, and the worst defect of this phase: `culprit probe
-      --format json` printed a password. Redaction had been applied in
-      the TEXT RENDERER, so it was one *format*, not one point — while
-      the file's own header comment claimed otherwise. Eight probes copy
-      a caller's `url`/`host`/`key`/`package`/`table` into `measured`
-      and `reason`. Reproduced by hand before fixing.
-      FIX: `model.RedactReading`, applied by the runner BEFORE a Reading
-      exists as a value, so text, JSON, `POST /readings` and anything
-      downstream inherit it; plus `redact_reading` on the API ingest
-      path, because that endpoint accepts readings from outside the
-      CLI's guarantee and they land in a 90-day store `api-reader` can
-      read. Both mutation-tested red. This is Phase 30's audit finding
-      arriving on a new path, and Phase 28's "one more site" lesson
-      arriving as "one more format".
-   V2 `docs/LIMITS.md` claimed built-in probes "never copy an input into
-      a reading — asserted per probe". False, and it was the premise
-      justifying not checking `measured` at all. Rewritten to what is
-      true, including that the pattern heuristic is load-bearing for a
-      `url` rather than a backstop.
-   D1 The migration argued `probe-writer` bounds a leaked credential
-      that could otherwise "rewrite the repository's own claims about
-      itself". Not true at the API layer: `POST /readings` shares
-      `CULPRIT_PROJECT_TOKEN` with `/facts/captures` and
-      `/divergences/captures`. Docstring narrowed to what the role
-      actually buys (it bounds a leaked *database* credential, not a
-      leaked *API* one). **Whether those three endpoints should share
-      one token is an open question for the architecture session.**
-   Also taken: the new per-package network assertion checked only
-      `net/http`; `internal/report` sits outside `internal/check`'s dep
-      graph, so it could have gained `net` + `crypto/tls` with every
-      test green. Now held to all three names.
-   Judged HOLDS by the auditor, after checking the precedent itself:
-      the `anomaly-detector` read-grant widening.
-
-  phase-auditor: verdict PHASE NOT COMPLETE. Findings and outcomes:
-   - **`probe.net.tcp_connect` reported `fail` on a timeout**, while
-     PROBES.md, LIMITS.md and CLAUDE.md all described the opposite. My
-     own earlier demo only looked right because the manifest timeout
-     fired first. The docs described the better behaviour, so the CODE
-     moved: timeout/deadline -> inconclusive, refused -> fail, with a
-     fixture for each and both verified against a real network.
-   - `probe.http.reachable` returned `fail` when it had had four
-     responses (a redirect chain). Now inconclusive.
-   - `probe.http.route_conformance` asserted "is declared" and
-     `probe.config.present` asserted "reads it with no default" when
-     nothing had declared anything — probes guessing, which is the one
-     thing this architecture exists to prevent. Both now return
-     inconclusive when `request.Expectation` is nil, with fixtures for
-     the declared and undeclared cases.
-   - `componentOf` read the wrong subject part for `component:` and
-     `image:` targets (they key "name", not "component"), so every
-     refusal against a component was recorded with no component at all.
-     Found via a reason string reading "... is not set for ,".
-   - `parseInputs` could not express a list, making `expect_fields` and
-     `expect_columns` — and so two probes — unsatisfiable from the CLI.
-     Repeating a key now builds a list.
-   - `docs/PERMISSIONS.md` still said `net.http.outbound`, `repo.read`
-     and `telemetry.metrics.read` were unused and "granting one changes
-     nothing". That is the document a user reads before granting
-     production access. Rewritten.
-   - Field 15 was NOT MET: PROBES.md documented 3 of the 5 required
-     per-probe attributes. Inputs and expected-source columns added.
-   - `culprit --help` still claimed the build implements two planes.
-
-ACCEPTANCE CRITERIA (field 14) — verdicts after the audit fixes
-
-  1. `culprit probe connection:...` returns readings for reachability,
-     TLS, route conformance and impedance
-     PARTIAL. The audit found the criterion's verbatim command could
-     never work: `demo-services/culprit.yaml` had NO `environments:`
-     block, so `--env` was unpassable and all 13 probes refused. Fixed —
-     a `local` environment now grants the four network/HTTP read
-     capabilities, and the command runs and produces real verdicts.
-     Still partial: the demo stack was not brought up in this run, and
-     impedance cannot reach a verdict from the CLI at all (below).
-  2. Blocking the path flips exactly the reachability probe to fail
-     while health probes stay pass
-     **NOT TESTABLE AS WRITTEN — needs an architecture decision.**
-     Not merely unrun: structurally unsatisfiable. Probes dial from
-     wherever the CLI runs, and `probe.Request` has no vantage point, so
-     a partition *between* two containers is invisible to a host-run
-     probe (both stay reachable via published ports). Stopping a
-     container instead makes its own health probe fail too, so
-     "exactly the reachability probe flips" cannot be produced either
-     way. Either probes gain a vantage point — running the static binary
-     inside the container under an allowlisted `exec`, which is what
-     "from where A sits" actually requires — or the criterion is
-     reworded. Documented in LIMITS; not decided here.
-     What WAS demonstrated for real: refused -> fail + exit 1;
-     timeout -> inconclusive; a live host -> pass.
-  3. Every probe returns inconclusive with a reason when preconditions
-     are unmet
-     PASS, and enforced structurally:
-     TestEveryProbeHasAllThreeVerdictFixtures fails by name if any
-     catalogue probe lacks a pass, fail or inconclusive fixture.
-     Mutation-tested red.
-  4. No probe declares effect: mutate; validation rejects one that tries
-     PASS. Refused on the type (Go and Python), again at catalogue
-     registration, and asserted over the shipped catalogue.
-  DoD docs/PROBES.md                 DONE, after the audit found it met
-                                     3 of the 5 required attributes.
-  Field 17 (not built)               No probe selection, no fault trees,
-                                     no synthetic write transactions —
-                                     the HTTP client has no method that
-                                     can send a body or use a verb other
-                                     than GET/OPTIONS.
-
-GATES (all on the merge-result tree)
-
-  just lint / cli-lint                     PASS
-  just typecheck                           PASS 0 errors x5 projects
-  just lint-imports                        PASS 4 contracts kept
-  just test                                PASS 888+4s api, 100 worker,
-                                                21 mcp, all Go packages,
-                                                31 extractor-python, node
-  just check-schema-drift                  PASS 16 tables
-  just check-invariants                    PASS coupled + symmetry
-  just check-no-llm-imports                PASS 9 packages
-  just check-scan-coverage                 PASS 251 files
-  just check-migration-round-trip          PASS against a real DB,
-                                                including a9d2c40f7e18
-  just self-check                          PASS 1023 facts / 451
-                                                subjects, 0 divergences
-  real network probe runs                  PASS (see criteria above)
-  CI on the merge result                   NOT RUN — see COMMITTING.
-
-MUTATION TESTS (invariant 10) — both new gates shown red
-  remove one probe's inconclusive fixture -> field-13 coverage gate red,
-      naming the probe
-  add internal/probe to the guarded list  -> new HTTP boundary assertion
-      red, naming the package
-
-CULPRIT CAUGHT A REGRESSION IN ITS OWN BUILD
-  `just self-check` fell from ~987 to 483 facts: the new role's env var
-  made api refuse to import, so route extraction silently produced
-  nothing. Fixed in the justfile (2 recipes) and 3 ci-cd.yml env blocks.
-  Now 1023 facts, 0 divergences. This is the dogfooding working.
-
-DEFECTS FOUND AND FIXED IN REVIEW (not by the gates)
-  1. The new probe engines omitted `hide_parameters=True`, which the
-     capture engine sets so a failing insert cannot log its bound
-     parameters. A reading's `measured`/`evidence` is exactly the JSONB
-     that would land there. Phase 30's audit caught this same omission
-     on the sibling engine; fixed here in api and worker.
-  2. Impedance emitted ONE READING PER SCORED METRIC ROW — the raw
-     metric event rate into a 90-day hypertable. Collapsed to one per
-     (connection, metric) per batch, with the trade-off (an intermediate
-     spike in a catch-up batch survives as an `anomalies` row, not as a
-     reading) tested and documented.
-  3. A subagent left a literal `</content>` tag in the migration,
-     breaking the symmetry gate. Caught by running the gate, fixed.
-
-ROLE WIDENING — NEEDS A HUMAN EYE
-  The migration grants `anomaly-detector` SELECT on `connections`, a
-  WIDENING of an existing role, which .claude/rules/database.md warns
-  about. Verified before accepting: that role already holds SELECT on
-  `components` (Phase 27 RENAMED `services`, and a rename carries its
-  grants), so this is a read grant on a sibling of a table it already
-  reads, for the same job — resolving which edge a metric belongs to.
-  The rule's bold sentence is scoped to writes. The alternative was a
-  14th role whose only job is reading one table the same process
-  already reads a sibling of. The downgrade revokes it. Flagged rather
-  than waved through.
-
-OPEN QUESTIONS FOR THE ARCHITECTURE SESSION (§3 is retired; they live here)
-  1. **Criterion 2 needs a vantage point, or rewording.** See above. A
-     probe that dials from the CLI's host cannot demonstrate a partition
-     between two containers, which is what the criterion asks for.
-  2. **Should the three project-token endpoints share one token?**
-     `POST /readings`, `POST /facts/captures` and
-     `POST /divergences/captures` all authenticate with
-     `CULPRIT_PROJECT_TOKEN`. The Postgres roles are split three ways;
-     the API credential is not, so a token leaked from a probe runner
-     can write the repository's own claims about itself. This is the
-     API-auth analogue of the role reuse `.claude/rules/database.md`
-     forbids, and the rule does not cover it.
-  3. **Field 13's "fixture" was read as a table-driven case set**, not
-     as `cli/testdata/probes/<id>/` directories. The requirement is
-     enforced by a gate rather than listed; say if on-disk fixtures were
-     meant.
-
-PLAN CORRECTIONS — for the architecture session
-  - Field 13 says "each probe gets a fixture". Implemented as a
-    table-driven case set in cli/internal/probe/probe_test.go with a
-    coverage gate, not as cli/testdata/probes/<id>/ directories. The
-    requirement is enforced rather than listed; if the plan meant
-    on-disk fixtures specifically, say so.
-  - Field 9's `POST /probes/{id}/run` is not satisfiable as written:
-    field 3 says probes execute in the culprit binary and no agent
-    transport exists until Phase 33. Implemented as an honest 503
-    naming the local command, with a test that it writes nothing.
-  - Field 4's `probe.edge.impedance` needed an attribution rule the
-    plan does not give: telemetry is keyed by service, impedance by
-    connection. The rule chosen (peer attribute; else exactly one
-    declared inbound connection; else emit nothing) is in LIMITS.
-  - Phase 30's LIMITS text said the self-check step is
-    `continue-on-error`; 60e53fd removed that. Corrected.
-
-KNOWN GAPS, STATED PLAINLY
-  - CI has not run. Only CI exercises: Linux + clean checkout + CRLF,
-    the frontend Docker build from generated types, Trivy on all six
-    images, the kind and Compose end-to-end jobs.
-  - **Six of the thirteen probes have no data source in the CLI.**
-    `probe.db.connect`, `probe.db.schema_conformance`,
-    `probe.config.present`, `probe.dep.version` and
-    `probe.edge.impedance` need a database client, config reader,
-    package reader and metrics reader; `cmd/culprit/probe.go` wires only
-    Network and HTTP. They return inconclusive with a reason naming the
-    missing source — honest, and not usable. The manifests, capability
-    gates, verdict logic and fixtures are real and tested against fakes;
-    the wiring is not. Impedance is the one that cannot simply be wired:
-    reading it means calling the API, and the binary deliberately links
-    no HTTP client outside the outbound probe path — which is why the
-    worker produces those readings instead. Documented in LIMITS and
-    PROBES.md rather than fixed, which is the choice the audit offered.
-  - `request.Expectation` is never populated by the CLI, so
-    `expected_source` is always null and every manifest's
-    `expected_from` is inert in practice. The probes that would
-    otherwise guess now return inconclusive instead, so this is honest,
-    but the INTENT-vs-OBSERVED comparison the planes exist for is not
-    yet wired end to end.
-  - Criteria 1 and 2 were not demonstrated against a running demo
-    stack (above). Neither was the Q2 recorded demonstration.
-  - Go surface is now 13,307 non-test lines, up from 10,356. The ~6k
-    revisit trigger from the retired Q1/Q9 is long past; the boundary
-    question is unanswered, and §3 no longer exists to hold it.
-  - The `GET /probes` catalogue is a committed JSON mirror of the Go
-    one. A test checks the ids/effects/timeouts against the Go source
-    by regex, which is better than nothing and weaker than a shared
-    fixture.
-  - Still true: no .gitattributes (CRLF noise), ghcr.io packages
-    private, CLAUDE.md far over its 8 KB budget (it grew again here).
-
-COMMITTING — the human, one command
-  git add -A ':!shared/uv.lock'
-  git commit -F <message file printed in the session>
-  Do NOT stage shared/uv.lock.
-  Then `/ci` to test the merge result and satisfy invariant 12.
-```
-
-Previous run (2026-09-12, earlier) — stopped at step 2 on Q15, before
-that question was resolved:
-
-```
-Run:          2026-09-12, /next — STOPPED AT STEP 2 ON A BLOCKER.
-              No phase was executed. Phase 31 NOT started.
-Status:       gates red, unchanged. Phase 30 is NOT complete
-              (invariant 12): `main` is red on `deploy`, and Q15 — the
-              question that blocks it — is not answerable from a
-              session. Nothing in it is code.
-
-WHY THIS RUN DID NOT EXECUTE A PHASE
-  /next step 2 says: if a §3 question is marked as blocking the
-  current phase, stop and report. Q15 is, on two counts, and neither
-  moved since the last run:
-   1. It needs shell access to `culprit-vm` to edit `infra/.env.prod`.
-      No session has it, and the file is by design never written from
-      CI or a repo.
-   2. It carries an architecture decision — whether a public
-      production deploy belongs in the phase gate at all — which §3
-      forbids Claude Code from answering.
-  There is no repository-side change that turns `deploy` green. The
-  branch is not broken; the VM is five weeks stale.
-
-WHAT HAD HAPPENED SINCE THE LAST REPORT (a human, not this session)
-  60e53fd  committed the previous run's three staged docs, and with
-           them the two working-copy edits that run had flagged as not
-           its own: ci-cd.yml dropping `continue-on-error` from the
-           self-check step, and the rewritten .claude/skills/ci/SKILL.md
-           (plus a copy under claude-setup/).
-  PR #18   merged it -> bb73a9b on main.
-  §1 said "staged, not committed" and named 888eb22 on arrival. That
-  is the third consecutive run to find §1 stale; corrected again.
-
-WHAT WAS VERIFIED (read-only; no code, no gates re-run)
-  main run 34641745097 on bb73a9b, job by job:
-    success  lint, typecheck, cli, migration-round-trip, test,
-             self-check, kind-capture, build(api, worker, frontend,
-             mcp_server, cli)
-    FAILURE  deploy
-  The deploy log is the same line as every run since Phase 14:
-    RuntimeError: REGISTRY_ADMIN_DB_PASSWORD must be set in the
-    environment to run this migration
-    (635870479f4e_create_service_registry.py:188, after pulling
-    ghcr.io/josh-heath123/view/*)
-  Deploy conclusion of the last six main pushes: bb73a9b, 888eb22,
-  c5ce4eb, a407542, 7ad6579, 186b068 — failure, every one.
-  Note: ci-cd.yml no longer lets a self-check finding pass (60e53fd
-  removed `continue-on-error`), and self-check was green on that run,
-  so the stricter gate is already proven to hold.
-
-WHAT THIS RUN CHANGED
-  docs/HANDOFF.md  §1 (branch, status, blocking questions, last gate
-                   run — all pointed at the superseded 888eb22) and
-                   this report. Nothing else. No code, workflow,
-                   config or LIMITS change, because nothing was built.
-
-GATES:        NOT RUN, deliberately. No code changed. CI on bb73a9b
-              (above) is the gate of record and is red on deploy only.
-AUDITS:       BOTH RUN, neither came back clean. Every finding was
-              either fixed or recorded above; the two that need a human
-              are under OPEN QUESTIONS.
-LIMITS:       not updated — no new threshold, ceiling or failure mode
-              was introduced. The SARIF and Caddy sections stand.
-
-TO FINISH PHASE 30 — unchanged, and still a human's, on culprit-vm (Q15)
-  1. scripts/backup.sh FIRST. This upgrade runs every migration from
-     Phase 14 to Phase 30 in one go, including Phase 27's
-     services -> components rename, against a database that has never
-     seen any of them.
-  2. infra/.env.prod: IMAGE_REGISTRY=ghcr.io/josh-heath123/culprit,
-     and every missing line from infra/.env.prod.example (Q15 lists
-     them).
-  3. Make the VM able to pull the private .../culprit/* packages.
-  4. gh run rerun 34641745097 --failed, then read the deploy job
-     itself, not the run's colour.
-  5. Architecture session: ratify Q14's answer into §2; decide Q15's
-     question of whether deploy belongs in the phase gate. Until that
-     is decided, every future phase inherits this same red gate.
-```
-
-Previous run, same phase (2026-09-11 evening) — triage of the deploy
-failure; its findings are carried in Q15:
-
-```
-Run:          2026-09-11 (evening), /next — Phase 30, still gates red.
-              Phase 31 NOT started.
-Status:       gates red. Phase 30 is NOT complete (invariant 12): the
-              main run is red on `deploy`, and only a human on the VM
-              can fix it (Q15).
-
-WHAT HAD HAPPENED SINCE THE LAST REPORT (a human, not this session)
-  d2dd1ac  committed the staged Caddy-from-source fix.
-  63cea12  answered Q14 with its third option: upload-sarif@v3 replaced
-           by actions/upload-artifact@v4 (culprit-sarif,
-           if-no-files-found: error).
-  PR #17   merged both -> 888eb22 on main.
-  §1 still said "staged, uncommitted" and "Q14 blocks" on arrival.
-
-/ci — tested the merge result, pinned to SHA (the ci skill's new form)
-  commit   63cea12 (PR head; checkout is refs/pull/17/merge, whose tree
-           is identical to 888eb22's — `git diff 63cea12 888eb22` empty)
-  run      34637992018  .../actions/runs/34637992018  (pull_request)
-    success  lint, typecheck, cli, migration-round-trip, test,
-             self-check, kind-capture, build(api), build(worker),
-             build(frontend), build(mcp_server), build(cli)
-    skipped  deploy
-  commit   888eb22 (the merge commit on main)
-  run      34639182959  .../actions/runs/34639182959  (push)
-    success  the same twelve jobs
-    FAILURE  deploy
-  Verdict: RED on the merge result, on `deploy` only. Every build now
-  passes Trivy CRITICAL/HIGH, including frontend (the Caddy fix works in
-  CI, not only locally) and api/worker/mcp_server, which the previous
-  run could only call UNKNOWN. self-check: 878 facts / 370 subjects,
-  0 divergences.
-
-WHAT THE DEPLOY FAILURE IS — triaged from the job log, then history
-  RuntimeError: REGISTRY_ADMIN_DB_PASSWORD must be set in the
-  environment to run this migration, in Phase 14's migration
-  (528aa38b5971 -> 635870479f4e), after pulling
-  ghcr.io/josh-heath123/view/*:latest.
-  Not new. Deploy outcome of every main push since Phase 13:
-    2026-08-04  7d5a810 Phase 13            success  <- last good deploy
-    2026-08-04  62ce6b1 Phase 14            failure
-    2026-08-06 .. 08-10  PRs #3-#12 (17-24) failure, all the same line
-    2026-09-09 .. 09-10  PRs #13-#16, c5ce4eb skipped (red builds)
-    2026-09-11  888eb22 (this)              failure, same line
-  Checked four of those logs: identical error, identical view/ pull.
-  Production (read-only public GETs): /api/openapi.json lists only
-  /auth/login and /incidents*; /api/users, /api/postmortems,
-  /api/model/components all 404. culprit.co.za runs a pre-Phase-14
-  API. Cause and the fix are in Q15.
-
-WHAT THIS RUN CHANGED (docs only)
-  docs/HANDOFF.md  §1, §4 row 30, this report; Q14 marked answered by
-                   the human's commit (for ratification); Q15 added.
-  docs/LIMITS.md   the SARIF section rewritten to what is committed:
-                   an artifact, no annotations, and a self-check finding
-                   can sit unnoticed on a green pull request.
-  CLAUDE.md        Status line; "deployed to culprit.co.za" corrected —
-                   true of Phases 0-13 only.
-  No code, workflow or config change.
-
-GATES
-  CI (above) is the gate of record for code: it ran the full set on
-  Linux on this exact tree. Local /verify NOT re-run — 888eb22 is
-  byte-identical to what CI tested and this run touched only docs.
-  check_coupled_files --base origin/main on the docs change: PASS.
-
-COMMITTED:    NO. `git commit -F <file>` was denied by the permission
-              system (the fourth run in a row it has been). The three
-              docs are staged; the message is scratchpad/commit-msg.txt
-              in session 90ffdb3c. Nothing pushed. Pushing it through a
-              PR to main would run CI and attempt the deploy again.
-
-AUDITS:       phase-auditor / invariant-auditor NOT re-run. Phase 30's
-              code has not changed since both came back clean
-              (2026-09-10); the delta since is frontend/Dockerfile, one
-              ci-cd.yml step, .trivyignore and docs, none under the
-              invariant auditor's paths. Acceptance-criteria verdicts
-              below still stand.
-
-LIMITS:       updated (SARIF section). The Caddy section from the
-              previous run stands and is now true in CI.
-
-NOTICED, NOT ACTED ON
-  - Working copy, not this session's, uncommitted:
-    .github/workflows/ci-cd.yml drops `continue-on-error: true` from
-    the self-check step (the block comment above it still explains why
-    it is there), and .claude/skills/ci/SKILL.md is rewritten (the
-    SHA-pinned watch this run used). Neither staged nor committed.
-  - self-check still requests `security-events: write`, now unused.
-  - The self-check locally/CI fact-count gap (987 vs 878) is still
-    unexplained.
-  - Deploys have been failing silently for five weeks; nothing alerts
-    on a red deploy job. Part of Q15's decision.
-
-TO FINISH PHASE 30 — a human, on culprit-vm (Q15)
-  1. scripts/backup.sh.
-  2. infra/.env.prod: IMAGE_REGISTRY=ghcr.io/josh-heath123/culprit, and
-     every missing line from infra/.env.prod.example (list in Q15).
-  3. Make the VM able to pull the private .../culprit/* packages.
-  4. gh run rerun 34639182959 --failed, then read the deploy job — not
-     just the run's colour.
-  5. Architecture session: ratify Q14's answer into §2; decide Q15's
-     question of whether deploy belongs in the phase gate.
-```
-
-Previous run, same phase (2026-09-10) — the implementation report; its
-acceptance-criteria verdicts still stand:
-
-```
-Phase:        30 — Environment capture and cross-environment diff
-Branch:       phase-30-env-capture, cut from origin/main a407542 (the
-              Phase 29 merge). origin/main has not moved since, so the
-              staged tree IS the merge result, and every local gate
-              below ran on it.
-Committed:    NO. `git commit -F <file>` was denied by the permission
-              system twice (with and without flags). Everything is
-              staged except shared/uv.lock (a stray file this session
-              created by running uv inside shared/ — do not commit it;
-              the session's rm of it was denied too). The commit message
-              is at scratchpad/commit-msg.txt in the session directory.
-CI:           NOT RUN. Nothing can be pushed without a commit. Standing
-              invariant 12 says a phase is not complete until CI is green
-              on the merge result; by that rule this phase is NOT
-              complete. What CI would add over the local run, and what
-              was done locally instead, is listed under GATES.
-Started:      2026-09-10
-Finished:     2026-09-10
-
-Scope note:   /next advanced ONE ledger row. Phase 31 was NOT started.
-              §1 was stale on arrival: Phase 29 had been merged (PR #16)
-              since the report was written. Corrected.
-
-WHAT WAS BUILT
-
-  cli/internal/capability/   §2.7 as code: the closed capability set,
-                             grant parsing (true/false, or a list for the
-                             three per-item capabilities), and a Ledger
-                             every check must ask. An ungranted check is
-                             a recorded refusal, never an omission. No
-                             *.write capability exists; naming one fails
-                             validation.
-  cli/internal/capture/      one-shot capture of one environment:
-                             adapters (compose, kubernetes, process,
-                             exec), env var names + shapes (values only
-                             for allowlisted keys), image reference and
-                             digest, live schema from pg_catalog under a
-                             read-only session, alembic version,
-                             installed packages, DNS / TCP / TLS checks
-                             that stop before any application request.
-                             A sealed envelope (DSSE-style: base64
-                             payload, SHA-256, optional Ed25519).
-  cli/internal/diverge/scope.go
-                             the Phase 29 comparator across scopes:
-                             intent_vs_configured, env_vs_env. INTENT is
-                             the reference wherever it has an answer;
-                             absence is judged INTENT -> environment only,
-                             never against an enumeration marked
-                             incomplete.
-  cli/internal/check/diff.go `culprit diff` as a function. Takes captures
-                             as arguments, so internal/check still links
-                             no networking package.
-  cli/cmd/culprit/env.go     `culprit env capture <env>`, `culprit diff
-                             <a> <b>` (each side a live environment or a
-                             saved envelope, verified before use).
-  ValueShape.scheme          Q7, as decided: a closed enum, in Go, Python
-                             and both CHECK constraints (migration
-                             e4c1b7a9d2f0). Shapes compare by
-                             ValueShape.Equivalent: length only as
-                             empty-or-not, unknown type on presence
-                             alone. shared/tests/shape_conformance.json.
-  api/app/model/captures*.py POST /captures, GET /captures/{id}, GET
-                             /captures/diff. New role capture-writer;
-                             api-reader reads through one serialiser that
-                             never renders a config value.
-  /services removed          field 6. Keys and topology suggestions moved
-                             under /model; the dashboard uses /model only
-                             (done by a forked agent; its tests pass).
-  docker-compose.prod.yml    an optional one-shot capture agent under the
-                             `agent` profile, on a new distroless `cli`
-                             image added to CI's build/scan/push matrix.
-  docs                       PERMISSIONS.md (DoD), demos/phase-30.md (Q2
-                             written account), LIMITS (+19 sections),
-                             EXTRACTOR_PROTOCOL.md (scheme), UPGRADING.md.
-  evals                      cli/testdata/envdiff/ (7 fixtures, false
-                             positives 0, including clean-environments);
-                             a Compose end-to-end test against two real
-                             projects; a kind test against a real
-                             cluster. Both are also new CI steps/jobs.
-
-GATES (all run on the merge-result tree, all green after the audit fixes)
-
-  just lint / typecheck / lint-imports     PASS (4 contracts kept)
-  just check-schema-drift                  PASS (16 tables)
-  just test                                PASS 832 + 86 + 21 python,
-                                                 all Go packages,
-                                                 31 extractor-python,
-                                                 22 node
-  check_coupled_files --base origin/main   PASS
-  check-scan-coverage / no-llm / symmetry  PASS
-  just check-migration-round-trip          PASS (with a seeded row
-                                                 carrying `scheme`)
-  just self-check                          PASS 987 facts, 0 divergences
-                                                 (was 983: the API still
-                                                 imports, so the route
-                                                 table is really read)
-  LLM_PROVIDER=none culprit check          PASS
-  Compose end-to-end (CULPRIT_DOCKER_TESTS) PASS 47s, real containers
-  kind (CULPRIT_KIND_TESTS)                PASS against a local kind
-                                                 cluster
-  cross-compile, 5 release targets         PASS (done locally, since CI
-                                                 could not run)
-  Trivy, CRITICAL/HIGH, on `cli` and `api` PASS (done locally with
-                                                 aquasec/trivy 0.65 and a
-                                                 fresh base image)
-  CI on the merge result                   NOT RUN — see Committed.
-
-MUTATION TESTS (invariant 10) — every new gate shown red
-
-  shape struct equality instead of Equivalent  -> clean-environments FP
-  environment skips ignored                    -> incomplete-enumeration FP
-  INTENT-as-reference off (absence, conflict)  -> duplicate env_vs_env FP
-  every value treated as allowlisted           -> planted-secret test red
-  renderer prints config values                -> report redaction red
-  ValueShape membership check removed          -> model tests red
-  API serialiser returns the raw column        -> planted-value test red
-  API grant check skipped                      -> ungranted-value test red
-  downgrade's scheme-strip removed             -> round trip red
-  pgx deferred-error check removed             -> Compose e2e red
-  exec adapter reads lines again               -> multi-line leak test red
-  manifest error echoes input                  -> echo test red
-  Grant.capability as free str                 -> capability test red
-  report reason redaction removed              -> tamper test red
-  SARIF notifications removed                  -> SARIF refusal test red
-
-ACCEPTANCE CRITERIA (field 14)
-
-  1. `culprit diff staging production` reports a missing env var
-     required by an intent fact, ranked breaks_request_path
-     PASS — run for real on cli/testdata/demo (docs/demos/phase-30.md):
-     JWT_SECRET_KEY, read by orders_api/config.py with no default,
-     orders-api on the request path. The phase auditor also removed it
-     from .env.example and compose and it was still found from the code
-     alone, and a missing PORT (which has a default) came out degrades.
-
-  2. Detects live DDL behind the migration head
-     PASS — migration_head 0003 vs 0002, and the order_lines table the
-     code maps missing from production. Also found by the auditor on a
-     database stamped 0003 but missing the table.
-
-  3. Detects an image digest mismatch
-     PASS — env_vs_env on image:orders-api digest (and reference). The
-     same-tag-different-digest case is the corpus fixture; the kind
-     test reads a real Pod's digest.
-
-  4. With only config.read.names granted, values never appear in output
-     and the report says which checks were refused
-     PASS after the audit fixes. FAILED on the first audit, correctly,
-     twice over: the exec adapter could turn a line of a multi-line
-     secret into a variable NAME (below, #1), and SARIF carried no
-     refusals at all. Both fixed, both now tests, both mutation-checked.
-
-  DoD: docs/PERMISSIONS.md                  DONE, every §2.7 grant, with
-                                            four overclaims corrected by
-                                            the audit.
-  Q2 obligation: written account            DONE (docs/demos/phase-30.md).
-                 recorded demonstration     NOT DONE — needs a person.
-
-DEFECTS FOUND AND FIXED
-
-  By running the thing against real systems:
-  1. information_schema lists only tables the role can use: a
-     least-privilege capture role would have made every other table
-     look missing from production. Reads pg_catalog now.
-  2. pgx reports "permission denied" after iteration, not from Query():
-     a role without SELECT on alembic_version read as "at no revision",
-     a false breaks_request_path. Now "version not read".
-  3. configured_facts' Phase 26.1 CHECK (value IS NULL OR grant_ref IS
-     NOT NULL) covers every row, so no image digest or column list
-     could be stored at all. Not narrowed: every CONFIGURED fact now
-     names the grant that permitted it, and POST /captures checks it
-     against the capture's own grant list — closing LIMITS' "nothing
-     validates that the grant it names is real".
-  4. The Go ValueShape never checked its fields against their closed
-     sets: a DSN in `type` decoded and was printed into SARIF. Found
-     while adding `scheme`.
-  5. pgx 5.7.5 carried a CRITICAL CVE (fixed 5.9.0, which needs Go
-     1.25); CI's Go 1.24 was past support and its binaries carried
-     stdlib CVEs. Caught by scanning the new image locally.
-
-  By the two audits (both right):
-  6. BLOCKING: the exec adapter split output on newlines; a PEM key's
-     last base64 line (`QUJDREVGRw==`) is a valid-looking assignment, so
-     a fragment of a secret became a subject — never masked, in the
-     envelope and every report. No character rule can tell it apart;
-     the exec adapter now accepts only NUL-delimited pairs (env -0) or
-     a JSON object and refuses lines.
-  7. SARIF carried no refusals: a no-grant diff was an empty,
-     clean-looking log. Now toolExecutionNotifications.
-  8. Skip/refusal reasons and meta from a loaded envelope were printed
-     verbatim; a hand-edited, re-hashed envelope could put a DSN in the
-     report. Now refused on open (Go and Python) and redacted at one
-     point in every renderer.
-  9. The Python manifest loader echoed a pasted DSN in its error
-     (pydantic input_value). Fixed at the one place it renders errors.
-  10. The §2.7 closed set was enforced only in Go: the API stored a
-      capture "granted db.schema.write" and apply-model accepted
-      config.read.values: true. Now a Python Capability enum, held to
-      Go by shared/tests/capability_conformance.json.
-  11. Four PERMISSIONS.md overclaims (length kept, "signed" envelope,
-      "refuses an altered envelope", Kubernetes Secret RBAC).
-  12. Smaller: an exec env_command could be skipped without a refusal
-      if process.exec.allowlist was absent; absolute compose files were
-      joined onto the manifest directory; no hide_parameters on the
-      capture engine; a help text claimed "safe to attach" even with
-      values allowlisted.
-
-PLAN CORRECTIONS AND DEVIATIONS — for the architecture session to ratify
-
-  - Field 11 (client-go + Docker SDK behind build tags): not done. The
-    adapters run the `docker` and `kubectl` the user already has. Behind
-    build tags the downloadable binary would capture nothing; both SDKs
-    are HTTP clients in a binary whose test asserts it links none. In
-    LIMITS.
-  - Field 7 ("signed"): signing is optional (--sign-key). Culprit will
-    not invent a key for the user; unsigned envelopes are hashed only
-    and can be re-hashed after editing. In LIMITS; see Q11.
-  - Field 4 lists DNS / TCP / TLS; Phase 31 lists the same as probes.
-    Implemented here as passive facts stopping before any application
-    request (field 17 read as "no application requests"). Phase 31
-    should reconcile — Q12.
-  - Field 5 ("api/app/model/ stores captures") needed data the Phase 26
-    table lacked: captures gained digest, signed_by, grants, refused.
-  - A twelfth role, capture-writer, rather than a third reuse of
-    fact-writer (which .claude/rules/database.md names as the signal the
-    rule has stopped working). api-reader gained SELECT on captures and
-    configured_facts — the established reader pattern, argued in the
-    migration; the residual risk is in LIMITS.
-  - The CLI still does not upload (LIMITS promised Phase 30 would; field
-    4 listed endpoints, not an uploader) — Q10.
-  - scripts/coupled_files.yaml retargeted shape.py's pair from
-    d1f4a9c73b60 to e4c1b7a9d2f0 (a historical migration is not edited
-    to satisfy a coupling check); the invariant audit judged it
-    legitimate.
-  - Not fixed, pre-existing (Phase 28): an absolute extract.components
-    `root:` is joined onto the manifest directory the same way.
+Phase:        31.1 — Close the probe loop
+Branch:       phase-31.1-probe-loop, cut from origin/main = a3f110a.
+              origin/main has not moved (fetched 2026-11-03), so the
+              working tree IS the merge result.
+Run:          2026-11-03, second /next of the day (resumed after the
+              disk-full stop). Phase 31.2 NOT started.
+Status:       IN PROGRESS — every acceptance criterion executed and PASS
+              locally against the running demo stack; both audits clean;
+              every local gate green. CI on the merge result NOT RUN:
+              it needs a commit, and the human commits.
+Committed:    NO, by protocol — staged, message written; the human commits.
+
+WHAT THIS RUN DID (the first run's build is described in git history:
+`git log -p docs/HANDOFF.md`; it is unchanged except as listed here)
+  The disk-full blocker had cleared (23 GB free, Docker 29.6.2 up). Stood
+  the quickstart up with infra/docker-compose.probe-demo.yml layered on
+  and executed criteria 1-5 against it, then the Docker-backed suites,
+  then both audits.
+
+ACCEPTANCE CRITERIA (field 14) — executed, by this session and again,
+independently, by phase-auditor
+  1. Phase 31 criterion 1 against the running demo stack          PASS
+     `culprit probe connection:order-service->inventory-service`, the
+     linux binary run inside order-service, with host/port/url inputs:
+     reachability PASS (200); TLS inconclusive, "first record does not
+     look like a TLS handshake" — true, the demo serves plain HTTP; route
+     conformance inconclusive, "no INTENT fact declares
+     http:inventory-service/GET /health" — true, demo-services/culprit.yaml
+     has no extract: by design; impedance refused (`local` does not grant
+     telemetry.metrics.read), and with the grant inconclusive. The worker
+     does produce it: `readings` holds probe.edge.impedance rows for this
+     connection from agent culprit-worker (22 pass / 2 fail at first
+     look, 224 by the audit), latest within the minute.
+  2. Phase 31 criterion 2 as reworded (binary inside A)           PASS
+     Partition: an iptables REJECT (tcp-reset) rule in order-service's own
+     network namespace, from an alpine sidecar sharing it; neither
+     container stopped. Inside A, http.reachable and net.tcp_connect for
+     B pass -> FAIL ("connection refused"); DNS from A stays pass; from
+     the host, both services' health probes stay PASS; rule removed,
+     everything PASS again. order-service -> payments-service unaffected.
+  3. route_conformance pass with expected_source / fail on a
+     disagreeing declaration, against the served api              PASS
+     GET /model/components against the api (127.0.0.1:18000): pass on
+     401, expected_source = introspection, culprit-extract-python@0.1.0,
+     api/app.main:app, $.paths./model/components.get, rank 90. With
+     router.py:98 temporarily declaring /model/component-list: FAIL,
+     "is declared but the running service answers 404", citing the
+     changed declaration; the served-but-undeclared route then reads
+     inconclusive. router.py reverted, diff empty.
+  4. db.schema_conformance pass / fail naming the dropped column  PASS
+     public.contracts (empty by design): pass, then after
+     `alter table contracts drop column created_at` FAIL, "missing
+     column(s) the code maps: created_at"; column restored exactly.
+     Connected as a throwaway LOGIN role with NO grants (pg_catalog is
+     enough), dropped afterwards — see "Environment" below for why not
+     api-reader.
+  5. no fixture credential in any reading, text or JSON           PASS
+     Live: the DSN password 0 times in text and JSON, pass and fail.
+     Audit: four bad DSNs and a fixture JWT, 0 matches.
+  6. a new internal/ package linking net/http turns the boundary
+     test red with no edit                                        PASS
+     (re-run by the audit: zzaudit named for net, crypto/tls, net/http)
+  7. .trivyignore holds no entries                                PASS
+     every image's scan green in CI                               NOT RUN
+
+FIELD 13 — "at least one run of each newly wired probe against the real
+demo stack": db.connect / db.schema_conformance PASS (above, and the
+audit's bad-DSN runs). config.present was in the audit's criterion-1
+run inside order-service, but its verdict was not reported back, so it
+counts as NOT RUN here. dep.version was NOT RUN against the stack (the
+demo declares no `packages:` command). Both pass their fixture suites.
+Field 13 is therefore partly met.
+
+DEFECTS FOUND AND FIXED IN THIS RUN
+  1. The overlay's partition did not work. Disconnecting order-service
+     from `default` (the first run's untested assumption) also kills
+     Docker Desktop's host port forward to it — host health went
+     inconclusive/EOF while the container still answered on its second
+     network. gw_priority on that network did not help either. Replaced
+     with the in-namespace REJECT rule; the order-edge network removed;
+     why both alternatives fail is in the overlay header and LIMITS.
+  2. probe.edge.impedance's CLI reason was "this agent cannot read
+     telemetry" — true but not what criterion 1 asks a reason to say
+     (that the worker produces it). Now says so. LIMITS claimed it
+     already did; corrected, and it now also says no endpoint serves
+     stored readings yet (POST /readings only).
+  3. Doc corrections from phase-auditor: PROBES.md (http.reachable also
+     fails on a refused connection; 4xx/timeout inconclusive), LIMITS'
+     network-boundary section still described the pre-allowlist test,
+     the overlay header now says the REJECT rule cuts both directions.
+  4. docs/UPGRADING.md said a quickstart never needs upgrading steps.
+     False — see Environment; LIMITS now documents it.
+
+ENVIRONMENT — what this machine needed, none of it product code
+  - infra/.env.prod is from 2026-09-09, before Phase 28: it lacks
+    FACT_/CAPTURE_/PROBE_WRITER_* and CULPRIT_PROJECT_TOKEN, so the
+    bootstrap migration aborted and api/worker crash-looped. Reading that
+    file was DENIED to this session, so it was not opened or edited: the
+    missing seven were generated into a scratchpad env file and appended
+    to the services through a throwaway compose overlay. The human should
+    add those keys to the real file (names in .env.prod.example). New
+    LIMITS paragraph: re-running `just quickstart` does not fix this, and
+    `--force` regeneration breaks the existing volume's passwords.
+  - Port 80 on this host is held by an Apache inside WSL; every
+    localhost/api request got its 404. The overlay now publishes the api
+    itself on 127.0.0.1:18000, which is also the better measurement (the
+    service that declares the routes, not a proxy). LIMITS: route
+    conformance cannot tell which server answered.
+
+AUDITS
+  invariant-auditor   CLEAN on all seven invariants, whole diff. Risks it
+                      raised, for a human (not fixed — out of scope or
+                      not yet reachable):
+                      - expect.go's conflictEvidence writes a competing
+                        fact's raw canonical value. Unreachable for a
+                        config value today (no CONFIGURED-measured probe
+                        sets expected_source); a future one would leak a
+                        granted value. Render a shape for CONFIGURED.
+                      - test_the_catalogue_mirrors_the_go_source checks
+                        only id/effect/timeout; this phase's version,
+                        predicate and input changes match only because
+                        they were diffed by hand.
+                      - the partition is a privileged manual command; it
+                        must stay a doc comment, never a recipe or probe.
+  phase-auditor       6/7 PASS, criterion 7's CI half NOT RUN. Its doc
+                      findings fixed (above).
+
+GATES (working tree = merge result)
+  lint, typecheck, lint-imports, check-schema-drift       PASS
+  check-no-llm-imports, check-scan-coverage,
+  check-invariants, coupled files --base origin/main       PASS
+  cli-lint, go test ./... (re-run after the last edit)     PASS
+  just test: api 889 passed / 4 skipped (the standing
+    "sanctioned implementation" parametrize skips),
+    worker 101, mcp_server 21, extractors py 31           PASS
+  extractors node 22                                       PASS
+  check-migration-round-trip                               PASS
+  cli-test-docker (TestEnvironmentDiffAgainstRealContainers) PASS
+  cli-test-kind                                            NOT RUN (no
+                                                           `kind` on this
+                                                           host; CI job)
+  culprit check --fail-on=breaks_request_path              PASS 0
+                                                           divergences,
+                                                           1023 facts
+  LLM_PROVIDER=none culprit check                          PASS
+  CI on the merge result                                   NOT RUN
 
 DELIBERATELY NOT BUILT (field 17)
+  No probe selection, no fault trees, no new probe (still 13), no new
+  capability, no agent transport, no change to how impedance is
+  produced — only the CLI's inconclusive wording about it.
 
-  No request into the system under test (DNS lookup, TCP handshake, TLS
-  handshake only). No writes: read-only DB session, read-only docker /
-  kubectl verbs, no write capability. No agent daemon: the compose agent
-  is profile-gated, restart "no", one-shot, stdout.
+PLAN CORRECTIONS — for the architecture session
+  - Criterion 2 (reworded) says the block "flips exactly A's reachability
+    probe for B". A REJECT rule in A's namespace also eats A's replies,
+    so B's probe of A goes inconclusive too; and http.reachable and
+    net.tcp_connect both flip, being the same reachability at two layers.
+    Suggested wording: "flips A's reachability probes for B to fail while
+    A's and B's own health probes, taken from the host, stay pass".
+  - Criterion 4 says "a column the migrations declare". The expectation
+    is taken from ORM introspection (rank 90), which outranks the Alembic
+    chain; the two agreed, so no conflict. Correct per §2.4, but the
+    criterion names the lower-ranked source.
+  - Carried from the first run, unchanged: field 4's predicate mismatch
+    (decided: manifests at v2), criteria 3/4 run against the quickstart
+    api, not the demo services (decided), the dsn input removed,
+    dep.version inconclusive on ranges, --capture changes no built-in
+    reading yet.
 
-DEPLOY PREREQUISITE — a human, on the VM, BEFORE merging
-
-  Add CAPTURE_WRITER_DB_PASSWORD and CAPTURE_WRITER_DATABASE_URL to
-  infra/.env.prod (docs/UPGRADING.md). Without them the migration stops
-  and the api refuses to start. Also: the new ghcr.io `cli` package will
-  be private under GITHUB_TOKEN, like the other four.
-
-KNOWN GAPS, STATED PLAINLY
-
-  - CI has not run (above). Things only CI exercises: Linux + clean
-    checkout + CRLF, frontend Docker build from generated types, the
-    kind job via helm/kind-action (pinned v1.12.0, never run), the
-    Compose e2e step on a runner.
-  - The residual risks the invariant audit named are documented in
-    LIMITS, not fixed: api-reader can read granted literals (only the
-    serialiser stops them), per-key grants are enforced by the API not
-    the DB, non-config values are not type-checked on upload — Q13.
-  - Go surface: 10,139 non-test lines (was 6,060). Q1's trigger was
-    already tripped — Q9.
-  - Still true: no .gitattributes (CRLF noise), ghcr.io packages
-    private, CLAUDE.md over its 8 KB budget (grew again).
+TO FINISH THIS PHASE
+  1. The human commits (command below the report in the session).
+  2. /ci: green on every job, Trivy on every image with the empty
+     .trivyignore. If an image goes red, fix the image — never restore a
+     line.
+  3. Merge, then the architecture session signs off.
 ```
 
 

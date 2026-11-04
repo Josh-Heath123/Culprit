@@ -24,6 +24,14 @@ import (
 // real "works in staging" cause), and not compared against the
 // constraint at all. That gap is written down in docs/LIMITS.md.
 
+// ParsePackages is parsePackages for `culprit probe`'s dependency data
+// source (Phase 31.1), which reads installed versions through the same
+// allowlisted command and the same two formats as a capture, so a probe
+// and a capture cannot read one environment differently.
+func ParsePackages(output []byte) (map[string]string, bool) {
+	return parsePackages(output)
+}
+
 // parsePackages reads either `pip freeze` lines or `npm ls --json`.
 func parsePackages(output []byte) (map[string]string, bool) {
 	trimmed := strings.TrimSpace(string(output))

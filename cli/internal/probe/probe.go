@@ -55,9 +55,28 @@ type Request struct {
 	// manifest's `inputs` schema.
 	Inputs map[string]any
 	// Expectation is the fact this reading is measured against, when one
-	// was found. A probe with no expectation reports a measurement and
-	// leaves the comparison to whoever asked.
+	// was found. The runner resolves it (expect.go) unless the caller set
+	// it. A probe measured against INTENT with no expectation returns
+	// inconclusive rather than a verdict: a measurement with no reference
+	// establishes nothing about conformance.
 	Expectation *model.Fact
+	// NoExpectation says why no expectation was found, so a probe's
+	// inconclusive reason can name what it looked for. Set by the runner.
+	NoExpectation string
+}
+
+// withoutExpectation is a probe's inconclusive outcome when nothing it
+// can be measured against was found.
+func withoutExpectation(request Request, measured map[string]any, finding string) Outcome {
+	why := request.NoExpectation
+	if why == "" {
+		why = "no declaration was found to measure it against"
+	}
+	return Outcome{
+		Verdict:  model.VerdictInconclusive,
+		Measured: measured,
+		Reason:   finding + ", but " + why + ", so conformance cannot be established",
+	}
 }
 
 // Outcome is what a probe returns. The runner turns it into a Reading,

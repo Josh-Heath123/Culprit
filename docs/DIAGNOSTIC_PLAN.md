@@ -1344,13 +1344,21 @@ expectations from the same extraction `culprit check` already runs.
   config and installed versions are read through the Phase 30 capture adapters.
   Each stays gated on the capabilities its manifest already declares.
 - The network boundary test inverted to an allowlist (D8, amended).
+- `.trivyignore` emptied of its five entries. They were accepted on
+  2026-08-04 for the published Caddy image, which the frontend no longer uses,
+  and the file says to delete them once every image has been scanned without
+  them — `fail-fast: false` (2026-11-03) now scans every image in one run. The
+  file applies to every image, and three of the five are Go standard-library
+  advisories, so an entry written for Caddy can now hide a real finding in the
+  `culprit` CLI image, which is a Go binary. If an image goes red without them,
+  fix the image; never restore a line.
 
 **5. Existing components to modify.** `cli/cmd/culprit/probe.go`,
 `cli/internal/probe/`, `cli/cmd/culprit/check_test.go`, the demo stack's
 compose file (the static binary mounted into the containers criterion 2
 needs), `demo-services/culprit.yaml` (grants for the `local` environment),
 `.claude/rules/database.md` (to standing invariant 3's clarified wording),
-`docs/PROBES.md`, and `docs/LIMITS.md`, whose "Six probes have no data source"
+`.trivyignore`, `docs/PROBES.md`, and `docs/LIMITS.md`, whose "Six probes have no data source"
 section lists five.
 
 **6. Existing components to remove.** None.
@@ -1398,6 +1406,7 @@ with no edit to the test.
 - No fixture credential appears in any reading, in text or in JSON.
 - A new package under `cli/internal/` that links `net/http` turns the boundary
   test red with no edit to the test.
+- `.trivyignore` holds no entries, and every image's scan is green in CI.
 
 **15. Definition of done.** Above, plus `docs/PROBES.md` and `docs/LIMITS.md`
 saying what is now wired, what still is not, and why. The run report replaces

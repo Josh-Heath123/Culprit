@@ -125,3 +125,9 @@ environments:
       net.tcp.connect: true
       net.tls.inspect: true
       net.http.outbound: true
+      # Phase 31.1: probe.config.present now has a data source. Run inside
+      # a demo container (infra/docker-compose.probe-demo.yml mounts the
+      # binary there), the process adapter reads that container's own
+      # environment, so this answers "is INVENTORY_SERVICE_URL set where
+      # order-service runs". Names only — no config.read.values.
+      config.read.names: true

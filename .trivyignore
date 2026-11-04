@@ -1,29 +1,15 @@
-# Vulnerabilities accepted, not fixed — reviewed 2026-08-04.
+# Intentionally empty. Do not add entries.
 #
-# 2026-09-11: frontend/Dockerfile now rebuilds caddy from source on a
-# current Go toolchain, and the frontend image scans clean with NO ignore
-# file at all. The five entries below no longer protect the image they
-# were written for. They are left in place only because this file is
-# root-level and applies to every image in the build matrix (api, worker,
-# mcp_server, cli), whose scans were cancelled in CI before this change
-# and have not been re-checked without it. Delete them once they are.
+# This file is root-level and applies to every image CI scans. Until
+# 2026-11-03 it held five advisories accepted on 2026-08-04 for the
+# published caddy:2-alpine binary; the frontend has rebuilt Caddy from
+# source since 2026-09-11 (frontend/Dockerfile), and three of the five
+# were Go standard-library advisories that could equally have hidden a
+# real finding in the `culprit` CLI image, which is a Go binary. They were
+# removed in Phase 31.1 (docs/DIAGNOSTIC_PLAN.md), once fail-fast: false
+# meant every image is scanned in the same run.
 #
-# All five below are compiled into the `caddy` binary itself (Go stdlib,
-# golang.org/x/text, and grpc-go), inside the official caddy:2-alpine
-# Docker image (frontend/Dockerfile). They are not Alpine apk packages, so
-# `apk upgrade` can't touch them — fixing them requires the Caddy
-# maintainers to rebuild their published image against patched Go module
-# versions. Confirmed against Docker Hub on 2026-08-04 that caddy:2-alpine
-# already points at their newest build (2.11.3, pushed 18 days prior) —
-# there is currently no newer upstream image that fixes these.
-#
-# Re-check this file next time frontend/Dockerfile's base image is
-# touched, or periodically: if caddy:2-alpine has been rebuilt since
-# 2026-08-04, remove the corresponding line(s) below and let Trivy catch
-# anything still unfixed for real.
-
-CVE-2026-56852       # golang.org/x/text — norm.Iter infinite loop
-GHSA-hrxh-6v49-42gf   # google.golang.org/grpc — xDS RBAC / HTTP/2 issues
-CVE-2026-27145        # Go stdlib crypto/x509 — DoS via excessive DNS name processing
-CVE-2026-39822        # Go stdlib os.Root — symlink-following directory traversal
-CVE-2026-42504        # Go stdlib mime — DoS via malicious MIME header
+# If an image's scan goes red, fix the image: bump the dependency, the
+# base image, or the Caddy pins (docs/LIMITS.md, "The dashboard's Caddy is
+# built from source"). An accepted vulnerability is a decision for the
+# architecture session (docs/HANDOFF.md §6), not a line in this file.

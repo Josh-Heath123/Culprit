@@ -38,6 +38,10 @@ type Runner struct {
 	// overrides carry culprit.yaml's `probes:` section: enable/disable
 	// and timeout overrides, per probe id.
 	overrides map[string]Override
+	// expectations are the facts readings are measured against
+	// (expect.go). Nil means none were supplied, which every probe that
+	// compares against a declaration reports as inconclusive.
+	expectations *Expectations
 }
 
 // Override is one entry of culprit.yaml's `probes:` section (field 10).
@@ -57,6 +61,9 @@ type Options struct {
 	AgentID     string
 	Concurrency int
 	Overrides   map[string]Override
+	// Expectations, when set, are resolved for every request that does
+	// not already carry one.
+	Expectations *Expectations
 }
 
 // NewRunner builds a Runner. A nil catalogue means the built-in one.
@@ -78,12 +85,13 @@ func NewRunner(options Options) *Runner {
 		deps.Now = time.Now
 	}
 	return &Runner{
-		catalogue:   catalogue,
-		ledger:      options.Ledger,
-		deps:        deps,
-		agentID:     agent,
-		concurrency: concurrency,
-		overrides:   options.Overrides,
+		catalogue:    catalogue,
+		ledger:       options.Ledger,
+		deps:         deps,
+		agentID:      agent,
+		concurrency:  concurrency,
+		overrides:    options.Overrides,
+		expectations: options.Expectations,
 	}
 }
 
@@ -154,7 +162,32 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Resolve the expectation after the capability gate, so a refused
+	// probe never even looks for one, and before Run, so the probe
+	// measures against it. A caller that set one keeps it.
+	var conflicts []model.Fact
+	if request.Expectation == nil {
+		resolution := r.expectations.Resolve(manifest, request)
+		request.Expectation = resolution.Fact
+		request.NoExpectation = resolution.Missing
+		conflicts = resolution.Conflicts
+	}
+
 	outcome := probe.Run(runCtx, request, r.deps)
+
+	// expected_source is the reading's link back to the claim it was
+	// measured against, so only the probe can set it: only the probe knows
+	// whether it compared against the fact it was handed, or against an
+	// explicit input that overrode it, or against nothing at all. Stamping
+	// it here whenever a fact was *found* made a reading run with
+	// `--input expect_columns=id` cite the migration it ignored (found by
+	// the Phase 31.1 invariant audit). The conflict evidence follows the
+	// same rule: it is about the source the reading cites.
+	if outcome.ExpectedSource != nil && request.Expectation != nil &&
+		outcome.Verdict != model.VerdictRefused {
+		outcome.Evidence = append(outcome.Evidence,
+			conflictEvidence(request.Expectation, conflicts)...)
+	}
 
 	// A probe that overran its own timeout reports that as the reason it
 	// could not tell, rather than as a failure of the thing it measured.

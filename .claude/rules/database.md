@@ -23,9 +23,25 @@ that can post readings is one that already had reach into a running environment,
 which is a wider starting position than either of the two above).
 
 **If a component needs a write the current roles cannot do, add a role. Do not
-widen an existing one.** A role is reused only when the new surface is genuinely
-the same trust domain. **Two** such exceptions exist, and both are documented
-where the reuse happens:
+widen an existing one.** This is standing invariant 3 (`docs/DIAGNOSTIC_PLAN.md`
+§3), whose wording is the rule of record:
+
+> A new job, a new trust domain or a new write surface gets a new role, and a
+> role's write grants are never widened. A read grant may be added to an
+> existing role only for a table its *same* job needs beside one it already
+> reads, with the justification written in the migration and the downgrade
+> revoking it.
+
+So **write grants are never widened**, without exception. A **read** grant may
+be added, under all three conditions: same job, a table beside one the role
+already reads, argued in the migration with the downgrade revoking it. The one
+instance is Phase 31's `anomaly-detector` SELECT on `connections`, beside the
+`components` it already read (Phase 27's rename carried its `services` grant
+there), to resolve which edge a metric belongs to — `a9d2c40f7e18`. A read grant
+that fails any of the three is a new role, the same as a write.
+
+A role is reused only when the new surface is genuinely the same trust domain.
+**Two** such exceptions exist, and both are documented where the reuse happens:
 
 1. `postmortem-writer` covering engineering memory (Phase 21).
 2. `fact-writer` covering `divergences` (Phase 29) — divergences are produced by

@@ -224,6 +224,21 @@ will now crash on boot rather than start in a broken state. Compare against
 `infra/.env.prod.example`, which lists every variable, or regenerate with
 `just bootstrap-env`. See `docs/UPGRADING.md`.
 
+**The local quickstart hits the same wall, and re-running it does not
+help.** `just quickstart` generates `infra/.env.prod` only if the file does
+not exist, and `just quickstart-down` keeps it (and the database volume).
+So a quickstart first run before Phase 28 keeps an `.env.prod` without the
+`fact-writer`, `capture-writer` and `probe-writer` passwords or
+`CULPRIT_PROJECT_TOKEN`. On the next run the bootstrap migration aborts
+with `FACT_WRITER_DB_PASSWORD must be set in the environment to run this
+migration`, and `api` and `worker` restart in a loop. Found running Phase
+31.1 on a machine that had last run the quickstart in September. Add the
+missing lines by hand, with names from `infra/.env.prod.example`. Do not
+regenerate the file with `--force` while the volume still exists: the
+Postgres superuser password is fixed when the volume is first created, so
+a regenerated file no longer matches it. Removing the volume and the file
+together starts clean, at the cost of the local data.
+
 ## A config value cannot be stored without naming an explicit grant
 
 `configured_facts` — the table that holds what an environment is actually
@@ -1136,24 +1151,81 @@ against your target, and most of them will return `inconclusive` because
 their inputs were not supplied. That is honest but noisy. Name the probes
 you want.
 
-## Six probes have no data source in the CLI
+## One probe has no data source in the CLI, and that is deliberate
 
-`culprit probe` wires a real network client and a real HTTP client, and
-nothing else. `probe.db.connect`, `probe.db.schema_conformance`,
-`probe.config.present`, `probe.dep.version` and `probe.edge.impedance`
-each need a data source the CLI does not yet construct — a database
-client, a config reader, a package reader, a metrics reader — so from
-the command line they return `inconclusive` with a reason naming the
-missing source. They are honest about it, and they are not usable.
+Until Phase 31.1, five probes had no data source behind them from the
+command line. Four now do, through the Phase 30 capture machinery
+(`cli/internal/probe/sources.go`): `probe.db.connect` and
+`probe.db.schema_conformance` read the database with
+`capture.PostgresReader`, `probe.config.present` reads the environment
+through its capture adapter, and `probe.dep.version` runs the
+component's declared packages command. Each needs `--env`, and each
+reaches only what that environment declares and grants.
 
-The catalogue lists them because the manifest, the capability gate, the
-verdict logic and the fixtures are all real and tested against fakes;
-what is missing is the wiring. `probe.edge.impedance` is the exception
-worth knowing: its readings **are** produced, by
-`worker/app/anomaly/job.py`, which has the telemetry the CLI does not.
-And it cannot simply be wired in the CLI, because reading impedance would
-mean calling the API, and the binary deliberately links no HTTP client
-outside `internal/probe`'s outbound path.
+`probe.edge.impedance` still has none, and is not meant to: reading
+impedance from the CLI would mean calling the API, and only
+`internal/probe` may link an HTTP client (D8, amended) — which it does
+for outbound probes of the system under test, not for reading Culprit's
+own store. Its readings are produced by `worker/app/anomaly/job.py`,
+which has the telemetry. From `culprit probe` it is `refused` unless the
+environment grants `telemetry.metrics.read` (the demo's `local` does not),
+and with that grant it returns `inconclusive` saying the worker produces
+it. Neither is a measurement. No endpoint serves stored readings yet
+(`POST /readings` only), so today those worker readings are visible in the
+database, not from the CLI or the dashboard. Phase 31.1's field 17 keeps
+impedance's production where it is.
+
+## Reading installed packages needs a second grant
+
+`probe.dep.version`'s manifest declares `repo.read`. Reading what is
+*installed* in an environment means running that component's `packages:`
+command, and running a command needs it on `process.exec.allowlist` —
+the same rule `culprit env capture` follows. So the probe needs both,
+and with only `repo.read` it returns `refused` naming the command. The
+manifest was not changed to declare the second capability, because
+manifests list what a probe needs regardless of environment and the
+command is per environment; the source asks the ledger for it instead,
+and the refusal is recorded like any other.
+
+## Declared version ranges are reported, not judged
+
+`probe.dep.version` compares the installed version against the declared
+one only when the declaration is an exact pin (`1.2.3`, `==1.2.3`). A
+manifest usually declares a range — `fastapi>=0.115`, `react: ^18.2.0` —
+and deciding whether a version satisfies a range means PEP 440 and
+semver semantics that D7 keeps out of a generic comparator (the same line
+`culprit env capture` draws between `version` and `installed_version`).
+Against a range the probe returns `inconclusive` with both values, so on
+most real projects this probe will not reach a verdict unless you pass
+`--input expect_version=` yourself.
+
+## Probe expectations are only as good as the extraction behind them
+
+`culprit probe` resolves each reading's expectation from the same
+extraction `culprit check` runs, which has three consequences:
+
+- **It costs an extraction.** Every `culprit probe` invocation runs the
+  extractors first, including the language plugins, which import the
+  application. `--no-plugins` skips them, at the price of every
+  expectation the plugins would have supplied.
+- **No declaration, no verdict.** A probe measured against INTENT whose
+  subject nothing declares returns `inconclusive`, even when the
+  measurement looks healthy: "this route answers 200" is a measurement,
+  and only a declaration turns it into conformance. A repository whose
+  routes are not extractable gets measurements, not conformance.
+- **A concrete URL is matched to a template by segments.** `/orders/42`
+  matches a declared `/orders/{id}`, and a literal route beats a
+  parameterised one. Matching is per segment and exact: a route
+  registered with a trailing slash, a different prefix, or a mount point
+  the extractor did not see will not match, and reads as undeclared.
+
+`--capture <envelope>` supplies CONFIGURED expectations, from a capture
+of the same environment. In this release the only probe measured against
+CONFIGURED whose predicate a capture could supply is none:
+`probe.db.connect` produces `database_connects`, which a capture does not
+record, so `--capture` changes nothing about any built-in reading yet.
+The path exists, and is tested, so the next probe that needs it does not
+need an engine change.
 
 ## Probes run from wherever you run them, not from where the caller sits
 
@@ -1168,23 +1240,39 @@ a CI runner sees CI's network, not production's. Nothing in
 `probe.Request` names a vantage point, and no probe shells into a
 container to run from inside it.
 
-The consequence for Phase 31's own acceptance criterion 2 — "blocking
-the network path between two containers flips exactly the reachability
-probe to fail while both components' health probes stay pass" — is that
-it cannot be demonstrated with a host-run probe. Either probes gain a
-vantage point (running the static binary inside the container under an
-allowlisted `exec`, which is what "from where A sits" actually requires),
-or the criterion needs rewording. That is an open decision.
+The vantage point is therefore wherever you put the binary, and the
+reading records it in `agent_id` (decided 2026-11-03, Phase 31's
+criterion 2 reworded to say so). Phase 31.1 demonstrated it by running
+the static linux binary *inside* order-service
+(`infra/docker-compose.probe-demo.yml` mounts it there): with a firewall
+rule in order-service's own network namespace rejecting its traffic to
+inventory-service, A's reachability probes for B went to `fail` while
+both services' health probes, run from the host, stayed `pass`. Culprit
+does not put itself in the container for you — you `docker exec` it.
+
+Two ways to break a path between containers do **not** demonstrate this,
+and both were tried. Disconnecting A from the shared network on Docker
+Desktop also kills the host's port forward to A, even with a second
+network attached and made A's gateway network, so A's own health probe
+from the host stops passing too. And dropping packets rather than
+rejecting them produces a timeout, which every network probe reports as
+`inconclusive`, not `fail` — correctly, since a timeout does not prove
+the path is closed.
 
 ## A probe's inputs come from you, not from the model
 
-The endpoint a network probe dials, the URL an HTTP probe requests, the
-DSN a database probe connects with, the token an auth probe inspects —
-all arrive as `--input key=value`. Culprit does not derive them from
-`culprit.yaml`'s component definitions in this release, so a probe whose
-input you did not supply returns `inconclusive` rather than guessing a
-hostname. Wiring the system model into probe inputs automatically is
-worthwhile and is not done.
+The endpoint a network probe dials, the URL an HTTP probe requests and
+the token an auth probe inspects arrive as `--input key=value`. Culprit
+does not derive them from `culprit.yaml`'s component definitions, so a
+probe whose input you did not supply returns `inconclusive` rather than
+guessing a hostname. Wiring the system model into probe inputs
+automatically is worthwhile and is not done.
+
+A database's connection string is the exception, and on purpose: since
+Phase 31.1 it is **never** an input. It is read from the variable a
+component's `database: dsn_env:` names, in the environment `culprit` runs
+in, so it never appears in shell history, a process listing or a
+reading.
 
 ## Refused, filtered and slow are not the same, and only one is a failure
 
@@ -1223,11 +1311,14 @@ asserted it on the grounds that it had nothing to talk to. Probes make
 that false: `probe.http.*` and `probe.auth.propagation` exist to ask a
 running service a question, under the `net.http.outbound` grant.
 
-What replaced that assertion is narrower but sharper — `internal/check`,
-`internal/diverge`, `internal/severity`, `internal/report`,
-`internal/extract` and `internal/model` are each asserted to link no
-`net/http`, so the packages that *compute findings* still cannot open a
-socket. `internal/probe` is the one package permitted a client, its
+What replaced that assertion is narrower but sharper, and since Phase
+31.1 it is an allowlist (`TestTheNetworkBoundaryIsAnAllowlist`): only
+`internal/probe` may link `net/http`, only `internal/probe` and
+`internal/capture` may link `net` or `crypto/tls`, and every other package
+under `internal/` — including one added tomorrow, with no edit to the
+test — may link none of them, so the packages that *compute findings*
+still cannot open a socket. `internal/probe` is the one package permitted
+a client, its
 client has no method that can send a body or use a verb other than `GET`
 and `OPTIONS`, and none of it runs without a grant. But the honest
 statement is that the binary's network posture changed in this release,
@@ -1258,6 +1349,26 @@ non-GET route reports `inconclusive` rather than confirming the route
 exists. That is the correct answer and it is also a real gap: Culprit
 cannot verify a write route's existence without writing, and it will not
 write.
+
+## Route conformance proves a path is routed, not that it works
+
+`probe.http.route_conformance` fails only on a **404**, or a **405** for
+the declared method. Every other status passes, so a route behind
+authentication passes on its **401** — Phase 31.1's own demonstration
+passed `GET /model/components` that way — and a route that answers 500
+on every request passes too. What it establishes is "the running service
+knows this path", which is the INTENT-against-OBSERVED question; whether
+the route then does its job is `probe.http.schema_conformance`'s and the
+auth probes' question.
+
+It also cannot tell *which* server answered. Point `base_url` at the
+wrong thing and the verdict is about that thing: on the machine Phase
+31.1 was first run on, an unrelated Apache held port 80, answered every
+request with its own 404, and every declared route correctly — and
+uselessly — read `fail`. A catch-all route (a single-page app's fallback
+that answers 200 for any path) has the opposite effect: every route
+passes. The reading's `measured.url` is where to look when a verdict is
+surprising.
 
 ## `probe.auth.token_shape` understands JWTs
 
