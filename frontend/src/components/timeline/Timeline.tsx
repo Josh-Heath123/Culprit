@@ -7,7 +7,8 @@ import { scaleBand, scaleTime } from "@visx/scale";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useComponents } from "@/hooks/useModel";
-import { markRadiusFor, severityColorVar, severityFor } from "@/lib/severity";
+import { formatDate, formatDateTime, formatTime } from "@/lib/datetime";
+import { markRadiusFor, severityFillClass, severityFor } from "@/lib/severity";
 import type { ComponentOut, IncidentSummary } from "@/lib/types";
 
 interface TimelineProps {
@@ -146,13 +147,7 @@ function TimelineChart({
   return (
     <svg width={width} height={height} role="img" aria-label="Incident timeline by service">
       <Group left={MARGIN.left} top={MARGIN.top}>
-        <GridColumns
-          scale={xScale}
-          height={innerHeight}
-          stroke="var(--border)"
-          strokeOpacity={0.5}
-          numTicks={8}
-        />
+        <GridColumns scale={xScale} height={innerHeight} numTicks={8} className="stroke-line" />
 
         {laneServiceNames.map((service) => {
           const y = yScale(service) ?? 0;
@@ -163,15 +158,14 @@ function TimelineChart({
                 x2={innerWidth}
                 y1={y + yScale.bandwidth()}
                 y2={y + yScale.bandwidth()}
-                stroke="var(--border)"
-                strokeOpacity={0.5}
+                className="stroke-line"
               />
               <text
                 x={-12}
                 y={y + yScale.bandwidth() / 2}
                 dy="0.35em"
                 textAnchor="end"
-                className="fill-muted-foreground font-mono text-[11px]"
+                className="fill-fg-muted font-mono text-2xs"
               >
                 {service}
               </text>
@@ -182,6 +176,8 @@ function TimelineChart({
         {bands.map(({ incident, x0, x1, y0, y1 }) => {
           const selected = incident.id === selectedIncidentId;
           return (
+            // A band is a control: focusable, and Enter or Space opens it,
+            // so the timeline works by keyboard as well as by pointer.
             <rect
               key={incident.id}
               x={x0}
@@ -189,13 +185,24 @@ function TimelineChart({
               width={Math.max(x1 - x0, 4)}
               height={y1 - y0 + 8}
               rx={4}
+              role="button"
+              tabIndex={0}
+              aria-label={`Incident on ${incident.services.join(", ")}, opened ${formatDateTime(incident.opened_at)}`}
+              aria-pressed={selected}
+              data-testid="incident-band"
               className={
                 selected
-                  ? "cursor-pointer fill-primary/15 stroke-primary"
-                  : "cursor-pointer fill-secondary/50 stroke-border hover:fill-secondary/80"
+                  ? "cursor-pointer fill-brand-tint stroke-brand"
+                  : "cursor-pointer fill-surface-2 stroke-line-strong hover:fill-surface-3 focus-visible:stroke-brand"
               }
               strokeWidth={selected ? 1.5 : 1}
               onClick={() => onSelectIncident(incident.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectIncident(incident.id);
+                }
+              }}
             />
           );
         })}
@@ -208,11 +215,8 @@ function TimelineChart({
               cx={cx}
               cy={cy}
               r={markRadiusFor(anomaly.score)}
-              fill={severityColorVar(severity)}
-              fillOpacity={0.9}
-              stroke="var(--background)"
               strokeWidth={1}
-              className="cursor-pointer"
+              className={`cursor-pointer stroke-surface-0 ${severityFillClass(severity)}`}
               onClick={() => onSelectIncident(incidentId)}
             >
               <title>
@@ -226,14 +230,22 @@ function TimelineChart({
           top={innerHeight}
           scale={xScale}
           numTicks={8}
-          stroke="var(--border)"
-          tickStroke="var(--border)"
+          axisLineClassName="stroke-line-strong"
+          tickClassName="[&_line]:stroke-line-strong"
+          tickFormat={(value) => tickLabel(value as Date, xScale.domain())}
           tickLabelProps={() => ({
-            className: "fill-muted-foreground font-mono text-[10px]",
+            className: "fill-fg-subtle font-mono text-2xs",
             textAnchor: "middle",
           })}
         />
       </Group>
     </svg>
   );
+}
+
+/** Axis labels in the interface's one format: times when the window is
+ * under a day, dates beyond it. */
+function tickLabel(value: Date, domain: Date[]): string {
+  const span = domain[1].getTime() - domain[0].getTime();
+  return span < 24 * 60 * 60 * 1000 ? formatTime(value) : formatDate(value);
 }

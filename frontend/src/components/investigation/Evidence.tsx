@@ -1,5 +1,7 @@
 import { VerdictBadge } from "@/components/ui/status";
 import type { InvestigationReading } from "@/lib/types";
+import { Prose } from "@/components/ui/prose";
+import { formatDateTime } from "@/lib/datetime";
 
 /** The evidence for a fault edge: the readings it cites — what was
  * measured, against what, under which grant.
@@ -21,13 +23,17 @@ export function Evidence({ readings }: { readings: InvestigationReading[] }) {
             <span className="ml-auto font-mono text-2xs text-fg-subtle">{id}</span>
           </div>
           <span className="font-mono text-2xs wrap-anywhere text-fg-muted">{reading.target}</span>
-          {reading.reason ? <p className="text-sm leading-relaxed text-fg">{reading.reason}</p> : null}
+          {reading.reason ? (
+            <p className="text-sm leading-relaxed text-fg">
+              <Prose text={reading.reason} />
+            </p>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Values label="Measured" values={reading.measured ?? {}} />
             {reading.expected ? <Values label="Expected" values={reading.expected} /> : null}
           </div>
           <p className="text-2xs text-fg-subtle">
-            <time dateTime={reading.taken_at}>{new Date(reading.taken_at).toLocaleString()}</time> ·{" "}
+            <time dateTime={reading.taken_at}>{formatDateTime(reading.taken_at)}</time> ·{" "}
             {reading.agent_id}
             {reading.grants_used.length > 0 ? ` · grants: ${reading.grants_used.join(", ")}` : ""}
           </p>

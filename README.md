@@ -45,6 +45,28 @@ reading names the declaration it was measured against:
 
 ![culprit probe: GET /health passes, GET /orders fails because it is declared but answers 404, and the JSON reading's expected_source names api/openapi.json](docs/captures/probe.svg)
 
+**The dashboard** shows what `culprit diagnose` found. These screenshots are
+taken by the end-to-end suite (`frontend/e2e/tour.spec.ts`, `just e2e`)
+against the stack `just quickstart` builds, the same run CI makes on every
+pull request, so they show only what renders. The data is the quickstart's
+injected fault and the fault library's recorded walks.
+
+A complete investigation: the root is marked, every edge opens to the
+readings that established it, and confidence is four checks rather than a
+score.
+
+![The investigation view: the diagnosis names the root auth:order-service->inventory-service/audience, with the four confidence checks; the fault tree has the caused-by edge open, showing the failing probe.auth.token_shape reading; the symptom card and the hypotheses in four groups are on the right](docs/screenshots/investigation-complete-1280.png)
+
+A partial one is shown as where the walk stopped and what it could not
+check — never as a root or a cause:
+
+![A partial investigation: "Walk stopped at component:order-service", and under "Could not check" the audience hypothesis, refused because config.read.values was not granted](docs/screenshots/investigation-partial-1280.png)
+
+<p>
+  <img src="docs/screenshots/investigations-1280.png" width="66%" alt="The investigations list: each run's symptom, its root or where the walk stopped, and whether it is complete or partial">
+  <img src="docs/screenshots/investigation-complete-375.png" width="30%" alt="The same complete investigation on a 375-pixel-wide phone screen, stacked into one column">
+</p>
+
 ## Key features
 
 | | What it lets you do |
@@ -206,9 +228,9 @@ In plain terms:
   connections, contracts — not every function and import.
 - **D7 — Divergence detection is generic.** All domain knowledge lives in
   extractors and probes.
-- **D8 — The narrator is the only LLM, and it may not decide facts.** It may
-  turn a settled result into prose. It may not create a fact, a divergence, a
-  reading or a verdict.
+- **D8 — No language model decides anything.** Nothing in Culprit calls one
+  today. A narrator may come later (Phase 35), only to turn a settled result
+  into prose: it may not create a fact, a divergence, a reading or a verdict.
 
 Two standing rules come up everywhere: **a config value never appears in a
 report** unless you grant that key — every report format has a test that
@@ -404,6 +426,9 @@ a credential.
 | `just cli-test-docker`, `just cli-test-kind` | environment capture against real Compose projects and a kind cluster |
 | `just check-migration-round-trip` | every migration upgrades, downgrades and upgrades again against a real database with rows in it |
 | `just lint`, `just typecheck`, `just lint-imports` | ruff and `gofmt`/`go vet`, pyright, and the import contracts that keep the deterministic packages away from any LLM client |
+| `just e2e` | the dashboard in a real browser (Playwright) against a running `just quickstart`: sign in, read a complete and a partial investigation, keyboard alone, every route at 375, 768, 1280 and 1920 px, the settings journeys, and a deliberate error path — any console error or failed request elsewhere fails it |
+| `cd frontend && npm test` | the dashboard's unit tests (Node's own runner): the one date format, the hypothesis labels, flags in prose |
+| `just check-frontend-tokens` | no page styles itself outside the design tokens; `scripts/tests/test_design_tokens.py` measures every text token on every surface, each status colour on its own tint, and white on the blue fill, against WCAG 2.2 AA (4.5:1) |
 
 CI runs every row on every pull request except `just self-check-coverage`,
 whose report it prints in the self-check job's log without ever failing on
@@ -448,8 +473,8 @@ failure. [`docs/PROBES.md`](docs/PROBES.md) documents each probe and
 The plan of record is [`docs/DIAGNOSTIC_PLAN.md`](docs/DIAGNOSTIC_PLAN.md).
 What comes next, as plans:
 
-- **Phase 32.1 — An investigation-first interface,** replacing the incident
-  dashboard, with a design system and a demonstration video.
+- **The demonstration video,** recorded from the script, storyboard and
+  checklist in [`docs/video/`](docs/video); linked here once it exists.
 - **Phase 33 — A production agent** with an auditable, least-privilege
   permission model, so an investigation can reach a running system.
 - **Phase 34 — A verification loop:** after a fix, check the fault is really

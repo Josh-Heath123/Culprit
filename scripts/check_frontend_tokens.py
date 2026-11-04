@@ -17,9 +17,9 @@ reach it. So this refuses, in the files in scope:
 - Tailwind v4's CSS-variable shorthand (`bg-(--x)`);
 - any inline `style=` and any colour prop (`color=`, `fill=`, `stroke=`).
 
-**Scope.** Phase 32.1 part 1 redesigns the two investigation screens,
-so the gate covers those and the components only they use; part 2
-widens SCOPE to every page. A path in SCOPE that does not exist is an
+**Scope.** All of frontend/src since Phase 32.1 part 2 (part 1 covered
+the investigation screens only), every .tsx and .ts file, components/ui
+included. A path in SCOPE that does not exist is an
 error, not a skip — a gate whose files moved away is green for nothing.
 
 Exit codes: 0 clean, 1 a violation, 2 could not run.
@@ -37,15 +37,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 #: Files and directories the gate reads, relative to the repository.
-SCOPE: tuple[str, ...] = (
-    "frontend/src/routes/InvestigationList.tsx",
-    "frontend/src/routes/InvestigationView.tsx",
-    "frontend/src/components/investigation",
-    "frontend/src/components/layout/AppHeader.tsx",
-    # New in Phase 32.1 and used only by the screens above so far.
-    "frontend/src/components/ui/card.tsx",
-    "frontend/src/components/ui/status.tsx",
-)
+SCOPE: tuple[str, ...] = ("frontend/src",)
+
+#: Files in SCOPE the gate does not read, each with its reason. The bar is
+#: the one scripts/check_scan_coverage.py sets for its own exclusions: an
+#: exclusion nobody wrote a reason for is indistinguishable from an
+#: oversight.
+EXCLUDED: dict[str, str] = {
+    "frontend/src/index.css": "the one place colours are declared; its contrast is measured by "
+    "scripts/tests/test_design_tokens.py",
+    "frontend/src/lib/api-types.generated.ts": "generated from the API's OpenAPI schema, never "
+    "hand-edited, and holds no styling",
+}
 
 _PALETTE = (
     "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|"
@@ -110,9 +113,15 @@ def _files(root: Path, scope: tuple[str, ...]) -> list[Path]:
     for entry in scope:
         path = root / entry
         if path.is_dir():
-            found = sorted(p for p in path.rglob("*.tsx") if p.is_file())
+            found = sorted(
+                p
+                for p in path.rglob("*")
+                if p.is_file()
+                and p.suffix in {".tsx", ".ts"}
+                and p.relative_to(root).as_posix() not in EXCLUDED
+            )
             if not found:
-                raise FileNotFoundError(f"{entry} is in SCOPE and holds no .tsx file")
+                raise FileNotFoundError(f"{entry} is in SCOPE and holds no .tsx or .ts file")
             files.extend(found)
         elif path.is_file():
             files.append(path)
@@ -121,9 +130,21 @@ def _files(root: Path, scope: tuple[str, ...]) -> list[Path]:
     return files
 
 
+#: Phase 32.1 review: one date format everywhere,
+#: from one formatter. A locale-dependent toLocale*String is how "4/11"
+#: ended up meaning two different days.
+DATE_FORMATTER = "frontend/src/lib/datetime.ts"
+LOCALE_FORMATTING = re.compile(r"\.toLocale(?:Date|Time)?String\(|\bIntl\.DateTimeFormat\b")
+
+
 def check_file(path: Path) -> list[Violation]:
     source = path.read_text(encoding="utf-8")
     found: list[Violation] = []
+    if not path.as_posix().endswith(DATE_FORMATTER):
+        for match in LOCALE_FORMATTING.finditer(source):
+            line = source.count("\n", 0, match.start()) + 1
+            rule = "locale formatting outside lib/datetime.ts"
+            found.append(Violation(path, line, rule, match.group(0)))
     for rule, pattern in RULES:
         for match in pattern.finditer(source):
             line = source.count("\n", 0, match.start()) + 1

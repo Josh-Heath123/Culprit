@@ -1,5 +1,7 @@
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import type { Hypothesis, InvestigationTree } from "@/lib/types";
+import { Prose } from "@/components/ui/prose";
+import { hypothesisLabel } from "@/lib/hypotheses";
 
 const GROUPS = [
   ["supported", "Supported", "the readings confirm it"],
@@ -29,9 +31,16 @@ export function Hypotheses({ groups }: { groups: InvestigationTree["hypotheses"]
                 <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
                   {items.map((h) => (
                     <li key={h.id} className="flex min-w-0 flex-col gap-1 px-3 py-2.5">
-                      <span className="font-mono text-xs font-medium wrap-anywhere text-fg">{h.kind}</span>
+                      <span className="text-sm font-medium text-fg" data-testid="hypothesis-label">
+                        {hypothesisLabel(h.kind)}
+                      </span>
+                      <span className="font-mono text-2xs text-fg-subtle">{h.kind}</span>
                       <span className="font-mono text-2xs wrap-anywhere text-fg-muted">{h.subject}</span>
-                      {h.reason ? <span className="text-xs leading-relaxed text-fg-muted">{h.reason}</span> : null}
+                      {h.reason ? (
+                        <span className="text-xs leading-relaxed text-fg-muted">
+                          <Prose text={h.reason} />
+                        </span>
+                      ) : null}
                       {h.readings.length > 0 ? (
                         <span className="font-mono text-2xs text-fg-subtle">cites {h.readings.join(", ")}</span>
                       ) : null}

@@ -13,8 +13,11 @@ export function severityFor(score: number): Severity {
   return Math.abs(score) >= CRITICAL_THRESHOLD ? "critical" : "warning";
 }
 
-export function severityColorVar(severity: Severity): string {
-  return severity === "critical" ? "var(--destructive)" : "var(--severity-warning)";
+/** A token utility, not a colour: the gate (scripts/check_frontend_tokens.py)
+ * refuses colours outside index.css. Severity is also carried by the mark's
+ * size (markRadiusFor), so it is never colour alone. */
+export function severityFillClass(severity: Severity): string {
+  return severity === "critical" ? "fill-fail" : "fill-degrades";
 }
 
 /** Mark radius scales mildly with magnitude so a more severe anomaly is
@@ -23,4 +26,9 @@ export function severityColorVar(severity: Severity): string {
 export function markRadiusFor(score: number): number {
   const clamped = Math.min(Math.abs(score), 12);
   return 3 + clamped * 0.4;
+}
+
+/** The same, for text (an anomaly's z-score in the incident panel). */
+export function severityTextClass(severity: Severity): string {
+  return severity === "critical" ? "text-fail" : "text-degrades";
 }

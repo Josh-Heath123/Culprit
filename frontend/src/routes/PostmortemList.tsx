@@ -1,76 +1,87 @@
+import { ChevronRightIcon, PlusIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { Badge } from "@/components/ui/badge";
+import { Page } from "@/components/layout/Page";
 import { Button } from "@/components/ui/button";
+import { EmptyPanel, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { usePostmortems } from "@/hooks/usePostmortems";
-import type { EmbeddingStatus } from "@/lib/types";
+import { formatDateTime } from "@/lib/datetime";
 
-function statusBadgeVariant(status: EmbeddingStatus): "outline" | "destructive" {
-  return status === "failed" ? "destructive" : "outline";
-}
+import { EmbeddingStatusBadge } from "./PostmortemEditor";
 
 export function PostmortemList() {
-  const { postmortems, isPending, isError, hasNextPage, fetchNextPage, isFetchingNextPage } =
+  const { postmortems, isPending, isError, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =
     usePostmortems();
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-primary" aria-hidden />
-            <span className="text-sm font-semibold tracking-tight text-foreground">Culprit</span>
-          </Link>
-          <span className="text-xs text-muted-foreground">/ Postmortems</span>
-        </div>
+    <Page
+      title="Postmortems"
+      description="Written by your team. With a VOYAGE_API_KEY they are embedded, so a coding agent can search them through the MCP server before it changes something."
+      actions={
         <Button asChild size="sm">
-          <Link to="/postmortems/new">Write a postmortem</Link>
-        </Button>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 overflow-y-auto p-6">
-        {isPending ? <p className="text-xs text-muted-foreground">Loading postmortems…</p> : null}
-        {isError ? <p className="text-xs text-destructive">Couldn't load postmortems.</p> : null}
-        {!isPending && postmortems.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Nothing here yet. Postmortems your team writes are kept here and, with a
-            VOYAGE_API_KEY, embedded so a coding agent can search them through the MCP server.
-          </p>
-        ) : null}
-
-        {postmortems.map((postmortem) => (
-          <Link
-            key={postmortem.id}
-            to={`/postmortems/${postmortem.id}`}
-            className="flex flex-col gap-1.5 rounded-md border border-border p-4 hover:border-foreground/30"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-foreground">{postmortem.title}</span>
-              <Badge variant={statusBadgeVariant(postmortem.embedding_status)}>
-                {postmortem.embedding_status}
-              </Badge>
-            </div>
-            <p className="line-clamp-2 text-xs text-muted-foreground">{postmortem.body}</p>
-            {postmortem.created_at ? (
-              <span className="text-[11px] text-muted-foreground/70">
-                {new Date(postmortem.created_at).toLocaleString()}
-              </span>
-            ) : null}
+          <Link to="/postmortems/new">
+            <PlusIcon aria-hidden />
+            Write a postmortem
           </Link>
-        ))}
+        </Button>
+      }
+    >
+      {isPending ? <LoadingRows label="Loading postmortems" rows={3} /> : null}
+      {isError ? (
+        <ErrorPanel
+          title="Couldn't load postmortems."
+          message={error instanceof Error ? error.message : "The request failed."}
+          onRetry={() => refetch()}
+        />
+      ) : null}
+      {!isPending && !isError && postmortems.length === 0 ? (
+        <EmptyPanel title="No postmortems yet">
+          Write one with the button above, or from an incident in the history.
+        </EmptyPanel>
+      ) : null}
 
-        {hasNextPage ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="self-center"
-            onClick={() => void fetchNextPage()}
-            disabled={isFetchingNextPage}
-          >
-            {isFetchingNextPage ? "Loading…" : "Load more"}
-          </Button>
-        ) : null}
-      </main>
-    </div>
+      {postmortems.length > 0 ? (
+        <ul className="flex flex-col gap-2" aria-label="Postmortems">
+          {postmortems.map((postmortem) => (
+            <li key={postmortem.id}>
+              <Link
+                to={`/postmortems/${postmortem.id}`}
+                className="group flex items-center gap-4 rounded-lg border border-line bg-surface-1 p-4 transition-colors duration-150 hover:border-line-strong hover:bg-surface-2 sm:p-5"
+                data-testid="postmortem-row"
+              >
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-fg">{postmortem.title}</span>
+                    <EmbeddingStatusBadge status={postmortem.embedding_status} />
+                  </div>
+                  <p className="line-clamp-2 text-sm text-fg-muted">{postmortem.body}</p>
+                  {postmortem.created_at ? (
+                    <time dateTime={postmortem.created_at} className="text-2xs text-fg-subtle">
+                      {formatDateTime(postmortem.created_at)}
+                    </time>
+                  ) : null}
+                </div>
+                <ChevronRightIcon
+                  aria-hidden
+                  className="size-4 shrink-0 text-fg-subtle transition-transform duration-150 group-hover:translate-x-0.5"
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {hasNextPage ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-center"
+          onClick={() => void fetchNextPage()}
+          disabled={isFetchingNextPage}
+        >
+          {isFetchingNextPage ? "Loading…" : "Load more"}
+        </Button>
+      ) : null}
+    </Page>
   );
 }

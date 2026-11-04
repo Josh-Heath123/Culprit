@@ -50,7 +50,11 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginRoute />} />
 
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Dashboard />} />
+        {/* Investigations are the product; the incident timeline is the
+            retired engine's history (Phase 32 part 2), so signing in lands
+            on investigations, not on it. */}
+        <Route path="/" element={<Navigate to="/investigations" replace />} />
+        <Route path="/incidents" element={<Dashboard />} />
         <Route path="/incidents/:incidentId" element={<Dashboard />} />
         <Route path="/incidents/:incidentId/postmortem" element={<PostmortemEditor />} />
         <Route path="/investigations" element={<InvestigationList />} />

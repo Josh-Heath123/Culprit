@@ -1,7 +1,9 @@
 import { CheckIcon, CrosshairIcon, MinusIcon, SignpostIcon } from "lucide-react";
 
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Prose } from "@/components/ui/prose";
 import { DiagnosisBadge } from "@/components/ui/status";
+import { hypothesisLabel } from "@/lib/hypotheses";
 import type { ConfidenceRubric, Diagnosis, Hypothesis } from "@/lib/types";
 
 /** The walk's conclusion. Complete: the root it established, the
@@ -51,11 +53,15 @@ function Complete({ diagnosis }: { diagnosis: Diagnosis }) {
           {diagnosis.root_subject}
         </p>
       </div>
-      <p className="text-sm leading-relaxed text-fg">{diagnosis.statement}</p>
+      <p className="text-sm leading-relaxed text-fg">
+        <Prose text={diagnosis.statement} />
+      </p>
       {diagnosis.remediation ? (
         <div className="rounded-md border border-brand-line bg-brand-tint px-3 py-2.5">
           <span className="text-2xs font-semibold tracking-widest text-brand uppercase">Suggested fix</span>
-          <p className="mt-1 text-sm leading-relaxed text-fg">{diagnosis.remediation}</p>
+          <p className="mt-1 text-sm leading-relaxed text-fg">
+            <Prose text={diagnosis.remediation} />
+          </p>
         </div>
       ) : null}
     </>
@@ -74,7 +80,9 @@ function Partial({ diagnosis, unexplored }: { diagnosis: Diagnosis; unexplored: 
           {diagnosis.root_subject}
         </p>
       </div>
-      <p className="text-sm leading-relaxed text-fg">{diagnosis.statement}</p>
+      <p className="text-sm leading-relaxed text-fg">
+        <Prose text={diagnosis.statement} />
+      </p>
       <div className="flex flex-col gap-2" data-testid="could-not-check">
         <h3 className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">Could not check</h3>
         {unexplored.length === 0 ? (
@@ -86,10 +94,14 @@ function Partial({ diagnosis, unexplored }: { diagnosis: Diagnosis; unexplored: 
           <ul className="flex flex-col gap-2">
             {unexplored.map((h) => (
               <li key={h.id} className="rounded-md border border-inconclusive-line bg-inconclusive-tint px-3 py-2.5">
-                <p className="font-mono text-xs wrap-anywhere text-fg">
-                  {h.kind} <span className="text-fg-muted">{h.subject}</span>
-                </p>
-                {h.reason ? <p className="mt-1 text-sm leading-relaxed text-fg-muted">{h.reason}</p> : null}
+                <p className="text-sm font-medium text-fg">{hypothesisLabel(h.kind)}</p>
+                <p className="font-mono text-2xs text-fg-subtle">{h.kind}</p>
+                <p className="font-mono text-2xs wrap-anywhere text-fg-muted">{h.subject}</p>
+                {h.reason ? (
+                  <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+                    <Prose text={h.reason} />
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -134,7 +146,9 @@ function Rubric({ rubric }: { rubric: ConfidenceRubric }) {
                 <span className="text-sm font-medium text-fg">
                   {name} <span className="font-normal text-fg-muted">— {criterion.holds ? "yes" : "no"}</span>
                 </span>
-                <span className="text-xs leading-relaxed text-fg-muted">{criterion.reason}</span>
+                <span className="text-xs leading-relaxed text-fg-muted">
+                  <Prose text={criterion.reason} />
+                </span>
               </div>
             </li>
           );

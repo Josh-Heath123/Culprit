@@ -1,17 +1,20 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { Page } from "@/components/layout/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { ErrorPanel, LoadingRows } from "@/components/ui/states";
 import {
   useAcceptTopologySuggestion,
   useDismissTopologySuggestion,
   useTopologySuggestions,
 } from "@/hooks/useTopologySuggestions";
 import { connectionsBySource, useComponents, useConnections } from "@/hooks/useModel";
+import { formatDate } from "@/lib/datetime";
 import {
   createComponent,
   createConnection,
@@ -90,15 +93,15 @@ function NewKeyDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="p-5">
-        <div className="flex flex-col gap-3">
+      <DialogContent aria-describedby={undefined} className="p-5 sm:p-6">
+        <div className="flex flex-col gap-4">
           <div>
-            <p className="text-sm font-semibold text-foreground">New key for {serviceName}</p>
-            <p className="mt-1 text-xs text-destructive">
+            <DialogTitle className="text-base">New key for {serviceName}</DialogTitle>
+            <p className="mt-1 text-xs text-fail">
               This is shown once. It cannot be retrieved again — copy it now.
             </p>
           </div>
-          <code className="break-all rounded-md border border-border bg-secondary px-3 py-2 font-mono text-xs text-foreground">
+          <code className="wrap-anywhere rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-xs text-fg">
             {apiKey}
           </code>
           <div className="flex justify-end gap-2">
@@ -191,12 +194,12 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
           event.preventDefault();
           if (nameValid) mutation.mutate();
         }}
-        className="flex flex-col gap-3 rounded-md border border-border p-4"
+        className="flex flex-col gap-4 rounded-lg border border-line bg-surface-1 p-4 sm:p-5"
       >
-        <p className="text-sm font-semibold text-foreground">Register a component</p>
+        <p className="text-sm font-semibold text-fg">Register a component</p>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="new-service-name" className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="new-service-name" className="text-xs font-medium text-fg-muted">
             Name — must match the OTel <code>service.name</code> resource attribute exactly
           </label>
           <Input
@@ -206,14 +209,14 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
             onChange={(event) => setName(event.target.value)}
           />
           {name && !nameValid ? (
-            <p className="text-xs text-destructive">
+            <p className="text-xs text-fail">
               lowercase letters, digits, <code>. _ -</code> only, starting with a letter or digit
             </p>
           ) : null}
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="new-service-display-name" className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="new-service-display-name" className="text-xs font-medium text-fg-muted">
             Display name (optional)
           </label>
           <Input
@@ -225,12 +228,11 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="new-service-kind" className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="new-service-kind" className="text-xs font-medium text-fg-muted">
             Kind
           </label>
-          <select
+          <Select
             id="new-service-kind"
-            className="self-start rounded-md border border-border bg-background px-2 py-1 text-xs"
             value={kind}
             onChange={(event) => setKind(event.target.value as ComponentKind)}
           >
@@ -239,11 +241,11 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="new-service-metrics" className="text-xs font-medium text-muted-foreground">
+          <label htmlFor="new-service-metrics" className="text-xs font-medium text-fg-muted">
             Monitored metrics, comma-separated (blank = score every metric seen)
           </label>
           <Input
@@ -256,12 +258,12 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
 
         {existing.length > 0 ? (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-xs font-medium text-fg-muted">
               Depends on (declared as <code>http</code> connections, unclassified — change either below)
             </span>
             <div className="flex flex-wrap gap-3">
               {existing.map((component) => (
-                <label key={component.id} className="flex items-center gap-1.5 text-xs text-foreground">
+                <label key={component.id} className="flex items-center gap-1.5 text-xs text-fg">
                   <input
                     type="checkbox"
                     checked={dependsOn.includes(component.name)}
@@ -281,12 +283,12 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
         ) : null}
 
         {mutation.isError ? (
-          <p className="font-mono text-xs text-destructive">
+          <p className="font-mono text-xs text-fail">
             {mutation.error instanceof Error ? mutation.error.message : "Couldn't create component."}
           </p>
         ) : null}
         {failedConnections.length > 0 ? (
-          <p className="font-mono text-xs text-destructive">
+          <p className="font-mono text-xs text-fail">
             Created, but these connections were not: {failedConnections.join(", ")}. Add them
             below.
           </p>
@@ -364,20 +366,23 @@ function ConnectionsPanel({
   const candidates = components.filter((c) => c.name !== component.name);
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border/60 p-3">
-      <span className="text-xs font-medium text-muted-foreground">Connections</span>
+    <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-2 p-3">
+      <span className="text-xs font-medium text-fg-muted">Connections</span>
 
       {connections.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-fg-muted">
           None declared. Nothing downstream of this component is on a request path yet.
         </p>
       ) : (
         <div className="flex flex-col gap-1">
           {connections.map((connection) => (
-            <div key={connection.id} className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">&rarr;</span>
-                <span className="font-mono text-foreground">{connection.to_component}</span>
+            <div
+              key={connection.id}
+              className="flex flex-col gap-2 border-t border-line pt-2 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+                <span className="text-fg-muted">&rarr;</span>
+                <span className="font-mono wrap-anywhere text-fg">{connection.to_component}</span>
                 <Badge variant="default">{connection.kind}</Badge>
                 <Badge
                   variant={connection.criticality === "on_request_path" ? "default" : "outline"}
@@ -385,15 +390,15 @@ function ConnectionsPanel({
                   {CRITICALITY_LABEL[connection.criticality]}
                 </Badge>
                 {connection.declared_by !== "culprit_yaml" ? (
-                  <span className="text-muted-foreground">
+                  <span className="text-fg-muted">
                     {connection.declared_by === "accepted_suggestion" ? "accepted" : "inferred"}
                   </span>
                 ) : null}
               </div>
               <div className="flex items-center gap-1">
-                <select
+                <Select
+                  className="min-w-40"
                   aria-label={`Criticality of ${component.name} to ${connection.to_component}`}
-                  className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs"
                   value={connection.criticality}
                   onChange={(event) =>
                     reclassify.mutate({
@@ -407,7 +412,7 @@ function ConnectionsPanel({
                       {CRITICALITY_LABEL[value]}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -430,9 +435,8 @@ function ConnectionsPanel({
             if (target) add.mutate();
           }}
         >
-          <select
+          <Select
             aria-label={`Add a connection from ${component.name}`}
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
             value={target}
             onChange={(event) => setTarget(event.target.value)}
           >
@@ -442,10 +446,9 @@ function ConnectionsPanel({
                 {candidate.name}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             aria-label="Connection kind"
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
             value={kind}
             onChange={(event) => setKind(event.target.value as ConnectionKind)}
           >
@@ -454,10 +457,9 @@ function ConnectionsPanel({
                 {value}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             aria-label="Connection criticality"
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
             value={criticality}
             onChange={(event) => setCriticality(event.target.value as Criticality)}
           >
@@ -466,7 +468,7 @@ function ConnectionsPanel({
                 {CRITICALITY_LABEL[value]}
               </option>
             ))}
-          </select>
+          </Select>
           <Button type="submit" variant="secondary" size="sm" disabled={!target || add.isPending}>
             {add.isPending ? "Adding…" : "Add connection"}
           </Button>
@@ -474,12 +476,12 @@ function ConnectionsPanel({
       ) : null}
 
       {add.isError ? (
-        <p className="font-mono text-xs text-destructive">
+        <p className="font-mono text-xs text-fail">
           {add.error instanceof Error ? add.error.message : "Couldn't add that connection."}
         </p>
       ) : null}
       {(reclassify.error ?? remove.error) ? (
-        <p className="font-mono text-xs text-destructive">
+        <p className="font-mono text-xs text-fail">
           {(reclassify.error ?? remove.error)?.message || "That change was not saved."}
         </p>
       ) : null}
@@ -527,23 +529,22 @@ function ComponentRow({
   });
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-sm text-foreground">{component.name}</span>
+    <li className="flex flex-col gap-3 rounded-lg border border-line bg-surface-1 p-4 sm:p-5" data-testid="component-row">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="font-mono text-sm wrap-anywhere text-fg">{component.name}</span>
           {component.display_name ? (
-            <span className="text-xs text-muted-foreground">{component.display_name}</span>
+            <span className="text-xs text-fg-muted">{component.display_name}</span>
           ) : null}
-          {component.disabled ? <Badge variant="outline">disabled</Badge> : null}
+          {component.disabled ? <Badge variant="refused">disabled</Badge> : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Phase 27: a component is a service, a database, a queue...
               and which one decides how it can be probed later. Editable
               here because the alternative is that everything migrated
               from the old registry stays labelled `service` forever. */}
-          <select
+          <Select
             aria-label={`Kind of ${component.name}`}
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
             value={component.kind}
             onChange={(event) => setKind.mutate(event.target.value as ComponentKind)}
             disabled={setKind.isPending}
@@ -553,7 +554,7 @@ function ComponentRow({
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
           <Button
             variant="outline"
             size="sm"
@@ -566,7 +567,7 @@ function ComponentRow({
       </div>
 
       <ConnectionsPanel component={component} connections={connections} components={components} />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-fg-muted">
         monitored metrics:{" "}
         {component.monitored_metrics.length > 0 ? component.monitored_metrics.join(", ") : "all"}
       </p>
@@ -574,12 +575,12 @@ function ComponentRow({
       <div className="flex flex-col gap-1">
         {component.keys.map((key) => (
           <div key={key.id} className="flex items-center justify-between gap-2 font-mono text-xs">
-            <span className={key.revoked ? "text-muted-foreground line-through" : "text-foreground"}>
+            <span className={key.revoked ? "text-fg-muted line-through" : "text-fg"}>
               {key.label ?? "(unlabeled)"}
               {/* Nullable at the database (a server default, no NOT
                   NULL), so the API says so — see KeyOut. */}
-              {key.created_at ? ` · created ${new Date(key.created_at).toLocaleDateString()}` : ""}
-              {key.last_used_at ? ` · last used ${new Date(key.last_used_at).toLocaleDateString()}` : ""}
+              {key.created_at ? ` · created ${formatDate(key.created_at)}` : ""}
+              {key.last_used_at ? ` · last used ${formatDate(key.last_used_at)}` : ""}
             </span>
             {!key.revoked ? (
               <Button
@@ -609,11 +610,11 @@ function ComponentRow({
         <NewKeyDialog serviceName={component.name} apiKey={issuedKey} onClose={() => setIssuedKey(null)} />
       ) : null}
       {(setKind.error ?? toggleDisabled.error ?? issueKey.error ?? revoke.error) ? (
-        <p className="font-mono text-xs text-destructive">
+        <p className="font-mono text-xs text-fail">
           {(setKind.error ?? toggleDisabled.error ?? issueKey.error ?? revoke.error)?.message || "That change was not saved."}
         </p>
       ) : null}
-    </div>
+    </li>
   );
 }
 
@@ -624,21 +625,21 @@ function TopologySuggestionRow({ suggestion }: { suggestion: TopologySuggestionO
   const bothRegistered = suggestion.from_service_registered && suggestion.to_service_registered;
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-mono text-sm text-foreground">
-          {suggestion.from_service} <span className="text-muted-foreground">&rarr;</span>{" "}
+    <li className="flex flex-col gap-3 rounded-lg border border-line bg-surface-1 p-4 sm:p-5">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+        <p className="font-mono text-sm wrap-anywhere text-fg">
+          {suggestion.from_service} <span className="text-fg-muted">&rarr;</span>{" "}
           {suggestion.to_service}
         </p>
-        <span className="text-xs text-muted-foreground">
-          seen {suggestion.observations.toLocaleString()} time
+        <span className="text-xs text-fg-muted">
+          seen {suggestion.observations} time
           {suggestion.observations === 1 ? "" : "s"} since{" "}
-          {new Date(suggestion.first_seen_at).toLocaleDateString()}
+          {formatDate(suggestion.first_seen_at)}
         </span>
       </div>
 
       {!bothRegistered ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-fg-muted">
           {!suggestion.from_service_registered ? suggestion.from_service : suggestion.to_service}{" "}
           isn't a registered component yet — register it above before accepting this dependency.
         </p>
@@ -663,11 +664,11 @@ function TopologySuggestionRow({ suggestion }: { suggestion: TopologySuggestionO
         </Button>
       </div>
       {(accept.error ?? dismiss.error) ? (
-        <p className="font-mono text-xs text-destructive">
+        <p className="font-mono text-xs text-fail">
           {(accept.error ?? dismiss.error)?.message || "That suggestion was not updated."}
         </p>
       ) : null}
-    </div>
+    </li>
   );
 }
 
@@ -677,21 +678,25 @@ function TopologySuggestions() {
   if (isPending || isError || suggestions.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3" aria-labelledby="suggestions-heading">
       <div>
-        <p className="text-sm font-semibold text-foreground">Suggested dependencies</p>
-        <p className="text-xs text-muted-foreground">
-          Observed from real trace data, not applied automatically — accepting one changes
-          correlation on the next tick; dismissing hides it without affecting anything.
+        <h2 id="suggestions-heading" className="text-sm font-semibold text-fg">
+          Suggested connections
+        </h2>
+        <p className="text-xs text-fg-muted">
+          Observed in trace data, never applied by themselves — accepting one adds it to the system
+          model as a connection; dismissing hides it and changes nothing.
         </p>
       </div>
-      {suggestions.map((suggestion) => (
-        <TopologySuggestionRow
-          key={`${suggestion.from_service}->${suggestion.to_service}`}
-          suggestion={suggestion}
-        />
-      ))}
-    </div>
+      <ul className="flex flex-col gap-2">
+        {suggestions.map((suggestion) => (
+          <TopologySuggestionRow
+            key={`${suggestion.from_service}->${suggestion.to_service}`}
+            suggestion={suggestion}
+          />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -701,28 +706,37 @@ export function SettingsServices() {
   // /model beside it for kinds and typed connections; ComponentOut now
   // carries keys itself, so there is one list and one query key to
   // invalidate.
-  const { components, isPending, isError } = useComponents();
+  const { components, isPending, isError, error, refetch } = useComponents();
   const { connections } = useConnections();
 
   const outgoing = connectionsBySource(connections);
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-primary" aria-hidden />
-          <span className="text-sm font-semibold tracking-tight text-foreground">Culprit</span>
-        </Link>
-        <span className="text-xs text-muted-foreground">/ Services</span>
-      </header>
+    <Page
+      eyebrow="Settings"
+      title="Services"
+      description={
+        <>
+          The system model: each component, how it connects to the others, and the ingest keys its
+          telemetry is sent with. <code className="font-mono text-code text-fg">culprit.yaml</code>{" "}
+          applied with <code className="font-mono text-code whitespace-nowrap text-fg">just apply-model</code>{" "}
+          writes the same records.
+        </>
+      }
+    >
+      <AddServiceForm existing={components} />
 
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 overflow-y-auto p-6">
-        <AddServiceForm existing={components} />
+      {isPending ? <LoadingRows label="Loading components" rows={3} /> : null}
+      {isError ? (
+        <ErrorPanel
+          title="Couldn't load components."
+          message={error instanceof Error ? error.message : "The request failed."}
+          onRetry={() => refetch()}
+        />
+      ) : null}
 
-        {isPending ? <p className="text-xs text-muted-foreground">Loading components…</p> : null}
-        {isError ? <p className="text-xs text-destructive">Couldn't load components.</p> : null}
-
-        <div className="flex flex-col gap-3">
+      {components.length > 0 ? (
+        <ul className="flex flex-col gap-3" aria-label="Components">
           {components.map((component) => (
             <ComponentRow
               key={component.id}
@@ -731,10 +745,10 @@ export function SettingsServices() {
               components={components}
             />
           ))}
-        </div>
+        </ul>
+      ) : null}
 
-        <TopologySuggestions />
-      </main>
-    </div>
+      <TopologySuggestions />
+    </Page>
   );
 }

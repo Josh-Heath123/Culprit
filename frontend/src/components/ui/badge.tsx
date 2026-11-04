@@ -23,7 +23,7 @@ const badgeVariants = cva(
         degrades: "border-degrades-line bg-degrades-tint text-degrades",
         cosmetic: "border-cosmetic-line bg-cosmetic-tint text-cosmetic",
         unknown: "border-unknown-line bg-unknown-tint text-unknown",
-        // Kept for the routes part 2 has not redesigned yet.
+        // The incident history's confidence badge (ConfidenceBadge.tsx).
         warning: "border-degrades-line bg-degrades-tint text-degrades",
         destructive: "border-fail-line bg-fail-tint text-fail",
       },

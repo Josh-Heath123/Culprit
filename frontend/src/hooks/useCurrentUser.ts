@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchCurrentUser } from "@/lib/api";
 
-/** Only ever called from behind RequireAuth (Nav.tsx, SettingsUsers.tsx)
+/** Only ever called from behind RequireAuth (AppHeader.tsx, SettingsUsers.tsx)
  * — no token, no point querying. Role/disabled changes made by another
  * admin mid-session are picked up on the query's normal
  * refetch-on-focus behavior, same as everything else in src/hooks/;

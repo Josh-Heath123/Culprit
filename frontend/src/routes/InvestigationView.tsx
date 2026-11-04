@@ -5,12 +5,13 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { DiagnosisCard } from "@/components/investigation/Diagnosis";
 import { FaultTree } from "@/components/investigation/FaultTree";
 import { Hypotheses } from "@/components/investigation/Hypotheses";
-import { ErrorPanel, LoadingInvestigation } from "@/components/investigation/States";
+import { ErrorPanel, LoadingInvestigation } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { useInvestigationTree } from "@/hooks/useInvestigations";
 import { ApiError } from "@/lib/api";
 import type { InvestigationTree, Symptom } from "@/lib/types";
+import { formatDateTime } from "@/lib/datetime";
 
 /** One investigation: the fault tree `culprit diagnose` established,
  * shown as it was stored. Nothing here computes a verdict, ranks a
@@ -23,11 +24,8 @@ export function InvestigationView() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <AppHeader
-        trail={
-          <span className="hidden truncate font-mono text-xs text-fg-subtle lg:block">{investigationId}</span>
-        }
-      />
+      {/* The id is not repeated here: it is in the Symptom card. */}
+      <AppHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
         <Link
           to="/investigations"
@@ -101,7 +99,7 @@ function SymptomCard({ investigation }: { investigation: InvestigationTree }) {
           <dd className="col-span-2 font-mono wrap-anywhere text-fg">{investigation.environment}</dd>
           <dt className="text-fg-subtle">Opened</dt>
           <dd className="col-span-2 text-fg">
-            <time dateTime={investigation.opened_at}>{new Date(investigation.opened_at).toLocaleString()}</time>
+            <time dateTime={investigation.opened_at}>{formatDateTime(investigation.opened_at)}</time>
           </dd>
           <dt className="text-fg-subtle">Investigation</dt>
           <dd className="col-span-2 font-mono wrap-anywhere text-fg-muted">{investigation.id}</dd>
@@ -121,7 +119,7 @@ function Attestation({ symptom }: { symptom: Symptom }) {
       <p className="text-xs leading-relaxed text-fg-muted">
         {attestation.kind === "reproduced"
           ? `The walk reproduced it read-only: reading ${attestation.reading}.`
-          : `Reported by ${attestation.reported_by}. Not reproduced — a probe never replays a write.`}
+          : `Reported by ${attestation.reported_by}. The symptom itself was not replayed — a probe never replays a write; "reproduced" below is about the root's reading.`}
       </p>
     </div>
   );

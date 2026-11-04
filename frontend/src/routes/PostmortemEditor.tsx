@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
+import { CircleCheckIcon, CircleXIcon, LoaderIcon } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { Page } from "@/components/layout/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useIncident } from "@/hooks/useIncident";
@@ -16,40 +20,36 @@ import {
 import type { EmbeddingStatus } from "@/lib/types";
 
 /** Matches the eight fixture postmortems' own structure
- * (worker/app/rag/seed_postmortems.py) — retrieval quality depends on the
- * corpus having a consistent shape, so a new postmortem starts out
- * looking like the ones already grounding root-cause narratives. */
+ * (worker/scripts/seed_postmortems.py), so search over the corpus sees one
+ * consistent shape. */
 function bodySkeleton(): string {
   return "Summary: \n\nTimeline: \n\nRoot cause: \n\nResolution: \n";
 }
 
-function EmbeddingStatusBadge({
-  status,
-  error,
-  onRetry,
-  retrying,
-}: {
-  status: EmbeddingStatus;
-  error: string | null;
-  onRetry: () => void;
-  retrying: boolean;
-}) {
+/** Whether a postmortem is embedded for search: a word and an icon, never
+ * colour alone. */
+export function EmbeddingStatusBadge({ status }: { status: EmbeddingStatus }) {
   if (status === "embedded") {
-    return <Badge variant="outline">embedded</Badge>;
+    return (
+      <Badge variant="outline">
+        <CircleCheckIcon aria-hidden className="size-3" />
+        embedded
+      </Badge>
+    );
   }
   if (status === "pending") {
-    return <Badge variant="outline">embedding…</Badge>;
+    return (
+      <Badge variant="unknown">
+        <LoaderIcon aria-hidden className="size-3" />
+        embedding…
+      </Badge>
+    );
   }
   return (
-    <div className="flex items-center gap-2">
-      <Badge variant="destructive">failed</Badge>
-      <span className="max-w-md truncate font-mono text-xs text-destructive" title={error ?? ""}>
-        {error}
-      </span>
-      <Button variant="outline" size="sm" onClick={onRetry} disabled={retrying}>
-        {retrying ? "Retrying…" : "Retry"}
-      </Button>
-    </div>
+    <Badge variant="fail">
+      <CircleXIcon aria-hidden className="size-3" />
+      embedding failed
+    </Badge>
   );
 }
 
@@ -72,6 +72,7 @@ export function PostmortemEditor() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [initialized, setInitialized] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Pre-fill exactly once, the moment the data it depends on arrives —
   // an existing postmortem's own title/body, or (for a brand-new one
@@ -125,57 +126,73 @@ export function PostmortemEditor() {
   const deleting = deletePostmortem.isPending;
 
   if (!isNew && existing.isPending) {
-    return <p className="p-6 text-xs text-muted-foreground">Loading postmortem…</p>;
+    return (
+      <Page title="Postmortem">
+        <LoadingRows label="Loading the postmortem" rows={1} />
+      </Page>
+    );
   }
   if (!isNew && existing.isError) {
-    return <p className="p-6 text-xs text-destructive">Couldn't load this postmortem.</p>;
+    return (
+      <Page title="Postmortem">
+        <ErrorPanel
+          title="Couldn't load this postmortem."
+          message={existing.error instanceof Error ? existing.error.message : "The request failed."}
+          onRetry={() => existing.refetch()}
+        />
+      </Page>
+    );
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-primary" aria-hidden />
-          <span className="text-sm font-semibold tracking-tight text-foreground">Culprit</span>
+    <Page
+      eyebrow={
+        <Link to="/postmortems" className="hover:text-fg">
+          Postmortems
         </Link>
-        <Link to="/postmortems" className="text-xs text-muted-foreground hover:text-foreground">
-          / Postmortems
-        </Link>
-        <span className="text-xs text-muted-foreground">/ {isNew ? "New" : "Edit"}</span>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 overflow-y-auto p-6">
-        {incidentId ? (
-          <p className="text-xs text-muted-foreground">
+      }
+      title={isNew ? "Write a postmortem" : "Edit postmortem"}
+      description={
+        incidentId || existing.data?.incident_id ? (
+          <>
             Attached to{" "}
-            <Link to={`/incidents/${incidentId}`} className="underline hover:text-foreground">
-              this incident
-            </Link>
-            .
-          </p>
-        ) : null}
-
+            <Link
+              to={`/incidents/${incidentId ?? existing.data?.incident_id}`}
+              className="text-brand underline-offset-2 hover:underline"
+            >
+              an incident
+            </Link>{" "}
+            (history).
+          </>
+        ) : undefined
+      }
+    >
+      <Card className="flex flex-col gap-5 p-4 sm:p-6">
         {!isNew && existing.data ? (
-          <div className="flex items-center justify-between">
-            <EmbeddingStatusBadge
-              status={existing.data.embedding_status}
-              error={existing.data.embedding_error}
-              onRetry={() => retryEmbedding.mutate()}
-              retrying={retryEmbedding.isPending}
-            />
-            {existing.data.incident_id ? (
-              <Link
-                to={`/incidents/${existing.data.incident_id}`}
-                className="text-xs text-muted-foreground underline hover:text-foreground"
-              >
-                view incident
-              </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <EmbeddingStatusBadge status={existing.data.embedding_status} />
+            {existing.data.embedding_status === "failed" ? (
+              <>
+                {existing.data.embedding_error ? (
+                  <span className="min-w-0 font-mono text-xs wrap-anywhere text-fail">
+                    {existing.data.embedding_error}
+                  </span>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => retryEmbedding.mutate()}
+                  disabled={retryEmbedding.isPending}
+                >
+                  {retryEmbedding.isPending ? "Retrying…" : "Retry embedding"}
+                </Button>
+              </>
             ) : null}
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="postmortem-title" className="text-xs font-medium text-muted-foreground">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="postmortem-title" className="text-xs font-medium text-fg-muted">
             Title
           </label>
           <Input
@@ -186,47 +203,53 @@ export function PostmortemEditor() {
           />
         </div>
 
-        <div className="flex flex-1 flex-col gap-1">
-          <label htmlFor="postmortem-body" className="text-xs font-medium text-muted-foreground">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="postmortem-body" className="text-xs font-medium text-fg-muted">
             Body — plain text, no rich formatting
           </label>
           <Textarea
             id="postmortem-body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            rows={20}
-            className="flex-1 resize-none font-mono"
+            rows={18}
+            className="resize-y font-mono"
           />
         </div>
 
         {saveError ? (
-          <p className="font-mono text-xs text-destructive">
+          <p role="alert" className="rounded-md border border-fail-line bg-fail-tint px-3 py-2 text-xs text-fail">
             {saveError instanceof Error ? saveError.message : "Couldn't save this postmortem."}
           </p>
         ) : null}
         {deleteError ? (
-          <p className="font-mono text-xs text-destructive">
+          <p role="alert" className="rounded-md border border-fail-line bg-fail-tint px-3 py-2 text-xs text-fail">
             {deleteError instanceof Error ? deleteError.message : "Couldn't delete this postmortem."}
           </p>
         ) : null}
 
-        <div className="flex items-center justify-between">
-          <Button onClick={() => void handleSave()} disabled={!canSave || saving} size="sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button onClick={() => void handleSave()} disabled={!canSave || saving}>
             {saving ? "Saving…" : isNew ? "Create postmortem" : "Save"}
           </Button>
           {!isNew ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => void handleDelete()}
-              disabled={deleting}
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
+            confirmingDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-fg-muted">Delete it for good?</span>
+                <Button variant="outline" size="sm" onClick={() => setConfirmingDelete(false)}>
+                  Keep
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => void handleDelete()} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Delete"}
+                </Button>
+              </div>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>
+                Delete…
+              </Button>
+            )
           ) : null}
         </div>
-      </main>
-    </div>
+      </Card>
+    </Page>
   );
 }

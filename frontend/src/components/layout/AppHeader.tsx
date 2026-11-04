@@ -3,17 +3,18 @@ import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 
 import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
+import { Brand } from "@/components/layout/Brand";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { logout } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/** The header of the redesigned screens (Phase 32.1 part 1: the
- * investigation list and view). Glass, because it sits over the page as
+/** The one header (Phase 32.1). Glass, because it sits over the page as
  * it scrolls. Below 768 px the links fold into a menu rather than
- * shrinking, and below 1024 px the account actions do; the incident
- * dashboard keeps its own Nav until part 2. */
+ * shrinking, and below 1024 px the account actions do. Every signed-in
+ * page has it (components/layout/Page.tsx). */
 interface Item {
   to: string;
   label: string;
@@ -24,13 +25,13 @@ interface Item {
 
 const ITEMS: Item[] = [
   { to: "/investigations", label: "Investigations" },
-  { to: "/", label: "Incidents", history: true },
+  { to: "/incidents", label: "Incidents", history: true },
   { to: "/postmortems", label: "Postmortems" },
   { to: "/settings/services", label: "Services", admin: true },
   { to: "/settings/users", label: "Users", admin: true },
 ];
 
-export function AppHeader({ trail }: { trail?: React.ReactNode }) {
+export function AppHeader() {
   const { data: currentUser } = useCurrentUser();
   const [changingPassword, setChangingPassword] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,8 +41,7 @@ export function AppHeader({ trail }: { trail?: React.ReactNode }) {
     <header className="sticky top-0 z-40 border-b border-glass-line bg-glass backdrop-blur-glass">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Link to="/investigations" className="flex shrink-0 items-center gap-2 rounded-md">
-          <span className="size-2.5 rounded-full bg-highlight" aria-hidden />
-          <span className="text-sm font-semibold tracking-tight text-fg">Culprit</span>
+          <Brand />
         </Link>
 
         <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
@@ -50,12 +50,13 @@ export function AppHeader({ trail }: { trail?: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="min-w-0 flex-1">{trail}</div>
+        <div className="min-w-0 flex-1" />
 
         {currentUser ? (
           <div className="hidden items-center gap-1 lg:flex">
-            <span className="px-2 text-xs text-fg-muted">
-              {currentUser.username} <span className="text-fg-subtle">· {currentUser.role}</span>
+            <span className="flex items-center gap-1.5 px-2 text-xs text-fg-muted">
+              {currentUser.username}
+              <Badge variant={currentUser.role === "admin" ? "primary" : "outline"}>{currentUser.role}</Badge>
             </span>
             <Button variant="ghost" size="sm" onClick={() => setChangingPassword(true)}>
               Change password
@@ -80,7 +81,7 @@ export function AppHeader({ trail }: { trail?: React.ReactNode }) {
       <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
         <DialogContent
           aria-describedby={undefined}
-          className="top-16 right-4 left-4 w-auto max-w-none translate-x-0 p-2"
+          className="top-16 max-w-none p-2"
         >
           <DialogTitle className="px-3 pt-2 pb-1 text-2xs tracking-widest text-fg-subtle uppercase">
             Menu
@@ -94,8 +95,9 @@ export function AppHeader({ trail }: { trail?: React.ReactNode }) {
           </nav>
           {currentUser ? (
             <div className="mt-2 flex flex-col border-t border-line pt-2">
-              <span className="px-3 py-2 text-xs text-fg-muted">
-                {currentUser.username} <span className="text-fg-subtle">· {currentUser.role}</span>
+              <span className="flex items-center gap-1.5 px-3 py-2 text-xs text-fg-muted">
+                {currentUser.username}
+                <Badge variant={currentUser.role === "admin" ? "primary" : "outline"}>{currentUser.role}</Badge>
               </span>
               <Button
                 variant="ghost"
@@ -125,7 +127,7 @@ function NavItem({ item, block = false, ...props }: { item: Item; block?: boolea
     <NavLink
       {...props}
       to={item.to}
-      end={item.to === "/"}
+      end={item.to === "/incidents"}
       className={({ isActive }) =>
         cn(
           "rounded-md px-2.5 py-1.5 text-sm transition-colors duration-150",
