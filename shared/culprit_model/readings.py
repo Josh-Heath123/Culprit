@@ -46,6 +46,22 @@ from culprit_model.redaction import looks_like_credential, redact_credentials
 from culprit_model.subjects import SubjectError
 from culprit_model.subjects import parse as parse_subject
 
+#: The hypothesis kinds a probe can discriminate — what the isolation walk
+#: chooses probes by (Phase 32). The Go half is model.HypothesisKinds;
+#: shared/tests/investigation_conformance.json holds the two to one list.
+HYPOTHESIS_KINDS: frozenset[str] = frozenset(
+    {
+        "component_fails",
+        "connection_unreachable",
+        "database_unreachable",
+        "tls_invalid",
+        "auth_audience_mismatch",
+        "auth_rejected",
+        "contract_mismatch",
+        "config_missing",
+    }
+)
+
 
 class Verdict(StrEnum):
     """Four verdicts, not two (§2.6).
@@ -163,12 +179,21 @@ class ProbeManifest(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _discriminates_only_known_kinds(self) -> "ProbeManifest":
+        unknown = sorted(set(self.discriminates) - HYPOTHESIS_KINDS)
+        if unknown:
+            raise ValueError(
+                f"probe {self.id!r} discriminates {unknown}, which the isolation "
+                "walk does not know; it would never be chosen, silently"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _id_is_well_formed(self) -> "ProbeManifest":
         parts = self.id.split(".")
         if len(parts) != 3 or parts[0] != "probe" or not all(parts):
             raise ValueError(
-                f"probe id {self.id!r} must be 'probe.<group>.<name>', "
-                "e.g. 'probe.net.tcp_connect'"
+                f"probe id {self.id!r} must be 'probe.<group>.<name>', e.g. 'probe.net.tcp_connect'"
             )
         return self
 
@@ -219,9 +244,7 @@ class Reading(BaseModel):
     @model_validator(mode="after")
     def _expiry_follows_measurement(self) -> "Reading":
         if self.expires_at is not None and self.expires_at < self.taken_at:
-            raise ValueError(
-                f"reading from {self.probe_id!r} expires before it was taken"
-            )
+            raise ValueError(f"reading from {self.probe_id!r} expires before it was taken")
         return self
 
     @model_validator(mode="after")

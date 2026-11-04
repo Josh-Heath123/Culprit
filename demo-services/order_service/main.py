@@ -30,6 +30,9 @@ PAYMENTS_URL = os.environ.get("PAYMENTS_SERVICE_URL", "http://localhost:8003")
 # Deliberately shorter than a plausible injected latency spike, so a slow
 # downstream call becomes a timeout -> 502 here, not just added latency.
 DOWNSTREAM_TIMEOUT_S = float(os.environ.get("DOWNSTREAM_TIMEOUT_S", "3"))
+# The bearer token presented to inventory-service, when it checks one
+# (Phase 32's audience fault is this token minted for the wrong audience).
+INVENTORY_TOKEN = os.environ.get("INVENTORY_TOKEN", "")
 
 fault_state = FaultState()
 app = FastAPI(title=SERVICE_NAME)
@@ -50,6 +53,13 @@ class CreateOrderRequest(BaseModel):
 def _propagated_headers() -> dict[str, str]:
     headers: dict[str, str] = {}
     inject(headers)
+    return headers
+
+
+def _inventory_headers() -> dict[str, str]:
+    headers = _propagated_headers()
+    if INVENTORY_TOKEN:
+        headers["Authorization"] = f"Bearer {INVENTORY_TOKEN}"
     return headers
 
 
@@ -75,10 +85,16 @@ async def create_order(req: CreateOrderRequest) -> dict:
             attributes={"peer.service": INVENTORY_SERVICE_NAME},
         ):
             try:
+                stock_resp = await client.get(
+                    f"{INVENTORY_URL}/stock",
+                    params={"sku": req.sku},
+                    headers=_inventory_headers(),
+                )
+                stock_resp.raise_for_status()
                 reserve_resp = await client.post(
                     f"{INVENTORY_URL}/reserve",
                     json={"order_id": order_id, "sku": req.sku, "qty": req.qty},
-                    headers=_propagated_headers(),
+                    headers=_inventory_headers(),
                 )
                 reserve_resp.raise_for_status()
             except httpx.HTTPError as exc:

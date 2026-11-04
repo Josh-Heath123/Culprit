@@ -30,12 +30,16 @@ type authTokenShape struct{}
 
 func (authTokenShape) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:      "probe.auth.token_shape",
-		Version: 1,
-		Effect:  model.EffectInspect,
+		ID:            "probe.auth.token_shape",
+		Discriminates: []string{model.HypothesisAuthAudience},
+		Version:       1,
+		Effect:        model.EffectInspect,
 		// No capability: this probe opens nothing. It reads a token the
-		// caller already holds and reports its structure.
-		Capabilities: nil,
+		// caller already holds and reports its structure. An empty list,
+		// not nil: nil marshals as `null`, which the Python ProbeManifest
+		// rejects — the hand-kept API mirror said `[]` and hid that until
+		// Phase 32 generated the mirror from this.
+		Capabilities: []string{},
 		TimeoutMS:    2_000,
 		ExpectedFrom: model.PlaneIntent,
 		Produces: []model.Produces{
@@ -189,12 +193,13 @@ type authPropagation struct{}
 
 func (authPropagation) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.auth.propagation",
-		Version:      1,
-		Effect:       model.EffectInterrogate,
-		Capabilities: []string{"net.http.outbound"},
-		TimeoutMS:    15_000,
-		ExpectedFrom: model.PlaneIntent,
+		ID:            "probe.auth.propagation",
+		Discriminates: []string{model.HypothesisAuthRejected},
+		Version:       1,
+		Effect:        model.EffectInterrogate,
+		Capabilities:  []string{"net.http.outbound"},
+		TimeoutMS:     15_000,
+		ExpectedFrom:  model.PlaneIntent,
 		Produces: []model.Produces{
 			{SubjectTemplate: "auth:{from}->{to}/propagation", Predicate: "token_accepted"},
 		},

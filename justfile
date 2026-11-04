@@ -110,6 +110,13 @@ check-migration-round-trip:
 cli-build:
     cd cli && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=$(cat ../VERSION)" -o bin/culprit ./cmd/culprit
 
+# Regenerate api/app/readings/catalogue.json — the API's copy of the probe
+# catalogue, which `GET /probes` serves — from the binary's own. Never edit
+# that file by hand: TestTheAPICatalogueIsGeneratedFromTheBinary
+# (cli/cmd/culprit) compares the whole document with what this writes.
+probe-catalogue:
+    cd cli && go run ./cmd/culprit probe --list --format json > ../api/app/readings/catalogue.json
+
 # Regenerate the README's terminal captures (docs/captures/*.svg) from
 # real runs of `check`, `env capture` + `diff`, and `probe` — nothing in
 # the README is drawn by hand. Needs Go, uv and Node, and `npm ci` in
@@ -199,6 +206,14 @@ cli-test-docker:
 # Phase 30: the Kubernetes adapter against a kind cluster. Creates the
 # cluster if it does not exist, applies cli/testdata/kind/fixture.yaml,
 # and runs the capture test against it. Needs kind, kubectl and Docker.
+# Phase 32's fault library: every fault the demo services can be given
+# (demo-services/faults/), walked by `culprit diagnose` from inside the
+# vantage container, against cli/testdata/faultlib/expected.json. The
+# regression suite for "the walk finds the root, not the symptom". Needs
+# Docker; also a CI job.
+fault-library:
+    cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 20m
+
 cli-test-kind:
     #!/usr/bin/env bash
     set -euo pipefail

@@ -175,3 +175,29 @@ func NewConfigFact(
 	}
 	return fact, fact.Validate()
 }
+
+// DisplayValue is the one way a fact's value is written into anything a
+// person or a log reads — a reading's evidence, a reason, a report line.
+//
+// A CONFIGURED fact is rendered as its ValueShape and never its value,
+// even when a grant let the value be captured. The grant (config.read.values)
+// permits Culprit to *compare* the value; it does not make the value safe to
+// print, attach to a bug report or store as a reading. Phase 31.1's
+// conflict evidence rendered every fact with CanonicalJSON, which was
+// unreachable for a secret only because no probe yet measured against a
+// CONFIGURED expectation — redaction by call site again (standing
+// invariant 11), closed here before the isolation walk adds such a probe.
+func DisplayValue(fact Fact) string {
+	if fact.Plane != PlaneConfigured {
+		return CanonicalJSON(fact.Value)
+	}
+	shape := fact.ValueShape
+	if shape == nil {
+		derived := UnknownShape()
+		if text, ok := fact.Value.(string); ok {
+			derived = ShapeOfString(text)
+		}
+		shape = &derived
+	}
+	return "a value of shape " + CanonicalJSON(shape)
+}

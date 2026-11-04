@@ -18,7 +18,8 @@ type configPresent struct{}
 
 func (configPresent) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID: "probe.config.present",
+		ID:            "probe.config.present",
+		Discriminates: []string{model.HypothesisConfigMissing},
 		// Version 2 (Phase 31.1): measured against `required`, the
 		// predicate the config extractors emit for a key the code reads
 		// with no default. Version 1 named `is_set`, which no extractor

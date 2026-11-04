@@ -315,9 +315,9 @@ func conflictEvidence(chosen *model.Fact, conflicts []model.Fact) []model.Eviden
 			Value: fmt.Sprintf(
 				"%s (rank %d) says %s; this reading used %s (rank %d), which says %s",
 				sourceName(other.Provenance), other.Provenance.ConfidenceRank,
-				model.CanonicalJSON(other.Value),
+				model.DisplayValue(other),
 				sourceName(chosen.Provenance), chosen.Provenance.ConfidenceRank,
-				model.CanonicalJSON(chosen.Value)),
+				model.DisplayValue(*chosen)),
 		})
 	}
 	return evidence

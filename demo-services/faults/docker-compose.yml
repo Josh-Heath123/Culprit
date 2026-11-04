@@ -1,0 +1,47 @@
+# Phase 32's fault library: the three demo services and nothing else — no
+# API, worker or database, because the isolation walk runs in the binary
+# and reads nothing but the services (DIAGNOSTIC_PLAN.md Phase 32, "How
+# Phase 32 is run"). Driven by cli/cmd/culprit/faultlib_test.go
+# (`just fault-library`, and its own CI job); not meant to be run by hand,
+# though it can be:
+#
+#   DEMO_TOKEN_SECRET=... INVENTORY_TOKEN=... docker compose \
+#     -f demo-services/faults/docker-compose.yml \
+#     -f demo-services/faults/docker-compose.configured.yml up -d --build
+#
+# Every value here is synthetic. The token secret and the tokens are minted
+# per run by the test.
+#
+# PAYMENTS_PROVIDER_KEY is deliberately absent from this file: the config
+# fault is that key *unset*, and Compose can only set a variable, not unset
+# it — an empty string still counts as set (docs/LIMITS.md). The healthy
+# stack layers docker-compose.configured.yml on top; the config fault
+# recreates payments-service from this file alone.
+name: culprit-faults
+
+x-demo: &demo
+  build:
+    context: ../..
+    dockerfile: demo-services/Dockerfile
+  image: culprit-faults-demo:local
+
+services:
+  order-service:
+    <<: *demo
+    command: uvicorn order_service.main:app --host 0.0.0.0 --port 8001
+    environment:
+      INVENTORY_SERVICE_URL: http://inventory-service:8002
+      PAYMENTS_SERVICE_URL: http://payments-service:8003
+      INVENTORY_TOKEN: ${INVENTORY_TOKEN:?the fault library mints this}
+
+  inventory-service:
+    <<: *demo
+    command: uvicorn inventory_service.main:app --host 0.0.0.0 --port 8002
+    environment:
+      EXPECTED_AUDIENCE: inventory-service
+      DEMO_TOKEN_SECRET: ${DEMO_TOKEN_SECRET:?the fault library mints this}
+      CONTRACT_FAULT: ${CONTRACT_FAULT:-}
+
+  payments-service:
+    <<: *demo
+    command: uvicorn payments_service.main:app --host 0.0.0.0 --port 8003

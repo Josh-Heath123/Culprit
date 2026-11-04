@@ -45,7 +45,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
-| Current phase | **32, part 1 — The isolation walk** — status `not started`. Brief in §4. |
+| Current phase | **32, part 1 — The isolation walk** — status `in progress`, **awaiting the human's commit and then `/ci`**. Built; fault library 6/6 against real containers; both audits run, actionable findings fixed; every local gate green (§5). Not `complete`: field 15 needs the fault library green in CI. Brief in §4. |
 | Previous phase | **31.2 — Present what works: complete**, signed off 2026-11-04 by the architecture session. PR #21 (`be9d151`, run 41805277023) green on every job; the review's pre-merge fixes (`a18c73e`) reached `main` as `87c1cad` by a direct push rather than a pull request, so the run on `main` is their CI. |
 | Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. Every merge to `main` runs `deploy` (PR #19 `a3f110a`, PR #20 `4f69ab3`), and it is expected to fail as before until Q16 is resolved. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
 | Branch | `phase-32-isolation-walk`, cut from `origin/main` = `87c1cad`; its first commit is the 31.2 sign-off and the Phase 32 brief. Do not stage `shared/uv.lock`. |
@@ -81,7 +81,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 31 | Probes | **complete** | **Signed off 2026-11-03** (architecture session): merged via PR #19 (`a3f110a`), CI green on every job after two ambient dependency fixes (`335aa3b`, `96ac919`). Criteria 3 and 4 met; 1 and 2 carried into 31.1. History — as of 2026-09-12: built and locally green; CI not run. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) **Review 2026-11-03:** every open item decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31. To complete: the human commits, then `/ci` green on the merge result, then merge. |
 | 31.1 | Close the probe loop | **complete** | **Signed off 2026-11-04** (architecture session): PR #20 (`4f69ab3`), CI green on the merge result (run 41789133416). Criteria 2 and 4 refined and the auditor's risks decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31.1. **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Phase 31 is merged; the branch `phase-31.1-probe-loop` is cut from `origin/main` = `a3f110a`, with the sign-off as its first commit. Order within the phase: the two gate repairs first — the boundary allowlist (it must exist before anything else lands under `cli/internal/`) and the emptied `.trivyignore` — then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 31.2 | Present what works | **complete** | **Signed off 2026-11-04** (architecture session): PR #21 green on every job; the review's five corrections and the lockfile change verified on disk in `a18c73e`, with the self-check's numbers evidenced in §5. **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.2, with `docs/PRODUCTISATION.md` as its requirements — §5, §6 and §10 apply now; the redesign (§2) and the video (§7) belong to Phase 32.1. Present only what works. The web UI is made honest here, not restyled. **Go-ahead 2026-11-04:** the branch `phase-31.2-present-what-works` exists, cut from `origin/main` = `4f69ab3`. Read Phase 31.2 in the plan including "Carried in from Phase 31.1". **Review 2026-11-04 (before CI):** justfile fix ratified with one change (types generated from the lockfile, as CI does); criterion 4 refined; five README and LIMITS corrections to make on this branch before merge — `DIAGNOSTIC_PLAN.md`, end of Phase 31.2. The last-admin guard is Phase 32's third item. |
-| 32, part 1 | The isolation walk | not started | **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — all 17 fields, read with "How Phase 32 is run" at the end of the section, which wins where they differ. This run is **part 1 only: the walk, in the binary** — no migration, no API, no frontend, no worker change; those are part 2. Order: the two carried-in items first (CONFIGURED values rendered as shapes; the generated catalogue mirror), then the shared Investigation model and its conformance fixture, then `internal/isolate` and `culprit diagnose`, then the fault library and its CI job. Branch `phase-32-isolation-walk`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 32, part 1 | The isolation walk | **in progress — built and audited, CI not run** | **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — all 17 fields, read with "How Phase 32 is run" at the end of the section, which wins where they differ. This run is **part 1 only: the walk, in the binary** — no migration, no API, no frontend, no worker change; those are part 2. Order: the two carried-in items first (CONFIGURED values rendered as shapes; the generated catalogue mirror), then the shared Investigation model and its conformance fixture, then `internal/isolate` and `culprit diagnose`, then the fault library and its CI job. Branch `phase-32-isolation-walk`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32, part 2 | The investigation in the control plane | not started | Scope in `DIAGNOSTIC_PLAN.md` Phase 32, "How Phase 32 is run". Brief written when part 1 is signed off. |
 | 32.1 | Design system and the investigation-first interface | not started | Folded in from `docs/PRODUCTISATION.md` on 2026-11-03. The full brief is written when Phase 32 is complete. |
 | 33 | Production agent and permission model | not started | — |
@@ -118,281 +118,178 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        31.2 — Present what works
-Branch:       phase-31.2-present-what-works, cut from origin/main = 4f69ab3
-              (its first commits are the 31.1 record-keeping and sign-off).
-              origin/main has not moved, so the working tree is the merge
-              result.
-Run:          2026-11-04, /next. Phase 32 NOT started.
-Status:       IN PROGRESS — built, truth-passed, audited, local gates
-              green. CI on the merge result NOT RUN: it needs a commit,
-              and the human commits. Criterion 5's GitHub half needs the
-              push too.
+Phase:        32, part 1 — The isolation walk (in the binary)
+Branch:       phase-32-isolation-walk, cut from origin/main = 87c1cad; first
+              commit 2054b22 (31.2 sign-off + this brief). origin/main has
+              not moved, so the working tree is the merge result.
+Run:          2026-11-04, /next. Part 2 NOT started.
+Status:       IN PROGRESS — built, both audits run and their actionable
+              findings fixed, every local gate green, the fault library
+              6/6 against real containers. CI NOT RUN: it needs a commit,
+              and the human commits. Field 15 ("the fault library running
+              in CI on every push") is therefore not yet met.
 Committed:    NO, by protocol — staged, message written; the human commits.
 
-WHAT WAS BUILT
-  README.md        rebuilt to PRODUCTISATION.md §6, centred on the CLI:
-                   problem/users/value; real captures; key features; how it
-                   works (planes, facts, subjects, divergences, readings)
-                   with two Mermaid diagrams; the stack by role; D1-D8 in
-                   plain language; installation (CLI from source — no
-                   release exists, so no curl|sh — and the quickstart);
-                   a five-minute end-to-end tour; testing; structure;
-                   limits; future work as plans; author/licence. No video
-                   link, no screenshots of the web UI (described, not
-                   showcased), no culprit.co.za link (Q16 open).
-  scripts/render_captures.py + `just readme-captures`
-                   regenerates docs/captures/{check,diff,probe}.svg from
-                   real runs: `check` on cli/testdata/demo; `env capture` x2
-                   + `diff` and `probe` against a synthetic project and a
-                   throwaway 127.0.0.1 HTTP server it starts itself.
-                   Standard library only; subject targets built with
-                   culprit_model.subjects.build; refuses to write a capture
-                   if an extractor crashed. Tested in
-                   scripts/tests/test_render_captures.py (7).
-  extractors/{python,node}/README.md
-                   install from the clone path (not on PyPI/npm — field 17);
-                   culprit.co.za link replaced with the GitHub repo.
-  docs/PROBES.md, docs/UPGRADING.md, docs/INSTALL.md
-                   PROBES and UPGRADING touched in 31.1; INSTALL needed no
-                   change (its ghcr visibility note is accurate for forks).
+WHAT WAS BUILT (in the brief's order)
+  1. Carried in: evidence never renders a CONFIGURED value.
+     model.DisplayValue renders a CONFIGURED fact as its ValueShape, never
+     its value; conflictEvidence — the only place reading evidence
+     rendered a fact's value — uses it. TestEvidenceNeverRendersAConfigured
+     Value: granted value absent from text and JSON, pass and fail;
+     mutation-tested red.
+  2. Carried in: the catalogue mirror is generated. `just probe-catalogue`
+     writes api/app/readings/catalogue.json from `culprit probe --list
+     --format json`; TestTheAPICatalogueIsGeneratedFromTheBinary compares
+     the whole document byte for byte. Mutation-tested (cost, and a
+     discriminates entry). Generating it FOUND A REAL DRIFT: the binary
+     printed token_shape's capabilities as null, which the Python
+     ProbeManifest rejects — the hand-kept `[]` had hidden it. Fixed at
+     the source.
+  3. The model: Investigation, Hypothesis, FaultEdge, InvestigationReading,
+     ConfidenceRubric in Go (cli/internal/model/investigation.go) and
+     Python (shared/culprit_model/investigations.py), held together by
+     shared/tests/investigation_conformance.json (2 accepted, 11 rejected,
+     each one mutation from valid). A FaultEdge with no establishing
+     reading cannot be constructed, decoded or validated; every cited id
+     must be a reading the investigation took; verified=true is rejected
+     until Phase 34. Readings are held as {id, reading} so Reading itself
+     is unchanged. Hypothesis kinds are model.HypothesisKinds /
+     readings.HYPOTHESIS_KINDS; a manifest discriminating an unknown kind
+     fails validation in both languages.
+  4. cli/internal/isolate: hypothesis space from the model's request-path
+     tree; probe selection by `discriminates` alone, cheapest first;
+     bisection down single-child chains; fan-out by children; boundary
+     hypotheses (connection, TLS, audience, contract, config, database)
+     at the localised component; the edge tested first when the agent
+     sits at the parent; budgets; tree assembly; the §2.9 rubric computed
+     from readings. Links no network package and not internal/probe
+     (go list -deps; TestTheNetworkBoundaryIsAnAllowlist covers it).
+     Probe manifests gained `discriminates`.
+  5. `culprit diagnose <symptom>`: a subject URI, "METHOD URL" or a
+     component name; --env, --from (vantage), --reference, text|json.
+     Every probe still runs through probe.Runner and its ledger. Exit 0
+     complete, 1 partial, 2 could not run.
+     culprit.yaml gains `isolation:` (field 10) and — NOT IN THE PLAN, see
+     below — environments.*.endpoints, components.*.tokens, endpoint
+     health_path.
+  6. The fault library: demo-services gain an audience check
+     (shared/demo_auth.py, stdlib HS256), a parameter-free GET /stock
+     route, a required PAYMENTS_PROVIDER_KEY and /ready routes that go
+     through the fault middleware; demo-services/faults/ is a three-
+     service stack; cli/cmd/culprit/faultlib_test.go injects each fault,
+     confirms POST /orders really fails (201 healthy, 5xx under the fault;
+     latency stays 201), runs the linux binary inside the vantage
+     container, and compares root, completeness, every edge, the rubric —
+     and asserts no token or secret appears in JSON or text.
+     cli/testdata/faultlib/expected.json; `just fault-library`; CI job
+     `fault-library`.
 
-DEFECTS FOUND AND FIXED
-  Fresh-clone setup
-  1. `just quickstart` from a fresh clone DID NOT BUILD: the frontend image
-     needs src/lib/api-types.generated.ts, which is gitignored; CI
-     generates it on the runner, the recipe never did. It only ever worked
-     from a checkout that already had the file. Fixed in the justfile:
-     schema dumped from the api image under `env -i` with the same
-     placeholder values `just generate-types` uses (no .env.prod value can
-     reach the file — invariant-auditor's recommendation; byte-identical
-     output verified), types generated in a node:22-alpine container with
-     the lockfile's openapi-typescript@7.13.0. NOT IN FIELD 5's file list
-     — see "For the architecture session".
-  2. README demo output needed `npm ci` in extractors/node (without it: 4
-     divergences / 19 gaps, not 5 / 17). README now says so.
-  3. README's getting-started culprit.yaml declared no extractors, so a
-     user got artefact readers only. The tour now declares one.
-  4. extractors/*/README.md told users to install from PyPI/npm, where
-     nothing is published.
-  5. README promised the quickstart shows "an incident with a root-cause
-     narrative"; without VOYAGE_API_KEY and an LLM key no narrative is
-     ever written. README, the quickstart's closing message and the
-     incident panel's pending copy now say so; LIMITS records it.
-  6. README said the fault fires "about 75 seconds in"; the recipe says 90.
-  Frontend truth pass (32 scripted steps, admin and member, every route,
-  console and network read on each — harness in the scratchpad, not
-  committed)
-  7. The only admin could demote or disable themselves from Settings ->
-     Users: one click, zero admins, every admin page 403 (reproduced).
-     Your own row now has no role/disable control. The API still allows
-     it — LIMITS, and see below.
-  8. Deleting a postmortem navigated to a list that still showed it (the
-     editor bypassed the hook that invalidates the list).
-  9. A member's dashboard was blank: the timeline's lanes came from
-     admin-only /model (403), so no lanes and no bands, while the header
-     counted the incidents. Lanes now come from the incidents for a
-     member, and the admin-only request is not sent.
-  10. A member reaching /settings/users or /settings/services by URL got
-     the admin forms, every control of which could only 403. New
-     RequireAdmin route guard says "This page is for admins."
-  11. The newest closed incident's band ran past the time axis under the
-     detail panel and could not be clicked (closed_at missing from the
-     domain).
-  12. Seven mutations on the Services and Users pages failed silently on
-     error; each card now shows the error.
-  13. A wrong current password in Change password logged you out (any 401
-     cleared the session). It is now a message in the dialog.
-  14. scripts/render_captures.py hand-formatted subject URIs; the subject
-     lint caught it in `just test`; now uses the builder.
+DEFECTS THE FAULT LIBRARY FOUND IN THE WALK (and the fixes)
+  1. Back-edges. The demo declares inventory->order and payments->order
+     on the request path; the walk followed them, so a pass at inventory
+     "ruled out" the whole system. The walk now uses the request-path tree
+     built breadth first from the entry. Locked by a unit test.
+  2. From inside order-service a failing request to inventory crossed the
+     edge, and the walk blamed inventory. When the agent sits at the
+     parent, the edge is tested before descending (Placement.Vantage).
+  3. A root reached only by elimination was "complete". Under added
+     latency every probe passes and the entry was blamed. Now partial,
+     saying what it might be missing.
+  4. probe.net.dns_resolve discriminated connection_unreachable; a name
+     that resolves proves nothing about a connection. Removed.
+  5. Contract hypotheses on templated routes are inconclusive — the probe
+     cannot tell a missing route from a missing item. A real limit
+     (LIMITS); the demo's contract route takes its parameter in the query.
 
-ACCEPTANCE CRITERIA (field 14)
-  1. Every README setup/usage command run from a fresh clone      PASS
-     Clone of the public repo (4f69ab3) in C:\Users\flosh\
-     culprit-freshclone-31.2, outside %TEMP% (see Environment), with this
-     branch's changed files copied in. Run literally, in order:
-       just cli-build; (cd extractors/node && npm ci);
-       export PATH=...; cd cli && culprit check -f testdata/demo/culprit.yaml
-         -> 5 divergence(s), 17 gaps, exit 1 (byte-identical to the
-            working repo's run)
-       the tour: export CULPRIT_HOME; the four heredocs; `culprit check`
-         -> No divergences, 16 facts, exit 0; two `env capture`s and
-         `culprit diff` -> 1 divergence, PAYMENTS_API_KEY
-         breaks_request_path, exit 1; http.server + three `culprit probe`s
-         -> /health PASS, /orders FAIL (404), expected_source
-         api/openapi.json
-       just quickstart (fixed recipe, run twice) -> every step, admin
-         created, stack healthy, incidents within minutes
-     Two substitutions for THIS MACHINE, not the README: compose project
-     `culprit-freshclone` (the default name would reuse an existing volume
-     with different passwords) and the dashboard on 127.0.0.1:8088 (an
-     Apache inside WSL holds :80). Windows-only: `python` for `python3`,
-     as the README now says. phase-auditor re-ran the CLI and tour
-     commands independently from its own clone: same results.
-  2. Every README image produced by a committed command           PASS
-     `just readme-captures`; the auditor regenerated them in an isolated
-     copy: check/diff text identical, probe differs only by port.
-  3. phase-auditor finds no unsupported claim                     PASS after
-     fixes — its first pass listed seven README claims; all corrected
-     (least-privilege wording vs the anomaly-detector read grant and two
-     role reuses; D1's 2026-11-03 amendment; Trivy blocks only fixable
-     findings; an unsupported "two rounds, five false positives" story
-     inherited from the old README, removed; `just test`'s real scope;
-     dep.version/config.present caveats; minor wording). Not re-audited
-     after the fixes — each was checked against the source it cites.
-  4. Every route: zero console errors, zero failed requests, no
-     control does nothing                                         PASS on
-     every success path, admin and member. NOT TESTABLE AS WRITTEN on
-     error paths: a deliberate 401/404/409 always produces Chromium's
-     "Failed to load resource" console error, and every 204 (DELETE,
-     reset-password) is reported by the browser as net::ERR_ABORTED after
-     the server's clean 204 (verified with curl and by the effect landing).
-     "Generate now" without keys re-queues a job that fails in the worker:
-     the control works and says honestly why nothing appears.
-  5. Both diagrams render on GitHub                               local PASS
-     (mermaid 11.4.1, both render, screenshots read); GitHub NOT RUN
-     until pushed.
-  6. culprit.co.za not linked                                     PASS
-     (README, INSTALL, PROBES, LIMITS, both extractor READMEs). Q16 open.
-
-CARRIED IN FROM 31.1
-  probe.config.present and probe.dep.version, run inside order-service
-  against the demo stack:
-    config.present INVENTORY_SERVICE_URL -> inconclusive, measured
-      is_set=true ("no INTENT fact declares ... required")
-    config.present CULPRIT_NOT_A_REAL_KEY -> inconclusive, is_set=false
-    dep.version fastapi (with and without expect_version) -> refused,
-      repo.read not granted (and the demo declares no packages: command)
-  Neither reaches a verdict on the demo, so the README shows neither and
-  says what each needs. (The auditor separately got config.present
-  PASS/FAIL against a process environment that declared the key.)
+ACCEPTANCE CRITERIA (field 14, and field 15)
+  1. Auth-audience mismatch: root is the audience config, not the
+     500 at the edge                                               PASS
+     Fault library, real containers: root
+     auth:order-service->inventory-service/audience, complete, reproduced
+     and discriminated (6 alternatives ruled out by readings). POST /orders
+     answered 5xx under the fault, 201 healthy. phase-auditor reproduced
+     it independently.
+  2. The tree distinguishes symptom, propagation and root, and every
+     edge cites readings                                           PASS by
+     the validator's rule; QUESTION for review. All three relations appear
+     (the config fault: symptom_of, propagates_to, caused_by). But a
+     symptom on a write endpoint cannot be replayed read-only, so the
+     symptom_of edge cites the reading that establishes the cause (the
+     token reading, the tcp reading) — documented in LIMITS, flagged by
+     the phase-auditor as "a borrowed citation".
+  3. O(log n) on a six-hop chain, counted                            PASS
+     Fault at every position on 7 components: request probes <= 3
+     (= ceil(log2 7)); 64 components: <= 6 request probes and <= 12 probe
+     executions in all. Mutation to a linear walk turned it red. The
+     auditor notes constants dominate at six hops: 7 total executions for
+     a fault at c3 (4 request + 3 boundary).
+  4. LLM_PROVIDER=none gives a complete, correct tree               PASS
+     True by construction — nothing in the binary reads it; the real
+     command against a local server, with it set, gives a complete tree.
+  F15. Fault library in CI on every push           local PASS 6/6; CI
+     NOT RUN.
+  Scope: no migration, API, frontend or worker change — PASS (only
+  api/app/readings/catalogue.json, which carried item 2 regenerates).
 
 AUDITS
-  invariant-auditor   CLEAN (before the last round of fixes). Its three
-                      risks: the schema dump saw real secrets — FIXED with
-                      env -i; `npx -y openapi-typescript@7.13.0` fetches
-                      without the lockfile's integrity hash — open, small;
-                      RequireAdmin shows "for admins" if the current-user
-                      request errors — client-side only, server enforces.
-  phase-auditor       1 PASS (commands; report now written), 2 PASS,
-                      3 FAIL -> fixed, 4 FAIL -> two controls fixed
-                      (change-password logout, "Generate now" copy), rest
-                      is the wording problem above, 5 local only, 6 PASS.
+  invariant-auditor   CLEAN. Its risks, and what was done:
+    - symptom URL could carry a credential (query/userinfo) — FIXED,
+      description keeps scheme/host/port/path only;
+    - a typed subject was stored as typed — FIXED, rebuilt canonical;
+    - no end-to-end proof the token stays out — FIXED, the fault library
+      asserts it every case, both formats;
+    - the token is read with NO capability grant — OPEN, for review
+      (docs/PERMISSIONS.md says so);
+    - Go has no lint against hand-written subjects — standing, as before;
+    - report.renderValue / render.describeValue are other value
+      renderers (outside reading evidence) — noted.
+  phase-auditor       criteria as above. Its fixes made: fault library now
+    proves each fault real and compares edges; total-probe bound added;
+    isolation: unit tests; a wrong LIMITS sentence corrected.
 
 GATES (working tree = merge result), after the last edit
-  lint, typecheck, lint-imports, check-schema-drift         PASS
-  check-no-llm-imports, check-scan-coverage, check-invariants,
-  coupled files --base origin/main, cli-lint                PASS
-  just test: api 898 / 4 skipped, worker 101, mcp 21,
-    go test ./..., extractors py 31 / node                  PASS
-  frontend tsc -b and npm run build                         PASS
-  just self-check: no divergences, 1023 facts / 451 subjects PASS
-  LLM_PROVIDER=none self-check                              PASS
-  check-migration-round-trip, cli-test-docker/kind          NOT RUN
-    (no migration, no CLI change this phase; both CI jobs)
-  CI on the merge result                                    NOT RUN
+  lint, typecheck, lint-imports, check-schema-drift, check-no-llm-imports,
+  check-scan-coverage, check-invariants, coupled files, cli-lint   PASS
+  go test ./... (-count=1)                                          PASS
+  just test: api 920 / 4 skipped, worker 101, mcp 21, extractors py 31
+                                                                    PASS
+  just fault-library                                       PASS 6/6
+  self-check (1023 facts, no divergences), LLM_PROVIDER=none       PASS
+  check-migration-round-trip                                        PASS
+    (earlier in the run; no migration in this phase)
+  CI on the merge result                                            NOT RUN
 
-ENVIRONMENT — particular to this machine
-  - Port 80 is held by an Apache inside WSL (also in 31.1).
-  - A clone under %TEMP% cannot run the quickstart from Git Bash: it maps
-    %TEMP% to /tmp and Docker reads that as its own VM's /tmp. Cost two
-    failed runs; in LIMITS because a Windows user could hit it.
-  - infra/.env.prod is still the pre-Phase-28 file (31.1).
-  - Leftovers, for the human to remove: the culprit-freshclone stack
-    (`docker compose -p culprit-freshclone ... down -v`) and its clone
-    C:\Users\flosh\culprit-freshclone-31.2; C:\Users\flosh\
-    culprit-extinstall-test (an extractor-install test; deleting it was
-    denied to this session); the auditor's C:\Users\flosh\culprit-audit-312.
-
-DELIBERATELY NOT BUILT (field 17)
-  No restyle, no design system, no new UI feature (RequireAdmin, the
-  "you" badge, member lanes and the inline errors make existing behaviour
-  honest), no new dependency (openapi-typescript is the lockfile's
-  version; Playwright and mermaid ran from the scratchpad only), no video,
-  no publication.
+DELIBERATELY NOT BUILT (part 1 scope, field 17)
+  No migration, no API, no frontend, no worker change — part 2. No
+  remediation application (remediation is a string), no verification
+  loop (verified always false), no production agent, no postmortem prior,
+  no upload from the binary, no trace-id or error-signature symptoms.
+  auth_rejected hypotheses are not generated (no protected URL to present
+  a token to); --reference exists but no fault exercises it.
 
 FOR THE ARCHITECTURE SESSION
-  - Field 5 does not list the justfile, but the quickstart did not build
-    from a fresh clone, and fixing that in the README alone would have
-    meant telling a new user to install uv and Node, contradicting the
-    quickstart's one promise. Fixed in the recipe; wants ratifying.
-  - The API lets an admin remove the last admin (PATCH/DELETE /users).
-    The dashboard closes the one-click route; the server-side refusal is
-    a backend change this phase could not make. Suggest it is small and
-    early in Phase 32, or its own commit.
-  - The narrative job's failure is invisible: root_cause_status stays
-    `pending` forever without keys. A `failed` status the panel can show
-    is a worker change, not made.
-  - Criterion 4 as worded is untestable on error paths (above). Suggested:
-    "zero console errors and failed requests on success paths; every 4xx
-    is shown to the user; 204s judged by the server's response".
-  - The quickstart's compose project name is fixed and its port is 80
-    with no override; both are in LIMITS now.
-```
-
-```
-FOLLOW-UP — 2026-11-04, the architecture review's pre-merge items
-(DIAGNOSTIC_PLAN.md, end of Phase 31.2). Same branch, PR #21. Phase 32
-NOT started.
-
-PR #21 CI, before this follow-up
-  run 41805277023 on 86fffa1 (the PR head; the review commit 8d2dbd6 was
-  not yet pushed): conclusion success. Every job success — lint,
-  typecheck, cli, test, migration-round-trip, self-check, kind-capture,
-  build+Trivy for api, worker, frontend, mcp_server, cli. deploy skipped
-  (pull request). Nothing red, nothing to fix.
-
-1. justfile: types generated from the lockfile, as CI does
-  The node:22-alpine step now runs `npm ci && npm run generate-types`
-  instead of `npx -y openapi-typescript@7.13.0`. It runs in the
-  container's own /tmp on copies of package.json, package-lock.json and
-  openapi.schema.json, and copies back only the generated file: running
-  `npm ci` in the mounted frontend/ would replace a host checkout's
-  node_modules with Linux builds. Verified:
-    - generated file BYTE-IDENTICAL to the npx version's (cmp), and
-      byte-identical across two independent fresh clones
-    - `just quickstart` from a NEW clone of the pushed branch (86fffa1)
-      with only this justfile applied: exit 0, every step, fresh secrets
-      and volume (compose project culprit-freshclone-b, dashboard on
-      127.0.0.1:8089 — this host's :80 is taken), dashboard 200; no
-      node_modules created in the checkout. Stack torn down (down -v).
-
-2. README.md
-  - the demo: "five-component system — three services and the two
-    databases behind them"; cli/testdata/demo/culprit.yaml's header
-    comment said "two-component" and now says the same.
-  - Trivy: ignore-unfixed drops unfixed findings from the scan output
-    altogether — neither blocking nor visible. Said so.
-  - "CI runs all of it": corrected to every row except
-    `just self-check-coverage`. Nuance for the architecture session: CI
-    DOES run the same command (`check --unverifiable --fail-on=any`) in
-    the self-check job, with `|| true` — its report is printed in the log
-    and can never fail the build. The README now says exactly that.
-  - Numbers re-run today; the README's 9 and 368 stand. Printed:
-      $ just self-check
-      No divergences. 1023 fact(s) compared across 451 subject(s).
-      Not checked (9) — these are gaps, not clean results
-      $ just self-check-coverage
-      No divergences. 1023 fact(s) compared across 451 subject(s).
-      Not checked (9) — these are gaps, not clean results
-      Unverifiable surface (368)
-    (both exit 0)
-
-3. docs/LIMITS.md, "Culprit's own pull requests get no SARIF annotations"
-  The private-repository reason is history now; the section says the
-  repository is public, nothing but the workflow stands in the way, and
-  Phase 32.1 restores the upload.
-
-GATES (affected)
-  go test ./... (the demo culprit.yaml changed)        PASS
-  check-scan-coverage (parses the justfile)            PASS
-  check-invariants, coupled files --base origin/main   PASS
-  lint, cli-lint                                       PASS
-  self-check, self-check-coverage                      PASS (above)
-  just readme-captures: check and diff text unchanged; probe.svg differs
-    only by the throwaway server's port, so the committed copy was kept
-  CI on this follow-up                                 NOT RUN (needs the
-                                                       push)
+  - Plan deviation: culprit.yaml gained environments.*.endpoints,
+    components.*.tokens and endpoint.health_path; field 10 names only
+    `isolation:`. The walk cannot place a probe without them, and
+    endpoints sit beside components: because the process adapter may
+    name only one component (Phase 30's rule, not weakened).
+  - The token read has no grant. Should naming a token variable require
+    a capability (config.read.values on that key, or a new read grant)?
+  - Criterion 2's citation: the symptom_of edge borrows the cause's
+    reading when the symptom is a write. Either a symptom-source marker,
+    or reword §2.8/criterion 2 (the auditor's two proposals).
+  - `complete: true` while untested branches remain `open` (e.g. the
+    payments branch in the partition run) — complete means "nothing the
+    walk needed went unexplored", not "every hypothesis tested". Confirm.
+  - Partition from inside the caller is honestly NOT discriminated
+    (refused == down from that vantage); expected.json says so.
+  - Proposed rewordings (auditor): criterion 1 "…a complete investigation
+    whose root is auth:<caller>-><callee>/audience, and neither the caller
+    component nor the symptom"; criterion 3 "…request probes <= ceil(log2
+    n) at every position on 7 and 64 components, total executions on 64
+    <= 12".
+  - The quickstart compose sets a synthetic PAYMENTS_PROVIDER_KEY,
+    because payments now requires it.
 ```
 
 

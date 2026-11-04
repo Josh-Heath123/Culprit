@@ -1,0 +1,1858 @@
+{
+  "why": [
+    "The §2.8 Investigation contract, held to both languages. cli/internal/model/investigation_test.go and shared/tests/test_investigations.py read this file.",
+    "The rule it exists for: a fault edge cannot exist without a reading this investigation took. An edge is a claim; a claim no measurement established is not allowed to be built."
+  ],
+  "relations": [
+    "symptom_of",
+    "propagates_to",
+    "caused_by"
+  ],
+  "hypothesis_statuses": [
+    "open",
+    "ruled_out",
+    "supported",
+    "unexplored"
+  ],
+  "symptom_kinds": [
+    "subject",
+    "endpoint",
+    "component"
+  ],
+  "investigations_accepted": [
+    {
+      "why": "a complete diagnosis: every edge cites readings, the root is reached, verified is false with a reason",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a partial diagnosis: the finer cause was unexplored, and it says why",
+      "investigation": {
+        "id": "inv-0002",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "unexplored",
+            "reason": "probe.auth.token_shape was refused: no token is available to this agent"
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "component:order-service",
+          "statement": "The failure is localised to order-service; what inside it was not established.",
+          "confidence": {
+            "reproduced": {
+              "holds": false,
+              "reason": "r1 was not repeated"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "complete": false
+        }
+      }
+    }
+  ],
+  "investigations_rejected": [
+    {
+      "why": "a fault edge with no establishing reading",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": []
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a fault edge citing a reading the investigation did not take",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r9"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "an unknown relation",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "correlates_with",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a ruled-out hypothesis with no reading behind it",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": []
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "an unexplored hypothesis that does not say why",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "unexplored"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "two readings with one id",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a diagnosis that claims verified before Phase 34",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": true,
+              "reason": "it looks fixed"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a confidence criterion with no reason",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": ""
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a complete diagnosis whose root no fault edge reaches",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "config:order-service/INVENTORY_TOKEN",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "a symptom that is not a subject URI",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "local",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "order-service POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    },
+    {
+      "why": "an investigation with no environment",
+      "investigation": {
+        "id": "inv-0001",
+        "opened_at": "2026-11-04T10:00:00Z",
+        "closed_at": "2026-11-04T10:00:05Z",
+        "environment": "",
+        "symptom": {
+          "kind": "endpoint",
+          "subject": "http:order-service/POST /orders",
+          "description": "POST /orders answers 500",
+          "source": "culprit diagnose"
+        },
+        "hypotheses": [
+          {
+            "id": "h1",
+            "kind": "component_fails",
+            "subject": "component:inventory-service",
+            "status": "ruled_out",
+            "readings": [
+              "r2"
+            ]
+          },
+          {
+            "id": "h2",
+            "kind": "auth_audience_mismatch",
+            "subject": "auth:order-service->inventory-service/audience",
+            "status": "supported",
+            "readings": [
+              "r3"
+            ]
+          },
+          {
+            "id": "h3",
+            "kind": "connection_unreachable",
+            "subject": "connection:order-service->payments-service",
+            "status": "open"
+          }
+        ],
+        "readings": [
+          {
+            "id": "r1",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:order-service",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r2",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "component:inventory-service",
+              "environment": "staging",
+              "verdict": "pass",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          },
+          {
+            "id": "r3",
+            "reading": {
+              "probe_id": "probe.net.tcp_connect",
+              "probe_version": 1,
+              "target": "auth:order-service->inventory-service/audience",
+              "environment": "staging",
+              "verdict": "fail",
+              "measured": {
+                "connected": true
+              },
+              "evidence": [],
+              "taken_at": "2026-09-12T10:00:00Z",
+              "agent_id": "culprit-cli",
+              "grants_used": [
+                "net.tcp.connect"
+              ]
+            }
+          }
+        ],
+        "fault_tree": [
+          {
+            "from_subject": "http:order-service/POST /orders",
+            "to_subject": "component:order-service",
+            "relation": "symptom_of",
+            "established_by": [
+              "r1"
+            ]
+          },
+          {
+            "from_subject": "component:order-service",
+            "to_subject": "auth:order-service->inventory-service/audience",
+            "relation": "caused_by",
+            "established_by": [
+              "r1",
+              "r3"
+            ]
+          }
+        ],
+        "diagnosis": {
+          "root_subject": "auth:order-service->inventory-service/audience",
+          "statement": "order-service's token for inventory-service carries the wrong audience.",
+          "confidence": {
+            "reproduced": {
+              "holds": true,
+              "reason": "r3 failed again on a second run"
+            },
+            "discriminated": {
+              "holds": true,
+              "reason": "r2 ruled out inventory-service itself"
+            },
+            "counterfactual": {
+              "holds": false,
+              "reason": "no reference environment was named"
+            },
+            "verified": {
+              "holds": false,
+              "reason": "verification is Phase 34"
+            }
+          },
+          "remediation": "Make the audience order-service presents match the one inventory-service expects.",
+          "complete": true
+        }
+      }
+    }
+  ],
+  "hypothesis_kinds": [
+    "component_fails",
+    "connection_unreachable",
+    "database_unreachable",
+    "tls_invalid",
+    "auth_audience_mismatch",
+    "auth_rejected",
+    "contract_mismatch",
+    "config_missing"
+  ]
+}

@@ -235,6 +235,9 @@ services:
     restart: unless-stopped
     env_file: ../demo-services/.env
     environment:
+      # Required since Phase 32 (the fault library's config fault is this
+      # key unset). Synthetic: the demo charges nobody.
+      PAYMENTS_PROVIDER_KEY: demo-provider-key-not-a-secret
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://ingest-gateway:8010
       OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://ingest-gateway:8010
       OTEL_METRIC_EXPORT_INTERVAL_MS: "2000"
