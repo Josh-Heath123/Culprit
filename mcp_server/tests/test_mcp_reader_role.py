@@ -60,6 +60,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     # password. Same triplication, same reason.
     "CAPTURE_WRITER_DB_PASSWORD": "test-capture-writer-password",
     "PROBE_WRITER_DB_PASSWORD": "test-probe-writer-password",
+    "INVESTIGATION_WRITER_DB_PASSWORD": "test-investigation-writer-password",
 }
 
 

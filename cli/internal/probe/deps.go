@@ -33,6 +33,7 @@ type Deps struct {
 	Database DatabaseInspector
 	Metrics  MetricsReader
 	Config   ConfigReader
+	Secrets  SecretReader
 	Packages PackageReader
 	// Now is the clock. Injected so TLS-expiry arithmetic and reading
 	// timestamps are reproducible in tests, and so SOURCE_DATE_EPOCH
@@ -194,6 +195,18 @@ type MetricsReader interface {
 // method here that can return one.
 type ConfigReader interface {
 	Present(ctx context.Context, component, key string) (bool, error)
+}
+
+// SecretReader returns one variable's value, for the one probe that must
+// inspect a credential to answer (probe.auth.token_shape reads a token's
+// audience, issuer and expiry, and nothing else). It answers only under
+// `config.read.values` granted for exactly that `component/KEY` — the
+// same grant that lets a capture record a value (Phase 32 part 1's
+// review: a service's own credential is what that grant exists to gate).
+// Kept apart from ConfigReader so that interface still has no method
+// that can return a value.
+type SecretReader interface {
+	Secret(ctx context.Context, component, key string) (string, error)
 }
 
 // PackageReader reads installed dependency versions under `repo.read`.

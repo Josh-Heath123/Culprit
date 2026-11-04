@@ -1,0 +1,228 @@
+{
+  "id": "inv-1ebc75c6724bc476",
+  "opened_at": "2026-11-04T11:39:40.381112863Z",
+  "closed_at": "2026-11-04T11:39:40.38659981Z",
+  "environment": "faults-payments",
+  "symptom": {
+    "kind": "endpoint",
+    "subject": "http:order-service/POST /orders",
+    "description": "POST http://order-service:8001/orders",
+    "source": "culprit diagnose",
+    "attestation": {
+      "kind": "reported",
+      "reported_by": "culprit diagnose"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "kind": "component_fails",
+      "subject": "component:order-service",
+      "status": "open"
+    },
+    {
+      "id": "h2",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003einventory-service",
+      "status": "open"
+    },
+    {
+      "id": "h3",
+      "kind": "auth_audience_mismatch",
+      "subject": "auth:order-service-\u003einventory-service/audience",
+      "status": "open"
+    },
+    {
+      "id": "h4",
+      "kind": "contract_mismatch",
+      "subject": "http:inventory-service/GET /stock",
+      "status": "open"
+    },
+    {
+      "id": "h5",
+      "kind": "component_fails",
+      "subject": "component:inventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r1"
+      ]
+    },
+    {
+      "id": "h6",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003epayments-service",
+      "status": "open"
+    },
+    {
+      "id": "h7",
+      "kind": "component_fails",
+      "subject": "component:payments-service",
+      "status": "supported",
+      "readings": [
+        "r2"
+      ]
+    },
+    {
+      "id": "h8",
+      "kind": "config_missing",
+      "subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "status": "supported",
+      "readings": [
+        "r3"
+      ]
+    }
+  ],
+  "readings": [
+    {
+      "id": "r1",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "faults-payments",
+        "verdict": "pass",
+        "measured": {
+          "elapsed_ms": 2,
+          "status": 200,
+          "url": "http://inventory-service:8002/ready"
+        },
+        "taken_at": "2026-11-04T11:39:40.384170228Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r2",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:payments-service",
+        "environment": "faults-payments",
+        "verdict": "fail",
+        "measured": {
+          "elapsed_ms": 2,
+          "status": 503,
+          "url": "http://payments-service:8003/ready"
+        },
+        "reason": "http://payments-service:8003/ready answered 503; the service is reachable but failing",
+        "taken_at": "2026-11-04T11:39:40.386394365Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r3",
+      "reading": {
+        "probe_id": "probe.config.present",
+        "probe_version": 2,
+        "target": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+        "environment": "faults-payments",
+        "verdict": "fail",
+        "measured": {
+          "is_set": false,
+          "key": "PAYMENTS_PROVIDER_KEY"
+        },
+        "expected": {
+          "required": true
+        },
+        "expected_source": {
+          "source_kind": "assertion",
+          "extractor": "culprit.yaml invariants",
+          "artefact": "culprit.yaml",
+          "locator": "invariants[3]",
+          "confidence_rank": 100
+        },
+        "reason": "payments-service reads PAYMENTS_PROVIDER_KEY with no default, and it is not set in this environment",
+        "taken_at": "2026-11-04T11:39:40.386525996Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "config.read.names"
+        ]
+      }
+    },
+    {
+      "id": "r4",
+      "reading": {
+        "probe_id": "probe.config.present",
+        "probe_version": 2,
+        "target": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+        "environment": "faults-payments",
+        "verdict": "fail",
+        "measured": {
+          "is_set": false,
+          "key": "PAYMENTS_PROVIDER_KEY"
+        },
+        "expected": {
+          "required": true
+        },
+        "expected_source": {
+          "source_kind": "assertion",
+          "extractor": "culprit.yaml invariants",
+          "artefact": "culprit.yaml",
+          "locator": "invariants[3]",
+          "confidence_rank": 100
+        },
+        "reason": "payments-service reads PAYMENTS_PROVIDER_KEY with no default, and it is not set in this environment",
+        "taken_at": "2026-11-04T11:39:40.38657329Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "config.read.names"
+        ]
+      }
+    }
+  ],
+  "fault_tree": [
+    {
+      "from_subject": "http:order-service/POST /orders",
+      "to_subject": "component:order-service",
+      "relation": "symptom_of",
+      "established_by": [
+        "r2"
+      ]
+    },
+    {
+      "from_subject": "component:payments-service",
+      "to_subject": "component:order-service",
+      "relation": "propagates_to",
+      "established_by": [
+        "r2"
+      ]
+    },
+    {
+      "from_subject": "component:payments-service",
+      "to_subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "relation": "caused_by",
+      "established_by": [
+        "r3"
+      ]
+    }
+  ],
+  "diagnosis": {
+    "root_subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+    "statement": "payments-service fails because of config:payments-service/PAYMENTS_PROVIDER_KEY; the readings rule out the alternatives they reached.",
+    "confidence": {
+      "reproduced": {
+        "holds": true,
+        "reason": "probe.config.present failed again when run a second time (r3, then r4)"
+      },
+      "discriminated": {
+        "holds": true,
+        "reason": "1 competing hypotheses were ruled out by readings (h5)"
+      },
+      "counterfactual": {
+        "holds": false,
+        "reason": "no reference environment was named (--reference)"
+      },
+      "verified": {
+        "holds": false,
+        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+      }
+    },
+    "remediation": "Set PAYMENTS_PROVIDER_KEY for payments-service.",
+    "complete": true
+  }
+}

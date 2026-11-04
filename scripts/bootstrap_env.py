@@ -10,15 +10,13 @@ Phase 11 setup.
 Two modes:
   --local   DOMAIN=localhost, IMAGE_REGISTRY points at locally built
             images (docker-compose.quickstart.yml builds them, doesn't
-            pull), no LLM/embedding keys required — `just quickstart`
-            uses this. Degrades to "no root-cause narrative" rather than
-            failing; see worker/app/rag/llm.py and job.py, which already
-            propagate a missing-key error as a failed (not crashed) arq
-            job, leaving root_cause_* unset on the incident.
-  (default) Prompts for DOMAIN, LLM_PROVIDER, the matching LLM API key,
-            and VOYAGE_API_KEY, and states plainly that root-cause
-            narratives don't work without the embedding key. This is the
-            real-VM path documented in docs/INSTALL.md.
+            pull), no keys at all — `just quickstart` uses this.
+  (default) Prompts for DOMAIN and, optionally, VOYAGE_API_KEY (postmortem
+            embedding for search). This is the real-VM path documented in
+            docs/INSTALL.md.
+
+No LLM key is asked for: since Phase 32 part 2 nothing in Culprit calls a
+model (the incident narrative job was removed).
 
 Every generated value is escaped ($ -> $$) unconditionally before being
 written, regardless of which mode produced it or whether the user typed
@@ -57,6 +55,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("FACT_WRITER_DB_PASSWORD", "fact-writer role (Phase 28)"),
     ("CAPTURE_WRITER_DB_PASSWORD", "capture-writer role (Phase 30)"),
     ("PROBE_WRITER_DB_PASSWORD", "probe-writer role (Phase 31)"),
+    ("INVESTIGATION_WRITER_DB_PASSWORD", "investigation-writer role (Phase 32)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
@@ -143,28 +142,16 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     )
 
     if local:
-        env["ANTHROPIC_API_KEY"] = ""
         env["VOYAGE_API_KEY"] = ""
-        env["GEMINI_API_KEY"] = ""
-        env["LLM_PROVIDER"] = "gemini"
         print(
-            "--local mode: no LLM/embedding keys set. Incidents will still appear; "
-            "root-cause narratives will not be generated until GEMINI_API_KEY (or "
-            "ANTHROPIC_API_KEY) and VOYAGE_API_KEY are set in infra/.env.prod and the "
-            "stack is restarted. This is expected, not a bug.",
+            "--local mode: no VOYAGE_API_KEY set. Postmortems are stored but not "
+            "embedded for search until it is set in infra/.env.prod and the stack "
+            "is restarted. Nothing else needs a key.",
             file=sys.stderr,
         )
     else:
-        provider = _prompt("LLM_PROVIDER (gemini/anthropic)", default="gemini")
-        env["LLM_PROVIDER"] = provider
-        if provider == "anthropic":
-            env["ANTHROPIC_API_KEY"] = _prompt("ANTHROPIC_API_KEY", secret=True)
-            env["GEMINI_API_KEY"] = ""
-        else:
-            env["GEMINI_API_KEY"] = _prompt("GEMINI_API_KEY", secret=True)
-            env["ANTHROPIC_API_KEY"] = ""
         env["VOYAGE_API_KEY"] = _prompt(
-            "VOYAGE_API_KEY (required for root-cause narratives)", secret=True
+            "VOYAGE_API_KEY (optional; embeds postmortems for search)", secret=True
         )
 
     env["API_READER_DATABASE_URL"] = _db_url(
@@ -247,6 +234,12 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["PROBE_WRITER_DB_PASSWORD"] = passwords["PROBE_WRITER_DB_PASSWORD"]
     env["PROBE_WRITER_DATABASE_URL"] = _db_url(
         "probe-writer", passwords["PROBE_WRITER_DB_PASSWORD"], "postgres"
+    )
+    # Phase 32 part 2: investigation-writer -- INSERT on the five
+    # investigation tables and nothing else, behind POST /investigations.
+    env["INVESTIGATION_WRITER_DB_PASSWORD"] = passwords["INVESTIGATION_WRITER_DB_PASSWORD"]
+    env["INVESTIGATION_WRITER_DATABASE_URL"] = _db_url(
+        "investigation-writer", passwords["INVESTIGATION_WRITER_DB_PASSWORD"], "postgres"
     )
 
     # Phase 28: the project token `culprit` presents to POST

@@ -190,7 +190,7 @@ _self-check-env *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit check -f ../culprit.yaml {{ARGS}}
@@ -273,7 +273,7 @@ intent *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit intent -f ../culprit.yaml {{ARGS}}
@@ -355,7 +355,7 @@ create-user *ARGS:
 # frontend-build` and the frontend's Docker build) only worked on a
 # machine that already had a hand-written api/.env.
 generate-types:
-    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       INVESTIGATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
     cd frontend && npm run generate-types
 
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`
@@ -417,6 +417,7 @@ quickstart:
         REGISTRY_ADMIN_DATABASE_URL=$unused AUTH_SERVICE_DATABASE_URL=$unused \
         POSTMORTEM_WRITER_DATABASE_URL=$unused FACT_WRITER_DATABASE_URL=$unused \
         CAPTURE_WRITER_DATABASE_URL=$unused PROBE_WRITER_DATABASE_URL=$unused \
+        INVESTIGATION_WRITER_DATABASE_URL=$unused \
         /app/.venv/bin/python -m scripts.dump_openapi_schema > frontend/openapi.schema.json
     MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
         -v "$(pwd)/frontend:/frontend" -w /tmp node:22-alpine sh -euc '
@@ -450,39 +451,100 @@ quickstart:
     # it went unnoticed since Phase 17.
     "${COMPOSE[@]}" run --rm --build bootstrap
     echo "==> Building and starting the demo services"
-    "${COMPOSE[@]}" --profile demo up -d --build order-service inventory-service payments-service load-generator
-    echo "==> Scheduling an automatic fault injection in 90s"
-    # Steady baseline traffic alone won't trip the anomaly scorer -- it IS
-    # the baseline (CLAUDE.md's own manual-verification walkthrough
-    # injects a fault for the same reason). Without this, "a real
-    # correlated incident... within ~5 minutes" (the acceptance criterion
-    # this recipe exists to satisfy) would depend on the user separately
-    # discovering and running a fault-injection command themselves.
-    # Run as a DETACHED container (`-d`), not a nohup'd/disowned background
-    # shell job -- a `&`-backgrounded process is a child of this recipe's
-    # own shell and is not guaranteed to survive that shell exiting (some
-    # environments tear down a process's whole job/group on exit
-    # regardless of nohup; caught live while verifying this). A detached
-    # container is supervised by the Docker daemon instead, independent of
-    # this shell entirely. Uses a throwaway curl image on the compose
-    # network directly (not `just demo-fault`, which shells out to
-    # `uv run` -- unavailable by design on a host that only has Docker and
-    # just) so this needs nothing beyond what quickstart already requires.
-    docker run -d --rm --network culprit-quickstart_default \
-        curlimages/curl:latest sh -c \
-        'sleep 90 && curl -s -X POST http://inventory-service:8002/admin/fault/latency -H "Content-Type: application/json" -d "{\"delay_ms\": 800, \"duration_s\": 30}"' \
-        >/dev/null
+    # Phase 32 part 2: order-service presents a bearer token to
+    # inventory-service, which checks its audience — the check the fault
+    # below breaks. The signing secret is fresh per run and lives only in
+    # this shell's environment; the tokens are minted inside the demo
+    # image (demo-services/shared/demo_auth.py), so nothing here needs
+    # Python on the host.
+    DEMO_TOKEN_SECRET=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    export DEMO_TOKEN_SECRET
+    "${COMPOSE[@]}" --profile demo build order-service inventory-service payments-service load-generator
+    mint() {
+        "${COMPOSE[@]}" --profile demo run --rm --no-deps -T -e DEMO_TOKEN_SECRET \
+            order-service python -m shared.demo_auth "$1"
+    }
+    INVENTORY_TOKEN=$(mint inventory-service)
+    export INVENTORY_TOKEN
+    "${COMPOSE[@]}" --profile demo up -d order-service inventory-service payments-service load-generator
+    healthy() {
+        for _ in $(seq 1 60); do
+            if "${COMPOSE[@]}" --profile demo exec -T order-service python -c \
+                'import urllib.request as u; u.urlopen("http://localhost:8001/health", timeout=2); u.urlopen("http://inventory-service:8002/ready", timeout=2)' \
+                >/dev/null 2>&1; then
+                return 0
+            fi
+            sleep 2
+        done
+        echo "order-service did not become healthy" >&2
+        return 1
+    }
+    healthy
+
+    echo "==> Building the culprit binary (cli/Dockerfile)"
+    # The same image CI publishes, built here; the binary is copied out to
+    # the gitignored cli/bin/ and from there into order-service, because
+    # the walk runs where the environment is (DIAGNOSTIC_PLAN.md D3).
+    # MSYS_NO_PATHCONV: Git Bash would otherwise rewrite `<id>:/culprit`.
+    docker build -q -t culprit-quickstart-cli cli >/dev/null
+    mkdir -p cli/bin
+    cli_container=$(docker create culprit-quickstart-cli)
+    MSYS_NO_PATHCONV=1 docker cp "$cli_container:/culprit" cli/bin/culprit-quickstart >/dev/null
+    docker rm "$cli_container" >/dev/null
+
+    echo "==> Injecting a fault: order-service's token, re-minted for the wrong audience"
+    # A config fault on order-service that inventory-service answers with
+    # a 401 and the user sees as a 502 on POST /orders — the fault
+    # library's auth-audience case (cli/testdata/faultlib/).
+    INVENTORY_TOKEN=$(mint inventory) "${COMPOSE[@]}" --profile demo up -d --no-deps --force-recreate order-service
+    healthy
+
+    echo "==> Diagnosing POST /orders from inside order-service"
+    order_container=$("${COMPOSE[@]}" --profile demo ps -q order-service)
+    MSYS_NO_PATHCONV=1 docker exec -u 0 "$order_container" mkdir -p /tmp/walk
+    MSYS_NO_PATHCONV=1 docker cp cli/bin/culprit-quickstart "$order_container:/tmp/walk/culprit" >/dev/null
+    MSYS_NO_PATHCONV=1 docker cp demo-services/culprit.yaml "$order_container:/tmp/walk/culprit.yaml" >/dev/null
+    MSYS_NO_PATHCONV=1 docker exec -u 0 "$order_container" chmod 755 /tmp/walk/culprit
+    investigation=cli/bin/quickstart-investigation.json
+    # Exit 1 means "findings" — a diagnosis is a finding. Only 2 is an error.
+    diagnose_rc=0
+    MSYS_NO_PATHCONV=1 docker exec "$order_container" /tmp/walk/culprit diagnose \
+        "POST http://order-service:8001/orders" -f /tmp/walk/culprit.yaml \
+        --env quickstart --from order-service --no-plugins --format json \
+        --agent-id quickstart > "$investigation" || diagnose_rc=$?
+    if [ "$diagnose_rc" -gt 1 ]; then
+        echo "culprit diagnose failed (exit $diagnose_rc)" >&2
+        exit 1
+    fi
+
+    echo "==> Posting the investigation to the API"
+    # The project token goes in as an environment variable, not an argument,
+    # so it is not in the host's process list. The network is read from the
+    # api container rather than assumed, so a COMPOSE_PROJECT_NAME override
+    # still works.
+    api_container=$("${COMPOSE[@]}" ps -q api)
+    network=$(docker inspect -f '{{{{range $name, $_ := .NetworkSettings.Networks}}{{{{$name}}{{{{end}}' "$api_container")
+    project_token=$(grep -E '^CULPRIT_PROJECT_TOKEN=' infra/.env.prod | cut -d= -f2-)
+    TOKEN="$project_token" docker run --rm -i --network "$network" -e TOKEN curlimages/curl:latest \
+        sh -c 'curl -sS -f -X POST http://api:8000/investigations -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data-binary @- >/dev/null' \
+        < "$investigation"
+    investigation_id=$(grep -o '"inv-[0-9a-f]*"' "$investigation" | head -1 | tr -d '"')
+
+    port=${QUICKSTART_HTTP_PORT:-80}
+    base="http://localhost"
+    [ "$port" = "80" ] || base="http://localhost:$port"
     echo ""
-    echo "Culprit is running at http://localhost"
+    echo "Culprit is running at $base"
     admin_user=$(grep -E '^QUICKSTART_ADMIN_USERNAME=' infra/.env.prod | cut -d= -f2-)
     admin_pass=$(grep -E '^QUICKSTART_ADMIN_PASSWORD=' infra/.env.prod | cut -d= -f2-)
     echo "Log in as: ${admin_user} / ${admin_pass}"
-    echo "A fault will auto-inject in ~90s; an incident should appear within about"
-    echo "5 minutes. Its root-cause narrative is written only if infra/.env.prod has"
-    echo "VOYAGE_API_KEY and an LLM key. To trigger another fault yourself:"
-    echo "  docker run --rm --network culprit-quickstart_default curlimages/curl:latest \\"
-    echo "    -X POST http://inventory-service:8002/admin/fault/latency \\"
-    echo "    -H 'Content-Type: application/json' -d '{\"delay_ms\": 800, \"duration_s\": 30}'"
+    echo ""
+    echo "The injected fault has been diagnosed. See the investigation at:"
+    echo "  $base/investigations/$investigation_id"
+    echo "Its root should be auth:order-service->inventory-service/audience."
+    echo ""
+    echo "The fault is still in place. To restore order-service's real token:"
+    echo "  just quickstart"
 
 # Tear down the local quickstart (containers + demo profile; named
 # volumes, and infra/.env.prod / demo-services/.env, are left in place so

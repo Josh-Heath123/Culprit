@@ -1,0 +1,235 @@
+{
+  "id": "inv-4d6ffa3d1368e915",
+  "opened_at": "2026-11-04T11:39:08.810948054Z",
+  "closed_at": "2026-11-04T11:39:08.820007636Z",
+  "environment": "faults-order-ungranted",
+  "symptom": {
+    "kind": "endpoint",
+    "subject": "http:order-service/POST /orders",
+    "description": "POST http://order-service:8001/orders",
+    "source": "culprit diagnose",
+    "attestation": {
+      "kind": "reported",
+      "reported_by": "culprit diagnose"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "kind": "component_fails",
+      "subject": "component:order-service",
+      "status": "open"
+    },
+    {
+      "id": "h2",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003einventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r3"
+      ]
+    },
+    {
+      "id": "h3",
+      "kind": "auth_audience_mismatch",
+      "subject": "auth:order-service-\u003einventory-service/audience",
+      "status": "unexplored",
+      "reason": "probe.auth.token_shape was refused: reading INVENTORY_TOKEN needs config.read.values for order-service/INVENTORY_TOKEN, and config.read.values is not granted for this environment",
+      "readings": [
+        "r5"
+      ]
+    },
+    {
+      "id": "h4",
+      "kind": "contract_mismatch",
+      "subject": "http:inventory-service/GET /stock",
+      "status": "ruled_out",
+      "readings": [
+        "r6"
+      ]
+    },
+    {
+      "id": "h5",
+      "kind": "component_fails",
+      "subject": "component:inventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r1"
+      ]
+    },
+    {
+      "id": "h6",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003epayments-service",
+      "status": "ruled_out",
+      "readings": [
+        "r4"
+      ]
+    },
+    {
+      "id": "h7",
+      "kind": "component_fails",
+      "subject": "component:payments-service",
+      "status": "ruled_out",
+      "readings": [
+        "r2"
+      ]
+    },
+    {
+      "id": "h8",
+      "kind": "config_missing",
+      "subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "status": "ruled_out",
+      "readings": [
+        "r2"
+      ]
+    }
+  ],
+  "readings": [
+    {
+      "id": "r1",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "faults-order-ungranted",
+        "verdict": "pass",
+        "measured": {
+          "elapsed_ms": 3,
+          "status": 200,
+          "url": "http://inventory-service:8002/ready"
+        },
+        "taken_at": "2026-11-04T11:39:08.81481852Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r2",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:payments-service",
+        "environment": "faults-order-ungranted",
+        "verdict": "pass",
+        "measured": {
+          "elapsed_ms": 2,
+          "status": 200,
+          "url": "http://payments-service:8003/ready"
+        },
+        "taken_at": "2026-11-04T11:39:08.817000348Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r3",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "faults-order-ungranted",
+        "verdict": "pass",
+        "measured": {
+          "host": "inventory-service",
+          "port": 8002
+        },
+        "taken_at": "2026-11-04T11:39:08.817560635Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    },
+    {
+      "id": "r4",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003epayments-service",
+        "environment": "faults-order-ungranted",
+        "verdict": "pass",
+        "measured": {
+          "host": "payments-service",
+          "port": 8003
+        },
+        "taken_at": "2026-11-04T11:39:08.818056402Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    },
+    {
+      "id": "r5",
+      "reading": {
+        "probe_id": "probe.auth.token_shape",
+        "probe_version": 2,
+        "target": "auth:order-service-\u003einventory-service/audience",
+        "environment": "faults-order-ungranted",
+        "verdict": "refused",
+        "reason": "reading INVENTORY_TOKEN needs config.read.values for order-service/INVENTORY_TOKEN, and config.read.values is not granted for this environment",
+        "taken_at": "2026-11-04T11:39:08.818108179Z",
+        "agent_id": "fault-library"
+      }
+    },
+    {
+      "id": "r6",
+      "reading": {
+        "probe_id": "probe.http.route_conformance",
+        "probe_version": 2,
+        "target": "http:inventory-service/GET /stock",
+        "environment": "faults-order-ungranted",
+        "verdict": "pass",
+        "measured": {
+          "method": "GET",
+          "status": 401,
+          "url": "http://inventory-service:8002/stock"
+        },
+        "expected": {
+          "exists": true
+        },
+        "expected_source": {
+          "source_kind": "assertion",
+          "extractor": "culprit.yaml invariants",
+          "artefact": "culprit.yaml",
+          "locator": "invariants[1]",
+          "confidence_rank": 100
+        },
+        "taken_at": "2026-11-04T11:39:08.819959783Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    }
+  ],
+  "fault_tree": [],
+  "diagnosis": {
+    "root_subject": "component:order-service",
+    "statement": "The failure is localised to order-service, and the walk could not finish: auth_audience_mismatch on auth:order-service-\u003einventory-service/audience: probe.auth.token_shape was refused: reading INVENTORY_TOKEN needs config.read.values for order-service/INVENTORY_TOKEN, and config.read.values is not granted for this environment.",
+    "confidence": {
+      "reproduced": {
+        "holds": false,
+        "reason": "no failing probe established the diagnosis, so there was nothing to run again"
+      },
+      "discriminated": {
+        "holds": true,
+        "reason": "6 competing hypotheses were ruled out by readings (h2, h4, h5, h6, h7, h8)"
+      },
+      "counterfactual": {
+        "holds": false,
+        "reason": "no reference environment was named (--reference)"
+      },
+      "verified": {
+        "holds": false,
+        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+      }
+    },
+    "complete": false
+  }
+}

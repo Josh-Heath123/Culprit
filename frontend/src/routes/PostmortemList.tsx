@@ -33,8 +33,8 @@ export function PostmortemList() {
         {isError ? <p className="text-xs text-destructive">Couldn't load postmortems.</p> : null}
         {!isPending && postmortems.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Nothing here yet. Postmortems your team writes become grounding context for future
-            incidents' root-cause narratives.
+            Nothing here yet. Postmortems your team writes are kept here and, with a
+            VOYAGE_API_KEY, embedded so a coding agent can search them through the MCP server.
           </p>
         ) : null}
 

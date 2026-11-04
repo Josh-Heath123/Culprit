@@ -52,6 +52,7 @@ _IMPORT_TIME_DEFAULTS = {
         "postgresql+asyncpg://capture-writer:test@localhost:5432/test"
     ),
     "PROBE_WRITER_DATABASE_URL": "postgresql+asyncpg://probe-writer:test@localhost:5432/test",
+    "INVESTIGATION_WRITER_DATABASE_URL": "postgresql+asyncpg://investigation-writer:test@localhost:5432/test",
     "CULPRIT_PROJECT_TOKEN": "test-project-token",
 }
 for _name, _value in _IMPORT_TIME_DEFAULTS.items():
@@ -78,6 +79,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "FACT_WRITER_DB_PASSWORD": "test-fact-writer-password",
     "CAPTURE_WRITER_DB_PASSWORD": "test-capture-writer-password",
     "PROBE_WRITER_DB_PASSWORD": "test-probe-writer-password",
+    "INVESTIGATION_WRITER_DB_PASSWORD": "test-investigation-writer-password",
 }
 
 

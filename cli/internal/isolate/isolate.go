@@ -226,7 +226,24 @@ func (w *Walk) Diagnose(ctx context.Context, symptom model.Symptom, entry string
 	inv.FaultTree, inv.Diagnosis = w.assemble(ctx, symptom, found)
 	inv.Hypotheses = w.hypotheses // reproduction may have added readings
 	inv.Readings = w.readings
+	inv.Symptom.Attestation = w.attest(symptom)
 	return inv, nil
+}
+
+// attest says what establishes the symptom happened (§2.8, amended): a
+// failing reading on the symptom's own subject if the walk took one, and
+// otherwise the report it came from — never "reproduced" by inference.
+func (w *Walk) attest(symptom model.Symptom) model.Attestation {
+	for _, item := range w.readings {
+		if item.Reading.Target == symptom.Subject && item.Reading.Verdict == model.VerdictFail {
+			return model.Attestation{Kind: model.AttestedReproduced, Reading: item.ID}
+		}
+	}
+	reportedBy := symptom.Source
+	if reportedBy == "" {
+		reportedBy = "the caller"
+	}
+	return model.Attestation{Kind: model.AttestedReported, ReportedBy: reportedBy}
 }
 
 // ---- the hypothesis space -------------------------------------------------

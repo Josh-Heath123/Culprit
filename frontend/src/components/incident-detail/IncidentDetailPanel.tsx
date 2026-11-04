@@ -1,4 +1,4 @@
-import { FileTextIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import { FileTextIcon, XIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -7,11 +7,10 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ErrorState";
 import { useIncident } from "@/hooks/useIncident";
-import { useRegenerateRootCause } from "@/hooks/useRegenerateRootCause";
 import { severityColorVar, severityFor } from "@/lib/severity";
 
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { Evidence } from "./Evidence";
+import { NarrativeCitations } from "./NarrativeCitations";
 
 interface IncidentDetailPanelProps {
   incidentId: string;
@@ -20,13 +19,12 @@ interface IncidentDetailPanelProps {
 
 export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanelProps) {
   const { data: incident, isPending, isError, error, refetch } = useIncident(incidentId);
-  const regenerate = useRegenerateRootCause(incidentId);
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex flex-col">
-          <span className="text-xs font-medium text-muted-foreground">Incident</span>
+          <span className="text-xs font-medium text-muted-foreground">Incident · history</span>
           <span className="font-mono text-xs text-foreground">{incidentId}</span>
         </div>
         <div className="flex items-center gap-1">
@@ -76,28 +74,23 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
             <Separator />
 
             <section className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Root cause</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={regenerate.isPending}
-                  onClick={() => regenerate.mutate()}
-                >
-                  <RefreshCwIcon className={regenerate.isPending ? "size-3.5 animate-spin" : "size-3.5"} />
-                  {incident.root_cause_status === "ready" ? "Regenerate" : "Generate now"}
-                </Button>
-              </div>
-
-              {regenerate.isError ? (
-                <p className="text-xs text-destructive">
-                  Couldn't regenerate the narrative —{" "}
-                  {regenerate.error instanceof Error ? regenerate.error.message : "try again."}
-                </p>
-              ) : null}
+              <span className="text-xs font-medium text-muted-foreground">Root cause</span>
+              {/* Phase 32 part 2: the correlation engine and the narrative
+                  job are gone, and the incident tables are read-only. This
+                  is the record of what that engine concluded, kept as
+                  history; there is nothing left to regenerate it. */}
+              <p className="text-[11px] text-muted-foreground">
+                From the earlier incident-correlation engine, kept as history. New diagnoses are{" "}
+                <Link to="/investigations" className="underline hover:text-foreground">
+                  investigations
+                </Link>
+                .
+              </p>
 
               {incident.root_cause_status === "pending" ? (
-                <PendingRootCause justRegenerated={regenerate.isSuccess} />
+                <p className="text-xs text-muted-foreground">
+                  No narrative was written for this incident before the engine was retired.
+                </p>
               ) : (
                 <div className="flex flex-col gap-3">
                   <p className="text-sm leading-snug text-foreground">
@@ -115,7 +108,7 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
                     </div>
                   ) : null}
 
-                  <Evidence evidence={incident.root_cause_evidence} />
+                  <NarrativeCitations evidence={incident.root_cause_evidence} />
                 </div>
               )}
             </section>
@@ -156,27 +149,6 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
           </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function PendingRootCause({ justRegenerated }: { justRegenerated: boolean }) {
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-dashed border-border px-3 py-3">
-      <div className="flex items-center gap-2">
-        <span className="size-1.5 animate-pulse rounded-full bg-severity-warning" />
-        <span className="text-xs font-medium text-foreground">
-          {justRegenerated ? "Regenerating narrative…" : "Narrative pending…"}
-        </span>
-      </div>
-      {/* Not "usually finishes within a few seconds": without the keys the
-          job fails inside the worker and this status never leaves pending,
-          which the panel cannot see (Phase 31.2 truth pass). */}
-      <p className="text-xs text-muted-foreground">
-        The narrative is written by a background job, usually within seconds — but only
-        if the worker has an embedding key (VOYAGE_API_KEY) and an LLM key. Without
-        them it stays pending. The anomalies and evidence here are complete either way.
-      </p>
     </div>
   );
 }

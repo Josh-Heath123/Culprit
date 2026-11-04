@@ -1,0 +1,294 @@
+{
+  "id": "inv-6c959b9de33dd25b",
+  "opened_at": "2026-11-04T11:39:31.886895465Z",
+  "closed_at": "2026-11-04T11:39:31.894285528Z",
+  "environment": "faults-order",
+  "symptom": {
+    "kind": "endpoint",
+    "subject": "http:order-service/POST /orders",
+    "description": "POST http://order-service:8001/orders",
+    "source": "culprit diagnose",
+    "attestation": {
+      "kind": "reported",
+      "reported_by": "culprit diagnose"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "kind": "component_fails",
+      "subject": "component:order-service",
+      "status": "open"
+    },
+    {
+      "id": "h2",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003einventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r3"
+      ]
+    },
+    {
+      "id": "h3",
+      "kind": "auth_audience_mismatch",
+      "subject": "auth:order-service-\u003einventory-service/audience",
+      "status": "ruled_out",
+      "readings": [
+        "r5"
+      ]
+    },
+    {
+      "id": "h4",
+      "kind": "contract_mismatch",
+      "subject": "http:inventory-service/GET /stock",
+      "status": "supported",
+      "readings": [
+        "r6"
+      ]
+    },
+    {
+      "id": "h5",
+      "kind": "component_fails",
+      "subject": "component:inventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r1"
+      ]
+    },
+    {
+      "id": "h6",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003epayments-service",
+      "status": "ruled_out",
+      "readings": [
+        "r4"
+      ]
+    },
+    {
+      "id": "h7",
+      "kind": "component_fails",
+      "subject": "component:payments-service",
+      "status": "ruled_out",
+      "readings": [
+        "r2"
+      ]
+    },
+    {
+      "id": "h8",
+      "kind": "config_missing",
+      "subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "status": "ruled_out",
+      "readings": [
+        "r2"
+      ]
+    }
+  ],
+  "readings": [
+    {
+      "id": "r1",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "faults-order",
+        "verdict": "pass",
+        "measured": {
+          "elapsed_ms": 2,
+          "status": 200,
+          "url": "http://inventory-service:8002/ready"
+        },
+        "taken_at": "2026-11-04T11:39:31.889365288Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r2",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:payments-service",
+        "environment": "faults-order",
+        "verdict": "pass",
+        "measured": {
+          "elapsed_ms": 1,
+          "status": 200,
+          "url": "http://payments-service:8003/ready"
+        },
+        "taken_at": "2026-11-04T11:39:31.891391394Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r3",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "faults-order",
+        "verdict": "pass",
+        "measured": {
+          "host": "inventory-service",
+          "port": 8002
+        },
+        "taken_at": "2026-11-04T11:39:31.89185946Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    },
+    {
+      "id": "r4",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003epayments-service",
+        "environment": "faults-order",
+        "verdict": "pass",
+        "measured": {
+          "host": "payments-service",
+          "port": 8003
+        },
+        "taken_at": "2026-11-04T11:39:31.892366505Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    },
+    {
+      "id": "r5",
+      "reading": {
+        "probe_id": "probe.auth.token_shape",
+        "probe_version": 2,
+        "target": "auth:order-service-\u003einventory-service/audience",
+        "environment": "faults-order",
+        "verdict": "pass",
+        "measured": {
+          "audiences": [
+            "inventory-service"
+          ],
+          "expired": false,
+          "expires_in_seconds": 3544,
+          "issuer": "order-service"
+        },
+        "expected": {
+          "audience": "inventory-service"
+        },
+        "taken_at": "2026-11-04T11:39:31.892512427Z",
+        "agent_id": "fault-library"
+      }
+    },
+    {
+      "id": "r6",
+      "reading": {
+        "probe_id": "probe.http.route_conformance",
+        "probe_version": 2,
+        "target": "http:inventory-service/GET /stock",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "method": "GET",
+          "status": 404,
+          "url": "http://inventory-service:8002/stock"
+        },
+        "expected": {
+          "exists": true
+        },
+        "expected_source": {
+          "source_kind": "assertion",
+          "extractor": "culprit.yaml invariants",
+          "artefact": "culprit.yaml",
+          "locator": "invariants[1]",
+          "confidence_rank": 100
+        },
+        "reason": "GET http://inventory-service:8002/stock is declared but the running service answers 404",
+        "taken_at": "2026-11-04T11:39:31.893460715Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r7",
+      "reading": {
+        "probe_id": "probe.http.route_conformance",
+        "probe_version": 2,
+        "target": "http:inventory-service/GET /stock",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "method": "GET",
+          "status": 404,
+          "url": "http://inventory-service:8002/stock"
+        },
+        "expected": {
+          "exists": true
+        },
+        "expected_source": {
+          "source_kind": "assertion",
+          "extractor": "culprit.yaml invariants",
+          "artefact": "culprit.yaml",
+          "locator": "invariants[1]",
+          "confidence_rank": 100
+        },
+        "reason": "GET http://inventory-service:8002/stock is declared but the running service answers 404",
+        "taken_at": "2026-11-04T11:39:31.894231321Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    }
+  ],
+  "fault_tree": [
+    {
+      "from_subject": "http:order-service/POST /orders",
+      "to_subject": "component:order-service",
+      "relation": "symptom_of",
+      "established_by": [
+        "r6"
+      ]
+    },
+    {
+      "from_subject": "component:order-service",
+      "to_subject": "http:inventory-service/GET /stock",
+      "relation": "caused_by",
+      "established_by": [
+        "r6"
+      ]
+    }
+  ],
+  "diagnosis": {
+    "root_subject": "http:inventory-service/GET /stock",
+    "statement": "order-service fails because of http:inventory-service/GET /stock; the readings rule out the alternatives they reached.",
+    "confidence": {
+      "reproduced": {
+        "holds": true,
+        "reason": "probe.http.route_conformance failed again when run a second time (r6, then r7)"
+      },
+      "discriminated": {
+        "holds": true,
+        "reason": "6 competing hypotheses were ruled out by readings (h2, h3, h5, h6, h7, h8)"
+      },
+      "counterfactual": {
+        "holds": false,
+        "reason": "no reference environment was named (--reference)"
+      },
+      "verified": {
+        "holds": false,
+        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+      }
+    },
+    "remediation": "Serve GET /stock on inventory-service, or stop calling it.",
+    "complete": true
+  }
+}

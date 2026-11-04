@@ -30,7 +30,7 @@ EXPECTED_REGISTRY = "ghcr.io/josh-heath123/culprit"
 
 @pytest.fixture(autouse=True)
 def _no_prompting(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A non-local build_env() prompts for LLM_PROVIDER and API keys.
+    """A non-local build_env() prompts for VOYAGE_API_KEY.
     Answering with the offered default is what a real operator pressing
     Enter does, and it keeps this file about the generated values rather
     than about the prompt loop."""
@@ -76,6 +76,7 @@ def test_the_generated_registry_matches_the_compose_default() -> None:
         "FACT_WRITER_DB_PASSWORD",
         "CAPTURE_WRITER_DB_PASSWORD",
         "PROBE_WRITER_DB_PASSWORD",
+        "INVESTIGATION_WRITER_DB_PASSWORD",
         "MCP_READER_DB_PASSWORD",
     ],
 )

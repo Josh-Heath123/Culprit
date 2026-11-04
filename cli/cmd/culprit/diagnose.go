@@ -324,6 +324,7 @@ func newWalkRunner(manifest *extract.Manifest, manifestPath, environment, agentI
 	deps := probe.Deps{
 		Network: probe.NewRealNetwork(timeout), HTTP: probe.NewRealHTTPClient(timeout), Now: time.Now,
 		Database: sources.Database(), Config: sources.Config(), Packages: sources.Packages(),
+		Secrets: sources.Secrets(),
 	}
 	return walkRunner{
 		environment: environment,
@@ -339,14 +340,13 @@ func newWalkRunner(manifest *extract.Manifest, manifestPath, environment, agentI
 
 // placement is isolate.Placement for one environment, from one vantage.
 type placement struct {
-	spec   extract.EnvironmentSpec
-	from   string
-	facts  []model.Fact
-	getenv func(string) (string, bool)
+	spec  extract.EnvironmentSpec
+	from  string
+	facts []model.Fact
 }
 
 func newPlacement(manifest *extract.Manifest, spec extract.EnvironmentSpec, from string, facts []model.Fact) placement {
-	return placement{spec: spec, from: from, facts: facts, getenv: os.LookupEnv}
+	return placement{spec: spec, from: from, facts: facts}
 }
 
 func (p placement) Vantage() string { return p.from }
@@ -413,22 +413,25 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 
 	case model.HypothesisAuthAudience:
 		from, to := parts["from_component"], parts["to_component"]
-		if reason := p.mustRunAt(from, "the token it presents"); reason != "" {
-			return nil, reason
+		if p.spec.Adapter == extract.AdapterProcess {
+			// The process adapter reads the agent's own environment, which
+			// holds the caller's token only when the agent runs inside it.
+			if reason := p.mustRunAt(from, "the token it presents"); reason != "" {
+				return nil, reason
+			}
 		}
 		variable, named := p.spec.Components[from].Tokens[to]
 		if !named {
 			return nil, fmt.Sprintf("no token variable is named for %s -> %s (environments.*.components.%s.tokens)", from, to, from)
 		}
-		token, set := p.getenv(variable)
-		if !set || token == "" {
-			return nil, fmt.Sprintf("%s is not set where this agent runs", variable)
-		}
 		audience, declared := p.expectedAudience(h.Subject)
 		if !declared {
 			return nil, fmt.Sprintf("nothing declares the audience %s expects (an invariant on %s)", to, h.Subject)
 		}
-		return map[string]any{"token": token, "expect_audience": audience}, ""
+		// The variable's name, never its value: the probe reads the token
+		// through the environment's source, and only under
+		// config.read.values for <caller>/<variable> (Phase 32 part 2).
+		return map[string]any{"token_env": variable, "expect_audience": audience}, ""
 
 	case model.HypothesisContractMismatch:
 		if manifest.ID != "probe.http.route_conformance" {

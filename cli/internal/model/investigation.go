@@ -117,12 +117,39 @@ const (
 	SymptomComponent SymptomKind = "component"
 )
 
+// AttestationKind is how the symptom's occurrence is known (§2.8,
+// amended 2026-11-04).
+type AttestationKind string
+
+const (
+	// AttestedReproduced: the walk reproduced the symptom read-only — a
+	// reading on the symptom's own subject failed.
+	AttestedReproduced AttestationKind = "reproduced"
+	// AttestedReported: the symptom is known only from the report it came
+	// from. A write cannot be replayed read-only, so this is common.
+	AttestedReported AttestationKind = "reported"
+)
+
+// Attestation says what establishes that the symptom happened at all —
+// separately from the symptom_of edge, which says what ties it to its
+// cause. A symptom that was only reported is never presented as
+// reproduced: "reproduced" must cite a failing reading on the symptom's
+// own subject, and the model refuses one that does not.
+type Attestation struct {
+	Kind AttestationKind `json:"kind"`
+	// Reading is the id of the failing reading that reproduced it.
+	Reading string `json:"reading,omitempty"`
+	// ReportedBy names where a reported symptom came from.
+	ReportedBy string `json:"reported_by,omitempty"`
+}
+
 // Symptom is what the investigation started from.
 type Symptom struct {
 	Kind        SymptomKind `json:"kind"`
 	Subject     string      `json:"subject"`
 	Description string      `json:"description,omitempty"`
 	Source      string      `json:"source"`
+	Attestation Attestation `json:"attestation"`
 }
 
 // Hypothesis is one candidate cause the model offered the walk.
@@ -276,6 +303,10 @@ func (inv Investigation) Validate() error {
 		return fmt.Errorf("symptom subject %q is not a subject URI: %w", inv.Symptom.Subject, err)
 	}
 
+	if err := validateAttestation(inv); err != nil {
+		return err
+	}
+
 	readings := make(map[string]bool, len(inv.Readings))
 	for _, item := range inv.Readings {
 		if strings.TrimSpace(item.ID) == "" {
@@ -389,4 +420,56 @@ func validateDiagnosis(d Diagnosis, tree []FaultEdge) error {
 		}
 	}
 	return nil
+}
+
+func validateAttestation(inv Investigation) error {
+	attestation := inv.Symptom.Attestation
+	switch attestation.Kind {
+	case AttestedReproduced:
+		for _, item := range inv.Readings {
+			if item.ID != attestation.Reading {
+				continue
+			}
+			if item.Reading.Verdict != VerdictFail || item.Reading.Target != inv.Symptom.Subject {
+				return fmt.Errorf(
+					"the symptom is attested as reproduced by %s, which is not a failing reading "+
+						"of %s. A symptom only reported is never presented as reproduced",
+					attestation.Reading, inv.Symptom.Subject)
+			}
+			return nil
+		}
+		return fmt.Errorf("the symptom is attested as reproduced by %q, which this investigation did not take",
+			attestation.Reading)
+	case AttestedReported:
+		if attestation.Reading != "" {
+			return fmt.Errorf("a reported symptom cites reading %s; if a reading reproduced it, say reproduced",
+				attestation.Reading)
+		}
+		if strings.TrimSpace(attestation.ReportedBy) == "" {
+			return fmt.Errorf("a reported symptom must say where the report came from")
+		}
+		return nil
+	}
+	return fmt.Errorf("the symptom has unknown attestation %q", attestation.Kind)
+}
+
+// MarshalJSON writes an investigation's lists as lists, never null. A walk
+// that establishes no edge leaves FaultTree nil, which encoding/json writes
+// as `null` — and the Python model, the one POST /investigations validates
+// with, rejects null where it expects a list. Found by the API's round trip
+// on a real partial investigation (Phase 32 part 2), the same class of
+// defect as part 1's `capabilities: null`.
+func (inv Investigation) MarshalJSON() ([]byte, error) {
+	type plain Investigation
+	normalised := plain(inv)
+	if normalised.Hypotheses == nil {
+		normalised.Hypotheses = []Hypothesis{}
+	}
+	if normalised.Readings == nil {
+		normalised.Readings = []InvestigationReading{}
+	}
+	if normalised.FaultTree == nil {
+		normalised.FaultTree = []FaultEdge{}
+	}
+	return json.Marshal(normalised)
 }

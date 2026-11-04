@@ -92,6 +92,22 @@ migration creating the `probe-writer` role will not run without the
 password. `POST /readings` authenticates with the same
 `CULPRIT_PROJECT_TOKEN`, so unset still means it refuses every request.
 
+**Phase 32 adds two more:**
+
+```
+INVESTIGATION_WRITER_DB_PASSWORD=<generate one>
+INVESTIGATION_WRITER_DATABASE_URL=postgresql+asyncpg://investigation-writer:<same password>@postgres:5432/culprit
+```
+
+Both required: the migration creating the `investigation-writer` role will
+not run without the password, and the api will not start without the URL.
+`POST /investigations` authenticates with the same `CULPRIT_PROJECT_TOKEN`.
+
+The same migration makes `incident_candidates` and `incident_anomalies`
+read-only, and the worker no longer runs the correlation engine or the
+narrative job: an upgraded install keeps its incidents as history, and new
+diagnoses arrive as investigations from `culprit diagnose`.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

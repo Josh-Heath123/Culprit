@@ -36,7 +36,7 @@
   },
   {
     "id": "probe.auth.token_shape",
-    "version": 1,
+    "version": 2,
     "effect": "inspect",
     "capabilities": [],
     "inputs": {
@@ -49,11 +49,11 @@
         },
         "token": {
           "type": "string"
+        },
+        "token_env": {
+          "type": "string"
         }
       },
-      "required": [
-        "token"
-      ],
       "type": "object"
     },
     "timeout_ms": 2000,

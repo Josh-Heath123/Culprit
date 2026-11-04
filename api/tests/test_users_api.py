@@ -312,3 +312,100 @@ def test_login_rate_limited_after_10_failures_per_minute(client: TestClient) -> 
         "/auth/login", json={"username": "nonexistent-user", "password": "wrong"}
     )
     assert eleventh.status_code == 429
+
+
+# ---- the last admin (Phase 32 part 2) ---------------------------------------
+
+
+def _users(client: TestClient, headers: dict) -> dict[str, dict]:
+    return {u["username"]: u for u in client.get("/users", headers=headers).json()["items"]}
+
+
+def test_the_last_admin_cannot_be_demoted_disabled_or_deleted(client: TestClient) -> None:
+    """Found by Phase 31.2's truth pass: the only admin demoting themselves
+    left nobody able to manage users. Every route that could do it says 409."""
+    admin_token = _bootstrap_admin(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    admin_id = next(u["id"] for u in _users(client, headers).values() if u["role"] == "admin")
+
+    for method, body in (
+        ("patch", {"role": "member"}),
+        ("patch", {"disabled": True}),
+        ("delete", None),
+    ):
+        response = client.request(method.upper(), f"/users/{admin_id}", json=body, headers=headers)
+        assert response.status_code == 409, (method, body, response.text)
+        assert "no enabled admin" in response.json()["detail"]
+
+    # Still an admin, still enabled: nothing was half-applied.
+    admin = _users(client, headers)[
+        next(n for n, u in _users(client, headers).items() if u["id"] == admin_id)
+    ]
+    assert admin["role"] == "admin" and admin["disabled"] is False
+
+
+def test_an_admin_can_be_demoted_while_another_remains(client: TestClient) -> None:
+    admin_token = _bootstrap_admin(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    created = client.post(
+        "/users",
+        json={"username": "second-admin", "password": "a-decent-password-2", "role": "admin"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    second = created.json()["id"]
+    assert (
+        client.patch(f"/users/{second}", json={"role": "member"}, headers=headers).status_code
+        == 200
+    )
+    # ...and now the remaining one is the last.
+    first = next(u["id"] for u in _users(client, headers).values() if u["role"] == "admin")
+    assert (
+        client.patch(f"/users/{first}", json={"role": "member"}, headers=headers).status_code == 409
+    )
+
+
+def test_two_admins_demoting_each_other_at_once_leave_one_admin(client: TestClient) -> None:
+    """The concurrent case: two transactions, each removing the other admin.
+    The admin rows are locked and counted inside the change, so exactly one
+    succeeds and the other is refused — never both."""
+    import asyncio
+
+    from app.auth.repository import LastAdminError, update_user
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    admin_token = _bootstrap_admin(client)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    client.post(
+        "/users",
+        json={"username": "rival-admin", "password": "a-decent-password-3", "role": "admin"},
+        headers=headers,
+    )
+    from uuid import UUID
+
+    admins = [UUID(u["id"]) for u in _users(client, headers).values() if u["role"] == "admin"]
+    assert len(admins) == 2
+
+    async def race() -> list[object]:
+        engine = create_async_engine(os.environ["AUTH_SERVICE_DATABASE_URL"])
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+
+        async def demote(user_id: UUID) -> object:
+            async with factory() as session:
+                try:
+                    return await update_user(session, user_id, role="member")
+                except LastAdminError as exc:
+                    return exc
+
+        try:
+            return list(await asyncio.gather(demote(admins[0]), demote(admins[1])))
+        finally:
+            await engine.dispose()
+
+    outcomes = asyncio.run(race())
+    refused = [o for o in outcomes if isinstance(o, LastAdminError)]
+    assert len(refused) == 1, outcomes
+    remaining = [
+        u for u in _users(client, headers).values() if u["role"] == "admin" and not u["disabled"]
+    ]
+    assert len(remaining) == 1

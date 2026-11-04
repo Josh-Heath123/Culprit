@@ -6,7 +6,7 @@ import type { CitedEvidenceOut } from "@/lib/types";
  * the specific retrieved postmortem passage... visibly, like a
  * footnote — this makes the suggestion auditable instead of a
  * 'trust me' black box." Never just the hypothesis text alone. */
-export function Evidence({ evidence }: { evidence: CitedEvidenceOut[] }) {
+export function NarrativeCitations({ evidence }: { evidence: CitedEvidenceOut[] }) {
   if (evidence.length === 0) {
     return <p className="text-xs text-muted-foreground">No cited evidence.</p>;
   }

@@ -39,12 +39,51 @@ async def create_user(
     return user
 
 
+class LastAdminError(Exception):
+    """The change would leave no enabled admin (Phase 32 part 2)."""
+
+
+def _is_active_admin(user: User) -> bool:
+    return user.role == "admin" and user.disabled_at is None
+
+
 async def update_user(
     session: AsyncSession, user_id: UUID, *, role: str | None = None, disabled: bool | None = None
 ) -> User | None:
+    """Change a user's role or disabled state — never leaving no admin.
+
+    Demoting or disabling the last enabled admin locks every admin out,
+    with no way back short of `just create-user` on the host (found by
+    Phase 31.2's truth pass). So when the change would remove an active
+    admin, every active-admin row is locked (SELECT ... FOR UPDATE) and
+    counted in the same transaction as the change. Two admins demoting
+    each other at the same moment: the second waits on the first's lock,
+    re-reads, sees one admin left, and is refused.
+    """
     user = await get_user_by_id(session, user_id)
     if user is None:
         return None
+    removes_admin = _is_active_admin(user) and (
+        (role is not None and role != "admin") or disabled is True
+    )
+    if removes_admin:
+        active = (
+            (
+                await session.execute(
+                    select(User.id)
+                    .where(User.role == "admin", User.disabled_at.is_(None))
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        # The lock may have waited on another transaction; decide on what
+        # is committed now, not on what was read before it.
+        await session.refresh(user)
+        if _is_active_admin(user) and len(active) <= 1 and user.id in active:
+            await session.rollback()
+            raise LastAdminError
     if role is not None:
         user.role = role
     if disabled is not None:

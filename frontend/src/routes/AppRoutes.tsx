@@ -4,6 +4,8 @@ import { LoginScreen } from "@/components/auth/LoginScreen";
 import { Dashboard } from "@/components/Dashboard";
 import { useAuthToken } from "@/hooks/useAuth";
 
+import { InvestigationList } from "./InvestigationList";
+import { InvestigationView } from "./InvestigationView";
 import { NotFound } from "./NotFound";
 import { PostmortemEditor } from "./PostmortemEditor";
 import { PostmortemList } from "./PostmortemList";
@@ -51,6 +53,8 @@ export function AppRoutes() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/incidents/:incidentId" element={<Dashboard />} />
         <Route path="/incidents/:incidentId/postmortem" element={<PostmortemEditor />} />
+        <Route path="/investigations" element={<InvestigationList />} />
+        <Route path="/investigations/:investigationId" element={<InvestigationView />} />
         <Route path="/postmortems" element={<PostmortemList />} />
         <Route path="/postmortems/new" element={<PostmortemEditor />} />
         <Route path="/postmortems/:postmortemId" element={<PostmortemEditor />} />

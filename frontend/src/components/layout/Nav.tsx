@@ -23,13 +23,18 @@ export function Nav({ totalIncidents }: NavProps) {
           <span className="text-sm font-semibold tracking-tight text-foreground">Culprit</span>
         </Link>
         <span className="font-mono text-xs text-muted-foreground">
-          {totalIncidents} incident{totalIncidents === 1 ? "" : "s"}
+          {totalIncidents} incident{totalIncidents === 1 ? "" : "s"} (history)
         </span>
       </div>
       <div className="flex items-center gap-3">
         {/* Not admin-gated, unlike Services/Users below — any
          * authenticated team member may read and write postmortems
          * (docs/SELF_HOSTED_PLAN.md Phase 18). */}
+        {/* Phase 32 part 2: diagnoses are investigations now; the
+         * incident timeline on this page is the earlier engine's record. */}
+        <Link to="/investigations" className="text-xs text-muted-foreground hover:text-foreground">
+          Investigations
+        </Link>
         <Link to="/postmortems" className="text-xs text-muted-foreground hover:text-foreground">
           Postmortems
         </Link>

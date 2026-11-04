@@ -11,10 +11,10 @@ changed file paths. This only *annotates* an incident that already
 exists — it never changes which anomalies get grouped into which incident
 (worker/app/correlation/'s own concern, untouched here).
 
-Imports only app.db (Core tables) and app.observability, the same way
-worker/app/rag/context.py reads incident_candidates/anomalies without
-importing app.correlation: this job needs correlation's *output* (the DB
-rows), never its *code*. The third importlinter contract (worker/
+Imports only app.db (Core tables) and app.observability: this job
+needs correlation's *output* (the DB rows), never its *code* — and
+since Phase 32 part 2 that code is gone; its rows remain as history.
+The third importlinter contract (worker/
 pyproject.toml) makes this structural, not just a convention — see that
 file's own comment for why it's deliberately one-directional.
 """

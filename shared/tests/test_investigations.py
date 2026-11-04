@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from culprit_model import subjects
 from culprit_model.investigations import (
+    AttestationKind,
     FaultEdge,
     HypothesisStatus,
     Investigation,
@@ -35,6 +36,10 @@ def test_the_hypothesis_status_set_matches_the_shared_fixture() -> None:
 
 def test_the_hypothesis_kinds_match_the_shared_fixture() -> None:
     assert set(FIXTURE["hypothesis_kinds"]) == HYPOTHESIS_KINDS
+
+
+def test_the_attestation_kinds_match_the_shared_fixture() -> None:
+    assert set(FIXTURE["attestation_kinds"]) == {k.value for k in AttestationKind}
 
 
 def test_the_symptom_kind_set_matches_the_shared_fixture() -> None:

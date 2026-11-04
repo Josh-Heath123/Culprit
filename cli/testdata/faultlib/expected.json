@@ -26,7 +26,27 @@
       "edges": [
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:order-service -[caused_by]-> auth:order-service->inventory-service/audience"
-      ]
+      ],
+      "attestation": "reported"
+    },
+    {
+      "name": "auth-audience-ungranted",
+      "inject": "the audience fault again, walked in an environment that does not grant config.read.values for order-service/INVENTORY_TOKEN",
+      "vantage": "order-service",
+      "environment": "faults-order-ungranted",
+      "root_subject": "component:order-service",
+      "complete": false,
+      "relations": [],
+      "rubric": {
+        "reproduced": false,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [],
+      "statement_contains": "config.read.values",
+      "note": "Phase 32 part 2's token grant: without it the audience hypothesis is refused, the tree records the branch as unexplored, and the diagnosis is partial and names the missing grant.",
+      "attestation": "reported"
     },
     {
       "name": "network-partition",
@@ -49,7 +69,8 @@
       "edges": [
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:order-service -[caused_by]-> connection:order-service->inventory-service"
-      ]
+      ],
+      "attestation": "reported"
     },
     {
       "name": "contract",
@@ -71,7 +92,8 @@
       "edges": [
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:order-service -[caused_by]-> http:inventory-service/GET /stock"
-      ]
+      ],
+      "attestation": "reported"
     },
     {
       "name": "config",
@@ -95,7 +117,8 @@
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:payments-service -[propagates_to]-> component:order-service",
         "component:payments-service -[caused_by]-> config:payments-service/PAYMENTS_PROVIDER_KEY"
-      ]
+      ],
+      "attestation": "reported"
     },
     {
       "name": "error-rate",
@@ -117,7 +140,8 @@
       "edges": [
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:inventory-service -[propagates_to]-> component:order-service"
-      ]
+      ],
+      "attestation": "reported"
     },
     {
       "name": "latency",
@@ -134,7 +158,8 @@
         "verified": false
       },
       "note": "No read-only probe discriminates 'slow'; every probe passes, and the walk says the cause is inside order-service or something it cannot observe, such as added latency — a partial diagnosis, not a wrong one. Latency waits for impedance to have a CLI source (docs/LIMITS.md).",
-      "edges": []
+      "edges": [],
+      "attestation": "reported"
     }
   ]
 }

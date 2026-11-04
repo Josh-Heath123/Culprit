@@ -55,3 +55,14 @@ export type PaginatedPostmortems = components["schemas"]["PaginatedPostmortems"]
 export type PostmortemCreate = components["schemas"]["PostmortemCreate"];
 export type PostmortemPatch = components["schemas"]["PostmortemPatch"];
 export type EmbeddingStatus = PostmortemOut["embedding_status"];
+
+// Phase 32 part 2: investigations, from `culprit diagnose`.
+export type InvestigationSummary = components["schemas"]["InvestigationSummary"];
+export type InvestigationList = components["schemas"]["InvestigationList"];
+export type InvestigationTree = components["schemas"]["InvestigationTree"];
+export type TreeEdge = components["schemas"]["TreeEdge"];
+export type InvestigationReading = components["schemas"]["InvestigationReading"];
+export type Reading = components["schemas"]["Reading"];
+export type Hypothesis = components["schemas"]["Hypothesis"];
+export type ConfidenceRubric = components["schemas"]["ConfidenceRubric"];
+export type Symptom = components["schemas"]["Symptom"];

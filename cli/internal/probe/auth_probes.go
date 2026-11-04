@@ -32,10 +32,15 @@ func (authTokenShape) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.auth.token_shape",
 		Discriminates: []string{model.HypothesisAuthAudience},
-		Version:       1,
-		Effect:        model.EffectInspect,
-		// No capability: this probe opens nothing. It reads a token the
-		// caller already holds and reports its structure. An empty list,
+		// Version 2 (Phase 32 part 2): token_env, so the token can be read
+		// under config.read.values instead of handed in by the caller.
+		Version: 2,
+		Effect:  model.EffectInspect,
+		// No manifest capability: this probe opens nothing. A token passed
+		// as `token` is one the caller already holds. One named by
+		// `token_env` is a service's own credential, read only under
+		// config.read.values for that variable — enforced by the source,
+		// as process.exec.allowlist is for installed packages. An empty list,
 		// not nil: nil marshals as `null`, which the Python ProbeManifest
 		// rejects — the hand-kept API mirror said `[]` and hid that until
 		// Phase 32 generated the mirror from this.
@@ -47,10 +52,11 @@ func (authTokenShape) Manifest() model.ProbeManifest {
 		},
 		Cost: model.CostCheap,
 		Inputs: map[string]any{
-			"type":     "object",
-			"required": []any{"token"},
+			"type": "object",
+			// One of token or token_env.
 			"properties": map[string]any{
 				"token":           map[string]any{"type": "string"},
+				"token_env":       map[string]any{"type": "string"},
 				"expect_audience": map[string]any{"type": "string"},
 				"expect_issuer":   map[string]any{"type": "string"},
 			},
@@ -71,7 +77,26 @@ type jwtClaims struct {
 func (authTokenShape) Run(ctx context.Context, request Request, deps Deps) Outcome {
 	token, ok := stringInput(request.Inputs, "token")
 	if !ok {
-		return inconclusive("no token was supplied, so its shape cannot be inspected")
+		variable, named := stringInput(request.Inputs, "token_env")
+		if !named {
+			return inconclusive("no token was supplied, so its shape cannot be inspected")
+		}
+		if deps.Secrets == nil {
+			return inconclusive("this agent cannot read the environment's configuration")
+		}
+		// The token the caller presents lives in the caller's environment.
+		holder := calleeOfTarget(request.Target)
+		if kind, parts, err := model.ParseSubject(request.Target); err == nil && kind == model.KindAuth {
+			holder = parts["from_component"]
+		}
+		value, err := deps.Secrets.Secret(ctx, holder, variable)
+		if err != nil {
+			if outcome, decided := sourceOutcome(err); decided {
+				return outcome
+			}
+			return inconclusive(fmt.Sprintf("%s could not be read", variable))
+		}
+		token = value
 	}
 
 	claims, err := decodeClaims(token)

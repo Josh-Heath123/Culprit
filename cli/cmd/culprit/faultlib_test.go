@@ -41,6 +41,12 @@ type faultExpectation struct {
 	Rubric      map[string]bool `json:"rubric"`
 	// Edges are the fault tree's shape: "from -[relation]-> to", exactly.
 	Edges []string `json:"edges"`
+	// StatementContains, when set, must appear in the diagnosis statement —
+	// how a partial diagnosis says why it is partial.
+	StatementContains string `json:"statement_contains"`
+	// Attestation is how the symptom's occurrence is known: every symptom
+	// here is a POST, which no probe replays, so "reported".
+	Attestation string `json:"attestation"`
 }
 
 type faultLibrary struct {
@@ -104,6 +110,14 @@ func TestTheFaultLibrary(t *testing.T) {
 			}
 
 			inv := stack.diagnose(library.Symptom, fault)
+			// CULPRIT_FAULT_LIBRARY_RECORD=<dir> keeps each real
+			// investigation — the API's round-trip test posts the audience
+			// one (api/tests/data/), so it is tested on what the walk wrote,
+			// not on something written by hand to look like it.
+			if dir := os.Getenv("CULPRIT_FAULT_LIBRARY_RECORD"); dir != "" {
+				encoded, _ := json.MarshalIndent(inv, "", "  ")
+				_ = os.WriteFile(filepath.Join(dir, fault.Name+".json"), append(encoded, '\n'), 0o644)
+			}
 			checkDiagnosis(t, fault, inv)
 		})
 	}
@@ -120,6 +134,12 @@ func checkDiagnosis(t *testing.T, want faultExpectation, inv model.Investigation
 	}
 	if d.RootSubject != want.RootSubject {
 		t.Errorf("root %s, want %s\nstatement: %s", d.RootSubject, want.RootSubject, d.Statement)
+	}
+	if want.StatementContains != "" && !strings.Contains(d.Statement, want.StatementContains) {
+		t.Errorf("the statement does not say %q: %s", want.StatementContains, d.Statement)
+	}
+	if got := string(inv.Symptom.Attestation.Kind); got != want.Attestation {
+		t.Errorf("symptom attestation %s, want %s", got, want.Attestation)
 	}
 	if d.Complete != want.Complete {
 		t.Errorf("complete = %v, want %v\nstatement: %s", d.Complete, want.Complete, d.Statement)
@@ -267,7 +287,7 @@ func (s *faultStack) send(from, method, url, body string) {
 // inject applies one fault and returns what undoes it.
 func (s *faultStack) inject(name string) func() {
 	switch name {
-	case "auth-audience":
+	case "auth-audience", "auth-audience-ungranted":
 		wrong := mintToken(strings.TrimPrefix(s.env[0], "DEMO_TOKEN_SECRET="), "inventory")
 		s.secrets = append(s.secrets, wrong)
 		s.compose(s.withToken(wrong), "up", "-d", "--force-recreate", "order-service")

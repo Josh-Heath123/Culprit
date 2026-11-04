@@ -143,23 +143,29 @@ package may link an HTTP client — a test lists every package under
 
 ### The control plane
 
-The repository also contains Culprit's earlier half, a running service that
-ingests telemetry. Services push OpenTelemetry metrics and logs to an ingest
-gateway; a worker drains them from Redis Streams into Postgres, flags
-statistical anomalies (rolling z-score, not a model), groups anomalies that
-happen together across connected services into incidents, and — only after
-retrieving similar past postmortems — asks an LLM to write a root-cause
-narrative. The same worker now also scores per-connection impedance and
-stores it as a probe reading. Its API accepts the CLI's JSON (facts, captures,
-divergences, readings) for history; the CLI itself never uploads anything.
+The repository also contains a running service, the control plane. Services
+push OpenTelemetry metrics and logs to an ingest gateway; a worker drains them
+from Redis Streams into Postgres, flags statistical anomalies (rolling
+z-score, not a model) and scores per-connection impedance, stored as probe
+readings. Its API accepts the CLI's JSON (facts, captures, divergences,
+readings and investigations) and stores it; the CLI itself never uploads
+anything.
 
-The web dashboard belongs to that half: an incident timeline, postmortems,
-and settings for components, ingest keys and users. It works, and Phase 32
-replaces it with an investigation-first interface, so it is described here
-rather than showcased. What it does and does not do is in
-[`docs/LIMITS.md`](docs/LIMITS.md) — among them, that a member's timeline is
-drawn from incidents rather than from the component registry, which only an
-admin can read.
+`culprit diagnose "<symptom>"` is the isolation walk: run where the
+environment is, it walks the connection graph from the symptom, runs the
+probes that discriminate between hypotheses, and prints an investigation —
+a fault tree whose every edge cites the readings that established it, and a
+four-part rubric (reproduced, discriminated, counterfactual, verified)
+instead of a confidence score. `POST /investigations` stores one, and the
+dashboard's **Investigations** page shows it: the tree with its root marked,
+each edge expanding to its readings, and the hypotheses the walk did not
+need kept apart from the ones it needed and could not test.
+
+The dashboard also keeps postmortems, settings for components, ingest keys
+and users, and an incident timeline that is now history: Phase 32 retired
+the engine that grouped anomalies into incidents and the LLM narrative
+written over them, and the incident tables are read-only. What the dashboard
+does and does not do is in [`docs/LIMITS.md`](docs/LIMITS.md).
 
 ## Technology stack
 
@@ -168,10 +174,10 @@ admin can read.
 | CLI and probe agent | Go 1.25, `cobra`, `yaml.v3`, `pgx` (database probes and live-schema capture). One static binary, no cgo. |
 | Extractors | Python (FastAPI, Flask and Django introspection, SQLAlchemy, Alembic, `ast`), Node (`@babel/parser`) |
 | Backend | Python 3.12, FastAPI, SQLAlchemy, Alembic, `arq` jobs on Redis, managed with `uv` |
-| Data | PostgreSQL 16 with TimescaleDB and pgvector, one instance, thirteen least-privilege roles |
+| Data | PostgreSQL 16 with TimescaleDB and pgvector, one instance, fourteen least-privilege roles |
 | Ingestion | OpenTelemetry SDK in the services, a FastAPI OTLP gateway, Redis Streams |
 | Anomaly scoring | `river` (EWMA mean and variance, rolling z-score) |
-| Narrative (optional) | Voyage embeddings for retrieval; Anthropic or Gemini for the one LLM call |
+| Postmortem search (optional) | Voyage embeddings over the postmortem corpus |
 | Frontend | React 18, Vite, TypeScript, Tailwind, shadcn/ui, TanStack Query, visx, cmdk |
 | Infrastructure | Docker Compose, Caddy, GitHub Actions, Trivy (blocking on every image) |
 | Testing and checks | pytest, `go test`, `node --test`, pyright, ruff, import-linter, `tsc` in the frontend build, and the repository's own invariant checks |
@@ -248,15 +254,20 @@ just quickstart
 This builds every image, generates every secret into `infra/.env.prod`, runs
 the migrations, starts Postgres, Redis, the API, the worker and the dashboard
 plus three demo services and a load generator, creates an admin account and
-prints its credentials. Ninety seconds in it injects a latency fault into the
-demo inventory service, and an incident appears at <http://localhost> within
-a few minutes. Without `VOYAGE_API_KEY` and an LLM key in `infra/.env.prod`
-the incident appears but no narrative is written. `just quickstart-down`
-stops it and keeps the data.
+prints its credentials. Then it injects a fault — order-service's token for
+inventory-service, re-minted for the wrong audience, so `POST /orders` fails
+with a 502 — runs `culprit diagnose` inside the order-service container,
+posts the investigation, and prints its address, e.g.
+`http://localhost/investigations/inv-…`. Its root is
+`auth:order-service->inventory-service/audience`. No API key of any kind is
+needed: nothing on that path calls a model. The fault stays in place until
+the next `just quickstart`; `just quickstart-down` stops everything and keeps
+the data.
 
 If it does not come up:
 
-- **Port 80 must be free.** The dashboard is published there.
+- **Port 80 must be free,** or set `QUICKSTART_HTTP_PORT=8088` (any free
+  port) for both `just quickstart` and the address it prints.
 - **Open `http://localhost`, not `http://127.0.0.1`.** Caddy serves the site
   by name; another host name gets an empty page.
 - **An `infra/.env.prod` from before a schema change** lacks newer role
@@ -412,11 +423,11 @@ dogfooding, and it is why the "Not checked" list is never optional.
 
 | Path | What it is |
 |---|---|
-| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe` |
+| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose` |
 | [`extractors/`](extractors) | the Python and Node extractor plugins ([protocol](docs/EXTRACTOR_PROTOCOL.md)) |
 | [`shared/`](shared) | the core model — planes, facts, subjects, readings — shared by the Python services |
 | [`api/`](api) | FastAPI: the dashboard's API, the ingest gateway, capture and reading endpoints, migrations |
-| [`worker/`](worker) | arq jobs: stream draining, anomaly and impedance scoring, correlation, the narrative |
+| [`worker/`](worker) | arq jobs: stream draining, anomaly and impedance scoring, postmortem embedding |
 | [`frontend/`](frontend) | the React dashboard |
 | [`mcp_server/`](mcp_server) | read-only MCP tools over Culprit's engineering memory, for coding agents |
 | [`demo-services/`](demo-services) | three small instrumented services the quickstart runs |
@@ -437,9 +448,6 @@ failure. [`docs/PROBES.md`](docs/PROBES.md) documents each probe and
 The plan of record is [`docs/DIAGNOSTIC_PLAN.md`](docs/DIAGNOSTIC_PLAN.md).
 What comes next, as plans:
 
-- **Phase 32 — Fault isolation.** Given a symptom, walk the connection graph,
-  choose the probes that discriminate between hypotheses, and produce a fault
-  tree that separates the root cause from what it propagated to.
 - **Phase 32.1 — An investigation-first interface,** replacing the incident
   dashboard, with a design system and a demonstration video.
 - **Phase 33 — A production agent** with an auditable, least-privilege

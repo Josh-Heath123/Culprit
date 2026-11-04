@@ -15,6 +15,8 @@ import type {
   ConnectionsOut,
   GraphOut,
   IncidentDetail,
+  InvestigationList,
+  InvestigationTree,
   KeyCreateResponse,
   LoginResponse,
   PaginatedIncidents,
@@ -151,8 +153,15 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
   return request<IncidentDetail>(`/incidents/${id}`);
 }
 
-export function regenerateRootCause(id: string): Promise<{ status: string; incident_id: string }> {
-  return request(`/incidents/${id}/regenerate-root-cause`, { method: "POST" });
+// Phase 32 part 2: investigations. Read-only here — they are written by
+// `culprit diagnose` with the project token, never from the dashboard,
+// and nothing on this side can open one (field 17: no agent until 33).
+export function fetchInvestigations(limit: number): Promise<InvestigationList> {
+  return request<InvestigationList>(`/investigations?limit=${limit}`);
+}
+
+export function fetchInvestigationTree(id: string): Promise<InvestigationTree> {
+  return request<InvestigationTree>(`/investigations/${encodeURIComponent(id)}/tree`);
 }
 
 // Phase 27: the system model. Every endpoint here is under

@@ -68,7 +68,7 @@ export function CommandPalette({ incidents }: CommandPaletteProps) {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-sm text-foreground">
-                      {incident.root_cause_hypothesis ?? "Narrative pending"}
+                      {incident.root_cause_hypothesis ?? "No narrative (history)"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">

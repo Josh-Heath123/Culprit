@@ -55,3 +55,28 @@ def verify(authorization: str | None, secret: str, audience: str) -> str | None:
     if audience not in (audiences or []):
         return "wrong audience"
     return None
+
+
+def _b64encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def mint(secret: str, audience: str, issuer: str = "order-service", ttl_s: int = 86400) -> str:
+    """An HS256 token `verify` accepts for `audience` — or, minted for any
+    other audience, the fault (`just quickstart` mints both). The same
+    construction as the fault library's `mintToken` in
+    cli/cmd/culprit/faultlib_test.go."""
+    header = _b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    claims = {"aud": audience, "iss": issuer, "exp": int(time.time()) + ttl_s}
+    payload = _b64encode(json.dumps(claims).encode())
+    signature = hmac.new(secret.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest()
+    return f"{header}.{payload}.{_b64encode(signature)}"
+
+
+if __name__ == "__main__":
+    # python -m shared.demo_auth <audience>, with DEMO_TOKEN_SECRET in the
+    # environment rather than on the command line.
+    import os
+    import sys
+
+    print(mint(os.environ["DEMO_TOKEN_SECRET"], sys.argv[1]))

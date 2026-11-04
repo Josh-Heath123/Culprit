@@ -37,6 +37,8 @@ from app.facts.router import router as facts_router  # noqa: E402
 from app.incidents.config import API_READER_DATABASE_URL, REDIS_URL  # noqa: E402
 from app.incidents.limiter import limiter  # noqa: E402
 from app.incidents.router import router as incidents_router  # noqa: E402
+from app.investigations.config import INVESTIGATION_WRITER_DATABASE_URL  # noqa: E402
+from app.investigations.router import router as investigations_router  # noqa: E402
 from app.memory.router import router as memory_router  # noqa: E402
 from app.model.capture_config import CAPTURE_WRITER_DATABASE_URL  # noqa: E402
 from app.model.captures_router import router as captures_router  # noqa: E402
@@ -139,6 +141,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.probe_writer_session_factory = async_sessionmaker(
         probe_engine, expire_on_commit=False
     )
+    # Phase 32 part 2: POST /investigations, as investigation-writer.
+    # hide_parameters for the same reason as the probe engine above: an
+    # investigation carries readings, whose JSONB is a probe's output.
+    investigation_engine = create_async_engine(
+        INVESTIGATION_WRITER_DATABASE_URL, pool_size=2, max_overflow=3, hide_parameters=True
+    )
+    app.state.investigation_writer_session_factory = async_sessionmaker(
+        investigation_engine, expire_on_commit=False
+    )
     # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
     # /postmortems to enqueue arq jobs by name — this API process never
     # runs arq jobs itself.
@@ -153,6 +164,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await divergence_engine.dispose()
     await capture_engine.dispose()
     await probe_engine.dispose()
+    await investigation_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -267,3 +279,6 @@ app.include_router(captures_router)
 # user session. POST /probes/{id}/run answers 503: probes run in the
 # culprit binary, and this API has no agent transport until Phase 33.
 app.include_router(readings_router)
+# Phase 32 part 2. No router-level dependency, as for readings: the upload
+# takes the project token, the reads a user session, declared per route.
+app.include_router(investigations_router)

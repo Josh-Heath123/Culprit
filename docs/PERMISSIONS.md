@@ -108,7 +108,8 @@ key's shape, or "(a value, not shown)", whatever the capture holds.
 **Grant it for:** keys whose value you need compared and that are not
 secret — `LOG_LEVEL`, `FEATURE_FLAGS`, a region. Do not list secrets; the
 shape already tells you whether a secret is set and what kind of thing
-it is.
+it is. The one exception is a bearer token `culprit
+diagnose` must inspect — see "Reading a token" below.
 
 ### `db.metadata.read`
 
@@ -210,23 +211,28 @@ Named by the plan for later phases (the production agent). No code in
 this release uses them; granting one changes nothing and is recorded as
 unused.
 
-## What `culprit diagnose` reads without a grant — `tokens:`
+## Reading a token for `culprit diagnose` — `tokens:` and `config.read.values`
 
 `environments.<env>.components.<caller>.tokens` names, for each component
 the caller presents a bearer token to, the *variable* holding that token
-in the environment `culprit diagnose` runs in. The walk reads the variable's
-value and passes it to `probe.auth.token_shape`, which reports only the
-token's audience, issuer and expiry; the token never reaches a reading, a
-reason or the investigation, and the fault library asserts that on every
-fault, in JSON and in text.
+in the environment `culprit diagnose` runs in. Naming it grants nothing.
+Reading it is reading a credential, so it is behind `config.read.values`
+for that exact key (Phase 32 part 2):
 
-That read is **not** behind a capability today: `probe.auth.token_shape`
-opens nothing and declares none, and no grant names the variable. A DSN,
-by contrast, is read only for probes that `db.metadata.read` permits.
-Whether reading a token should require a grant of its own is an open
-decision for the architecture review of Phase 32 (`docs/HANDOFF.md` §5).
-Until then, name a token variable only in an environment you are content
-for `culprit diagnose` to read it in.
+```yaml
+grants:
+  config.read.values: [order-service/INVENTORY_TOKEN]
+```
+
+With the grant, `probe.auth.token_shape` reads the variable itself and
+reports only the token's audience, issuer and expiry; the token never
+reaches a reading, a reason or the investigation, and the fault library
+asserts that on every fault, in JSON and in text. Without it — or with a
+grant for some other key — the probe is **refused**, the audience
+hypothesis is left unexplored, and the diagnosis is partial and names the
+missing grant. Granting this key also lets `culprit env capture` record
+the token's value in a capture (see `config.read.values` above), so grant
+it only for an environment you run `diagnose` in.
 
 ## How Culprit reaches an environment
 
