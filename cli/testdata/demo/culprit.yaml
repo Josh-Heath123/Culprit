@@ -1,5 +1,7 @@
-# The two-component demo: a real FastAPI service and a real React
-# frontend, checked against each other.
+# The five-component demo: three services — a real FastAPI service, a
+# real React frontend and a small billing service — and the two
+# databases behind them (orders-db, billing-db), checked against each
+# other.
 #
 # The component trees are `cli/testdata/fixtures/fastapi-orders` and
 # `cli/testdata/fixtures/react-web`, reused rather than copied. Each has

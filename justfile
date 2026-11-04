@@ -378,8 +378,14 @@ quickstart:
     # it on the runner before its Docker build; `just generate-types` does
     # it with uv and npm. This recipe promises Docker only, so it does both
     # halves in containers: the schema from the api image this recipe builds
-    # anyway, the types with the openapi-typescript version the lockfile
-    # pins. Without this, `just quickstart` from a fresh clone failed at
+    # anyway, the types exactly as CI makes them — `npm ci && npm run
+    # generate-types`, so openapi-typescript and everything under it come
+    # from frontend/package-lock.json with its integrity hashes, not from an
+    # unpinned `npx` fetch (Phase 31.2 review). The install happens in the
+    # container's own /tmp, not in the mounted frontend/: `npm ci` there
+    # would replace a host checkout's node_modules with Linux builds and
+    # break `npm run dev` on the host. Only the generated file comes back.
+    # Without this, `just quickstart` from a fresh clone failed at
     # `tsc -b` with "Cannot find module '@/lib/api-types.generated'" — it
     # had only ever worked from a checkout that had already generated the
     # file (found by Phase 31.2's fresh-clone run).
@@ -398,8 +404,12 @@ quickstart:
         CAPTURE_WRITER_DATABASE_URL=$unused PROBE_WRITER_DATABASE_URL=$unused \
         /app/.venv/bin/python -m scripts.dump_openapi_schema > frontend/openapi.schema.json
     MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-        -v "$(pwd)/frontend:/app" -w /app node:22-alpine \
-        npx -y openapi-typescript@7.13.0 openapi.schema.json -o src/lib/api-types.generated.ts
+        -v "$(pwd)/frontend:/frontend" -w /tmp node:22-alpine sh -euc '
+            mkdir types && cd types
+            cp /frontend/package.json /frontend/package-lock.json /frontend/openapi.schema.json .
+            mkdir -p src/lib
+            npm ci --no-audit --no-fund && npm run generate-types
+            cp src/lib/api-types.generated.ts /frontend/src/lib/api-types.generated.ts'
     echo "==> Building and starting Culprit"
     "${COMPOSE[@]}" up -d --build postgres redis api ingest-gateway worker frontend
     echo "==> Running bootstrap (migrations, demo service registration, admin user)"

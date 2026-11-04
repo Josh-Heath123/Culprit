@@ -1127,14 +1127,17 @@ before deciding a pin, read its `go.mod`
 ## Culprit's own pull requests get no SARIF annotations
 
 `culprit check --format sarif` works, and the `self-check` CI job writes a
-valid file. Uploading it to GitHub's code scanning — which is what turns
-findings into pull-request annotations — needs code scanning enabled on
-the repository, and this repository is private, where that is a paid
-feature. The upload failed on every run from Phase 29 until 2026-09-11,
-when it was replaced (`63cea12`, `docs/HANDOFF.md` §3 Q14) by
-`actions/upload-artifact`: the SARIF file is now kept as a build
+valid file. Uploading it to GitHub's code scanning is what turns findings
+into pull-request annotations. While this repository was private that
+needed a paid feature, and the upload failed on every run from Phase 29
+until 2026-09-11, when it was replaced (`63cea12`, `docs/HANDOFF.md` §3
+Q14) by `actions/upload-artifact`: the SARIF file is kept as a build
 artifact named `culprit-sarif`, and the step fails if the file was not
 written.
+
+The repository is public now, so that reason no longer holds; nothing
+but the workflow stands in the way. Restoring the upload is planned for
+Phase 32.1. Until then the artifact is still all CI produces.
 
 So the pull-request annotations described for Phase 29 have never
 appeared on Culprit's own pull requests, and still do not. A finding
@@ -1145,7 +1148,7 @@ now fail the job — but it is still never annotated onto the diff, so
 finding out *what* it was means opening the log or the artifact. A user's
 public repository, or a private one with GitHub Code Security, can still
 upload SARIF and get annotations; that path is simply not exercised by
-Culprit's own CI any more.
+Culprit's own CI until Phase 32.1 restores it.
 
 ## Probes run what you name them to run
 

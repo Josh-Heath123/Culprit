@@ -329,6 +329,71 @@ FOR THE ARCHITECTURE SESSION
     with no override; both are in LIMITS now.
 ```
 
+```
+FOLLOW-UP — 2026-11-04, the architecture review's pre-merge items
+(DIAGNOSTIC_PLAN.md, end of Phase 31.2). Same branch, PR #21. Phase 32
+NOT started.
+
+PR #21 CI, before this follow-up
+  run 41805277023 on 86fffa1 (the PR head; the review commit 8d2dbd6 was
+  not yet pushed): conclusion success. Every job success — lint,
+  typecheck, cli, test, migration-round-trip, self-check, kind-capture,
+  build+Trivy for api, worker, frontend, mcp_server, cli. deploy skipped
+  (pull request). Nothing red, nothing to fix.
+
+1. justfile: types generated from the lockfile, as CI does
+  The node:22-alpine step now runs `npm ci && npm run generate-types`
+  instead of `npx -y openapi-typescript@7.13.0`. It runs in the
+  container's own /tmp on copies of package.json, package-lock.json and
+  openapi.schema.json, and copies back only the generated file: running
+  `npm ci` in the mounted frontend/ would replace a host checkout's
+  node_modules with Linux builds. Verified:
+    - generated file BYTE-IDENTICAL to the npx version's (cmp), and
+      byte-identical across two independent fresh clones
+    - `just quickstart` from a NEW clone of the pushed branch (86fffa1)
+      with only this justfile applied: exit 0, every step, fresh secrets
+      and volume (compose project culprit-freshclone-b, dashboard on
+      127.0.0.1:8089 — this host's :80 is taken), dashboard 200; no
+      node_modules created in the checkout. Stack torn down (down -v).
+
+2. README.md
+  - the demo: "five-component system — three services and the two
+    databases behind them"; cli/testdata/demo/culprit.yaml's header
+    comment said "two-component" and now says the same.
+  - Trivy: ignore-unfixed drops unfixed findings from the scan output
+    altogether — neither blocking nor visible. Said so.
+  - "CI runs all of it": corrected to every row except
+    `just self-check-coverage`. Nuance for the architecture session: CI
+    DOES run the same command (`check --unverifiable --fail-on=any`) in
+    the self-check job, with `|| true` — its report is printed in the log
+    and can never fail the build. The README now says exactly that.
+  - Numbers re-run today; the README's 9 and 368 stand. Printed:
+      $ just self-check
+      No divergences. 1023 fact(s) compared across 451 subject(s).
+      Not checked (9) — these are gaps, not clean results
+      $ just self-check-coverage
+      No divergences. 1023 fact(s) compared across 451 subject(s).
+      Not checked (9) — these are gaps, not clean results
+      Unverifiable surface (368)
+    (both exit 0)
+
+3. docs/LIMITS.md, "Culprit's own pull requests get no SARIF annotations"
+  The private-repository reason is history now; the section says the
+  repository is public, nothing but the workflow stands in the way, and
+  Phase 32.1 restores the upload.
+
+GATES (affected)
+  go test ./... (the demo culprit.yaml changed)        PASS
+  check-scan-coverage (parses the justfile)            PASS
+  check-invariants, coupled files --base origin/main   PASS
+  lint, cli-lint                                       PASS
+  self-check, self-check-coverage                      PASS (above)
+  just readme-captures: check and diff text unchanged; probe.svg differs
+    only by the throwaway server's port, so the committed copy was kept
+  CI on this follow-up                                 NOT RUN (needs the
+                                                       push)
+```
+
 
 ## §6. Escalate to the architecture session when
 
