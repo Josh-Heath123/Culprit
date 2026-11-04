@@ -462,7 +462,12 @@ quickstart:
     # database at fbf4cb16570a (Phase 16) while every other container ran
     # current code. A fresh machine never sees it, which is exactly why
     # it went unnoticed since Phase 17.
-    "${COMPOSE[@]}" run --rm --build bootstrap
+    # --user, as for bootstrap_env.py above: this step writes
+    # demo-services/.env through a bind mount, and the image's `app` user
+    # cannot create files in a directory the host user owns. Docker
+    # Desktop does not enforce that, so it first failed on a Linux runner
+    # (the e2e job's first run, Phase 32.1 part 2).
+    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm --build --user "$(id -u):$(id -g)" -e HOME=/tmp bootstrap
     echo "==> Building and starting the demo services"
     # Phase 32 part 2: order-service presents a bearer token to
     # inventory-service, which checks its audience — the check the fault

@@ -45,7 +45,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
-| Current phase | **32.1, part 2 — Everywhere else** — status `implemented, awaiting commit and CI`. PR #24 confirmed merged with CI green before work began. Every criterion runnable locally is met and both audits and the fresh-eyes review ran (§5); the e2e job and the SARIF upload can only be proven in CI. **Not complete** until that run is green on the merge result. |
+| Current phase | **32.1, part 2 — Everywhere else** — status `gates red`. Committed as `2a851ee` (PR #25); its run 41916090503 was red on the `e2e` job alone: the quickstart's bootstrap container could not write `demo-services/.env` on a Linux runner. Fixed in the justfile (§5, CI), awaiting commit and a new run. Every other job was green, `self-check` and its SARIF upload included. **Not complete** until a run is green on the merge result. |
 | Previous phase | **32.1, part 1 — The system, on the Investigation screens:** reviewed 2026-11-04 by the architecture session, and the look approved by Malcolm on the screenshots. Complete once PR #24 (`bd29351`) is green and merged. Decisions and Malcolm's four changes are at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. Every merge to `main` runs `deploy` (PR #19 `a3f110a`, PR #20 `4f69ab3`), and it is expected to fail as before until Q16 is resolved. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
 | Branch | `phase-32.1-part-2`, cut from `origin/main` after PR #24 merges; its first commit is this brief. Do not stage `shared/uv.lock`. |
@@ -84,7 +84,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32, part 1 | The isolation walk | **complete** | **Signed off 2026-11-04** (architecture session): PR #22 (`972f288`), CI green on the merge result with the fault library 6/6 on Linux (run 41815764073). Criteria 1 and 3 refined; decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — all 17 fields, read with "How Phase 32 is run" at the end of the section, which wins where they differ. This run is **part 1 only: the walk, in the binary** — no migration, no API, no frontend, no worker change; those are part 2. Order: the two carried-in items first (CONFIGURED values rendered as shapes; the generated catalogue mirror), then the shared Investigation model and its conformance fixture, then `internal/isolate` and `culprit diagnose`, then the fault library and its CI job. Branch `phase-32-isolation-walk`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32, part 2 | The investigation in the control plane | **complete** | **Signed off 2026-11-04** (architecture session), subject to the quickstart verification on `main` recorded in §5. Merged via PR #23 (`a22da56`). Decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — "How Phase 32 is run", then "Part 2 — the investigation in the control plane" at the end of the section, which holds the work order, the criteria and what not to build. Branch `phase-32-control-plane`. Order: the carried-in items first (the token grant, the symptom's attestation, untested versus unexplored branches; then the last admin), then storage, the API, the view, the correlation engine's removal, and the quickstart, README and LIMITS last. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32.1, part 1 | The system, on the Investigation screens | **complete** (PR #24 merged, run 41875987970 green) | **Reviewed 2026-11-04** (architecture session); look approved by Malcolm on the screenshots. PR #24 (`bd29351`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
-| 32.1, part 2 | Everywhere else | **implemented, awaiting commit and CI** | 2026-11-04: every locally runnable criterion met (§5); the e2e job and SARIF upload await CI. Screenshots of every route in `docs/review/phase-32.1-part2/`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — "Malcolm's review of the screenshots" and "Part 2 — everywhere else" at the end of the section, which hold the four review changes, the work order, the criteria and what not to build; field 14 as refined applies. Requirements: `docs/PRODUCTISATION.md` §2, §4, §7 and §8. First confirm with `gh` that PR #24 is merged with CI green; if not, stop. Follow the work order: the review changes first, the fresh-eyes review last. Branch `phase-32.1-part-2`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 32.1, part 2 | Everywhere else | **gates red — fix awaiting commit** | 2026-11-04: `2a851ee`, PR #25; run 41916090503 red on `e2e` only (quickstart bootstrap, Linux bind-mount ownership), fixed in the justfile, awaiting commit and CI. SARIF upload accepted (`self-check` green). Screenshots of every route in `docs/review/phase-32.1-part2/`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — "Malcolm's review of the screenshots" and "Part 2 — everywhere else" at the end of the section, which hold the four review changes, the work order, the criteria and what not to build; field 14 as refined applies. Requirements: `docs/PRODUCTISATION.md` §2, §4, §7 and §8. First confirm with `gh` that PR #24 is merged with CI green; if not, stop. Follow the work order: the review changes first, the fresh-eyes review last. Branch `phase-32.1-part-2`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 33 | Production agent and permission model | not started | — |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
@@ -305,6 +305,37 @@ LEFT OPEN (for the architecture session and Malcolm)
   - The tour is one long test with soft assertions; an early hard failure
     hides the routes after it. Each run leaves an `e2e-member-…` user in
     the stack (LIMITS says so).
+
+CI, 2026-11-04 (/ci)
+  commit   2a851eecfdbcce516f21522010b9e6b46a68d6fd (PR #25)
+  run      41916090503  https://github.com/Josh-Heath123/Culprit/actions/runs/41916090503
+  Merge result: origin/main = 8006010, the branch's parent, so 2a851ee IS
+  the merge result (fast-forward; nothing to merge). Local gates re-run on
+  it: all PASS (lint, typecheck, lint-imports, schema-drift, no-llm,
+  invariants, scan-coverage, frontend-tokens, cli-lint, coupled files,
+  just test, tsc, oxlint, npm test, npm audit, culprit check exit 0,
+  LLM_PROVIDER=none exit 0).
+  Jobs: success lint, typecheck, cli, test, migration-round-trip,
+    self-check, kind-capture, fault-library, build x5; skipped deploy;
+    FAILURE e2e.
+  Verdict: RED.
+  Cause (test-triage, from the failed step's log): step "Quickstart",
+    `sh: 17: cannot create /demo-services-env/.env.new: Permission
+    denied`. The compose `bootstrap` service runs as the api image's
+    `app` system user and writes demo-services/.env through a bind mount
+    of a directory the runner user owns. Docker Desktop does not enforce
+    the ownership, so it never showed on Windows. Not new in this commit
+    (the mount predates it); this was the first quickstart on a Linux
+    host, so any Linux user's fresh `just quickstart` hit it too.
+    Playwright never ran.
+  Fix (uncommitted, staged): the justfile runs that service with
+    `--user "$(id -u):$(id -g)" -e HOME=/tmp`, as it already ran
+    bootstrap_env.py. Locally, from a clean export of 2a851ee plus the
+    fix: just quickstart exit 0 (wrote demo-services/.env, printed
+    /investigations/inv-1dd6b3d7d19b5a04), just e2e 4/4. That proves no
+    regression on Windows only; the Linux proof is the next CI run.
+  SARIF: self-check concluded success with the upload step, so code
+    scanning accepted it. Nothing to ask Malcolm.
 ```
 
 
