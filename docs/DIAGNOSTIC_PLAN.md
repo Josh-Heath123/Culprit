@@ -616,6 +616,14 @@ Every fault edge cites the readings that established it. An edge with no reading
 cannot be created — that is the structural guarantee against narrative
 masquerading as diagnosis.
 
+**Amended 2026-11-04 — what establishes a symptom.** A write cannot be replayed
+read-only, so the walk often cannot observe the symptom itself. A `symptom_of`
+edge cites the readings that tie the symptom to its cause, which is what that
+edge asserts. The symptom's *occurrence* is attested separately: by a reading,
+when the walk reproduced it read-only, or otherwise by the report it came from
+— and the investigation says which. A symptom that was only reported is never
+presented as reproduced.
+
 ### §2.9 Confidence rubric — not a percentage
 
 Replaces the LLM's `High|Medium|Low` string. Four independent booleans, reported
@@ -1672,13 +1680,15 @@ faults and network-partition faults. **This is the regression suite for the
 product's core claim and it is not optional.**
 
 **14. Acceptance criteria.**
-- Injecting an auth-audience mismatch between two demo services produces an
-  investigation whose root subject is the audience config, not the 500 at the
-  edge.
+- Injecting an auth-audience mismatch between two demo services produces a
+  complete investigation whose root is `auth:<caller>-><callee>/audience` —
+  neither the caller component nor the symptom. *(Refined 2026-11-04.)*
 - The fault tree distinguishes symptom, propagation and root, and every edge
   cites readings.
-- Isolation on a 6-hop chain uses `O(log n)` probes, not `n` — asserted by
-  counting probe executions in the test.
+- Isolation is logarithmic, counted: with a fault at every position on a
+  synthetic chain of 7 components and of 64, request probes stay at or under
+  ⌈log₂ n⌉, and total probe executions on 64 stay at or under 12. *(Refined
+  2026-11-04: at six hops the constants dominate, so it is asserted at 64 too.)*
 - `LLM_PROVIDER=none` produces a complete, correct fault tree. Only the prose
   summary is absent.
 
@@ -1789,6 +1799,120 @@ around it.
   anything the binary does.
 - **The six-hop criterion runs against a synthetic model and a fake runner
   that counts executions**, not the demo stack, which has three services.
+
+
+**Architecture review of part 1, 2026-11-04 — signed off.** Complete: merged via
+PR #22 (`972f288`); CI green on the merge result (run 41815764073), the
+`fault-library` job included, its log showing all six faults passing on Linux.
+Checked on disk: `internal/isolate` imports only `internal/model` and the
+standard library; the environment loader refuses a token *value*, an endpoint
+carrying a scheme, port or credentials, and a health path with a query string.
+The fault library found five defects in the walk itself — back-edges, an edge
+blamed on its callee, elimination passed off as proof, a probe that
+discriminated nothing, contract probes on templated routes — which is what it
+is for. Decisions on what the run report left open:
+
+- **The new `culprit.yaml` keys are ratified:** `environments.*.endpoints`,
+  `environments.*.components.*.tokens` and an endpoint's `health_path`. The
+  walk cannot place a probe without them, and they hold names and addresses,
+  never values.
+- **Reading a token needs a grant.** The walk reads the token from the
+  environment it runs in. Inside a caller's container — the fault library
+  today, an agent in Phase 33 — that is the service's own credential, which is
+  what `config.read.values` exists to gate (§0.4, §2.7). The read requires
+  `config.read.values` granted for that variable in that environment; without
+  it the audience hypothesis is `refused` and the tree shows the branch as
+  unexplored. No new capability. **First item of part 2.**
+- **What establishes a symptom** — §2.8 amended. The borrowed citation stands
+  for what the `symptom_of` edge asserts; the symptom's occurrence becomes a
+  separate, structural attestation. **Second item of part 2**, in both
+  languages and the conformance fixture, before any of it is stored.
+- **`complete` is confirmed** as "nothing the walk needed went unexplored",
+  not "every hypothesis tested". The report lists branches it did not need as
+  untested, apart from those it needed and could not explore, and LIMITS
+  states the assumption underneath: the walk stops at the first root it can
+  establish, and does not look for a second, independent fault.
+- **A partition seen from inside the caller is not discriminated**, because
+  from there a refused connection and a stopped service look the same.
+  Accepted as honest; `expected.json` says so.
+- **Criteria 1 and 3 refined** as the auditor proposed (above).
+- **The quickstart's synthetic `PAYMENTS_PROVIDER_KEY`** is accepted: a demo
+  value the payments service now requires.
+
+**Part 2 — the investigation in the control plane. Brief and criteria,
+2026-11-04.** In this order:
+
+1. **Carried in from part 1:** the token grant; the symptom's attestation;
+   untested versus unexplored branches in the report, and the single-root
+   assumption in LIMITS.
+2. **The last admin cannot be removed** (the third carried-in item above).
+3. **Storage.** Field 8's tables in one migration. Field 7's rule held by the
+   database: a fault edge's establishing readings are a non-empty array, and
+   every cited reading belongs to the same investigation (a composite key), so
+   neither an empty citation nor a citation into another investigation can be
+   inserted. A new role, `investigation-writer`, with INSERT on those tables
+   and nothing else (invariant 3); `api-reader` gains SELECT.
+4. **The API.** `POST /investigations` ingests exactly what
+   `culprit diagnose --format json` writes, authenticated like the capture
+   endpoints, redacted at the same choke point as a reading (invariant 11);
+   `GET /investigations`, `GET /investigations/{id}` and
+   `GET /investigations/{id}/tree`.
+5. **The view**, built functionally on the existing component library: an
+   investigations list, and the investigation with its tree, the boundary
+   marked, every edge expandable to the readings that established it, the
+   rubric as four booleans, untested and unexplored branches shown as such,
+   and the symptom shown as reproduced or reported. `Evidence.tsx` repointed
+   at readings.
+6. **The correlation engine removed:** `worker/app/correlation/graph.py`,
+   `job.py` and their tests, and the incident narrative job with them. The
+   anomaly scorer and its impedance readings stay; the postmortem corpus and
+   its editor stay.
+7. **Plan correction — field 6's data migration is dropped.** An incident is
+   not an investigation: it has no readings, and an investigation's edges must
+   cite readings, so converting one would mean inventing them.
+   `incident_candidates` and `incident_anomalies` stay read-only for one
+   release — no role keeps INSERT or UPDATE on them — and the dashboard shows
+   them as history from the earlier engine until Phase 34 drops them.
+8. **The quickstart, README and LIMITS brought into line.** The quickstart's
+   fault no longer produces an incident. It injects one the walk diagnoses
+   completely — the audience mismatch is the clearest; added latency only
+   ever reaches a partial diagnosis — runs `culprit diagnose` from inside the
+   calling demo container as the fault library does, posts the investigation,
+   and prints where to see it. Phase 31.2's standard holds: the README shows
+   only what works.
+
+**Acceptance criteria (part 2):**
+- **Round trip.** The fault library's audience investigation, posted to
+  `POST /investigations`, comes back from `GET /investigations/{id}/tree`
+  with the same root, edges, citations, rubric and symptom attestation —
+  compared whole, in a test.
+- **The database holds the rule.** As `investigation-writer`, an INSERT of a
+  fault edge with no establishing reading, and of one citing a reading from
+  another investigation, are both refused by the database — shown by direct
+  SQL in a test, not through the API. The migration round-trips (invariant 8).
+- **The view.** Against the compose stack, a browser test opens the
+  investigation from the list, sees the root marked, expands an edge to its
+  readings, and sees the rubric as four booleans and the symptom as reproduced
+  or reported — judged as Phase 31.2's criterion 4.
+- **The quickstart, from a fresh clone,** ends with an investigation on the
+  dashboard whose root is the fault it injected, and the README shows exactly
+  that.
+- **The correlation engine is gone:** nothing schedules it or the narrative
+  job, no role can write the incident tables, and its tests are deleted, not
+  skipped.
+- **The token grant.** Without `config.read.values` for the token variable,
+  the audience hypothesis is `refused` and the investigation is partial and
+  says why; with it, part 1's criterion 1 still passes in the fault library.
+- **The last admin.** `PATCH` and `DELETE /users/{id}` refuse with a 409, and
+  the concurrent case holds.
+- **`LLM_PROVIDER=none`:** diagnose, post and view are complete. With the
+  narrative job gone, nothing in part 2 calls a model.
+
+**Do NOT implement in part 2.** No `POST /investigations/{id}/probe`, and no
+dashboard control that opens an investigation — both need Phase 33's agent. No
+upload from the binary. No restyle (Phase 32.1). No remediation application, no
+verification (`verified` stays false), no postmortem prior, no trace-id or
+error-signature symptoms.
 
 ---
 
