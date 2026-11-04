@@ -546,6 +546,32 @@ quickstart:
     echo "The fault is still in place. To restore order-service's real token:"
     echo "  just quickstart"
 
+# End-to-end journeys in a browser (Phase 32.1), against the stack `just
+# quickstart` started: sign in, open and read investigations, the
+# partial-diagnosis wording, keyboard-only, and the screenshots at four
+# widths. Seeds the two partial investigations itself. The credentials go
+# to Playwright as environment, never argv. Needs `npx playwright install
+# chromium` once.
+e2e *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    port=${QUICKSTART_HTTP_PORT:-80}
+    base="http://localhost"
+    [ "$port" = "80" ] || base="http://localhost:$port"
+    # .env.prod escapes a literal $ as $$ for compose; undo that here.
+    read_env() { grep -E "^$1=" infra/.env.prod | cut -d= -f2- | sed 's/\$\$/$/g'; }
+    export CULPRIT_E2E_BASE_URL="$base"
+    CULPRIT_E2E_USERNAME=$(read_env QUICKSTART_ADMIN_USERNAME)
+    CULPRIT_E2E_PASSWORD=$(read_env QUICKSTART_ADMIN_PASSWORD)
+    CULPRIT_E2E_PROJECT_TOKEN=$(read_env CULPRIT_PROJECT_TOKEN)
+    export CULPRIT_E2E_USERNAME CULPRIT_E2E_PASSWORD CULPRIT_E2E_PROJECT_TOKEN
+    cd frontend && npx playwright test {{ARGS}}
+
+# Fail if a redesigned page styles itself with anything but the design
+# tokens (Phase 32.1): no raw colour, palette colour or arbitrary value.
+check-frontend-tokens:
+    uv run --project api python scripts/check_frontend_tokens.py
+
 # Tear down the local quickstart (containers + demo profile; named
 # volumes, and infra/.env.prod / demo-services/.env, are left in place so
 # a following `just quickstart` doesn't regenerate secrets or keys).

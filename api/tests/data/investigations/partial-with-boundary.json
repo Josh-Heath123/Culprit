@@ -1,0 +1,139 @@
+{
+  "id": "inv-5ea1b0a7d0e5c0de",
+  "opened_at": "2026-11-04T12:00:00Z",
+  "environment": "test",
+  "symptom": {
+    "kind": "component",
+    "subject": "component:order-service",
+    "source": "test",
+    "attestation": {
+      "kind": "reported",
+      "reported_by": "test"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "kind": "component_fails",
+      "subject": "component:order-service",
+      "status": "open"
+    },
+    {
+      "id": "h2",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003einventory-service",
+      "status": "supported",
+      "readings": [
+        "r2"
+      ]
+    },
+    {
+      "id": "h3",
+      "kind": "auth_audience_mismatch",
+      "subject": "auth:order-service-\u003einventory-service/audience",
+      "status": "unexplored",
+      "reason": "no probe could be placed: probe.auth.token_shape: no token for order-service -\u003e inventory-service is available to this agent"
+    },
+    {
+      "id": "h4",
+      "kind": "auth_rejected",
+      "subject": "auth:order-service-\u003einventory-service/propagation",
+      "status": "ruled_out",
+      "readings": [
+        "r3"
+      ]
+    },
+    {
+      "id": "h5",
+      "kind": "component_fails",
+      "subject": "component:inventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r1"
+      ]
+    }
+  ],
+  "readings": [
+    {
+      "id": "r1",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "test",
+        "verdict": "pass",
+        "taken_at": "2026-11-04T12:00:00Z",
+        "agent_id": "test-runner"
+      }
+    },
+    {
+      "id": "r2",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "test",
+        "verdict": "fail",
+        "taken_at": "2026-11-04T12:00:00Z",
+        "agent_id": "test-runner"
+      }
+    },
+    {
+      "id": "r3",
+      "reading": {
+        "probe_id": "probe.auth.propagation",
+        "probe_version": 1,
+        "target": "auth:order-service-\u003einventory-service/propagation",
+        "environment": "test",
+        "verdict": "pass",
+        "taken_at": "2026-11-04T12:00:00Z",
+        "agent_id": "test-runner"
+      }
+    },
+    {
+      "id": "r4",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "test",
+        "verdict": "fail",
+        "taken_at": "2026-11-04T12:00:00Z",
+        "agent_id": "test-runner"
+      }
+    }
+  ],
+  "fault_tree": [
+    {
+      "from_subject": "component:order-service",
+      "to_subject": "connection:order-service-\u003einventory-service",
+      "relation": "caused_by",
+      "established_by": [
+        "r2"
+      ]
+    }
+  ],
+  "diagnosis": {
+    "root_subject": "connection:order-service-\u003einventory-service",
+    "statement": "The walk stopped at connection:order-service-\u003einventory-service: a reading there fails. It could not check every alternative: auth_audience_mismatch on auth:order-service-\u003einventory-service/audience: no probe could be placed: probe.auth.token_shape: no token for order-service -\u003e inventory-service is available to this agent.",
+    "confidence": {
+      "reproduced": {
+        "holds": true,
+        "reason": "probe.net.tcp_connect failed again when run a second time (r2, then r4)"
+      },
+      "discriminated": {
+        "holds": true,
+        "reason": "2 competing hypotheses were ruled out by readings (h4, h5)"
+      },
+      "counterfactual": {
+        "holds": false,
+        "reason": "no reference environment was named (--reference)"
+      },
+      "verified": {
+        "holds": false,
+        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+      }
+    },
+    "complete": false
+  }
+}

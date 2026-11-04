@@ -1,7 +1,7 @@
 {
-  "id": "inv-3a406d77d45ba5ae",
-  "opened_at": "2026-11-04T11:39:54.485331844Z",
-  "closed_at": "2026-11-04T11:39:56.096352512Z",
+  "id": "inv-76e9d723081c4522",
+  "opened_at": "2026-11-04T16:15:14.693920884Z",
+  "closed_at": "2026-11-04T16:15:16.302651227Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -98,7 +98,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-04T11:39:55.288491599Z",
+        "taken_at": "2026-11-04T16:15:15.497039676Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -118,7 +118,7 @@
           "status": 200,
           "url": "http://payments-service:8003/ready"
         },
-        "taken_at": "2026-11-04T11:39:55.291182839Z",
+        "taken_at": "2026-11-04T16:15:15.499525492Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -137,7 +137,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-04T11:39:55.291802646Z",
+        "taken_at": "2026-11-04T16:15:15.500278141Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -156,7 +156,7 @@
           "host": "payments-service",
           "port": 8003
         },
-        "taken_at": "2026-11-04T11:39:55.292227484Z",
+        "taken_at": "2026-11-04T16:15:15.500829041Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -176,13 +176,13 @@
             "inventory-service"
           ],
           "expired": false,
-          "expires_in_seconds": 3520,
+          "expires_in_seconds": 3515,
           "issuer": "order-service"
         },
         "expected": {
           "audience": "inventory-service"
         },
-        "taken_at": "2026-11-04T11:39:55.292335068Z",
+        "taken_at": "2026-11-04T16:15:15.500939075Z",
         "agent_id": "fault-library"
       }
     },
@@ -209,7 +209,7 @@
           "locator": "invariants[1]",
           "confidence_rank": 100
         },
-        "taken_at": "2026-11-04T11:39:56.096320285Z",
+        "taken_at": "2026-11-04T16:15:16.302598505Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -220,7 +220,7 @@
   "fault_tree": [],
   "diagnosis": {
     "root_subject": "component:order-service",
-    "statement": "Nothing the walk tested failed: every component below order-service answers and every edge from it passes. The cause is inside order-service, or is something no read-only probe observes, such as added latency.",
+    "statement": "Nothing the walk tested failed: every component below order-service answers and every edge from it passes. What fails is inside order-service, or is something no read-only probe observes, such as added latency.",
     "confidence": {
       "reproduced": {
         "holds": false,

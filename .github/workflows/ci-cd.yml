@@ -86,6 +86,12 @@ jobs:
       # itself checked. Offline and instant -- no container needed.
       - name: Check scan coverage
         run: uv run --project api python scripts/check_scan_coverage.py
+      # Phase 32.1: a redesigned page that styles itself with a raw colour,
+      # a Tailwind palette colour or an arbitrary value has stepped outside
+      # the tokens whose contrast scripts/tests/test_design_tokens.py
+      # measures. Scoped to the investigation screens until part 2.
+      - name: Check frontend tokens
+        run: uv run --project api python scripts/check_frontend_tokens.py
       # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
       # together" pair (scripts/coupled_files.yaml) that changed on only
       # one side. Checked against the PR's committed diff, not a working

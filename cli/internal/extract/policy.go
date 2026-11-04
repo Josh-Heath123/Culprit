@@ -118,6 +118,12 @@ func (m *Manifest) validatePolicy() error {
 						"undeclared is a hole in the model that reads as an edge.",
 					component.Name, connection.To, connection.To)}
 			}
+			// The kind is closed, as it is in Python and the database: a
+			// `queue` here used to load and then select no probe at all.
+			if _, err := model.ParseConnectionKind(connection.Kind); err != nil {
+				return &PolicyError{Message: fmt.Sprintf(
+					"components.%s.connections.%s: %v", component.Name, connection.To, err)}
+			}
 			if connection.Criticality != "" && !validCriticality[connection.Criticality] {
 				return &PolicyError{Message: fmt.Sprintf(
 					"components.%s.connections.%s: criticality %q is not one of %s",

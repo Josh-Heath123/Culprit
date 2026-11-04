@@ -1,7 +1,7 @@
 {
-  "id": "inv-6c959b9de33dd25b",
-  "opened_at": "2026-11-04T11:39:31.886895465Z",
-  "closed_at": "2026-11-04T11:39:31.894285528Z",
+  "id": "inv-a7397e2ef52c70e8",
+  "opened_at": "2026-11-04T16:14:52.320987005Z",
+  "closed_at": "2026-11-04T16:14:52.329538445Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -98,7 +98,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-04T11:39:31.889365288Z",
+        "taken_at": "2026-11-04T16:14:52.323432625Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -114,11 +114,11 @@
         "environment": "faults-order",
         "verdict": "pass",
         "measured": {
-          "elapsed_ms": 1,
+          "elapsed_ms": 2,
           "status": 200,
           "url": "http://payments-service:8003/ready"
         },
-        "taken_at": "2026-11-04T11:39:31.891391394Z",
+        "taken_at": "2026-11-04T16:14:52.325998465Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -137,7 +137,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-04T11:39:31.89185946Z",
+        "taken_at": "2026-11-04T16:14:52.32686344Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -156,7 +156,7 @@
           "host": "payments-service",
           "port": 8003
         },
-        "taken_at": "2026-11-04T11:39:31.892366505Z",
+        "taken_at": "2026-11-04T16:14:52.327457803Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -176,13 +176,13 @@
             "inventory-service"
           ],
           "expired": false,
-          "expires_in_seconds": 3544,
+          "expires_in_seconds": 3538,
           "issuer": "order-service"
         },
         "expected": {
           "audience": "inventory-service"
         },
-        "taken_at": "2026-11-04T11:39:31.892512427Z",
+        "taken_at": "2026-11-04T16:14:52.327612498Z",
         "agent_id": "fault-library"
       }
     },
@@ -210,7 +210,7 @@
           "confidence_rank": 100
         },
         "reason": "GET http://inventory-service:8002/stock is declared but the running service answers 404",
-        "taken_at": "2026-11-04T11:39:31.893460715Z",
+        "taken_at": "2026-11-04T16:14:52.32866555Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -241,7 +241,7 @@
           "confidence_rank": 100
         },
         "reason": "GET http://inventory-service:8002/stock is declared but the running service answers 404",
-        "taken_at": "2026-11-04T11:39:31.894231321Z",
+        "taken_at": "2026-11-04T16:14:52.329493133Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"

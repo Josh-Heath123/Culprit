@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "Shared conformance fixture for connection kinds (Phase 27 field 7,",
+    "closed in both languages by Phase 32.1). shared/tests/test_graph.py",
+    "asserts Python's ConnectionKind is exactly `kinds`;",
+    "cli/internal/model/conformance_test.go asserts the same of the Go one,",
+    "and that every `refused` value is refused. The database's",
+    "ck_connections_kind CHECK holds the same set.",
+    "`default` is the kind an edge has when the manifest names none.",
+    "Add a kind here first, then to each implementation and a migration."
+  ],
+  "kinds": ["http", "grpc", "sql", "message", "cache", "dns", "auth"],
+  "default": "http",
+  "refused": ["queue", "HTTP", "amqp", "redis", " http", "kafka"]
+}

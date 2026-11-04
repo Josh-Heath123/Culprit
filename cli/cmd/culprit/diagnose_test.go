@@ -138,9 +138,22 @@ func TestDiagnoseWithoutAVantageIsPartialAndSaysWhy(t *testing.T) {
 	if !errors.As(err, &partial) {
 		t.Fatalf("err = %v, want a partial diagnosis (exit 1)\n%s", err, stdout)
 	}
-	for _, needle := range []string{"PARTIAL", "--from web", "Unexplored"} {
+	for _, needle := range []string{"PARTIAL", "--from web", "Unexplored", "stopped at", "could not check"} {
 		if !strings.Contains(stdout, needle) {
 			t.Errorf("text output does not say %q:\n%s", needle, stdout)
+		}
+	}
+	// Phase 32.1 field 14: a partial diagnosis is never shown under the
+	// word "root" or "cause", and offers no fix.
+	start := strings.Index(stdout, "Diagnosis (")
+	end := strings.Index(stdout, "Confidence")
+	if start < 0 || end < start {
+		t.Fatalf("no diagnosis block in:\n%s", stdout)
+	}
+	block := strings.ToLower(stdout[start:end])
+	for _, word := range []string{"root", "cause", "fix "} {
+		if strings.Contains(block, word) {
+			t.Errorf("the partial diagnosis says %q:\n%s", word, stdout[start:end])
 		}
 	}
 }

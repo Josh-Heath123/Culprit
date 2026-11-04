@@ -108,6 +108,13 @@ read-only, and the worker no longer runs the correlation engine or the
 narrative job: an upgraded install keeps its incidents as history, and new
 diagnoses arrive as investigations from `culprit diagnose`.
 
+**Phase 32.1** adds no secret, but the `culprit` binary now refuses a
+connection `kind` outside the closed set (`http`, `grpc`, `sql`, `message`,
+`cache`, `dns`, `auth`) when it loads `culprit.yaml`, as the control plane
+already did. A file that says `kind: queue` (or any other kind) for a
+connection made `culprit check` and `culprit diagnose` load it and then skip
+that edge; it now exits 2 naming the edge. Change `queue` to `message`.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

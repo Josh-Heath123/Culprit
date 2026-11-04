@@ -3,16 +3,29 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+/** A small label. The status variants (pass, fail, ...) exist for the
+ * badges in status.tsx, which always add an icon and the word — use those
+ * for a verdict or a severity, never a bare coloured Badge. */
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs font-medium font-mono leading-none whitespace-nowrap",
+  "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-2xs font-medium leading-none whitespace-nowrap",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-secondary text-secondary-foreground",
-        primary: "border-primary/40 bg-primary/10 text-primary",
-        warning: "border-severity-warning/40 bg-severity-warning/10 text-severity-warning",
-        destructive: "border-destructive/40 bg-destructive/10 text-destructive",
-        outline: "border-border text-muted-foreground",
+        default: "border-line bg-surface-2 text-fg-muted",
+        outline: "border-line-strong text-fg-muted",
+        primary: "border-brand-line bg-brand-tint text-brand",
+        highlight: "border-highlight-line bg-highlight-tint text-highlight",
+        pass: "border-pass-line bg-pass-tint text-pass",
+        fail: "border-fail-line bg-fail-tint text-fail",
+        inconclusive: "border-inconclusive-line bg-inconclusive-tint text-inconclusive",
+        refused: "border-refused-line bg-refused-tint text-refused",
+        breaks: "border-breaks-line bg-breaks-tint text-breaks",
+        degrades: "border-degrades-line bg-degrades-tint text-degrades",
+        cosmetic: "border-cosmetic-line bg-cosmetic-tint text-cosmetic",
+        unknown: "border-unknown-line bg-unknown-tint text-unknown",
+        // Kept for the routes part 2 has not redesigned yet.
+        warning: "border-degrades-line bg-degrades-tint text-degrades",
+        destructive: "border-fail-line bg-fail-tint text-fail",
       },
     },
     defaultVariants: {

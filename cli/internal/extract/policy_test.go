@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -249,5 +250,32 @@ func TestACatchAllSuppressionIsRefused(t *testing.T) {
 		if err := checkSubject("suppress[0]", pattern); err != nil {
 			t.Errorf("%q should be a valid pattern: %v", pattern, err)
 		}
+	}
+}
+
+// Phase 32.1: every culprit.yaml this repository ships loads under the
+// closed connection-kind set. The root one said `queue` for Redis until
+// this phase; nothing caught it, because only `just intent` read it and
+// the Go loader accepted any kind.
+func TestEveryShippedManifestLoads(t *testing.T) {
+	for _, path := range []string{
+		filepath.Join("..", "..", "..", "culprit.yaml"),
+		filepath.Join("..", "..", "..", "demo-services", "culprit.yaml"),
+	} {
+		if _, err := LoadManifest(path); err != nil {
+			t.Errorf("%s does not load: %v", path, err)
+		}
+	}
+}
+
+func TestAnUnknownConnectionKindIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	body := "components:\n  - name: a\n    connections:\n      - to: b\n        kind: queue\n  - name: b\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadManifest(path)
+	if err == nil || !strings.Contains(err.Error(), `"queue"`) {
+		t.Fatalf("a connection of kind queue loaded (err=%v); the kind set is closed", err)
 	}
 }

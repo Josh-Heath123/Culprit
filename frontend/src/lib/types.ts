@@ -66,3 +66,4 @@ export type Reading = components["schemas"]["Reading"];
 export type Hypothesis = components["schemas"]["Hypothesis"];
 export type ConfidenceRubric = components["schemas"]["ConfidenceRubric"];
 export type Symptom = components["schemas"]["Symptom"];
+export type Diagnosis = components["schemas"]["Diagnosis"];

@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/model"
+	"github.com/josh-heath123/culprit/cli/internal/report"
 )
 
 // ---- a synthetic world --------------------------------------------------------
@@ -299,6 +302,67 @@ func TestARefusedProbeLeavesTheDiagnosisVisiblyPartial(t *testing.T) {
 	}
 	if !strings.Contains(inv.Diagnosis.Statement, "no token") {
 		t.Errorf("the statement hides why it is partial: %q", inv.Diagnosis.Statement)
+	}
+}
+
+// TestABoundaryWithUntestedAlternativesIsWhereTheWalkStopped: an edge
+// failed a probe, but an alternative on the same edge could not be tested.
+// The statement names where the walk stopped and what it could not check —
+// never "because of" — and offers no fix (Phase 32.1 field 14).
+func TestABoundaryWithUntestedAlternativesIsWhereTheWalkStopped(t *testing.T) {
+	components := []Component{{"order-service", "service"}, {"inventory-service", "service"}}
+	connections := []Connection{{From: "order-service", To: "inventory-service", Kind: "http", OnRequestPath: true}}
+	runner := newRunner(func(probeID, target string) model.Verdict {
+		switch {
+		case probeID == "probe.http.reachable" && target == component("order-service"):
+			return model.VerdictFail
+		case probeID == "probe.net.tcp_connect":
+			return model.VerdictFail
+		}
+		return model.VerdictPass
+	})
+	placement := openPlacement{refuse: map[string]string{
+		KindAuthAudience: "no token for order-service -> inventory-service is available to this agent",
+	}}
+	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "test"})
+	inv := diagnose(t, walk, "order-service")
+
+	d := inv.Diagnosis
+	if d.Complete {
+		t.Fatalf("complete with an unexplored alternative: %+v", d)
+	}
+	if !strings.HasPrefix(d.Statement, "The walk stopped at ") || !strings.Contains(d.Statement, "no token") {
+		t.Errorf("statement = %q, want where the walk stopped and what it could not check", d.Statement)
+	}
+	if strings.Contains(strings.ToLower(d.Statement), "because") || strings.Contains(strings.ToLower(d.Statement), "cause") {
+		t.Errorf("a partial statement names a cause: %q", d.Statement)
+	}
+	if d.Remediation != "" {
+		t.Errorf("a partial diagnosis suggests a fix: %q", d.Remediation)
+	}
+
+	// The whole text output, the fault tree included, never says root or
+	// cause for it.
+	var out strings.Builder
+	if err := report.RenderInvestigation(&out, inv); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "-[stopped_at]->") {
+		t.Errorf("the boundary edge is not shown as where the walk stopped:\n%s", out.String())
+	}
+	if text := strings.ToLower(out.String()); strings.Contains(text, "root") || strings.Contains(text, "cause") {
+		t.Errorf("a partial investigation's text says root or cause:\n%s", out.String())
+	}
+
+	// CULPRIT_ISOLATE_RECORD=<dir> keeps this walk for the API round trip
+	// and the browser suite: the one partial investigation with a fault
+	// tree, which no fault-library case produces.
+	if dir := os.Getenv("CULPRIT_ISOLATE_RECORD"); dir != "" {
+		inv.ID = "inv-5ea1b0a7d0e5c0de"
+		encoded, _ := json.MarshalIndent(inv, "", "  ")
+		if err := os.WriteFile(filepath.Join(dir, "partial-with-boundary.json"), append(encoded, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
