@@ -13,11 +13,14 @@ import type { ComponentOut, ConnectionOut } from "@/lib/types";
  * invalidates the `["model"]` keys directly, so the person who made the
  * change sees it immediately regardless of the interval.
  */
-export function useComponents() {
+/** `/model` is admin-only; pass `enabled: false` for anyone else rather
+ * than sending a request that can only come back 403. */
+export function useComponents(options: { enabled?: boolean } = {}) {
   const query = useQuery({
     queryKey: ["model", "components"],
     queryFn: fetchComponents,
     refetchInterval: 30_000,
+    enabled: options.enabled ?? true,
   });
 
   const components: ComponentOut[] = query.data?.items ?? [];

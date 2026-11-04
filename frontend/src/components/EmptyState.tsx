@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useComponents } from "@/hooks/useModel";
 
 /** Built from the actually-registered component list (GET
@@ -12,8 +13,24 @@ import { useComponents } from "@/hooks/useModel";
  * open-ended incident_candidate, not a windowed slice, so the copy stays
  * honest about what "empty" here actually means. */
 export function EmptyState() {
-  const { components } = useComponents();
+  const { data: me } = useCurrentUser();
+  const isAdmin = me?.role === "admin";
+  const { components } = useComponents({ enabled: isAdmin });
   const active = components.filter((c) => !c.disabled);
+
+  // A member cannot read the component registry (/model is admin-only),
+  // so "no services registered" would be a guess, and the link would
+  // lead to a page they cannot use.
+  if (!isAdmin) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-1 text-center">
+        <p className="text-sm text-foreground">No anomalies detected.</p>
+        <p className="text-xs text-muted-foreground">
+          Culprit is watching. Incidents appear here as soon as one opens.
+        </p>
+      </div>
+    );
+  }
 
   if (active.length === 0) {
     return (

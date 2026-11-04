@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUsers } from "@/hooks/useUsers";
 import { createUser, patchUser, resetUserPassword } from "@/lib/api";
 import type { UserOut, UserRole } from "@/lib/types";
@@ -160,7 +161,7 @@ function AddUserForm() {
   );
 }
 
-function UserRow({ user }: { user: UserOut }) {
+function UserRow({ user, isSelf }: { user: UserOut; isSelf: boolean }) {
   const queryClient = useQueryClient();
   const [resettingPassword, setResettingPassword] = useState(false);
 
@@ -185,29 +186,44 @@ function UserRow({ user }: { user: UserOut }) {
           <span className="font-mono text-sm text-foreground">{user.username}</span>
           <Badge variant={user.role === "admin" ? "primary" : "outline"}>{user.role}</Badge>
           {user.disabled ? <Badge variant="outline">disabled</Badge> : null}
+          {isSelf ? <Badge variant="outline">you</Badge> : null}
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toggleRole.mutate()}
-            disabled={toggleRole.isPending}
-          >
-            {user.role === "admin" ? "Make member" : "Make admin"}
-          </Button>
+          {/* No role or disable control on your own row: demoting or
+              disabling yourself took the only admin's access away with no
+              way back short of `just create-user` on the host (Phase 31.2
+              truth pass). The API does not refuse it — docs/LIMITS.md. */}
+          {isSelf ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleRole.mutate()}
+              disabled={toggleRole.isPending}
+            >
+              {user.role === "admin" ? "Make member" : "Make admin"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setResettingPassword(true)}>
             Reset password
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toggleDisabled.mutate()}
-            disabled={toggleDisabled.isPending}
-          >
-            {user.disabled ? "Enable" : "Disable"}
-          </Button>
+          {isSelf ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleDisabled.mutate()}
+              disabled={toggleDisabled.isPending}
+            >
+              {user.disabled ? "Enable" : "Disable"}
+            </Button>
+          )}
         </div>
       </div>
+
+      {toggleRole.error ?? toggleDisabled.error ? (
+        <p className="text-xs text-destructive">
+          {(toggleRole.error ?? toggleDisabled.error)?.message || "That change was not saved."}
+        </p>
+      ) : null}
 
       <p className="text-xs text-muted-foreground">
         {user.last_login_at
@@ -228,6 +244,7 @@ function UserRow({ user }: { user: UserOut }) {
 
 export function SettingsUsers() {
   const { users, isPending, isError } = useUsers();
+  const currentUser = useCurrentUser();
 
   return (
     <div className="flex h-screen flex-col">
@@ -251,7 +268,7 @@ export function SettingsUsers() {
 
         <div className="flex flex-col gap-3">
           {users.map((user) => (
-            <UserRow key={user.id} user={user} />
+            <UserRow key={user.id} user={user} isSelf={user.id === currentUser.data?.id} />
           ))}
         </div>
       </main>

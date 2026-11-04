@@ -4,6 +4,7 @@ import { GridColumns } from "@visx/grid";
 import { Group } from "@visx/group";
 import { scaleBand, scaleTime } from "@visx/scale";
 
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useElementSize } from "@/hooks/useElementSize";
 import { useComponents } from "@/hooks/useModel";
 import { markRadiusFor, severityColorVar, severityFor } from "@/lib/severity";
@@ -15,8 +16,10 @@ interface TimelineProps {
   onSelectIncident: (id: string) => void;
 }
 
+type Lane = Pick<ComponentOut, "name" | "disabled">;
+
 interface TimelineChartProps extends TimelineProps {
-  services: ComponentOut[];
+  services: Lane[];
   width: number;
   height: number;
 }
@@ -33,7 +36,23 @@ export function Timeline(props: TimelineProps) {
   const { ref, width, height } = useElementSize<HTMLDivElement>();
   // One lane per registered component. GET /services served exactly
   // this list (every component, whatever its kind) until Phase 30.
-  const { components: services } = useComponents();
+  //
+  // /model is admin-only, so for a member that request could only 403
+  // and the timeline drew no lanes at all — incidents counted in the
+  // header, nothing on the chart (Phase 31.2 truth pass). A member's
+  // lanes are the services the incidents themselves name instead.
+  const { data: me } = useCurrentUser();
+  const isAdmin = me?.role === "admin";
+  const { components } = useComponents({ enabled: isAdmin });
+  const services = useMemo<Lane[]>(() => {
+    if (isAdmin) return components;
+    const named = new Set<string>();
+    for (const incident of props.incidents) {
+      incident.services.forEach((s) => named.add(s));
+      incident.anomalies.forEach((a) => named.add(a.service_name));
+    }
+    return [...named].sort().map((name) => ({ name, disabled: false }));
+  }, [isAdmin, components, props.incidents]);
   return (
     <div ref={ref} className="h-full w-full min-h-64">
       {width > 0 && height > 0 ? (
@@ -70,9 +89,15 @@ function TimelineChart({
 
   const { xScale, yScale, bands, marks } = useMemo(() => {
     const now = Date.now();
+    // closed_at too: a band ends at closed_at when there is one (below),
+    // and an incident closes a quiet window after its last anomaly, so
+    // leaving it out of the domain drew the newest closed incident's band
+    // past the axis and under the detail panel, where it could not be
+    // clicked (Phase 31.2 truth pass).
     const allTimes = incidents.flatMap((incident) => [
       new Date(incident.opened_at).getTime(),
       new Date(incident.last_anomaly_at).getTime(),
+      ...(incident.closed_at ? [new Date(incident.closed_at).getTime()] : []),
       ...incident.anomalies.map((a) => new Date(a.detected_at).getTime()),
     ]);
     const minTime = allTimes.length ? Math.min(...allTimes) : now - 4 * 60 * 60 * 1000;

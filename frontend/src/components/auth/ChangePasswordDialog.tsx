@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { changePassword } from "@/lib/api";
+import { ApiError, changePassword } from "@/lib/api";
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -21,7 +21,14 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const mutation = useMutation({
     mutationFn: () => changePassword(currentPassword, newPassword),
     onSuccess: onClose,
-    onError: (err) => setError(err instanceof Error ? err.message : "Couldn't change password."),
+    onError: (err) =>
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? "That isn't your current password."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't change password.",
+      ),
   });
 
   const valid = newPassword.length >= MIN_PASSWORD_LENGTH;

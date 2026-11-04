@@ -478,6 +478,11 @@ function ConnectionsPanel({
           {add.error instanceof Error ? add.error.message : "Couldn't add that connection."}
         </p>
       ) : null}
+      {(reclassify.error ?? remove.error) ? (
+        <p className="font-mono text-xs text-destructive">
+          {(reclassify.error ?? remove.error)?.message || "That change was not saved."}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -603,6 +608,11 @@ function ComponentRow({
       {issuedKey ? (
         <NewKeyDialog serviceName={component.name} apiKey={issuedKey} onClose={() => setIssuedKey(null)} />
       ) : null}
+      {(setKind.error ?? toggleDisabled.error ?? issueKey.error ?? revoke.error) ? (
+        <p className="font-mono text-xs text-destructive">
+          {(setKind.error ?? toggleDisabled.error ?? issueKey.error ?? revoke.error)?.message || "That change was not saved."}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -652,6 +662,11 @@ function TopologySuggestionRow({ suggestion }: { suggestion: TopologySuggestionO
           {dismiss.isPending ? "Dismissing…" : "Dismiss"}
         </Button>
       </div>
+      {(accept.error ?? dismiss.error) ? (
+        <p className="font-mono text-xs text-destructive">
+          {(accept.error ?? dismiss.error)?.message || "That suggestion was not updated."}
+        </p>
+      ) : null}
     </div>
   );
 }
