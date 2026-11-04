@@ -2097,6 +2097,78 @@ screen the product is centred on before it is applied everywhere.
   materials; the fresh-eyes review last. Part 2's criteria are field 14's,
   as refined above.
 
+**Architecture review of part 1, 2026-11-04.** Complete once PR #24
+(`bd29351`) is green on the merge result and merged; `/next` checks that
+before part 2 starts. Every part 1 criterion was met, both audits ran, and
+the phase audit's blocking finding — a partial tree still labelled its last
+edge "caused by" — was fixed in the CLI and the view, with tests over the
+whole output. Decisions on what the run report left open:
+
+- **Orange stays on a complete diagnosis's root.** Malcolm's call, on the
+  screenshots: the root is the most important thing on the page, and it
+  always carries the word and an icon. Red stays reserved for `fail`.
+- **The stored `root_subject` of a partial diagnosis** stays, and only its
+  presentation changed. Accepted, as LIMITS says. Investigations stored
+  earlier keep their wording; they are records.
+- **npm audit's three high advisories** (nanoid, source-map-js, vite) predate
+  this branch. Part 2 touches every frontend file, so it clears them inside
+  the lockfile, with no new dependency.
+
+**Malcolm's review of the screenshots, 2026-11-04: the look is approved as
+it is** — restrained, dark, orange for the root. Four changes, applied on every
+screen:
+
+1. **Dates and times are unambiguous**, in one format everywhere:
+   `4 Nov 2026, 18:18` (day, month, year, 24-hour clock, local time). One
+   formatter in the component set, with a unit test. No page formats a date
+   itself.
+2. **The investigation id leaves the top navigation bar.** It is already in
+   the Symptom card.
+3. **Hypotheses read as words:** "Auth audience mismatch", with the exact kind
+   (`auth_audience_mismatch`) beneath it in monospace. The labels come from
+   one map, and a test fails if any hypothesis kind in the shared model has
+   no label — so a new kind cannot ship unlabelled.
+4. **Command-line flags in prose render as code and never break across a
+   line** (`--reference`).
+
+**Part 2 — everywhere else. Brief, 2026-11-04.** Work order:
+
+1. The four review changes, on the investigation screens.
+2. Every other surviving route on the system: incidents (history),
+   postmortems (list and editor), services, users, sign-in, change password,
+   not found, and the command palette.
+3. The token gate widened from the investigation screens to all of
+   `frontend/src`, `components/ui` included (`dialog.tsx`'s `top-[20%]`).
+4. Responsive at 375, 768, 1280 and 1920 px, and full keyboard operation,
+   on every route.
+5. npm audit's three high advisories cleared.
+6. **The end-to-end suite in CI:** a job that brings up the quickstart stack
+   and runs `just e2e` on every pull request. Field 14's journeys, plus every
+   route loading under the refined criterion 4 of Phase 31.2. The README's
+   screenshots are taken by this suite, at fixed sizes.
+7. **The SARIF upload restored**, so the self-check's findings annotate
+   Culprit's own pull requests. If GitHub refuses the upload because code
+   scanning is not enabled on the repository, stop at that step and ask
+   Malcolm to enable it; do not leave a failing step in CI.
+8. The README: the interface is now shown, from the suite's screenshots, not
+   just described; nothing shown that does not work (Phase 31.2's standard).
+9. The video materials, following `docs/PRODUCTISATION.md` §7: script,
+   scene-by-scene storyboard and recording checklist. Malcolm records.
+10. The fresh-eyes review last: an agent that has not seen the work reads the
+    repository as a recruiter and as a senior engineer would.
+
+**Acceptance criteria (part 2):** field 14 as refined; the four review changes,
+each with its test; the token gate covering all of `frontend/src`, shown red
+by a deliberate raw colour; the e2e job green in CI on the merge result; npm
+audit reporting no high or critical advisory; the SARIF upload working, or
+stopped and reported as item 7 says; the README's screenshots produced by the
+suite; the video materials committed.
+
+**Do NOT implement in part 2.** No backend feature or endpoint to fill a
+screen; no dashboard control that opens an investigation (Phase 33); no new
+component, chart, animation or CSS library; no change to what the walk
+decides; no recording of the video itself.
+
 ---
 
 ### Phase 33 — The production agent and the permission model
