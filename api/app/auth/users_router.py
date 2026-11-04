@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.responses import Response
 
 from app.auth.repository import (
+    LastAdminError,
     create_user,
     get_user_by_id,
     get_user_by_username,
@@ -30,6 +31,11 @@ from app.auth.schemas import (
 from app.auth.security import WeakPassword, hash_password, validate_password
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+_LAST_ADMIN = (
+    "this would leave no enabled admin, and nobody could manage users again "
+    "short of `just create-user` on the host. Make another user an admin first."
+)
 
 
 async def get_write_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -64,9 +70,12 @@ async def patch_user_endpoint(
     user_id: UUID, body: PatchUserRequest, session: AsyncSession = Depends(get_write_session)
 ) -> UserOut:
     fields = body.model_dump(exclude_unset=True)
-    user = await repo_update_user(
-        session, user_id, role=fields.get("role"), disabled=fields.get("disabled")
-    )
+    try:
+        user = await repo_update_user(
+            session, user_id, role=fields.get("role"), disabled=fields.get("disabled")
+        )
+    except LastAdminError as exc:
+        raise HTTPException(status_code=409, detail=_LAST_ADMIN) from exc
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
     return _user_out(user)
@@ -91,7 +100,10 @@ async def reset_password_endpoint(
 async def delete_user_endpoint(
     user_id: UUID, session: AsyncSession = Depends(get_write_session)
 ) -> Response:
-    user = await repo_update_user(session, user_id, disabled=True)
+    try:
+        user = await repo_update_user(session, user_id, disabled=True)
+    except LastAdminError as exc:
+        raise HTTPException(status_code=409, detail=_LAST_ADMIN) from exc
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
     return Response(status_code=204)

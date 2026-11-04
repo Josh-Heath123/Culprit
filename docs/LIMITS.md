@@ -21,12 +21,15 @@ guarantee, since actual headroom depends heavily on traffic shape:
   every 10-30s, a hard ceiling if you point something chattier at it.
   Raise it if you need to, but that's directly more load on the single
   shared Postgres instance everything else also depends on.
-- **One Postgres instance, ten least-privilege roles sharing it.** `api`
-  opens a pool per role it uses (`api-reader`, `registry-admin`,
-  `auth-service`, `postmortem-writer`, `ingest-gateway`), `worker` does the
-  same (`ingestion-writer`, `anomaly-detector`, `correlation-engine`,
-  `root-cause-writer`), and `mcp_server` adds `mcp-reader` if you run it.
-  More services and more worker cron activity means more concurrent
+- **One Postgres instance, fourteen least-privilege roles sharing it.**
+  `api` opens a pool per role it uses (`api-reader`, `registry-admin`,
+  `auth-service`, `postmortem-writer`, `fact-writer`, `capture-writer`,
+  `probe-writer`, `investigation-writer`), the ingest gateway one
+  (`ingest-gateway`), `worker` five (`ingestion-writer`, `anomaly-detector`,
+  `probe-writer`, and `correlation-engine` and `root-cause-writer` for the
+  change-link and embedding jobs, which kept those roles when the jobs they
+  were named after were removed), and `mcp_server` adds `mcp-reader` if you
+  run it. More services and more worker cron activity means more concurrent
   connections against Postgres's own `max_connections` (100 by default,
   unraised here). This is the first thing to look at if connections start
   getting refused under real load.
@@ -74,39 +77,37 @@ enough — if your instrumentation only propagates trace context without
 creating its own `CLIENT` spans, topology inference will silently
 observe nothing, correctly, not incorrectly.
 
-## The root-cause narrative is a grounded hypothesis, not a verdict
+## Incidents are history, and nothing writes them any more
 
-The LLM call (`worker/app/rag/`) only ever runs after retrieval has
-grounded it in your own team's past postmortems — see `CLAUDE.md`'s
-"Where the AI must stay deterministic" section for why anomaly detection
-and correlation never touch an LLM at all. Even grounded, it's a
-hypothesis a human should read critically, not an authoritative
-diagnosis: retrieval can surface a similar-looking but wrong past
-incident, and a corpus with only a handful of postmortems in it has
-correspondingly little to ground against. Confidence level and cited
-evidence are shown specifically so you can judge that for yourself
-instead of trusting a bare paragraph.
+Phase 32 removed the engine that grouped anomalies into incidents and the
+job that asked an LLM to write a root-cause narrative over each one
+(`docs/DIAGNOSTIC_PLAN.md` D5). The incident tables are kept, read-only: no
+role can insert or update `incident_candidates` or `incident_anomalies`, and
+the dashboard's timeline shows what that engine concluded before it was
+retired, labelled as history. Nothing was migrated out of them and nothing
+new arrives in them. An incident still marked `pending` will stay that way —
+there is no job left to write its narrative, and the "Regenerate" button is
+gone with it.
 
-**Without keys there is no narrative, and the dashboard cannot tell.** The
-job needs `VOYAGE_API_KEY` (retrieval) and an LLM key. Without them it
-fails inside the worker on every attempt, and the incident's root-cause
-status stays `pending` for good — "Generate now" re-queues a job that fails
-the same way. The `--local` quickstart sets neither key. The incident
-panel says this instead of promising the narrative is seconds away; the
-worker log records the actual failure (`AuthenticationError` from the
-Voyage client). Recording the failure as a status the dashboard can show is
-not done.
+Diagnoses are investigations now: `culprit diagnose`, run where the
+environment is, posted to `POST /investigations`. No step of that path calls
+a model, so it is complete with `LLM_PROVIDER=none` and no keys at all.
 
-## RAG retrieval quality depends on your postmortem corpus
+The anomaly scorer still runs and still writes `anomalies` and impedance
+readings; it is the grouping into incidents that stopped.
 
-`worker/app/rag/retrieval.py` always returns its top 3 most-similar
-postmortems by embedding distance — there's no relevance floor. With a
-small corpus, or one whose postmortems don't share a consistent
-structure, "most similar" can still mean "not very similar at all." Voyage's
-free tier also caps at 3 requests/minute (`docs/SELF_HOSTED_PLAN.md`
-Phase 18) — a burst of postmortem writes degrades to a visible "failed,
-retry" state rather than hanging, but it does mean a burst takes real
-wall-clock time to fully embed.
+## Postmortem search has no relevance floor
+
+Postmortems, architecture decisions and change records are still embedded
+when written, and the MCP server's search returns the `top_k` most similar
+(5 by default, at most 50) by embedding distance, with no relevance floor.
+With a small corpus, or one whose postmortems don't share a consistent
+structure, "most similar" can still mean "not very similar at all." Since
+Phase 32 nothing in the worker retrieves from the corpus — the narrative job
+that did is gone. Voyage's free tier also caps at 3 requests/minute
+(`docs/SELF_HOSTED_PLAN.md` Phase 18) — a burst of postmortem writes
+degrades to a visible "failed, retry" state rather than hanging, but it does
+mean a burst takes real wall-clock time to fully embed.
 
 ## A revoked ingest key keeps working for up to 10 seconds
 
@@ -183,19 +184,13 @@ Three things this means in practice:
   error in the worker log is the intended behaviour for that case, not a
   regression.
 
-## A cited passage is checked for existence, not for relevance
+## A historic narrative's citations were checked for existence, not relevance
 
-Every citation in a root-cause narrative is now verified before it is
-stored: the quoted passage must actually appear in the postmortem it is
-attributed to (whitespace-normalised, so a re-wrapped line still counts).
-Citations that fail are dropped and counted, not repaired — there is no
-correct passage to substitute for a fabricated one.
-
-So a citation you see is genuinely present in the postmortem it names. That
-is not a guarantee that the passage is *relevant*, that the postmortem
-describes your incident, or that the surrounding hypothesis is right — see
-the section above on the narrative being a hypothesis. A narrative may also
-arrive with fewer citations than the model offered, or with none.
+Incident narratives written before Phase 32 had every citation verified
+before it was stored: the quoted passage had to appear in the postmortem it
+was attributed to. That shows a citation is genuine, not that it is
+relevant, or that the narrative around it was right. They are shown as they
+were stored.
 
 ## Incident-to-change linking is a 30-minute window and a substring match
 
@@ -219,6 +214,10 @@ deliberately crude, fixed, and not configurable:
 The bias is deliberate: a heuristic that occasionally misses a real
 correlation is a much smaller problem than one that confidently links
 unrelated things. Treat a link as a lead, not as a cause.
+
+Since Phase 32 nothing creates incidents, so the job still runs and finds
+nothing new to link; existing links are kept. Linking a change record to an
+investigation is not built.
 
 ## Every service now refuses to start without its database URL
 
@@ -488,26 +487,14 @@ credential in git history forever.
 The refusal never echoes the offending value, so a rejected manifest does
 not leak the secret into a CI log.
 
-## Correlation groups incidents across every connection kind
+## A topology suggestion is dropped once any connection joins the pair
 
-`worker/app/correlation/job.py` builds its adjacency from `connections`
-with **no filter on `kind`**. Two components joined by a `sql`, `cache`
-or `message` edge are as "related" for incident grouping as two joined by
-`http`.
-
-At upgrade time this changes nothing — every migrated connection is
-`http`. It starts to matter the first time you declare a non-HTTP edge:
-declaring `orders-svc -sql-> orders-db` makes an anomaly in each of them
-correlate into one incident candidate, where before Phase 27 there was no
-way to express that edge at all.
-
-This is deliberate for now. `docs/DIAGNOSTIC_PLAN.md` D5 says the
-undirected correlation engine is *replaced* in Phase 32, not adapted —
-its central data structure is an `nx.Graph`, and teaching it half a
-notion of direction and kind would change correlation behaviour in a
-phase whose first acceptance criterion is that nothing is lost. The same
-applies to topology suggestions: an observed HTTP edge is no longer
-suggested once a connection of *any* kind already joins that pair.
+An edge observed in traces is suggested in **Settings → Services** only while
+no connection of *any* kind joins that pair. If `orders-svc -sql-> orders-db`
+is declared, an observed HTTP call between the same two components is not
+suggested. (Until Phase 32 this section also described the correlation
+engine grouping incidents across every connection kind; that engine is
+gone.)
 
 ## "Safe to attach to a bug report" covers values, not every field
 
@@ -1480,18 +1467,15 @@ Which means the gap above is real: a credential in a URL in a shape the
 pattern does not match reaches a reading, and `api-reader` can read the
 90-day store it lands in.
 
-## The API lets an admin remove the last admin
+## The last enabled admin cannot be removed — through the API
 
-`PATCH /users/{id}` and `DELETE /users/{id}` do not refuse a change that
-leaves no enabled admin. Phase 31.2's truth pass did exactly that from the
-dashboard — the quickstart's only admin clicked "Make member" on their own
-row — and every admin page then answered 403, with no way back short of
-`just create-user <name> --role admin` on the host.
-
-The dashboard no longer offers a role or disable control on your own row.
-That closes the one-click route, not the hole: two admins can still demote
-each other, and anything that calls the API directly can still demote the
-last one. Refusing it is a server-side change and has not been made.
+`PATCH /users/{id}` (demoting or disabling) and `DELETE /users/{id}` answer
+`409` when they would leave no enabled admin, and two admins demoting each
+other at the same moment cannot both succeed: each change locks every
+enabled admin's row before counting them. The guard lives in the API, not
+the database, so a direct `UPDATE users` as the `auth-service` role is not
+refused. And an admin who forgets their password is still recovered only
+from the host, with `just create-user <name> --role admin`.
 
 ## A member's timeline has a lane only for services with incidents
 
@@ -1511,20 +1495,31 @@ Caddy routes by host name. The quickstart configures `localhost`, so
 machine — returns an empty `200` page, which looks like a broken frontend
 and is not. On a real install the same applies to the domain in `DOMAIN`.
 
-## The quickstart needs port 80, and a clone outside Windows' temp folder
+## The quickstart takes port 80 unless told otherwise, and a clone outside Windows' temp folder
 
-`just quickstart` publishes the dashboard on port 80 and has no setting to
-move it; if another server holds 80, that server answers instead (on the
-machine Phase 31.2 was verified on, an Apache inside WSL did). Its compose
-project is always named `culprit-quickstart`, so a second checkout's
-quickstart reuses the first one's database volume — whose passwords were
-fixed by the first checkout's `infra/.env.prod`.
+`just quickstart` publishes the dashboard on port 80. If another server
+holds it, that server answers instead (on the machine Phase 31.2 was
+verified on, an Apache inside WSL did): set `QUICKSTART_HTTP_PORT` to a free
+port, and the recipe prints the address with it. Its compose project is
+named `culprit-quickstart` unless `COMPOSE_PROJECT_NAME` says otherwise, so a
+second checkout's quickstart reuses the first one's database volume — whose
+passwords were fixed by the first checkout's `infra/.env.prod`.
 
 Under Git Bash on Windows, a clone inside `%TEMP%` cannot run the
 quickstart at all: Git Bash maps that folder to `/tmp`, the recipe hands
 `$(pwd)` to `docker run -v`, and Docker reads `/tmp/...` as a path inside
 its own VM, which is empty. The secrets step then fails with
 "can't open file '/repo/scripts/bootstrap_env.py'". Clone anywhere else.
+
+## The quickstart leaves its fault in place
+
+The quickstart's last step injects a fault — order-service's token for
+inventory-service, re-minted for the wrong audience — diagnoses it and
+posts the investigation. It does not undo it: `POST /orders` keeps failing
+with a 502 until the next `just quickstart`, which mints a fresh secret and
+a correct token. The token's signing secret is generated per run and kept
+only in the recipe's environment, so a bare `docker compose up` of the demo
+services runs with the audience check off.
 
 ## The README's captures are regenerated, and vary a little by machine
 
@@ -1608,9 +1603,14 @@ the audience the callee expects — an invariant on
 unauthenticated and no auth hypothesis is generated. A downstream that
 rejects otherwise-valid credentials (`auth_rejected`) is never tested:
 `culprit.yaml` has nowhere yet to say which protected URL to present a
-token to. The token is read from the agent's own environment, passed to
-`probe.auth.token_shape` as an input, and never appears in a reading or
-an investigation — only its audience, issuer and expiry do.
+token to. Reading the token is reading a credential, so it needs
+`config.read.values` naming that exact key —
+`config.read.values: [order-service/INVENTORY_TOKEN]`. Without it the probe
+is refused, the audience hypothesis is left *unexplored*, and the diagnosis
+is partial and names the missing grant; a grant for any other key does not
+count. With it, the token is read from the agent's own environment by the
+probe itself and never appears in a reading or an investigation — only its
+audience, issuer and expiry do.
 
 ## The walk follows one branch, and edges back up the path are ignored
 
@@ -1618,9 +1618,12 @@ The request path is a tree built breadth first from the entry: an edge
 back to a component already reached (the demo declares
 `inventory-service -> order-service`) is not followed, because a request
 entering at the entry does not travel it. At a fan-out the walk descends
-into the first failing child in name order and stops there: it assumes a
-single fault, and a second, simultaneous fault in another branch is not
-found.
+into the first failing child in name order. **It stops at the first root it
+can establish and does not look for a second, independent fault**: a second
+fault in another branch, at the same time, is not found. A complete
+diagnosis means nothing the walk *needed* went unexplored — not that every
+hypothesis was tested. The report lists the hypotheses it did not need as
+*untested*, apart from the *unexplored* ones it needed and could not test.
 
 ## Investigation budgets
 
@@ -1648,3 +1651,30 @@ test cache does not track it: after editing that file by hand, a cached
 `go test` still reports the old result. CI always runs fresh. Locally, use
 `go test -count=1`, or regenerate with `just probe-catalogue` rather than
 editing.
+
+## A stored investigation is final
+
+`POST /investigations` stores an investigation once. Posting the same `id`
+again answers `409`, and nothing can edit or delete one: `investigation-writer`
+has INSERT and nothing else, and no endpoint changes a stored row. Running
+`culprit diagnose` again produces a new investigation with a new id; the
+older one stays. Every value in it is redacted on the way in by the same
+credential heuristic as a reading's — see "The credential heuristic in a
+reading is a net, not a proof" — so a credential shaped unlike anything that
+heuristic knows would be stored as written.
+
+The upload uses `CULPRIT_PROJECT_TOKEN`, the same token as facts,
+divergences and readings. As with `probe-writer`, the new role bounds a
+leaked *database* credential, not a leaked API token: anyone holding the
+project token can post an investigation, and the dashboard will show it.
+What the database does guarantee is the shape: an edge that cites no
+reading, or cites a reading from another investigation, is refused however
+it is written.
+
+## The dashboard shows the newest 100 investigations
+
+The Investigations page asks for the newest 100 and has no "load more" yet.
+The API pages (`limit` up to 200, `offset`), so older ones are reachable
+there. The page cannot start an investigation or run a probe — they come
+only from `culprit diagnose`, run where the environment is; the control
+plane has no agent to run one until Phase 33.

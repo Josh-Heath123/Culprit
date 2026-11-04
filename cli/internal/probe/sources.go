@@ -97,6 +97,74 @@ func (s *Sources) requireCommand(command, component, check string) error {
 	return nil
 }
 
+// workloadOf reads a component's environment through the adapter, once.
+// The map it returns holds real values; callers read membership (config)
+// or one granted value (secrets), and neither keeps it.
+func (s *Sources) workloadOf(ctx context.Context, component string) (capture.Workload, error) {
+	settings, err := s.component(component)
+	if err != nil {
+		return capture.Workload{}, err
+	}
+	if s.Spec.Adapter == extract.AdapterExec {
+		if err := s.requireCommand(settings.EnvCommand, component, "environment"); err != nil {
+			return capture.Workload{}, err
+		}
+	}
+	s.once.Do(func() {
+		s.adapter, s.err = capture.NewAdapter(s.Spec, s.ManifestDir, s.Runner, s.Environ)
+	})
+	if s.err != nil {
+		return capture.Workload{}, errors.New(capture.SafeReason(s.err))
+	}
+	workload, err := s.adapter.Workload(ctx, component, settings)
+	if err != nil {
+		// Rendered under capture's closure: one of its closed kinds, or a
+		// fixed phrase. Runner and Reader are injectable, so "the current
+		// implementations only return closed kinds" is not a guarantee.
+		return capture.Workload{}, fmt.Errorf("the %s adapter could not read %s's environment: %s",
+			s.adapter.Name(), component, capture.SafeReason(err))
+	}
+	return workload, nil
+}
+
+// --- a credential's value -----------------------------------------------
+
+// Secrets reads one variable's value under config.read.values for it.
+func (s *Sources) Secrets() SecretReader { s.withDefaults(); return secretSource{s} }
+
+type secretSource struct{ s *Sources }
+
+func (c secretSource) Secret(ctx context.Context, component, key string) (string, error) {
+	item := component + "/" + key
+	check := "the value of " + key
+	if !c.s.Grants.Has(capability.ConfigReadValues) {
+		c.s.Ledger.Require(capability.ConfigReadValues, component, check)
+		return "", &RefusedError{Capability: string(capability.ConfigReadValues), Reason: fmt.Sprintf(
+			"reading %s needs config.read.values for %s, and config.read.values is not "+
+				"granted for this environment", key, item)}
+	}
+	if !c.s.Ledger.RequireItem(capability.ConfigReadValues, item, component, check) {
+		return "", &RefusedError{Capability: string(capability.ConfigReadValues), Reason: fmt.Sprintf(
+			"reading %s needs config.read.values for %s, which is not on this "+
+				"environment's allowlist", key, item)}
+	}
+	workload, err := c.s.workloadOf(ctx, component)
+	if err != nil {
+		return "", err
+	}
+	value, present := workload.Env[key]
+	if !present {
+		return "", &UnavailableError{Reason: fmt.Sprintf("%s is not set for %s", key, component)}
+	}
+	if !value.Known {
+		// Set by reference (a Kubernetes secretKeyRef): the key exists, but
+		// this adapter cannot see its value, and an empty string is not it.
+		return "", &UnavailableError{Reason: fmt.Sprintf(
+			"%s is set by reference for %s, so its value is not visible to this agent", key, component)}
+	}
+	return value.Value, nil
+}
+
 // --- configuration ----------------------------------------------------
 
 // Config answers whether a key is set, through the environment's adapter.
@@ -105,28 +173,9 @@ func (s *Sources) Config() ConfigReader { s.withDefaults(); return configSource{
 type configSource struct{ s *Sources }
 
 func (c configSource) Present(ctx context.Context, component, key string) (bool, error) {
-	settings, err := c.s.component(component)
+	workload, err := c.s.workloadOf(ctx, component)
 	if err != nil {
 		return false, err
-	}
-	if c.s.Spec.Adapter == extract.AdapterExec {
-		if err := c.s.requireCommand(settings.EnvCommand, component, "environment"); err != nil {
-			return false, err
-		}
-	}
-	c.s.once.Do(func() {
-		c.s.adapter, c.s.err = capture.NewAdapter(c.s.Spec, c.s.ManifestDir, c.s.Runner, c.s.Environ)
-	})
-	if c.s.err != nil {
-		return false, errors.New(capture.SafeReason(c.s.err))
-	}
-	workload, err := c.s.adapter.Workload(ctx, component, settings)
-	if err != nil {
-		// Rendered under capture's closure: one of its closed kinds, or a
-		// fixed phrase. Runner and Reader are injectable, so "the current
-		// implementations only return closed kinds" is not a guarantee.
-		return false, fmt.Errorf("the %s adapter could not read %s's environment: %s",
-			c.s.adapter.Name(), component, capture.SafeReason(err))
 	}
 	// The map holds real values. Only membership is read, and the map is
 	// not kept.

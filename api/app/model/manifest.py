@@ -45,7 +45,7 @@ Loading is pure — `load_manifest` parses a string. The only I/O is
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import yaml
 from culprit_model.capabilities import ALLOWLISTED, Capability
@@ -58,7 +58,14 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    model_validator,
+)
 
 #: The one shape this loader understands. An explicit version so a later
 #: phase can change the schema without having to guess what an
@@ -104,6 +111,25 @@ _SECRET_VALUE_PATTERNS = (
 )
 
 
+#: The one place a key named like a credential is not one: an environment's
+#: `components.<name>.tokens`, which maps a callee to the *name* of the
+#: variable holding the token (Phase 32; cli/internal/extract/
+#: environments.go `ComponentSettings.Tokens`). The same name rule as Go's
+#: `envVarName`. Matched on the exact path, so a dotted name — which this
+#: split cannot place — falls through to the ordinary refusal.
+_ENV_VAR_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _is_token_reference_map(path: str, key: object) -> bool:
+    parts = path.split(".")
+    return (
+        key == "tokens"
+        and len(parts) == 4
+        and parts[0] == "environments"
+        and parts[2] == "components"
+    )
+
+
 def _reject_credentials(node: Any, path: str = "") -> None:
     """Walks a parsed manifest and refuses anything credential-shaped.
 
@@ -119,6 +145,20 @@ def _reject_credentials(node: Any, path: str = "") -> None:
     if isinstance(node, dict):
         for key, value in node.items():
             here = f"{path}.{key}" if path else str(key)
+            if _is_token_reference_map(path, key):
+                if not isinstance(value, dict) or not all(
+                    isinstance(v, str) and _ENV_VAR_NAME.match(v) for v in value.values()
+                ):
+                    # Never echoed: if it is not a variable name, the
+                    # likeliest thing it is is the token.
+                    raise ManifestError(
+                        f"{here}: each value must be the *name* of an environment "
+                        "variable holding the token, never the token."
+                    )
+                # A name-shaped value can still be a credential (`ghp_...`,
+                # `AKIA...`), so the value scan still runs (invariant audit).
+                _reject_credentials(list(value.values()), here)
+                continue
             if isinstance(key, str) and _SECRET_KEY_PATTERN.search(key) and value not in (None, ""):
                 raise ManifestError(
                     f"{here}: looks like a credential. culprit.yaml names config keys, "
@@ -242,6 +282,9 @@ class EndpointEnvSpec(BaseModel):
     host: str = Field(pattern=r"^[^/@:\s]+$")
     port: int = Field(ge=1, le=65535)
     tls: bool = False
+    #: Phase 32: the path the isolation walk requests at this component.
+    #: Go's `validateEndpoint` rule: a path, no query string or credentials.
+    health_path: str = Field(default="", pattern=r"^(/[^ @?#]*)?$")
 
 
 class EnvironmentComponentSpec(BaseModel):
@@ -253,6 +296,12 @@ class EnvironmentComponentSpec(BaseModel):
     packages: str = ""
     database: DatabaseEnvSpec | None = None
     endpoint: EndpointEnvSpec | None = None
+    #: Phase 32: callee -> the *name* of the variable holding the bearer
+    #: token this component presents to it. Never the token; the
+    #: credential check (`_is_token_reference_map`) holds the same rule.
+    tokens: dict[str, Annotated[str, StringConstraints(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]] = (
+        Field(default_factory=dict)
+    )
 
 
 class EnvironmentSpec(BaseModel):
@@ -279,6 +328,9 @@ class EnvironmentSpec(BaseModel):
     #: Keyed by the closed §2.7 set — see `_check_grants`.
     grants: dict[Capability, bool | tuple[str, ...]] = Field(default_factory=dict)
     components: dict[str, EnvironmentComponentSpec] = Field(default_factory=dict)
+    #: Phase 32: where the isolation walk reaches each component from the
+    #: vantage `culprit diagnose` runs at. Not acted on here either.
+    endpoints: dict[str, EndpointEnvSpec] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _check_grants(self) -> "EnvironmentSpec":
@@ -296,6 +348,43 @@ class EnvironmentSpec(BaseModel):
             elif not isinstance(grant, bool):
                 raise ValueError(f"grants.{capability}: expected true or false")
         return self
+
+
+class InvariantSpec(BaseModel):
+    """`invariants:` (Phase 29): a developer's rank-100 assertion, which the
+    `culprit` binary turns into an INTENT fact. Like `extract:` and
+    `environments:`, structure only — the control plane does not act on
+    it; it is here so `apply-model` accepts a manifest carrying it and
+    `--export` keeps it. `cli/internal/extract/policy.go` is the loader that
+    judges one."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    subject: str = Field(min_length=1)
+    predicate: str = Field(min_length=1)
+    value: Any = None
+    why: str = ""
+
+
+class SuppressionSpec(BaseModel):
+    """`suppress:` (Phase 29). The reason is required, as in Go."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    subject: str = Field(min_length=1)
+    predicate: str = ""
+    reason: str = Field(min_length=1)
+    expires: str = ""
+
+
+class SeverityOverrideSpec(BaseModel):
+    """`severity_overrides:` (Phase 29). The reason is required, as in Go."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    subject: str = Field(min_length=1)
+    severity: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
 
 
 class Manifest(BaseModel):
@@ -316,6 +405,12 @@ class Manifest(BaseModel):
     extract: ExtractSpec | None = None
     #: Phase 30. Same treatment as `extract` — see EnvironmentSpec.
     environments: dict[str, EnvironmentSpec] | None = None
+    #: Phase 29's three policy sections — accepted and round-tripped, not
+    #: acted on here (see InvariantSpec). Until Phase 32 part 2 they were
+    #: missing, so `apply-model` refused any manifest carrying one.
+    invariants: tuple[InvariantSpec, ...] = ()
+    suppress: tuple[SuppressionSpec, ...] = ()
+    severity_overrides: tuple[SeverityOverrideSpec, ...] = ()
 
     @model_validator(mode="after")
     def _check_environment_components(self) -> "Manifest":
@@ -413,8 +508,7 @@ class Manifest(BaseModel):
         for name, spec in self.extract.components.items():
             if name not in known:
                 raise ValueError(
-                    f"extract.components.{name}: no component named {name} is declared "
-                    "in this file"
+                    f"extract.components.{name}: no component named {name} is declared in this file"
                 )
             unknown = sorted(set(spec.extractors) - extractors)
             if unknown:
@@ -561,6 +655,15 @@ def dump_manifest(manifest: Manifest) -> str:
             )
             for name in sorted(manifest.environments)
         }
+    # Phase 29's policy sections, carried in order for the same reason:
+    # an export that dropped them would delete a team's suppressions, each
+    # with the reason someone wrote for it.
+    for section in ("invariants", "suppress", "severity_overrides"):
+        entries = getattr(manifest, section)
+        if entries:
+            document[section] = [
+                entry.model_dump(mode="json", exclude_defaults=True) for entry in entries
+            ]
 
     return yaml.safe_dump(
         document,

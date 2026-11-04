@@ -21,6 +21,12 @@ func RenderInvestigation(w io.Writer, inv model.Investigation) error {
 	if inv.Symptom.Description != "" {
 		p.line("           %s", inv.Symptom.Description)
 	}
+	switch attestation := inv.Symptom.Attestation; attestation.Kind {
+	case model.AttestedReproduced:
+		p.line("           reproduced read-only (%s)", attestation.Reading)
+	case model.AttestedReported:
+		p.line("           reported by %s, not reproduced — probes never replay a write", attestation.ReportedBy)
+	}
 	p.line("Environment %s   investigation %s", inv.Environment, inv.ID)
 	p.line("")
 
@@ -73,8 +79,8 @@ func RenderInvestigation(w io.Writer, inv model.Investigation) error {
 	}{
 		{model.HypothesisSupported, "Supported"},
 		{model.HypothesisRuledOut, "Ruled out"},
-		{model.HypothesisUnexplored, "Unexplored — not tested, so not ruled out"},
-		{model.HypothesisOpen, "Not reached — the walk never needed them"},
+		{model.HypothesisUnexplored, "Unexplored — needed, and could not be tested"},
+		{model.HypothesisOpen, "Untested — the walk did not need them; neither ruled out nor in"},
 	} {
 		hypotheses := byStatus[group.status]
 		if len(hypotheses) == 0 {

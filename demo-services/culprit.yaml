@@ -142,7 +142,7 @@ environments:
 # shallow check the walk must not be pointed at (docs/LIMITS.md).
   faults-order:
     adapter: process
-    components:
+    components: &order-vantage
       order-service:
         tokens:
           inventory-service: INVENTORY_TOKEN
@@ -150,6 +150,23 @@ environments:
       order-service: { host: order-service, port: 8001 }
       inventory-service: { host: inventory-service, port: 8002, health_path: /ready }
       payments-service: { host: payments-service, port: 8003, health_path: /ready }
+    grants: &token-grants
+      net.dns.resolve: true
+      net.tcp.connect: true
+      net.http.outbound: true
+      config.read.names: true
+      # Reading order-service's own token, to check its audience, needs
+      # this (Phase 32 part 2): it is that service's credential.
+      config.read.values: [order-service/INVENTORY_TOKEN]
+  # The same vantage without the token grant: the audience hypothesis is
+  # refused, and the diagnosis is partial and says why.
+  faults-order-ungranted:
+    adapter: process
+    components:
+      order-service:
+        tokens:
+          inventory-service: INVENTORY_TOKEN
+    endpoints: *fault-endpoints
     grants: &fault-grants
       net.dns.resolve: true
       net.tcp.connect: true
@@ -161,6 +178,14 @@ environments:
       payments-service: {}
     endpoints: *fault-endpoints
     grants: *fault-grants
+  # `just quickstart`'s own run: the same vantage and grants as
+  # faults-order, against the quickstart's demo services (same host names
+  # and ports), under the name the dashboard will show.
+  quickstart:
+    adapter: process
+    components: *order-vantage
+    endpoints: *fault-endpoints
+    grants: *token-grants
 
 # --- Phase 32: the fault library ------------------------------------------
 #

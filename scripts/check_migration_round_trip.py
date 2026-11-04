@@ -77,6 +77,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "FACT_WRITER_DB_PASSWORD": "round-trip-fact-writer",
     "CAPTURE_WRITER_DB_PASSWORD": "round-trip-capture-writer",
     "PROBE_WRITER_DB_PASSWORD": "round-trip-probe-writer",
+    "INVESTIGATION_WRITER_DB_PASSWORD": "round-trip-investigation-writer",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:
@@ -100,6 +101,7 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
 
     port = build_subject(SubjectKind.CONFIG, component="rt-alpha", key="PORT")
     database_url = build_subject(SubjectKind.CONFIG, component="rt-alpha", key="DATABASE_URL")
+    alpha = build_subject(SubjectKind.COMPONENT, name="rt-alpha")
 
     return (
         (
@@ -195,6 +197,29 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             "         \"format\": \"dsn\", \"present\": true, "
             "         \"scheme\": \"postgresql\"}'::jsonb, "
             "       'introspection', 'round-trip@0.0.0', now() FROM c",
+        ),
+        (
+            # Phase 32 part 2: an investigation whose edge cites a reading.
+            # One statement, so the deferred `fault_edge_needs_a_reading`
+            # trigger fires on a real commit with the citation present; the
+            # c4e8a1f2b3d5 downgrade then drops all five tables over rows.
+            "investigation (cited edge)",
+            "WITH i AS ("
+            "  INSERT INTO investigations (id, opened_at, environment, symptom) "
+            "  VALUES ('inv-round-trip', now(), 'rt-env', '{}'::jsonb) RETURNING id"
+            "), r AS ("
+            "  INSERT INTO investigation_readings "
+            "  (investigation_id, id, probe_id, target, verdict, reading) "
+            f"  SELECT i.id, 'r1', 'probe.config.present', '{port}', 'fail', '{{}}'::jsonb "
+            "  FROM i RETURNING investigation_id"
+            "), e AS ("
+            "  INSERT INTO fault_edges "
+            "  (investigation_id, id, from_subject, to_subject, relation) "
+            f"  SELECT r.investigation_id, 0, '{alpha}', '{port}', 'caused_by' "
+            "  FROM r RETURNING investigation_id"
+            ") "
+            "INSERT INTO fault_edge_readings (investigation_id, edge_id, reading_id) "
+            "SELECT e.investigation_id, 0, 'r1' FROM e",
         ),
     )
 

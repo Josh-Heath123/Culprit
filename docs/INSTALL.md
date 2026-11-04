@@ -56,9 +56,8 @@ just bootstrap-env --domain your-domain.com
 `MSYS_NO_PATHCONV=1 docker run --rm -it -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --domain your-domain.com` —
 the `MSYS_NO_PATHCONV` prefix only matters on Windows Git Bash, harmless elsewhere.)
 
-This prompts for `LLM_PROVIDER` (gemini or anthropic), the matching API
-key, and `VOYAGE_API_KEY` (needed for root-cause narratives — without it,
-incidents still appear, just without a root-cause hypothesis), generates
+This prompts for `VOYAGE_API_KEY` (optional: it embeds postmortems for
+search; without it they are stored and marked as not embedded), generates
 every database-role password and the JWT signing key, and writes
 `infra/.env.prod` with mode `0600`. No secret value is ever printed to the
 terminal in this mode (contrast with `just quickstart`'s local path, which

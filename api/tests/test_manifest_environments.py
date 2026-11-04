@@ -110,3 +110,59 @@ def test_grants_outside_the_closed_set_are_refused(grants: str) -> None:
             f"environments: {{x: {{adapter: process, grants: {grants}, "
             "components: {a: {}}}}\n"
         )
+
+
+QUICKSTART_MODEL = Path(__file__).parents[2] / "demo-services" / "culprit.yaml"
+
+
+def test_the_quickstart_model_loads() -> None:
+    """`just quickstart` applies demo-services/culprit.yaml with this
+    loader. Phase 32 part 1 gave it `tokens:` maps, which the credential
+    check refused — and the bootstrap's `| tee` hid the exit status, so a
+    fresh quickstart started demo services with no ingest keys. Nothing
+    loaded this file in a test until then; this does."""
+    manifest = load_manifest(QUICKSTART_MODEL.read_text(encoding="utf-8"))
+    assert manifest.environments is not None
+    assert {"faults-order", "quickstart"} <= set(manifest.environments)
+    exported = dump_manifest(manifest)
+    assert load_manifest(exported) == manifest, "export must keep endpoints and tokens"
+
+
+TOKENS = """
+version: 1
+components:
+  - name: orders-api
+  - name: stock-api
+environments:
+  production:
+    adapter: process
+    components:
+      orders-api:
+        tokens: {{stock-api: {variable}}}
+"""
+
+
+def test_a_token_reference_names_a_variable() -> None:
+    load_manifest(TOKENS.format(variable="STOCK_TOKEN"))
+
+
+def test_a_token_where_its_variable_name_belongs_is_refused_without_echo() -> None:
+    token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJzdG9jayJ9.c2lnbmF0dXJl"
+    with pytest.raises(ManifestError) as refused:
+        load_manifest(TOKENS.format(variable=f'"{token}"'))
+    assert token not in str(refused.value)
+    assert "name" in str(refused.value)
+
+
+def test_tokens_anywhere_else_is_still_a_credential() -> None:
+    with pytest.raises(ManifestError, match="looks like a credential"):
+        load_manifest("version: 1\ncomponents:\n  - name: a\n    labels: {tokens: abc}\n")
+
+
+@pytest.mark.parametrize(
+    "token", ["ghp_abcdefghijklmnopqrstuvwxyz0123456789", "AKIAIOSFODNN7EXAMPLE"]
+)
+def test_a_credential_shaped_like_a_variable_name_is_still_refused(token: str) -> None:
+    with pytest.raises(ManifestError) as refused:
+        load_manifest(TOKENS.format(variable=token))
+    assert token not in str(refused.value)

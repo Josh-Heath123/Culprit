@@ -16,6 +16,7 @@ type investigationFixture struct {
 	HypothesisStatuses     []string            `json:"hypothesis_statuses"`
 	SymptomKinds           []string            `json:"symptom_kinds"`
 	HypothesisKinds        []string            `json:"hypothesis_kinds"`
+	AttestationKinds       []string            `json:"attestation_kinds"`
 	InvestigationsAccepted []investigationCase `json:"investigations_accepted"`
 	InvestigationsRejected []investigationCase `json:"investigations_rejected"`
 }
@@ -50,6 +51,9 @@ func TestRelationAndStatusSetsMatchTheSharedFixture(t *testing.T) {
 	}
 	if strings.Join(fixture.HypothesisKinds, ",") != strings.Join(HypothesisKinds, ",") {
 		t.Errorf("fixture hypothesis kinds %v, Go knows %v", fixture.HypothesisKinds, HypothesisKinds)
+	}
+	if strings.Join(fixture.AttestationKinds, ",") != string(AttestedReproduced)+","+string(AttestedReported) {
+		t.Errorf("fixture attestation kinds %v, Go knows reproduced, reported", fixture.AttestationKinds)
 	}
 	if len(fixture.SymptomKinds) != 3 {
 		t.Errorf("fixture has %d symptom kinds, Go knows 3", len(fixture.SymptomKinds))
@@ -90,5 +94,20 @@ func TestAFaultEdgeWithNoReadingCannotBeConstructed(t *testing.T) {
 		`{"from_subject":"component:orders","to_subject":"config:orders/DATABASE_URL",`+
 			`"relation":"caused_by","established_by":[]}`), &decoded); err == nil {
 		t.Fatal("an edge with no readings decoded from JSON")
+	}
+}
+
+// TestAnEmptyInvestigationMarshalsListsNotNull: the Python model rejects
+// null where it expects a list, so a partial investigation with no edges
+// must still write "fault_tree": [].
+func TestAnEmptyInvestigationMarshalsListsNotNull(t *testing.T) {
+	encoded, err := json.Marshal(Investigation{ID: "inv-empty", Environment: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"hypotheses":[]`, `"readings":[]`, `"fault_tree":[]`} {
+		if !strings.Contains(string(encoded), field) {
+			t.Errorf("%s missing from %s", field, encoded)
+		}
 	}
 }

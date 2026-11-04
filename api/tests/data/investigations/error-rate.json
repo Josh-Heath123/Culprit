@@ -1,0 +1,176 @@
+{
+  "id": "inv-46fc995ef58efffe",
+  "opened_at": "2026-11-04T11:39:46.475042296Z",
+  "closed_at": "2026-11-04T11:39:46.478849614Z",
+  "environment": "faults-order",
+  "symptom": {
+    "kind": "endpoint",
+    "subject": "http:order-service/POST /orders",
+    "description": "POST http://order-service:8001/orders",
+    "source": "culprit diagnose",
+    "attestation": {
+      "kind": "reported",
+      "reported_by": "culprit diagnose"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "kind": "component_fails",
+      "subject": "component:order-service",
+      "status": "open"
+    },
+    {
+      "id": "h2",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003einventory-service",
+      "status": "ruled_out",
+      "readings": [
+        "r2"
+      ]
+    },
+    {
+      "id": "h3",
+      "kind": "auth_audience_mismatch",
+      "subject": "auth:order-service-\u003einventory-service/audience",
+      "status": "open"
+    },
+    {
+      "id": "h4",
+      "kind": "contract_mismatch",
+      "subject": "http:inventory-service/GET /stock",
+      "status": "open"
+    },
+    {
+      "id": "h5",
+      "kind": "component_fails",
+      "subject": "component:inventory-service",
+      "status": "supported",
+      "readings": [
+        "r1"
+      ]
+    },
+    {
+      "id": "h6",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003epayments-service",
+      "status": "open"
+    },
+    {
+      "id": "h7",
+      "kind": "component_fails",
+      "subject": "component:payments-service",
+      "status": "open"
+    },
+    {
+      "id": "h8",
+      "kind": "config_missing",
+      "subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "status": "open"
+    }
+  ],
+  "readings": [
+    {
+      "id": "r1",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "elapsed_ms": 1,
+          "status": 500,
+          "url": "http://inventory-service:8002/ready"
+        },
+        "reason": "http://inventory-service:8002/ready answered 500; the service is reachable but failing",
+        "taken_at": "2026-11-04T11:39:46.477060907Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r2",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "faults-order",
+        "verdict": "pass",
+        "measured": {
+          "host": "inventory-service",
+          "port": 8002
+        },
+        "taken_at": "2026-11-04T11:39:46.47762773Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    },
+    {
+      "id": "r3",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "elapsed_ms": 0,
+          "status": 500,
+          "url": "http://inventory-service:8002/ready"
+        },
+        "reason": "http://inventory-service:8002/ready answered 500; the service is reachable but failing",
+        "taken_at": "2026-11-04T11:39:46.478785051Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    }
+  ],
+  "fault_tree": [
+    {
+      "from_subject": "http:order-service/POST /orders",
+      "to_subject": "component:order-service",
+      "relation": "symptom_of",
+      "established_by": [
+        "r1"
+      ]
+    },
+    {
+      "from_subject": "component:inventory-service",
+      "to_subject": "component:order-service",
+      "relation": "propagates_to",
+      "established_by": [
+        "r1"
+      ]
+    }
+  ],
+  "diagnosis": {
+    "root_subject": "component:inventory-service",
+    "statement": "The failure is in inventory-service: a request there fails, every request below it succeeds, and no edge from it failed a probe. What inside inventory-service fails was not established.",
+    "confidence": {
+      "reproduced": {
+        "holds": true,
+        "reason": "probe.http.reachable failed again when run a second time (r1, then r3)"
+      },
+      "discriminated": {
+        "holds": true,
+        "reason": "1 competing hypotheses were ruled out by readings (h2)"
+      },
+      "counterfactual": {
+        "holds": false,
+        "reason": "no reference environment was named (--reference)"
+      },
+      "verified": {
+        "holds": false,
+        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+      }
+    },
+    "complete": true
+  }
+}

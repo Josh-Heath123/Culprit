@@ -1,0 +1,175 @@
+{
+  "id": "inv-35a17eeb88d95e3f",
+  "opened_at": "2026-11-04T11:39:18.299310376Z",
+  "closed_at": "2026-11-04T11:39:18.301117511Z",
+  "environment": "faults-order",
+  "symptom": {
+    "kind": "endpoint",
+    "subject": "http:order-service/POST /orders",
+    "description": "POST http://order-service:8001/orders",
+    "source": "culprit diagnose",
+    "attestation": {
+      "kind": "reported",
+      "reported_by": "culprit diagnose"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "kind": "component_fails",
+      "subject": "component:order-service",
+      "status": "open"
+    },
+    {
+      "id": "h2",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003einventory-service",
+      "status": "supported",
+      "readings": [
+        "r2"
+      ]
+    },
+    {
+      "id": "h3",
+      "kind": "auth_audience_mismatch",
+      "subject": "auth:order-service-\u003einventory-service/audience",
+      "status": "open"
+    },
+    {
+      "id": "h4",
+      "kind": "contract_mismatch",
+      "subject": "http:inventory-service/GET /stock",
+      "status": "open"
+    },
+    {
+      "id": "h5",
+      "kind": "component_fails",
+      "subject": "component:inventory-service",
+      "status": "supported",
+      "readings": [
+        "r1"
+      ]
+    },
+    {
+      "id": "h6",
+      "kind": "connection_unreachable",
+      "subject": "connection:order-service-\u003epayments-service",
+      "status": "open"
+    },
+    {
+      "id": "h7",
+      "kind": "component_fails",
+      "subject": "component:payments-service",
+      "status": "open"
+    },
+    {
+      "id": "h8",
+      "kind": "config_missing",
+      "subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "status": "open"
+    }
+  ],
+  "readings": [
+    {
+      "id": "r1",
+      "reading": {
+        "probe_id": "probe.http.reachable",
+        "probe_version": 1,
+        "target": "component:inventory-service",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "url": "http://inventory-service:8002/ready"
+        },
+        "reason": "no HTTP response from http://inventory-service:8002/ready: Get \"http://inventory-service:8002/ready\": dial tcp 172.20.0.2:8002: connect: connection refused",
+        "taken_at": "2026-11-04T11:39:18.300101874Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.http.outbound"
+        ]
+      }
+    },
+    {
+      "id": "r2",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "host": "inventory-service",
+          "port": 8002
+        },
+        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.20.0.2:8002: connect: connection refused",
+        "taken_at": "2026-11-04T11:39:18.300602392Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    },
+    {
+      "id": "r3",
+      "reading": {
+        "probe_id": "probe.net.tcp_connect",
+        "probe_version": 1,
+        "target": "connection:order-service-\u003einventory-service",
+        "environment": "faults-order",
+        "verdict": "fail",
+        "measured": {
+          "host": "inventory-service",
+          "port": 8002
+        },
+        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.20.0.2:8002: connect: connection refused",
+        "taken_at": "2026-11-04T11:39:18.301066813Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "net.tcp.connect"
+        ]
+      }
+    }
+  ],
+  "fault_tree": [
+    {
+      "from_subject": "http:order-service/POST /orders",
+      "to_subject": "component:order-service",
+      "relation": "symptom_of",
+      "established_by": [
+        "r2"
+      ]
+    },
+    {
+      "from_subject": "component:order-service",
+      "to_subject": "connection:order-service-\u003einventory-service",
+      "relation": "caused_by",
+      "established_by": [
+        "r2"
+      ]
+    }
+  ],
+  "diagnosis": {
+    "root_subject": "connection:order-service-\u003einventory-service",
+    "statement": "order-service fails because of connection:order-service-\u003einventory-service; the readings rule out the alternatives they reached.",
+    "confidence": {
+      "reproduced": {
+        "holds": true,
+        "reason": "probe.net.tcp_connect failed again when run a second time (r2, then r3)"
+      },
+      "discriminated": {
+        "holds": false,
+        "reason": "no reading ruled out a competing hypothesis"
+      },
+      "counterfactual": {
+        "holds": false,
+        "reason": "no reference environment was named (--reference)"
+      },
+      "verified": {
+        "holds": false,
+        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+      }
+    },
+    "remediation": "Restore the network path from order-service to inventory-service.",
+    "complete": true
+  }
+}

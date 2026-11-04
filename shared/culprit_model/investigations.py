@@ -58,6 +58,39 @@ class SymptomKind(StrEnum):
     COMPONENT = "component"
 
 
+class AttestationKind(StrEnum):
+    #: the walk reproduced it read-only: a reading on its subject failed.
+    REPRODUCED = "reproduced"
+    #: known only from the report it came from (a write cannot be replayed).
+    REPORTED = "reported"
+
+
+class Attestation(BaseModel):
+    """What establishes that the symptom happened at all (§2.8, amended
+    2026-11-04) — separate from the symptom_of edge, which says what ties
+    it to its cause. A symptom only reported is never presented as
+    reproduced."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: AttestationKind
+    reading: str | None = None
+    reported_by: str | None = None
+
+    @model_validator(mode="after")
+    def _says_which(self) -> "Attestation":
+        if self.kind is AttestationKind.REPRODUCED and not (self.reading or "").strip():
+            raise ValueError("a reproduced symptom cites the reading that reproduced it")
+        if self.kind is AttestationKind.REPORTED:
+            if self.reading:
+                raise ValueError(
+                    "a reported symptom cites a reading; if a reading reproduced it, say reproduced"
+                )
+            if not (self.reported_by or "").strip():
+                raise ValueError("a reported symptom must say where the report came from")
+        return self
+
+
 class Symptom(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -65,6 +98,7 @@ class Symptom(BaseModel):
     subject: str
     description: str | None = None
     source: str
+    attestation: Attestation
 
     @model_validator(mode="after")
     def _subject_is_a_subject(self) -> "Symptom":
@@ -218,6 +252,21 @@ class Investigation(BaseModel):
                     f"fault edge {edge.from_subject} -[{edge.relation.value}]-> "
                     f"{edge.to_subject} cites {sorted(missing)}, which this "
                     "investigation did not take"
+                )
+
+        attestation = self.symptom.attestation
+        if attestation.kind is AttestationKind.REPRODUCED:
+            cited = next((item for item in self.readings if item.id == attestation.reading), None)
+            if cited is None:
+                raise ValueError(
+                    f"the symptom is attested as reproduced by {attestation.reading!r}, which "
+                    "this investigation did not take"
+                )
+            if cited.reading.verdict != "fail" or cited.reading.target != self.symptom.subject:
+                raise ValueError(
+                    f"the symptom is attested as reproduced by {attestation.reading}, which is "
+                    f"not a failing reading of {self.symptom.subject}. A symptom only reported "
+                    "is never presented as reproduced."
                 )
 
         if self.diagnosis is not None and self.diagnosis.complete:

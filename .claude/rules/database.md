@@ -10,7 +10,7 @@ paths:
 
 ## Least privilege
 
-One Postgres role per job. Thirteen exist: `ingestion-writer`, `api-reader`,
+One Postgres role per job. Fourteen exist: `ingestion-writer`, `api-reader`,
 `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`,
 `registry-admin`, `auth-service`, `postmortem-writer`, `mcp-reader`,
 `fact-writer`, `capture-writer` (Phase 30 — INSERT on `captures` and
@@ -20,7 +20,14 @@ environment is configured to do is a different trust domain from what a
 repository says about itself), `probe-writer` (Phase 31 — INSERT on `readings`
 and nothing else, not even SELECT on it; a new role again, because a credential
 that can post readings is one that already had reach into a running environment,
-which is a wider starting position than either of the two above).
+which is a wider starting position than either of the two above),
+`investigation-writer` (Phase 32 — INSERT on the five investigation tables and
+nothing else; field 7's rule, that every fault edge cites a reading of its own
+investigation, is held by the database itself, with a composite foreign key and
+a deferred constraint trigger, so a writer that skips the model still cannot
+store an uncited edge). The same migration *narrowed* two roles:
+`correlation-engine` and `root-cause-writer` lost every write on the incident
+tables, which are history now.
 
 **If a component needs a write the current roles cannot do, add a role. Do not
 widen an existing one.** This is standing invariant 3 (`docs/DIAGNOSTIC_PLAN.md`

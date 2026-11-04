@@ -293,6 +293,7 @@ jobs:
           FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
@@ -312,6 +313,7 @@ jobs:
           FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
@@ -541,6 +543,7 @@ jobs:
           FACT_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
           CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
           PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
+          INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
         run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
       - name: Generate frontend types from schema
         if: matrix.image == 'frontend'
