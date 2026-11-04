@@ -1527,8 +1527,13 @@ stack, with the browser console and network log read on each.
 - Every image in the README was produced from a real run by a committed command.
 - The `phase-auditor`, given the README and the code but not this phase's
   transcript, finds no claim the code does not support.
-- Every route loads with zero console errors and zero failed requests, and no
-  control does nothing.
+- Every route loads, and every success path completes, with zero console
+  errors and zero failed requests. On every error path a test provokes
+  deliberately, the only console errors and failed requests are the provoked
+  ones, and each is shown to the user as a message. A `204` is judged by the
+  server's response, not by the browser's `ERR_ABORTED` report. No control
+  does nothing. *(Refined 2026-11-04: as first worded this was untestable on
+  error paths, where the browser logs every deliberate 4xx as an error.)*
 - Both diagrams render on GitHub.
 - `culprit.co.za` is linked only if the VM remediation is verified done; until
   then it is not linked at all.
@@ -1556,6 +1561,43 @@ written nor controlled by us (§5).
   machine: a stale `infra/.env.prod`, and port 80 already held by another
   server. What a new user would also hit goes into the README; what is
   particular to this machine goes into the run report.
+
+
+**Architecture review, 2026-11-04 — before CI.** Decisions on what the run
+report left open, and an independent re-check of criterion 3:
+
+- **The justfile fix is ratified.** Field 5's list was incomplete: field 13
+  required setup to work from a fresh clone, and the quickstart could not
+  build there. One change: the recipe fetches `openapi-typescript` with
+  `npx -y`, outside the frontend lockfile's integrity hashes — a supply-chain
+  gap in a command every new user runs. It generates the types the way CI
+  does, `npm ci && npm run generate-types` inside the container.
+- **Criterion 4 is refined** (above).
+- **The API lets an admin remove the last admin.** The dashboard's one-click
+  route is closed and `just create-user <name> --role admin` recovers an
+  install, so it is not urgent; but it is a server-side invariant and belongs
+  on the server. **Third item of Phase 32.**
+- **A failed narrative job stays `pending` for good.** Not fixed in the
+  incident copilot, which Phase 32 demotes; LIMITS and the panel now say so.
+  Phase 35's narrator must show a failure as a status (added there).
+- **Criterion 3, re-checked by the architecture session**, because the
+  `phase-auditor` pass came before the last fixes. Supported on inspection:
+  thirteen roles; PostgreSQL 16; the extractors' stacks; both LLM providers;
+  the sealed, optionally signed capture envelope; the one test that renders
+  every report format and greps for a config value; the network allowlist;
+  thirteen probes; the eval suites; the licence; the database-roles rules
+  arguing their exceptions; the 484-facts story (Phase 29's run report). Not
+  supported — fixed on this branch before merge:
+  - "a three-component repository": the demo declares five components —
+    three services and two databases — and its own header comment says two;
+  - Trivy "unfixed ones are reported, not blocking": `ignore-unfixed: true`
+    drops them from the report entirely;
+  - "CI runs all of it": CI does not run `just self-check-coverage`;
+  - the self-check's "9 gaps" and the coverage command's "368" are not
+    evidenced in the run report — re-run both, and print what they print;
+  - `docs/LIMITS.md` says SARIF annotations cannot appear on Culprit's pull
+    requests because "this repository is private". It is public, so that
+    reason no longer holds. Restoring the upload is Phase 32.1's.
 
 ---
 
@@ -1679,6 +1721,14 @@ agent.
    is produced from the Go catalogue by a command, and a drift check compares
    the whole document, not three fields. Mutation-tested (standing invariant 10).
 
+
+**Added 2026-11-04 — third item: the last admin cannot be removed.**
+`PATCH /users/{id}` and `DELETE /users/{id}` refuse, with a 409, to demote,
+disable or delete the last active admin. The count and the change happen in
+one transaction with the admin rows locked, so two admins demoting each other
+at the same moment cannot both succeed. A test for each route and one for the
+concurrent case. Found by Phase 31.2's truth pass.
+
 ---
 
 ### Phase 32.1 — Design system and the investigation-first interface
@@ -1727,6 +1777,11 @@ library is refined onto it; pages stop styling themselves.
   the CLI segments recorded as real terminal sessions and the UI segments taken
   from the running stack. Malcolm records the narration. The README links the
   video once it exists, not before.
+- Culprit annotates its own pull requests. The repository is public, so
+  GitHub code scanning is free: restore the SARIF upload that `63cea12`
+  replaced with an artifact (Malcolm enables code scanning in the repository
+  settings), and the self-check's findings appear on the pull request — the
+  thing `--format sarif` is for, shown on Culprit itself.
 - A final review by an agent that has not seen the work, reading the repository
   as a recruiter and as a senior engineer would; findings fixed or listed in the
   run report.
@@ -1760,8 +1815,10 @@ arbitrary values in page components, mutation-tested (standing invariant 10).
 **14. Acceptance criteria.**
 - Every page styles itself through tokens only: the gate above is green, and
   was shown red by a deliberate raw colour.
-- The end-to-end journeys pass in CI, with zero console errors and zero failed
-  requests.
+- The end-to-end journeys pass in CI, judged as Phase 31.2's criterion 4
+  (refined 2026-11-04): zero console errors and failed requests on success
+  paths; on deliberate error paths, only the provoked ones, each shown to the
+  user.
 - Every text-and-background pair meets WCAG 2.2 AA, and the main journey can be
   completed by keyboard alone.
 - Every route is checked at the four widths, with screenshots in the run report.
@@ -2020,6 +2077,12 @@ new plan document.
 
 **17. Do NOT implement yet.** No write-capable MCP tools. No agent-initiated
 remediation. No multi-tenancy.
+
+
+**Added 2026-11-04.** A narrator failure — a missing key, a provider error, a
+timeout — is recorded as a status the interface shows, never a permanent
+`pending`. The incident copilot's narrative job never did this
+(`docs/LIMITS.md`).
 
 ---
 
