@@ -45,7 +45,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
-| Current phase | **31.1 — Close the probe loop** — status `in progress`, **awaiting the human's commit and then `/ci`**. Every field-14 criterion executed against the running demo stack and passed (criterion 7's CI half excepted); both audits clean; every local gate green, Docker-backed suites included (§5). Not `complete`: CI on the merge result has not run, because CI needs a commit and the human commits. Brief in §4. |
+| Current phase | **31.1 — Close the probe loop — complete, awaiting architecture sign-off.** Merged via PR #20 (`4f69ab3`). CI green on every job on the merge result: run 41789133416 on `2212e26`, whose tree is identical to `4f69ab3`. Every field-14 criterion met; both audits clean (§5). Phase 31.2 not started — it waits for sign-off. |
 | Previous phase | **31 — Probes: complete**, signed off 2026-11-03 by the architecture session. Merged via PR #19 (`a3f110a`). CI green on every job on the merge result, after two ambient dependency fixes (`335aa3b`, `96ac919`; §5). Criteria 3 and 4 met; 1 and 2 carried into 31.1 by the review in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. Merging PR #19 pushed `a3f110a` to `main`, so `deploy` runs there, and is expected to fail as before until Q16 is resolved. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
 | Branch | `phase-31.1-probe-loop`, cut from `origin/main` = `a3f110a`; its first commit is the Phase 31 sign-off. Do not stage `shared/uv.lock`. |
@@ -79,7 +79,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 30 | Environment capture and cross-env diff | **complete** | Signed off 2026-09-12. Both audits clean 2026-09-10; the deploy failure is not attributable to it, and deploy left the phase gate the same day (§1). |
 | — | **VM remediation** | **do this, as Phase 30's real-world test** | A human, on `culprit-vm`. **1.** `scripts/backup.sh` first — the next deploy runs every migration from Phase 14 through 30 in one go, including Phase 27's `services`→`components` rename, against a database that has seen none of them. **2.** Before editing anything by hand, run `culprit env capture` against the VM and `culprit diff` it against `.env.prod.example`. If Phase 30 does not report the missing role passwords and the wrong `IMAGE_REGISTRY` as `breaks_request_path`, that is a Phase 30 gap and a better bug report than any fixture. **3.** Then apply the fix: `IMAGE_REGISTRY=ghcr.io/josh-heath123/culprit`, plus every missing key. **4.** `gh run rerun <id> --failed`, and read the deploy job, not the run's colour. |
 | 31 | Probes | **complete** | **Signed off 2026-11-03** (architecture session): merged via PR #19 (`a3f110a`), CI green on every job after two ambient dependency fixes (`335aa3b`, `96ac919`). Criteria 3 and 4 met; 1 and 2 carried into 31.1. History — as of 2026-09-12: built and locally green; CI not run. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) **Review 2026-11-03:** every open item decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31. To complete: the human commits, then `/ci` green on the merge result, then merge. |
-| 31.1 | Close the probe loop | **in progress — criteria met locally, CI not run** | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Phase 31 is merged; the branch `phase-31.1-probe-loop` is cut from `origin/main` = `a3f110a`, with the sign-off as its first commit. Order within the phase: the two gate repairs first — the boundary allowlist (it must exist before anything else lands under `cli/internal/`) and the emptied `.trivyignore` — then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 31.1 | Close the probe loop | **complete, awaiting sign-off** | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Phase 31 is merged; the branch `phase-31.1-probe-loop` is cut from `origin/main` = `a3f110a`, with the sign-off as its first commit. Order within the phase: the two gate repairs first — the boundary allowlist (it must exist before anything else lands under `cli/internal/`) and the emptied `.trivyignore` — then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 31.2 | Present what works | not started | **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.2, with `docs/PRODUCTISATION.md` as its requirements — §5, §6 and §10 apply now; the redesign (§2) and the video (§7) belong to Phase 32.1. Present only what works. The web UI is made honest here, not restyled. |
 | 32 | Fault isolation and the Investigation | not started | Read `DIAGNOSTIC_PLAN.md` Phase 32, including "Added 2026-11-03". The full brief is written when 31.2 is complete. |
 | 32.1 | Design system and the investigation-first interface | not started | Folded in from `docs/PRODUCTISATION.md` on 2026-11-03. The full brief is written when Phase 32 is complete. |
@@ -123,11 +123,19 @@ Branch:       phase-31.1-probe-loop, cut from origin/main = a3f110a.
               working tree IS the merge result.
 Run:          2026-11-03, second /next of the day (resumed after the
               disk-full stop). Phase 31.2 NOT started.
-Status:       IN PROGRESS — every acceptance criterion executed and PASS
-              locally against the running demo stack; both audits clean;
-              every local gate green. CI on the merge result NOT RUN:
-              it needs a commit, and the human commits.
-Committed:    NO, by protocol — staged, message written; the human commits.
+Status:       COMPLETE, awaiting architecture sign-off. Every acceptance
+              criterion executed and PASS; both audits clean; every local
+              gate green; CI green on the merge result (below).
+Committed:    2212e26 (by the human), pushed, merged as PR #20 = 4f69ab3.
+CI:           run 41789133416 (pull_request, i.e. GitHub's merge ref),
+              head 2212e26, conclusion success. Every job success: lint,
+              cli, typecheck, migration-round-trip, test, self-check,
+              kind-capture, build+Trivy for cli, api, worker, frontend,
+              mcp_server — with .trivyignore empty. deploy skipped (PR).
+              2212e26 and 4f69ab3 have identical trees: main had not moved
+              under the branch. The main push run 41789961861 was still in
+              progress when this was written; its deploy is expected red
+              (Q16, outside the phase gate since 2026-09-12).
 
 WHAT THIS RUN DID (the first run's build is described in git history:
 `git log -p docs/HANDOFF.md`; it is unchanged except as listed here)
@@ -180,7 +188,8 @@ independently, by phase-auditor
      test red with no edit                                        PASS
      (re-run by the audit: zzaudit named for net, crypto/tls, net/http)
   7. .trivyignore holds no entries                                PASS
-     every image's scan green in CI                               NOT RUN
+     every image's scan green in CI                               PASS
+     (run 41789133416, all five build jobs, Trivy blocking)
 
 FIELD 13 — "at least one run of each newly wired probe against the real
 demo stack": db.connect / db.schema_conformance PASS (above, and the
@@ -255,14 +264,14 @@ GATES (working tree = merge result)
   extractors node 22                                       PASS
   check-migration-round-trip                               PASS
   cli-test-docker (TestEnvironmentDiffAgainstRealContainers) PASS
-  cli-test-kind                                            NOT RUN (no
-                                                           `kind` on this
-                                                           host; CI job)
+  cli-test-kind                                            NOT RUN here (no
+                                                           `kind`); PASS in
+                                                           CI (kind-capture)
   culprit check --fail-on=breaks_request_path              PASS 0
                                                            divergences,
                                                            1023 facts
   LLM_PROVIDER=none culprit check                          PASS
-  CI on the merge result                                   NOT RUN
+  CI on the merge result                                   PASS (41789133416)
 
 DELIBERATELY NOT BUILT (field 17)
   No probe selection, no fault trees, no new probe (still 13), no new
@@ -286,12 +295,10 @@ PLAN CORRECTIONS — for the architecture session
     dep.version inconclusive on ranges, --capture changes no built-in
     reading yet.
 
-TO FINISH THIS PHASE
-  1. The human commits (command below the report in the session).
-  2. /ci: green on every job, Trivy on every image with the empty
-     .trivyignore. If an image goes red, fix the image — never restore a
-     line.
-  3. Merge, then the architecture session signs off.
+NEXT
+  The architecture session signs off 31.1 (the two criterion rewordings
+  and the auditor's three risks above want a decision), then writes the
+  go-ahead for 31.2. Phase 31.2 was NOT started.
 ```
 
 
