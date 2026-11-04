@@ -141,3 +141,27 @@ environments:
           # was not read rather than guessing it.
           dsn_env: API_READER_DATABASE_URL
           name: culprit-api-db
+
+  # Phase 31.1: probing a local `just quickstart` stack from the host, which
+  # is how that phase's criteria 3 and 4 are demonstrated — the quickstart's
+  # own api both declares (the extractors read its OpenAPI and its Alembic
+  # migrations) and serves its routes, and its Postgres holds the schema the
+  # migrations declare. Read grants only; there is no *.write capability to
+  # grant. Run with infra/docker-compose.probe-demo.yml layered on, which
+  # publishes Postgres on 127.0.0.1:55432 for this and nothing else, and with
+  # CULPRIT_QUICKSTART_DSN set to the api-reader connection string from
+  # infra/.env.prod (host 127.0.0.1, port 55432). The DSN is read from that
+  # variable by name and never appears in a reading:
+  #
+  #   culprit probe 'schema:culprit-api-db/public.users' -f culprit.yaml \
+  #       --env quickstart -p probe.db.schema_conformance
+  quickstart:
+    adapter: process
+    grants:
+      net.http.outbound: true
+      db.metadata.read: true
+    components:
+      culprit-api:
+        database:
+          dsn_env: CULPRIT_QUICKSTART_DSN
+          name: culprit-api-db

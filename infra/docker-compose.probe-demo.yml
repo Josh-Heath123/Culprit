@@ -1,0 +1,86 @@
+# Phase 31.1 — what the probe demonstrations need, layered on the quickstart.
+#
+#   just cli-release            # cli/dist/culprit_<version>_linux_amd64
+#   docker compose -f infra/docker-compose.quickstart.yml \
+#       -f infra/docker-compose.probe-demo.yml --env-file infra/.env.prod \
+#       --profile demo up -d
+#
+# An overlay rather than a change to docker-compose.quickstart.yml, so an
+# ordinary `just quickstart` publishes nothing new. Everything published
+# here binds 127.0.0.1 only.
+#
+# Four things, one per acceptance criterion that needs it:
+#
+#   * The api on 127.0.0.1:18000 — criterion 3, `probe.http.route_conformance`
+#     from the host against the service that declares the routes.
+#   * Postgres on 127.0.0.1:55432 — criterion 4, `probe.db.schema_conformance`
+#     run from the host against the quickstart database, with the DSN read
+#     from CULPRIT_QUICKSTART_DSN (root culprit.yaml, environment
+#     `quickstart`).
+#   * The demo services' ports on 127.0.0.1 — criterion 2's "both
+#     components' own health probes, taken from the host".
+#   * The static `culprit` binary mounted into order-service and
+#     inventory-service, with demo-services/culprit.yaml beside it —
+#     criterion 2's "with the culprit binary run inside container A". A
+#     probe sees the network from wherever the binary runs (Phase 31
+#     review, 2026-11-03), so a partition between two containers is only
+#     visible from inside one of them.
+#
+# The partition is a firewall rule inside order-service's own network
+# namespace, added by a throwaway sidecar that shares it — neither
+# container is stopped, which the reworded criterion requires, and
+# inventory-service's own container is not touched. The rule does cut
+# both directions in effect: it also rejects order-service's replies to
+# inventory-service, so a probe run from inside inventory-service towards
+# order-service times out (inconclusive) while the rule is in place.
+#
+#   INV=$(docker inspect -f \
+#     '{{(index .NetworkSettings.Networks "culprit-quickstart_default").IPAddress}}' \
+#     culprit-quickstart-inventory-service-1)
+#   docker run --rm --net container:culprit-quickstart-order-service-1 \
+#     --cap-add NET_ADMIN alpine:3.20 sh -c "apk add -q iptables && \
+#     iptables -A OUTPUT -d $INV -p tcp -j REJECT --reject-with tcp-reset"
+#   # ... probe, then the same command with -D instead of -A to restore.
+#
+# REJECT with a reset rather than DROP, deliberately: a dropped packet is a
+# timeout, which the probes rightly call inconclusive (a timeout does not
+# prove a path is closed). A reset is a refused connection, which is fail.
+#
+# A network disconnect does NOT work for this, and was tried first: on
+# Docker Desktop, taking order-service off `default` also kills the host's
+# forward to 127.0.0.1:8001 — even with a second network attached and given
+# gw_priority — so the host's health probe of order-service stops passing
+# and the criterion's "both health probes stay pass" cannot hold.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:55432:5432"
+
+  # criterion 3, `probe.http.route_conformance` from the host, with
+  # --input base_url=http://127.0.0.1:18000. The api directly rather than
+  # through the frontend's Caddy on :80, so the probe measures the service
+  # that declares the routes and not a proxy in front of it — and because
+  # :80 is commonly taken on a developer machine (on the one this was first
+  # run on, an Apache inside WSL answered every request with its own 404,
+  # which the probe correctly reported as `fail`).
+  api:
+    ports:
+      - "127.0.0.1:18000:8000"
+
+  order-service:
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ../cli/dist:/opt/culprit:ro
+      - ../demo-services/culprit.yaml:/opt/culprit-manifest/culprit.yaml:ro
+
+  inventory-service:
+    ports:
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - ../cli/dist:/opt/culprit:ro
+      - ../demo-services/culprit.yaml:/opt/culprit-manifest/culprit.yaml:ro
+
+  payments-service:
+    ports:
+      - "127.0.0.1:8003:8003"

@@ -94,39 +94,42 @@ type httpRouteConformance struct{}
 
 func (httpRouteConformance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.http.route_conformance",
-		Version:      1,
+		ID: "probe.http.route_conformance",
+		// Version 2 (Phase 31.1): the produced predicate is `exists`, the
+		// predicate every route extractor emits, rather than
+		// `route_exists`, which none does — so version 1's expectation
+		// could never be found. And a verdict now needs a declaration.
+		Version:      2,
 		Effect:       model.EffectInterrogate,
 		Capabilities: []string{"net.http.outbound"},
 		TimeoutMS:    15_000,
 		// The expectation is a route the INTENT plane says should exist.
 		ExpectedFrom: model.PlaneIntent,
 		Produces: []model.Produces{
-			{SubjectTemplate: "http:{component}/{method} {path}", Predicate: "route_exists"},
+			{SubjectTemplate: "http:{component}/{method} {path}", Predicate: model.PredicateExists},
 		},
 		Cost: model.CostCheap,
 		Inputs: map[string]any{
-			"type":     "object",
-			"required": []any{"url"},
+			"type": "object",
 			"properties": map[string]any{
-				"url":    map[string]any{"type": "string"},
-				"method": map[string]any{"type": "string"},
+				// Either a full url, or an http: target plus base_url, from
+				// which the url is built — so the route probed is exactly
+				// the route declared.
+				"url":      map[string]any{"type": "string"},
+				"base_url": map[string]any{"type": "string"},
+				"method":   map[string]any{"type": "string"},
 			},
 		},
 	}
 }
 
 func (httpRouteConformance) Run(ctx context.Context, request Request, deps Deps) Outcome {
-	url, ok := stringInput(request.Inputs, "url")
-	if !ok {
-		return inconclusive("no URL to check: no route was named for this target")
+	url, method, problem := routeOf(request)
+	if problem != "" {
+		return inconclusive(problem)
 	}
 	if deps.HTTP == nil {
 		return inconclusive("no HTTP client is available to this agent")
-	}
-	method, _ := stringInput(request.Inputs, "method")
-	if method == "" {
-		method = "GET"
 	}
 
 	// OPTIONS asks whether a route exists without invoking it. For a
@@ -147,48 +150,75 @@ func (httpRouteConformance) Run(ctx context.Context, request Request, deps Deps)
 	}
 
 	measured := map[string]any{"url": url, "method": method, "status": response.Status}
-	expected := map[string]any{"route_exists": true}
+	if response.Status >= 500 {
+		return inconclusive(fmt.Sprintf(
+			"%s answered %d, so whether the route exists cannot be established",
+			url, response.Status))
+	}
 
-	switch {
-	case response.Status == 404:
-		// "is declared" only if something actually declared it. Without an
-		// expectation this probe has measured a 404 and nothing more, and
-		// saying otherwise would be asserting a claim it never established
-		// — the exact guessing this architecture exists to avoid.
-		if request.Expectation == nil {
-			return inconclusive(fmt.Sprintf(
-				"%s %s answers 404, but no INTENT fact declares this route, so "+
-					"there is nothing to say it should exist", method, url))
-		}
+	// Conformance is a comparison, and without a declaration there is
+	// nothing to compare with. Phase 31 returned pass for any non-404 here,
+	// which was a measurement wearing a verdict's clothes.
+	if request.Expectation == nil {
+		return withoutExpectation(request, measured,
+			fmt.Sprintf("%s %s answers %d", method, url, response.Status))
+	}
+	expected := map[string]any{"exists": true}
+	source := provenanceOf(request.Expectation)
+
+	switch response.Status {
+	case 404:
 		return Outcome{
 			Verdict: model.VerdictFail, Measured: measured, Expected: expected,
-			ExpectedSource: provenanceOf(request.Expectation),
+			ExpectedSource: source,
 			Reason: fmt.Sprintf(
 				"%s %s is declared but the running service answers 404", method, url),
 		}
-	case response.Status == 405:
-		if request.Expectation == nil {
-			return inconclusive(fmt.Sprintf(
-				"%s is not allowed on %s, but no INTENT fact declares that method "+
-					"for this route", method, url))
-		}
+	case 405:
 		return Outcome{
 			Verdict: model.VerdictFail, Measured: measured, Expected: expected,
-			ExpectedSource: provenanceOf(request.Expectation),
+			ExpectedSource: source,
 			Reason: fmt.Sprintf(
 				"%s is declared for %s but the running service does not allow that method",
 				method, url),
 		}
-	case response.Status >= 500:
-		return inconclusive(fmt.Sprintf(
-			"%s answered %d, so whether the route exists cannot be established",
-			url, response.Status))
 	default:
-		return Outcome{
-			Verdict: model.VerdictPass, Measured: measured, Expected: expected,
-			ExpectedSource: provenanceOf(request.Expectation),
-		}
+		return Outcome{Verdict: model.VerdictPass, Measured: measured, Expected: expected,
+			ExpectedSource: source}
 	}
+}
+
+// routeOf works out the url and method to ask. An explicit url wins; an
+// http: target with a base_url is the declared route itself, which is the
+// form that makes "probe what is declared" one command.
+func routeOf(request Request) (string, string, string) {
+	method, _ := stringInput(request.Inputs, "method")
+	if url, ok := stringInput(request.Inputs, "url"); ok {
+		if method == "" {
+			method = "GET"
+		}
+		return url, method, ""
+	}
+	kind, parts, err := model.ParseSubject(request.Target)
+	if err != nil || kind != model.KindHTTP {
+		return "", "", "no URL to check: name the route as an http: target with " +
+			"--input base_url=, or pass --input url="
+	}
+	base, ok := stringInput(request.Inputs, "base_url")
+	if !ok {
+		return "", "", fmt.Sprintf(
+			"%s names a route but not where it is served; pass --input base_url=",
+			request.Target)
+	}
+	if strings.Contains(parts["path"], "{}") {
+		return "", "", fmt.Sprintf(
+			"%s has a path parameter, so there is no single URL to ask; pass "+
+				"--input url= with a concrete path", request.Target)
+	}
+	if method == "" {
+		method = parts["method"]
+	}
+	return strings.TrimRight(base, "/") + parts["path"], method, ""
 }
 
 // --- probe.http.schema_conformance -------------------------------------
@@ -273,7 +303,6 @@ func (httpSchemaConformance) Run(ctx context.Context, request Request, deps Deps
 	if len(missing) > 0 {
 		return Outcome{
 			Verdict: model.VerdictFail, Measured: measured, Expected: expected,
-			ExpectedSource: provenanceOf(request.Expectation),
 			Reason: fmt.Sprintf(
 				"%s does not return declared field(s): %s",
 				url, strings.Join(missing, ", ")),
@@ -281,7 +310,6 @@ func (httpSchemaConformance) Run(ctx context.Context, request Request, deps Deps
 	}
 	return Outcome{
 		Verdict: model.VerdictPass, Measured: measured, Expected: expected,
-		ExpectedSource: provenanceOf(request.Expectation),
 	}
 }
 

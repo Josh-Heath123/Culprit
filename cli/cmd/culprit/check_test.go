@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -210,62 +211,79 @@ func TestNoModelProviderIsLinkedIntoTheBinary(t *testing.T) {
 	}
 }
 
-// TestOnlyTheProbePackageMayLinkAnHTTPClient replaces a binary-wide grep
-// for `net/http` that stood until Phase 31.
+// TestTheNetworkBoundaryIsAnAllowlist is D8 as amended 2026-11-03.
 //
-// That assertion rested on a premise — "the binary has nothing to talk
-// to" — which probes make false on purpose. `probe.http.reachable`,
-// `probe.http.route_conformance`, `probe.http.schema_conformance` and
-// `probe.auth.propagation` exist to ask a running service a question,
-// and §2.7 provisions `net.http.outbound` for exactly that. Keeping the
-// old assertion would have meant not building the phase.
+// Phase 31 replaced a binary-wide ban on `net/http`, because probes exist
+// to ask a running service a question (§2.7's `net.http.outbound`). What
+// it replaced it with named six packages that must stay off the network,
+// so every package NOT on that list was unchecked — internal/capability
+// and internal/render then, and every package created after. A check that
+// covers only what someone remembered to list looks like a gate and is
+// not one (standing invariant 9).
 //
-// What replaces it is deliberately *stronger* per package rather than
-// weaker overall. The property that mattered was never "this binary
-// cannot speak HTTP" — it was "the deterministic core cannot open a
-// socket, so it cannot reach a model provider or anything else". That is
-// now asserted of each core package by name. `internal/probe` is the one
-// package permitted an HTTP client, it is gated on a capability the
-// operator grants per environment, and its client has no method that can
-// send a body.
-func TestOnlyTheProbePackageMayLinkAnHTTPClient(t *testing.T) {
-	// Every package that computes a finding. None of them may reach the
-	// network by any route, directly or transitively.
-	deterministicCore := []string{
-		"internal/check",
-		"internal/diverge",
-		"internal/severity",
-		"internal/report",
-		"internal/extract",
-		"internal/model",
+// So the list is inverted. The packages ALLOWED each name are written
+// down; every other package under cli/internal/ is enumerated by
+// `go list ./internal/...` and may link none of them. A package created
+// tomorrow is covered the day it exists, with no edit here.
+//
+// The rule of record: only internal/probe may link net/http; only
+// internal/probe and internal/capture may link net or crypto/tls.
+// Dependencies are transitive (`go list -deps`), so a package that reaches
+// the network through another package is caught exactly as if it had
+// imported net itself.
+func TestTheNetworkBoundaryIsAnAllowlist(t *testing.T) {
+	const module = "github.com/josh-heath123/culprit/cli/"
+	allowed := map[string]map[string]bool{
+		"net/http":   {"internal/probe": true},
+		"net":        {"internal/probe": true, "internal/capture": true},
+		"crypto/tls": {"internal/probe": true, "internal/capture": true},
+	}
+	reasons := map[string]string{
+		"net":        "it can open a socket",
+		"net/http":   "it can make an HTTP request",
+		"crypto/tls": "it can open a TLS connection",
 	}
 
-	// The same three names TestTheCheckPathCannotMakeANetworkCall uses,
-	// not just net/http. Five of the six packages below are already inside
-	// internal/check's dependency graph and so are already held to all
-	// three by that test; internal/report is not, and checking only
-	// net/http here would have let it gain `net` and `crypto/tls` — enough
-	// to open a TLS socket and speak HTTP by hand — with every test still
-	// green. Named by the Phase 31 invariant audit.
-	forbidden := map[string]string{
-		"net":        "it would be able to open a socket",
-		"net/http":   "it would be able to make an HTTP request",
-		"crypto/tls": "it would be able to open a TLS connection",
+	// The module path, not "./internal/...": this test runs from
+	// cmd/culprit, where the relative pattern matches nothing and go list
+	// still exits 0 — an empty enumeration that would pass every package.
+	listing, err := exec.Command("go", "list", module+"internal/...").Output()
+	if err != nil {
+		t.Skipf("go list is unavailable in this environment: %v", err)
+	}
+	packages := strings.Fields(strings.TrimSpace(string(listing)))
+	if len(packages) < 2 {
+		// An enumeration that found (almost) nothing proves nothing, and a
+		// gate that silently checks zero packages is the failure this test
+		// exists to prevent.
+		t.Fatalf("go list ./internal/... found %d packages; expected the whole tree", len(packages))
 	}
 
-	for _, pkg := range deterministicCore {
-		output, err := exec.Command("go", "list", "-deps",
-			"github.com/josh-heath123/culprit/cli/"+pkg).Output()
+	for _, full := range packages {
+		pkg := strings.TrimPrefix(full, module)
+		output, err := exec.Command("go", "list", "-deps", full).Output()
 		if err != nil {
-			t.Skipf("go list is unavailable in this environment: %v", err)
+			t.Fatalf("go list -deps %s: %v", full, err)
 		}
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-			if reason, bad := forbidden[strings.TrimSpace(line)]; bad {
-				t.Errorf("%s links %s: %s. The deterministic core computes "+
-					"findings and must not be able to open a socket; a network "+
-					"client belongs in internal/probe, behind net.http.outbound.",
-					pkg, strings.TrimSpace(line), reason)
+			dep := strings.TrimSpace(line)
+			permitted, guarded := allowed[dep]
+			if !guarded || permitted[pkg] {
+				continue
 			}
+			t.Errorf("%s links %s: %s. Only %s may (D8, amended 2026-11-03). "+
+				"Code that computes findings must not reach the network; a "+
+				"network client belongs in internal/probe, behind a capability.",
+				pkg, dep, reasons[dep], strings.Join(sortedKeys(permitted), " and "))
 		}
 	}
+}
+
+func sortedKeys(set map[string]bool) []string {
+	keys := make([]string, 0, len(set))
+	for key := range set {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

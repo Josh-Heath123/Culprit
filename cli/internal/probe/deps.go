@@ -2,7 +2,10 @@ package probe
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
 // Deps is every way a probe can touch the outside world.
@@ -112,15 +115,57 @@ type TableColumn struct {
 
 // DatabaseInspector reads schema metadata under `db.metadata.read`. Never
 // rows: there is no method here that can return one.
+//
+// It takes a database's *name* — the `database` part of a `schema:`
+// subject, or a component — never a connection string. Phase 31 took the
+// DSN as a probe input, which put a credential on the command line, in
+// shell history and in every process listing. Phase 31.1 field 12: the
+// DSN "reaches the probe from the environment, by the name culprit.yaml
+// gives". The implementation resolves name -> `dsn_env` -> value itself,
+// so no probe ever holds the string.
 type DatabaseInspector interface {
 	// Connect establishes that the database is reachable and answering,
 	// under a read-only session.
-	Connect(ctx context.Context, dsn string) error
+	Connect(ctx context.Context, database string) error
 	// Columns returns the live columns of a table, read from pg_catalog
 	// rather than information_schema — information_schema lists only what
 	// the connecting role may use, which would make a least-privilege
 	// probe report every other table as missing.
-	Columns(ctx context.Context, dsn, schema, table string) ([]TableColumn, error)
+	Columns(ctx context.Context, database, schema, table string) ([]TableColumn, error)
+}
+
+// UnavailableError is a data source saying a probe's preconditions are
+// unmet — the component is not declared in this environment, the
+// variable naming its DSN is unset, its environment could not be fully
+// enumerated. A probe turns it into inconclusive: nothing was measured.
+type UnavailableError struct{ Reason string }
+
+func (e *UnavailableError) Error() string { return e.Reason }
+
+// RefusedError is a data source declining for want of a grant beyond
+// the manifest's own — reading installed packages runs an allowlisted
+// command, and that command must be on `process.exec.allowlist` exactly
+// as it must be for `culprit env capture`. A probe turns it into refused.
+type RefusedError struct {
+	Capability string
+	Reason     string
+}
+
+func (e *RefusedError) Error() string { return e.Reason }
+
+// sourceOutcome maps a data source's error onto a verdict, or reports
+// that the caller must decide (a plain error is a measurement failure,
+// whose meaning depends on the probe).
+func sourceOutcome(err error) (Outcome, bool) {
+	var unavailable *UnavailableError
+	if errors.As(err, &unavailable) {
+		return inconclusive(unavailable.Reason), true
+	}
+	var refused *RefusedError
+	if errors.As(err, &refused) {
+		return Outcome{Verdict: model.VerdictRefused, Reason: refused.Reason}, true
+	}
+	return Outcome{}, false
 }
 
 // ImpedanceSample is the OBSERVED-plane summary of one connection.

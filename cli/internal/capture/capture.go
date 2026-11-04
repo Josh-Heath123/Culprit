@@ -635,6 +635,12 @@ func (r *runState) skip(component, want, reason string) {
 	})
 }
 
+// SafeReason is safeReason for `culprit probe`'s data sources (Phase
+// 31.1), which use this package's adapters, runner and reader and must
+// render their errors under the same closure: an error that is not one of
+// the closed kinds below becomes a fixed phrase, never its own text.
+func SafeReason(err error) string { return safeReason(err) }
+
 // safeReason renders an error only if it is one of this package's own
 // closed kinds; anything else becomes a fixed phrase. See runner.go.
 func safeReason(err error) string {

@@ -75,24 +75,26 @@ capability ledger *before* anything is dialled, so an ungranted probe
 costs the system under test nothing at all.
 
 `Expects` is the plane the probe's expectation comes from. A probe whose
-expectation is INTENT reports `inconclusive` rather than `fail` when no
+expectation is INTENT reports `inconclusive` rather than a verdict when no
 INTENT fact backs the subject — "this route answers 404" is only a
-finding if something declared the route.
+finding if something declared the route, and "this route answers 200" is
+only conformance if something declared it too. Where expectations come
+from is the next section.
 
 | Probe | Inputs | Effect | Needs | Expects | Fails when |
 |---|---|---|---|---|---|
 | `probe.net.dns_resolve` | `host` | inspect | `net.dns.resolve` | CONFIGURED | the name resolves to no address |
 | `probe.net.tcp_connect` | `host`, `port` | inspect | `net.tcp.connect` | CONFIGURED | the connection is **actively refused** (a timeout is inconclusive) |
 | `probe.net.tls_validity` | `host`, `port` | inspect | `net.tls.inspect`, `net.tcp.connect` | CONFIGURED | the certificate is expired, expiring within 30 days, or untrusted |
-| `probe.http.reachable` | `url` | interrogate | `net.http.outbound` | CONFIGURED | the service answers 5xx |
-| `probe.http.route_conformance` | `url`, `method` | interrogate | `net.http.outbound` | INTENT | a **declared** route answers 404, or 405 for its declared method |
+| `probe.http.reachable` | `url` | interrogate | `net.http.outbound` | CONFIGURED | the service answers 5xx, or the connection is refused (a timeout or a 4xx is inconclusive) |
+| `probe.http.route_conformance` (v2) | `url`, or an `http:` target + `base_url`; `method` | interrogate | `net.http.outbound` | INTENT (`exists`) | a **declared** route answers 404, or 405 for its declared method |
 | `probe.http.schema_conformance` | `url`, `expect_fields` | interrogate | `net.http.outbound` | INTENT | a declared response field is absent |
 | `probe.auth.token_shape` | `token`, `expect_audience`, `expect_issuer` | inspect | *none* | INTENT | the token is expired, not yet valid, or carries the wrong audience or issuer |
 | `probe.auth.propagation` | `url`, `token` | interrogate | `net.http.outbound` | INTENT | the downstream answers 401 or 403 |
-| `probe.db.connect` | `dsn` | inspect | `db.metadata.read` | CONFIGURED | a read-only connection is refused |
-| `probe.db.schema_conformance` | `dsn`, `table`, `schema`, `expect_columns` | inspect | `db.metadata.read` | INTENT | the live table lacks a column the code maps, or does not exist |
-| `probe.config.present` | `key` | inspect | `config.read.names` | INTENT | a key a **declared** INTENT fact requires is not set |
-| `probe.dep.version` | `package`, `expect_version` | inspect | `repo.read` | INTENT | the installed version differs from the declared one, or is absent |
+| `probe.db.connect` (v2) | *none* — the target names the database | inspect | `db.metadata.read` | CONFIGURED | a read-only connection is refused |
+| `probe.db.schema_conformance` (v2) | a `schema:` target, or `table`, `schema`; optional `expect_columns` | inspect | `db.metadata.read` | INTENT (`columns`) | the live table lacks a column the declaration maps, or does not exist |
+| `probe.config.present` (v2) | `key`, or a `config:` target | inspect | `config.read.names` | INTENT (`required`) | a key the code reads with no default is not set |
+| `probe.dep.version` (v2) | `package`, or a `dep:` target; optional `expect_version` | inspect | `repo.read`, plus the packages command on `process.exec.allowlist` | INTENT (`version`) | the installed version differs from a declared **exact pin**, or is absent |
 | `probe.edge.impedance` | *none* | observe | `telemetry.metrics.read` | *none* | the connection's latency or error rate is ≥ 3 standard deviations from its own history |
 
 Inputs are supplied with `--input key=value`, repeated. A list input
@@ -105,14 +107,67 @@ culprit probe component:orders-api --env staging \
     --input expect_fields=id --input expect_fields=total_cents
 ```
 
-**Six of the thirteen have no data source in the shipped CLI yet.**
-`probe.db.connect`, `probe.db.schema_conformance`, `probe.config.present`,
-`probe.dep.version` and `probe.edge.impedance` need a database client, a
-config reader, a package reader and a metrics reader respectively, and
-the CLI wires only the network and HTTP ones. They return `inconclusive`
-with a reason saying so — honestly, but they cannot reach a verdict from
-`culprit probe` in this release. `probe.edge.impedance` readings *are*
-produced, by the worker, which has the telemetry; see `docs/LIMITS.md`.
+**Data sources (Phase 31.1).** With `--env`, the database, config and
+dependency probes read that environment through the same machinery
+`culprit env capture` uses, so a probe and a capture cannot read one
+environment differently:
+
+- **database** — `capture.PostgresReader`: pgx, a read-only session,
+  `pg_catalog`. The target names the database (`schema:orders-db/...`,
+  or a component); the connection string is read from the variable that
+  component's `database: dsn_env:` names, in the environment `culprit`
+  runs in. **A DSN is never a probe input** — version 1 took `--input
+  dsn=`, which put a credential in shell history and every process
+  listing.
+- **config** — the environment's adapter (`compose`, `kubernetes`,
+  `process`, `exec`). Presence only; the values the adapter sees are
+  dropped unread. An environment the adapter could not fully enumerate
+  makes an absent key `inconclusive`, not `fail`.
+- **dependencies** — the component's declared `packages:` command, which
+  must also be on `process.exec.allowlist`, exactly as for a capture. An
+  unlisted command is `refused`, and the refusal is recorded.
+
+Without `--env` there is no environment to read, and these probes say so.
+`probe.edge.impedance` has no CLI source and will not get one: its
+readings are produced by the worker, which has the telemetry
+(`docs/LIMITS.md`).
+
+## Where expectations come from
+
+A reading is a measurement against a reference, and the reference is a
+fact. `culprit probe` runs the same extraction `culprit check` runs —
+the same extractors, the same `invariants:` — and for each probe builds
+the subject it measures from the target and inputs (`--input
+url=http://orders/orders/42` against `connection:web->orders` measures
+`http:orders/GET /orders/42`), then selects the facts on that subject
+whose predicate is the one the manifest `produces`:
+
+- A concrete path matches a declared template (`/orders/42` matches
+  `/orders/{id}`), and the most specific declared route wins.
+- The highest `confidence_rank` (§2.4) is the expectation, and the
+  reading's `expected_source` is its provenance — the file, the locator,
+  the extractor.
+- **Rank picks, it never discards.** When two sources disagree about the
+  same subject and predicate, the reading carries the others as
+  `intent_conflict` evidence naming each source, its rank and what it
+  says.
+- A manifest whose `expected_from` is CONFIGURED takes its expectation
+  from a capture of the same environment, passed as `--capture
+  <envelope>` (`culprit env capture <env> -o <file>`).
+
+An explicit `expect_columns`, `expect_fields` or `expect_version` input
+still works, and still wins: it is how a script asks a narrower question
+than the code declares.
+
+```
+# Is every declared column of this table really there?
+culprit probe 'schema:culprit-api-db/public.users' --env quickstart     -p probe.db.schema_conformance
+
+# Is this declared route really served? (the api's own port, published on
+# 127.0.0.1:18000 by infra/docker-compose.probe-demo.yml; through the
+# dashboard's proxy it is --input base_url=http://localhost/api)
+culprit probe 'http:culprit-api/GET /model/components' --env quickstart     -p probe.http.route_conformance --input base_url=http://127.0.0.1:18000
+```
 
 `probe.auth.token_shape` needs no capability because it opens nothing: it
 reads a token you already hold and reports its structure.

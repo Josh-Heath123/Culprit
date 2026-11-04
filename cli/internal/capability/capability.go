@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
@@ -203,7 +204,14 @@ func (g Grants) Allows(capability Capability, item string) bool {
 // a refusal behind. A code path that consulted Grants.Has and then
 // forgot to record anything is the silent omission this package exists
 // to make impossible.
+//
+// Safe for concurrent use. `culprit probe` runs probes concurrently and
+// every one asks the ledger before it dials; until Phase 31.1 the maps
+// below were unguarded, and the probe test suite crashed intermittently
+// with "concurrent map writes" — a probe that crashes the run takes the
+// refusals of every other probe with it.
 type Ledger struct {
+	mutex   sync.Mutex
 	grants  Grants
 	used    map[Capability]bool
 	refused []model.Refusal
@@ -218,6 +226,8 @@ func NewLedger(grants Grants) *Ledger {
 // Require asks for a capability before doing `check` on `component`. It
 // returns true if the check may proceed; otherwise it records why not.
 func (l *Ledger) Require(capability Capability, component, check string) bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	if l.grants.Has(capability) {
 		l.used[capability] = true
 		return true
@@ -235,6 +245,8 @@ func (l *Ledger) Require(capability Capability, component, check string) bool {
 // the whole check rather than one per key, via Require or Refuse, so a
 // capture with forty keys does not produce forty identical lines.
 func (l *Ledger) RequireItem(capability Capability, item, component, check string) bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	if l.grants.Allows(capability, item) {
 		l.used[capability] = true
 		return true
@@ -249,6 +261,8 @@ func (l *Ledger) RequireItem(capability Capability, item, component, check strin
 // Refuse records a refusal the caller has already decided on. Used when
 // a check needs two capabilities and the reason should name both.
 func (l *Ledger) Refuse(capability Capability, component, check, reason string) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	l.refuse(capability, component, check, reason)
 }
 
@@ -268,6 +282,8 @@ func (l *Ledger) refuse(capability Capability, component, check, reason string) 
 
 // Refusals returns every refusal, in a stable order.
 func (l *Ledger) Refusals() []model.Refusal {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	refused := append([]model.Refusal(nil), l.refused...)
 	sort.SliceStable(refused, func(i, j int) bool {
 		if refused[i].Component != refused[j].Component {
@@ -284,6 +300,8 @@ func (l *Ledger) Refusals() []model.Refusal {
 // Records returns the grant set as the capture bundle carries it:
 // every granted capability, its allowlist, and whether it was used.
 func (l *Ledger) Records() []model.Grant {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	records := make([]model.Grant, 0, len(l.grants.granted))
 	for capability := range l.grants.granted {
 		record := model.Grant{Capability: string(capability), Used: l.used[capability]}

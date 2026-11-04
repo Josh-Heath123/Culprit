@@ -50,6 +50,14 @@ func declared(subject, predicate string) *model.Fact {
 	}
 }
 
+// declaredAs is declared with a value, for the probes that compare
+// against what the declaration says rather than only that it exists.
+func declaredAs(subject, predicate string, value any) *model.Fact {
+	fact := declared(subject, predicate)
+	fact.Value = value
+	return fact
+}
+
 // grantEverything is the ledger used for the verdict fixtures. What
 // happens when a grant is *missing* is tested separately, in
 // TestAnUngrantedProbeIsRefusedWithoutDialling.
@@ -155,15 +163,21 @@ func cases() []probeCase {
 			model.VerdictInconclusive, nil},
 
 		// --- probe.http.route_conformance ---
-		{"route exists", "probe.http.route_conformance", componentTarget,
+		{"declared route is served", "probe.http.route_conformance", componentTarget,
 			map[string]any{"url": "http://inventory.internal/stock", "method": "GET"},
 			Deps{HTTP: &fakeHTTP{response: HTTPResponse{Status: 200}}, Now: clock},
-			model.VerdictPass, nil},
+			model.VerdictPass,
+			declared("http:inventory-service/GET /stock", "exists")},
 		{"declared route answers 404", "probe.http.route_conformance", componentTarget,
 			map[string]any{"url": "http://inventory.internal/stock", "method": "GET"},
 			Deps{HTTP: &fakeHTTP{response: HTTPResponse{Status: 404}}, Now: clock},
 			model.VerdictFail,
-			declared("http:inventory-service/GET /stock", "route_exists")},
+			declared("http:inventory-service/GET /stock", "exists")},
+		{"a served route nobody declared conforms to nothing", "probe.http.route_conformance",
+			componentTarget,
+			map[string]any{"url": "http://inventory.internal/stock", "method": "GET"},
+			Deps{HTTP: &fakeHTTP{response: HTTPResponse{Status: 200}}, Now: clock},
+			model.VerdictInconclusive, nil},
 		{"an undeclared route answering 404 is not a finding", "probe.http.route_conformance",
 			componentTarget,
 			map[string]any{"url": "http://inventory.internal/stock", "method": "GET"},
@@ -222,32 +236,33 @@ func cases() []probeCase {
 
 		// --- probe.db.connect ---
 		{"database accepts a read-only connection", "probe.db.connect", connectionTarget,
-			map[string]any{"dsn": "postgresql://reader@db/orders"},
+			map[string]any{},
 			Deps{Database: fakeDatabase{}, Now: clock},
 			model.VerdictPass, nil},
 		{"database refuses the connection", "probe.db.connect", connectionTarget,
-			map[string]any{"dsn": "postgresql://reader@db/orders"},
+			map[string]any{},
 			Deps{Database: fakeDatabase{connectErr: errBoom}, Now: clock},
 			model.VerdictFail, nil},
 		{"no connection string to try", "probe.db.connect", connectionTarget,
 			map[string]any{},
-			Deps{Database: fakeDatabase{}, Now: clock},
+			Deps{Database: fakeDatabase{connectErr: &UnavailableError{
+				Reason: "ORDERS_DSN is not set in the environment culprit is running in"}}, Now: clock},
 			model.VerdictInconclusive, nil},
 
 		// --- probe.db.schema_conformance ---
 		{"live table has the mapped columns", "probe.db.schema_conformance", connectionTarget,
-			map[string]any{"dsn": "postgresql://reader@db/orders", "table": "orders",
+			map[string]any{"table": "orders",
 				"expect_columns": []any{"id", "total_cents"}},
 			Deps{Database: fakeDatabase{columns: []TableColumn{
 				{Name: "id"}, {Name: "total_cents"}}}, Now: clock},
 			model.VerdictPass, nil},
 		{"live table is missing a mapped column", "probe.db.schema_conformance", connectionTarget,
-			map[string]any{"dsn": "postgresql://reader@db/orders", "table": "orders",
+			map[string]any{"table": "orders",
 				"expect_columns": []any{"id", "total_cents"}},
 			Deps{Database: fakeDatabase{columns: []TableColumn{{Name: "id"}}}, Now: clock},
 			model.VerdictFail, nil},
 		{"live columns could not be read", "probe.db.schema_conformance", connectionTarget,
-			map[string]any{"dsn": "postgresql://reader@db/orders", "table": "orders",
+			map[string]any{"table": "orders",
 				"expect_columns": []any{"id"}},
 			Deps{Database: fakeDatabase{columnsErr: errBoom}, Now: clock},
 			model.VerdictInconclusive, nil},
@@ -256,12 +271,19 @@ func cases() []probeCase {
 		{"required key is set", "probe.config.present", componentTarget,
 			map[string]any{"key": "JWT_SECRET_KEY"},
 			Deps{Config: fakeConfig{present: true}, Now: clock},
-			model.VerdictPass, nil},
+			model.VerdictPass,
+			declaredAs("config:inventory-service/JWT_SECRET_KEY", "required", true)},
 		{"required key is missing", "probe.config.present", componentTarget,
 			map[string]any{"key": "JWT_SECRET_KEY"},
 			Deps{Config: fakeConfig{present: false}, Now: clock},
 			model.VerdictFail,
-			declared("config:inventory-service/JWT_SECRET_KEY", "is_set")},
+			declaredAs("config:inventory-service/JWT_SECRET_KEY", "required", true)},
+		{"an unset key with a default is the default in use", "probe.config.present",
+			componentTarget,
+			map[string]any{"key": "LOG_LEVEL"},
+			Deps{Config: fakeConfig{present: false}, Now: clock},
+			model.VerdictPass,
+			declaredAs("config:inventory-service/LOG_LEVEL", "required", false)},
 		{"an unset key nobody declared is not a finding", "probe.config.present",
 			componentTarget,
 			map[string]any{"key": "SOME_OPTIONAL_FLAG"},
@@ -285,6 +307,17 @@ func cases() []probeCase {
 			map[string]any{"package": "stripe"},
 			Deps{Packages: fakePackages{version: "7.1.0", found: true}, Now: clock},
 			model.VerdictInconclusive, nil},
+		{"declared exact pin differs from what is installed", "probe.dep.version",
+			componentTarget,
+			map[string]any{"package": "stripe"},
+			Deps{Packages: fakePackages{version: "6.0.0", found: true}, Now: clock},
+			model.VerdictFail,
+			declaredAs("dep:inventory-service/stripe", "version", "==7.1.0")},
+		{"a declared range is reported, not judged", "probe.dep.version", componentTarget,
+			map[string]any{"package": "stripe"},
+			Deps{Packages: fakePackages{version: "7.1.0", found: true}, Now: clock},
+			model.VerdictInconclusive,
+			declaredAs("dep:inventory-service/stripe", "version", ">=7.0")},
 
 		// --- probe.edge.impedance ---
 		{"connection behaving normally", "probe.edge.impedance", connectionTarget,
