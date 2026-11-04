@@ -1678,3 +1678,41 @@ The API pages (`limit` up to 200, `offset`), so older ones are reachable
 there. The page cannot start an investigation or run a probe — they come
 only from `culprit diagnose`, run where the environment is; the control
 plane has no agent to run one until Phase 33.
+
+## A partial diagnosis names where the walk stopped, not a cause
+
+When `culprit diagnose` cannot finish — a hypothesis was refused, no probe
+could tell, a budget ran out, or nothing it tested failed — its diagnosis is
+*partial*. The text output, the Investigations list and the investigation
+view then show the subject the walk got to as **where it stopped**, list what
+it **could not check** and why, and suggest no fix: that subject is the
+deepest one the readings established, not one shown to be at fault. Only a
+complete diagnosis is shown under "root". The stored field is still called
+`root_subject` in the JSON and the API, for both.
+
+Investigations stored before this wording changed (Phase 32.1) keep the
+statement they were stored with — a stored investigation is final, above —
+so an older partial one may still read "fails because of …" or "The cause is
+inside …" in its statement. The list and the view label it as partial
+either way.
+
+## Text on glass is measured over the page, not over what scrolls beneath it
+
+Every text-and-background pair in the interface is checked for WCAG 2.2 AA
+contrast (4.5:1) by `scripts/tests/test_design_tokens.py`. The translucent
+"glass" surfaces — the header, dialogs, tooltips, the symptom card on wide
+screens — are measured composited over the page background, because that is
+what is under them at rest. When the header passes over a lighter card as the
+page scrolls, what is beneath it is blurred and covered at 72% opacity, which
+keeps the difference small but is not separately measured. No glass sits over
+the fault tree, the readings or any table.
+
+## Connection kinds are a closed set, in the CLI as well
+
+A connection's `kind` is one of `http`, `grpc`, `sql`, `message`, `cache`,
+`dns` or `auth` — no case folding, no aliases. The control plane and the
+database always refused anything else; until Phase 32.1 the `culprit` binary
+did not, so a `culprit.yaml` saying `kind: queue` loaded for `culprit check`
+and `culprit diagnose` and then matched no probe at all, leaving that edge
+silently unexamined. It is now refused when the file loads (exit 2), naming
+the component and the edge. A queue is `message`. See docs/UPGRADING.md.

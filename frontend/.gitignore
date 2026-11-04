@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright (Phase 32.1): run output, never committed.
+test-results
+playwright-report
+e2e/.screenshots
+e2e/.state.json

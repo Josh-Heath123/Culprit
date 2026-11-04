@@ -744,6 +744,13 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 		Confidence:  w.rubric(ctx, found),
 	}
 	switch {
+	case found.root != "" && len(found.partial) > 0:
+		// A boundary failed a probe, but not every alternative was tested,
+		// so it is where the walk stopped — never stated as the cause
+		// (Phase 32.1 field 14).
+		diagnosis.Statement = fmt.Sprintf(
+			"The walk stopped at %s: a reading there fails. It could not check every alternative: %s.",
+			found.root, strings.Join(found.partial, "; "))
 	case found.root != "":
 		diagnosis.Statement = fmt.Sprintf(
 			"%s fails because of %s; the readings rule out the alternatives they reached.",
@@ -762,15 +769,12 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 		// can see — added latency is one (docs/LIMITS.md).
 		diagnosis.Statement = fmt.Sprintf(
 			"Nothing the walk tested failed: every component below %s answers and every edge "+
-				"from it passes. The cause is inside %s, or is something no read-only probe "+
+				"from it passes. What fails is inside %s, or is something no read-only probe "+
 				"observes, such as added latency.", deepest, deepest)
 	default:
 		diagnosis.Statement = fmt.Sprintf(
 			"The failure is localised to %s, and the walk could not finish: %s.",
 			deepest, strings.Join(found.partial, "; "))
-	}
-	if !diagnosis.Complete && len(found.partial) > 0 && found.root != "" {
-		diagnosis.Statement += " Not every alternative was tested: " + strings.Join(found.partial, "; ") + "."
 	}
 	if diagnosis.Complete && !treeReaches(tree, root) {
 		diagnosis.Complete = false

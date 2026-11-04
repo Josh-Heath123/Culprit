@@ -115,6 +115,14 @@ def test_grants_outside_the_closed_set_are_refused(grants: str) -> None:
 QUICKSTART_MODEL = Path(__file__).parents[2] / "demo-services" / "culprit.yaml"
 
 
+def test_the_root_model_loads() -> None:
+    """Phase 32.1: the root culprit.yaml (Culprit describing itself) said
+    `queue` for its Redis connections, a kind neither this loader nor the
+    database accepts. Only `just intent` read it, and the Go loader took
+    any kind, so nothing noticed."""
+    load_manifest((QUICKSTART_MODEL.parents[1] / "culprit.yaml").read_text(encoding="utf-8"))
+
+
 def test_the_quickstart_model_loads() -> None:
     """`just quickstart` applies demo-services/culprit.yaml with this
     loader. Phase 32 part 1 gave it `tokens:` maps, which the credential
@@ -166,3 +174,26 @@ def test_a_credential_shaped_like_a_variable_name_is_still_refused(token: str) -
     with pytest.raises(ManifestError) as refused:
         load_manifest(TOKENS.format(variable=token))
     assert token not in str(refused.value)
+
+
+def test_the_database_connection_kinds_match_the_shared_fixture() -> None:
+    """Phase 32.1: the closed kind set is one set in Go, Python *and* the
+    database. The CHECK is a literal in the migration that created it, so
+    it is read from that source here — otherwise a kind added to the
+    fixture, Go and Python would pass every conformance test and then be
+    refused by Postgres when the row is stored."""
+    import json
+    import re
+
+    root = Path(__file__).parents[2]
+    fixture = json.loads(
+        (root / "shared" / "tests" / "connection_kind_conformance.json").read_text(encoding="utf-8")
+    )
+    versions = root / "api" / "migrations" / "versions"
+    migration = (versions / "7c2e94b1f0aa_system_model_components_connections.py").read_text(
+        encoding="utf-8"
+    )
+    literal = re.search(r'^_CONNECTION_KINDS = "([^"]+)"$', migration, re.M)
+    assert literal, "the migration no longer declares _CONNECTION_KINDS as one literal"
+    assert re.findall(r"'([a-z_]+)'", literal.group(1)) == fixture["kinds"]
+    assert "ck_connections_kind" in migration

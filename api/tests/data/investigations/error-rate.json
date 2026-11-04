@@ -1,7 +1,7 @@
 {
-  "id": "inv-46fc995ef58efffe",
-  "opened_at": "2026-11-04T11:39:46.475042296Z",
-  "closed_at": "2026-11-04T11:39:46.478849614Z",
+  "id": "inv-25509a2549d2c36d",
+  "opened_at": "2026-11-04T16:15:06.802446601Z",
+  "closed_at": "2026-11-04T16:15:06.80676468Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -79,12 +79,12 @@
         "environment": "faults-order",
         "verdict": "fail",
         "measured": {
-          "elapsed_ms": 1,
+          "elapsed_ms": 2,
           "status": 500,
           "url": "http://inventory-service:8002/ready"
         },
         "reason": "http://inventory-service:8002/ready answered 500; the service is reachable but failing",
-        "taken_at": "2026-11-04T11:39:46.477060907Z",
+        "taken_at": "2026-11-04T16:15:06.804871524Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -103,7 +103,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-04T11:39:46.47762773Z",
+        "taken_at": "2026-11-04T16:15:06.8056488Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -124,7 +124,7 @@
           "url": "http://inventory-service:8002/ready"
         },
         "reason": "http://inventory-service:8002/ready answered 500; the service is reachable but failing",
-        "taken_at": "2026-11-04T11:39:46.478785051Z",
+        "taken_at": "2026-11-04T16:15:06.806704844Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"

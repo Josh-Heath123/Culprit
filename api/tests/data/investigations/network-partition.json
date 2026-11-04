@@ -1,7 +1,7 @@
 {
-  "id": "inv-35a17eeb88d95e3f",
-  "opened_at": "2026-11-04T11:39:18.299310376Z",
-  "closed_at": "2026-11-04T11:39:18.301117511Z",
+  "id": "inv-419ac25b7b0abce5",
+  "opened_at": "2026-11-04T16:14:39.174977654Z",
+  "closed_at": "2026-11-04T16:14:39.179039917Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -81,8 +81,8 @@
         "measured": {
           "url": "http://inventory-service:8002/ready"
         },
-        "reason": "no HTTP response from http://inventory-service:8002/ready: Get \"http://inventory-service:8002/ready\": dial tcp 172.20.0.2:8002: connect: connection refused",
-        "taken_at": "2026-11-04T11:39:18.300101874Z",
+        "reason": "no HTTP response from http://inventory-service:8002/ready: Get \"http://inventory-service:8002/ready\": dial tcp 172.18.0.2:8002: connect: connection refused",
+        "taken_at": "2026-11-04T16:14:39.17592745Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -101,8 +101,8 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.20.0.2:8002: connect: connection refused",
-        "taken_at": "2026-11-04T11:39:18.300602392Z",
+        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.18.0.2:8002: connect: connection refused",
+        "taken_at": "2026-11-04T16:14:39.178429175Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -121,8 +121,8 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.20.0.2:8002: connect: connection refused",
-        "taken_at": "2026-11-04T11:39:18.301066813Z",
+        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.18.0.2:8002: connect: connection refused",
+        "taken_at": "2026-11-04T16:14:39.178993674Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"

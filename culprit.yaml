@@ -31,7 +31,7 @@ components:
         kind: sql
         criticality: on_request_path
       - to: culprit-redis
-        kind: queue
+        kind: message
         criticality: on_request_path
 
   - name: culprit-worker
@@ -42,7 +42,7 @@ components:
         kind: sql
         criticality: on_request_path
       - to: culprit-redis
-        kind: queue
+        kind: message
         criticality: on_request_path
 
   - name: culprit-web

@@ -231,3 +231,19 @@ def test_scoped_to_drops_components_and_their_edges() -> None:
 
 def test_an_unscoped_component_exists_everywhere() -> None:
     assert _component("a").exists_in("anywhere")
+
+
+def test_connection_kinds_match_the_shared_fixture():
+    """Phase 32.1: the closed set is one set in both languages, held by
+    shared/tests/connection_kind_conformance.json."""
+    import json
+    from pathlib import Path
+
+    fixture = json.loads(
+        (Path(__file__).parent / "connection_kind_conformance.json").read_text(encoding="utf-8")
+    )
+    assert [kind.value for kind in ConnectionKind] == fixture["kinds"]
+    assert Connection.model_fields["kind"].default == ConnectionKind(fixture["default"])
+    for refused in fixture["refused"]:
+        with pytest.raises(ValueError):
+            ConnectionKind(refused)

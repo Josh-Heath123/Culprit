@@ -207,3 +207,39 @@ func TestSubjectParseErrorsConformance(t *testing.T) {
 		})
 	}
 }
+
+// --- connection kinds --------------------------------------------------
+
+type connectionKindFixture struct {
+	Kinds   []string `json:"kinds"`
+	Default string   `json:"default"`
+	Refused []string `json:"refused"`
+}
+
+func TestConnectionKindsMatchTheSharedFixture(t *testing.T) {
+	fixture := readFixture[connectionKindFixture](t, "connection_kind_conformance.json")
+	if len(fixture.Kinds) != len(ConnectionKinds) {
+		t.Fatalf("Go has %d connection kinds %v, the fixture %d %v",
+			len(ConnectionKinds), ConnectionKinds, len(fixture.Kinds), fixture.Kinds)
+	}
+	for index, want := range fixture.Kinds {
+		if string(ConnectionKinds[index]) != want {
+			t.Errorf("kind %d: Go %q, fixture %q", index, ConnectionKinds[index], want)
+		}
+		got, err := ParseConnectionKind(want)
+		if err != nil || string(got) != want {
+			t.Errorf("ParseConnectionKind(%q) = %q, %v", want, got, err)
+		}
+	}
+	if string(DefaultConnectionKind) != fixture.Default {
+		t.Errorf("default kind: Go %q, fixture %q", DefaultConnectionKind, fixture.Default)
+	}
+	if got, err := ParseConnectionKind(""); err != nil || string(got) != fixture.Default {
+		t.Errorf(`ParseConnectionKind("") = %q, %v; want the default %q`, got, err, fixture.Default)
+	}
+	for _, refused := range fixture.Refused {
+		if got, err := ParseConnectionKind(refused); err == nil {
+			t.Errorf("ParseConnectionKind(%q) accepted it as %q; the fixture refuses it", refused, got)
+		}
+	}
+}

@@ -1914,6 +1914,46 @@ upload from the binary. No restyle (Phase 32.1). No remediation application, no
 verification (`verified` stays false), no postmortem prior, no trace-id or
 error-signature symptoms.
 
+**Architecture review of part 2, 2026-11-04 — signed off, subject to one
+verification.** Merged via PR #23 (`a22da56`). Every criterion was executed,
+both audits found real defects and they were fixed, and the run found part 1
+had broken `just quickstart` from a fresh clone — fixed, with the test that
+would have caught it. Phase 32 is complete once the verification below
+passes. Decisions on what the run report left open:
+
+- **Criterion 4 was not run on the final tree.** The re-run after the audit
+  fixes was killed for low memory, and the earlier run used an export of the
+  working tree, not a clone. Part 1 had already broken the quickstart once
+  without anyone noticing, so before Phase 32.1 starts, the quickstart is run
+  from a fresh `git clone` of `main` at `a22da56`, and §5 records the result.
+  If it fails, the fix goes on its own small branch first.
+- **The browser test lives in a scratchpad.** Phase 32.1 adds the end-to-end
+  runner (its field 11), and this test becomes its first committed journey.
+- **`grants_used` is `[]` on a `token_shape` reading that read a credential**
+  under `config.read.values`: the runner stamps grants from the manifest, not
+  from what the probe exercised. A reading that understates its own access
+  is a false record, and Phase 33's audit log is built on these fields.
+  **First item of Phase 33**, with a test of `secretSource` itself.
+- **`config.read.values` granted for a token also lets `culprit env capture`
+  store that token.** The probe needs to read a secret in memory to inspect
+  its structure; capture needs a grant to store a value. One grant now does
+  both, so granting the first silently grants the second — not least
+  privilege. **Phase 33, the permission-model phase:** in-memory inspection
+  gets its own grant, and `config.read.values` stays the grant that stores.
+- **A partial diagnosis names a subject a skimmer could read as the cause.**
+  Phase 32.1: a partial diagnosis is shown as where the walk stopped and what
+  it could not check, never under the word "root" or "cause" — in the view,
+  the list and `culprit diagnose`'s text output.
+- **The last-admin guard is in the API only.** Accepted: the API, under
+  `auth-service`, is the only writer of users.
+- **`queue` as a connection kind.** The root `culprit.yaml` declares two
+  connections of kind `queue`, which is a component kind; the connection kind
+  is `message`. Python and the database hold connection kinds to a closed set
+  and would refuse the file; the Go binary accepts it. That is drift in the
+  one layer allowed to exist in both languages (D1, amended), and the
+  conformance fixture did not catch it because it does not cover connection
+  kinds. **First item of Phase 32.1.**
+
 ---
 
 ### Phase 32.1 — Design system and the investigation-first interface
@@ -1954,8 +1994,9 @@ library is refined onto it; pages stop styling themselves.
   states, full keyboard operation, semantic HTML, and `prefers-reduced-motion`
   honoured.
 - End-to-end tests of the main journeys against the compose stack, in CI: sign
-  in, open an investigation, expand an edge to its readings, view divergences,
-  manage settings. The README's screenshots are captured by the same suite at
+  in, open an investigation, expand an edge to its readings, read a partial
+  investigation, manage settings. (Divergences have no read endpoint, so they
+  get no view — field 9.) The README's screenshots are captured by the same suite at
   fixed sizes, so they can only show what works.
 - Demonstration video materials following `docs/PRODUCTISATION.md` §7's five
   parts: a script, a scene-by-scene storyboard and a recording checklist, with
@@ -2010,6 +2051,9 @@ arbitrary values in page components, mutation-tested (standing invariant 10).
 - With `LLM_PROVIDER=none` the interface is complete: only prose summaries are
   absent, and their absence is shown plainly, not as an error.
 - The README's screenshots come from the test suite.
+- A partial diagnosis is shown as where the walk stopped and what it could not
+  check — never under the word "root" or "cause" — in the view, the list and
+  `culprit diagnose`'s text output. *(Added 2026-11-04.)*
 
 **15. Definition of done.** Above, plus the video materials committed and
 `docs/LIMITS.md` updated.
@@ -2020,6 +2064,38 @@ screen is built on this system from the start.
 **17. Do NOT implement yet.** No backend feature added to fill a screen. No
 marketing site. No publication. Nothing that makes a screen look complete when
 the thing behind it is not.
+
+**Carried in from Phase 32 (2026-11-04) — do these first.**
+- **Connection kinds are one closed set in both languages.** The shared
+  conformance fixture lists them; the Go model refuses an unknown kind, as
+  Python and the database already do; the root `culprit.yaml` says `message`
+  where it says `queue`. Shown red first by the fixture with `queue` in it.
+- **Part 2's browser test is committed** as the first end-to-end journey,
+  with the runner (field 11).
+- **The partial-diagnosis wording** in `culprit diagnose`'s text output
+  (field 14). The view and the list follow in part 1.
+
+**How Phase 32.1 is run — decided 2026-11-04.** Two parts, two `/next` runs,
+and Malcolm between them. The look is his call, so it is settled on the
+screen the product is centred on before it is applied everywhere.
+
+- **Part 1 — the system, on the Investigation screens.** The carried-in items;
+  the tokens (colour, status, type, spacing, radius, shadow, surface) and the
+  component set; the investigation list and view redesigned on them. **Part 1
+  criteria:** every text-and-background token pair meets WCAG 2.2 AA (a
+  checked test); the two investigation screens style themselves through tokens
+  only (the gate, mutation-tested, scoped to them for now); the partial
+  diagnosis criterion; `LLM_PROVIDER=none` complete; and screenshots of the
+  list, a complete investigation and a partial one at 375, 768, 1280 and
+  1920 px, in the run report, for Malcolm to review.
+- **Malcolm reviews part 1's screenshots** and says what to change. His notes
+  go into part 2's brief before it runs.
+- **Part 2 — everywhere else.** Every other surviving route on the system;
+  the token gate widened to every page; responsive and keyboard across all of
+  them; the end-to-end journeys in CI, which take the README's screenshots;
+  the SARIF upload (Malcolm enables code scanning first); the video
+  materials; the fresh-eyes review last. Part 2's criteria are field 14's,
+  as refined above.
 
 ---
 
@@ -2106,6 +2182,16 @@ agent's credential and nothing else; a reading's `agent_id` is taken from that
 credential, never from the request body; and the project token is scoped to the
 three capture endpoints. If something other than an agent writes readings by
 then, it gets its own scoped credential, not the project token.
+
+**Added 2026-11-04 (Phase 32 review) — first two items.**
+- **`grants_used` records what a probe exercised**, not only what its manifest
+  declares: a `token_shape` reading that read a credential under
+  `config.read.values` names that grant. The audit log this phase builds is
+  only as true as these fields. `secretSource` gets a test of its own.
+- **Inspecting a secret is not storing it.** A probe that reads a secret in
+  memory to inspect its structure gets its own per-key grant; it permits no
+  storage, by capture or anywhere else. `config.read.values` remains the
+  grant that lets a value be stored. Granting one never implies the other.
 
 ---
 

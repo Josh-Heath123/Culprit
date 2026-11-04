@@ -4,23 +4,26 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+/** Buttons, on the design tokens (index.css). `default` is the one filled
+ * electric-blue action on a screen; everything else is quieter. Focus is
+ * the global :focus-visible outline, which no variant removes. */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors outline-none select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors duration-150 select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        outline: "border border-border bg-transparent hover:bg-accent hover:text-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-foreground",
-        destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-brand-fill text-on-brand-fill shadow-raised hover:bg-brand-fill-hover",
+        outline: "border border-line-strong bg-transparent text-fg hover:bg-surface-2",
+        secondary: "bg-surface-2 text-fg hover:bg-surface-3",
+        ghost: "text-fg-muted hover:bg-surface-2 hover:text-fg",
+        destructive: "border border-fail-line bg-fail-tint text-fail hover:bg-surface-3",
+        link: "text-brand underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-8 px-3",
-        sm: "h-7 px-2.5 text-xs",
-        lg: "h-9 px-4",
-        icon: "size-8",
+        default: "h-9 px-3.5",
+        sm: "h-8 px-2.5 text-xs",
+        lg: "h-10 px-4",
+        icon: "size-9",
       },
     },
     defaultVariants: {

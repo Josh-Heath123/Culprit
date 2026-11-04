@@ -22,7 +22,7 @@ components:
     kind: service
     connections:
       - to: search-indexer
-        kind: queue
+        kind: message
         criticality: background
   - name: search-indexer
     kind: worker

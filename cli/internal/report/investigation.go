@@ -31,15 +31,35 @@ func RenderInvestigation(w io.Writer, inv model.Investigation) error {
 	p.line("")
 
 	if d := inv.Diagnosis; d != nil {
-		status := "COMPLETE"
-		if !d.Complete {
-			status = "PARTIAL"
-		}
-		p.line("Diagnosis (%s)", status)
-		p.line("  root   %s", d.RootSubject)
-		p.line("  %s", d.Statement)
-		if d.Remediation != "" {
-			p.line("  fix    %s", d.Remediation)
+		if d.Complete {
+			p.line("Diagnosis (COMPLETE)")
+			p.line("  root   %s", d.RootSubject)
+			p.line("  %s", d.Statement)
+			if d.Remediation != "" {
+				p.line("  fix    %s", d.Remediation)
+			}
+		} else {
+			// A partial diagnosis is where the walk stopped and what it
+			// could not check — never printed under "root" or "cause", and
+			// with no fix, because nothing has been shown to be the fault
+			// (Phase 32.1 field 14).
+			p.line("Diagnosis (PARTIAL) — where the walk stopped, and what it could not check")
+			p.line("  stopped at  %s", d.RootSubject)
+			p.line("  %s", d.Statement)
+			unchecked := 0
+			for _, h := range inv.Hypotheses {
+				if h.Status != model.HypothesisUnexplored {
+					continue
+				}
+				if unchecked == 0 {
+					p.line("  could not check")
+				}
+				unchecked++
+				p.line("    %s %s", h.Kind, h.Subject)
+				if h.Reason != "" {
+					p.line("      %s", h.Reason)
+				}
+			}
 		}
 		p.line("")
 		p.line("Confidence — four checks, never a number")
@@ -63,9 +83,16 @@ func RenderInvestigation(w io.Writer, inv model.Investigation) error {
 	if len(inv.FaultTree) == 0 {
 		p.line("  (none: no reading established an edge)")
 	}
+	partial := inv.Diagnosis != nil && !inv.Diagnosis.Complete
 	for _, edge := range inv.FaultTree {
+		relation := string(edge.Relation)
+		// In a partial diagnosis the boundary edge is where the walk
+		// stopped, not a cause it established (Phase 32.1 field 14).
+		if partial && edge.Relation == model.RelationCausedBy {
+			relation = "stopped_at"
+		}
 		p.line("  %s", edge.FromSubject)
-		p.line("    -[%s]-> %s   (%s)", edge.Relation, edge.ToSubject, strings.Join(edge.EstablishedBy, ", "))
+		p.line("    -[%s]-> %s   (%s)", relation, edge.ToSubject, strings.Join(edge.EstablishedBy, ", "))
 	}
 	p.line("")
 
