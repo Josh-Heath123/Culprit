@@ -65,6 +65,13 @@ type EnvironmentSpec struct {
 	Exec       map[string][]string             `yaml:"exec"`
 	Grants     map[string]yaml.Node            `yaml:"grants"`
 	Components map[string]EnvironmentComponent `yaml:"components"`
+	// Endpoints are where the isolation walk sends requests to each
+	// component, as seen from wherever `culprit diagnose` runs (Phase 32).
+	// Separate from components: on purpose. That map is what a capture
+	// reads, and under the process adapter it can name only the one
+	// component culprit runs inside; the walk needs to reach all of them.
+	// A component's own endpoint: is used when it has no entry here.
+	Endpoints map[string]EndpointSpec `yaml:"endpoints"`
 }
 
 // ComposeSpec locates a Compose project.
@@ -103,6 +110,12 @@ type EnvironmentComponent struct {
 	Packages string        `yaml:"packages"`
 	Database *DatabaseSpec `yaml:"database"`
 	Endpoint *EndpointSpec `yaml:"endpoint"`
+	// Tokens maps a component this one calls to the *name* of a variable,
+	// in the environment of the agent running at this component, holding
+	// the bearer token this component presents to it. Never the token.
+	// The isolation walk reads it to ask probe.auth.token_shape whether
+	// the token carries the audience the callee expects (Phase 32).
+	Tokens map[string]string `yaml:"tokens"`
 }
 
 // DatabaseSpec is how to reach a component's database for metadata.
@@ -123,6 +136,13 @@ type EndpointSpec struct {
 	Port int    `yaml:"port"`
 	// TLS also inspects the certificate the endpoint presents.
 	TLS bool `yaml:"tls"`
+	// HealthPath is the path the isolation walk requests to ask "does a
+	// request entering at this component succeed?" (Phase 32). The walk
+	// bisects on the answer, so it should exercise what the component
+	// calls on the request path; a shallow health check that answers 200
+	// without touching its dependencies makes the walk trust a pass it
+	// should not (docs/LIMITS.md).
+	HealthPath string `yaml:"health_path"`
 }
 
 var (
@@ -285,16 +305,47 @@ func (m *Manifest) validateEnvironments() error {
 				}
 			}
 			if endpoint := settings.Endpoint; endpoint != nil {
-				host := strings.TrimSpace(endpoint.Host)
-				if host == "" || strings.ContainsAny(host, "/@: ") {
-					return fmt.Errorf("%s.endpoint.host: a bare hostname, with no scheme, "+
-						"port or credentials", at)
+				if err := validateEndpoint(at+".endpoint", *endpoint); err != nil {
+					return err
 				}
-				if endpoint.Port < 1 || endpoint.Port > 65535 {
-					return fmt.Errorf("%s.endpoint.port: 1 to 65535", at)
+			}
+			for callee, variable := range settings.Tokens {
+				if _, declared := m.componentNamed(callee); !declared {
+					return fmt.Errorf("%s.tokens: %q is not a component in this file", at, callee)
+				}
+				if !envVarName.MatchString(variable) {
+					// As for dsn_env, never echoed: if it is not a variable
+					// name, the likeliest thing it is is the token.
+					return fmt.Errorf("%s.tokens.%s: must be the *name* of an environment "+
+						"variable holding the token, never the token", at, callee)
 				}
 			}
 		}
+		for component, endpoint := range spec.Endpoints {
+			at := fmt.Sprintf("environments.%s.endpoints.%s", name, component)
+			if _, declared := m.componentNamed(component); !declared {
+				return fmt.Errorf("%s: not a component in this file", at)
+			}
+			if err := validateEndpoint(at, endpoint); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateEndpoint(at string, endpoint EndpointSpec) error {
+	host := strings.TrimSpace(endpoint.Host)
+	if host == "" || strings.ContainsAny(host, "/@: ") {
+		return fmt.Errorf("%s.host: a bare hostname, with no scheme, port or credentials", at)
+	}
+	if endpoint.Port < 1 || endpoint.Port > 65535 {
+		return fmt.Errorf("%s.port: 1 to 65535", at)
+	}
+	if path := endpoint.HealthPath; path != "" &&
+		(!strings.HasPrefix(path, "/") || strings.ContainsAny(path, " @?#")) {
+		return fmt.Errorf("%s.health_path: a path such as /health, with no query string "+
+			"or credentials", at)
 	}
 	return nil
 }

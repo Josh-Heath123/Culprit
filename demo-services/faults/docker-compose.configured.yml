@@ -1,0 +1,6 @@
+# The healthy configuration of payments-service. See docker-compose.yml for
+# why this lives in its own file.
+services:
+  payments-service:
+    environment:
+      PAYMENTS_PROVIDER_KEY: demo-provider-key-not-a-secret

@@ -87,7 +87,8 @@
         "id": "probe.db.write_row", "version": 1, "effect": "inspect",
         "capabilities": ["db.rows.write"], "timeout_ms": 1000
       }
-    }
+    },
+    {"why": "discriminates names a hypothesis kind the isolation walk does not know", "manifest": {"id": "probe.net.tcp_connect", "version": 1, "effect": "inspect", "capabilities": ["net.tcp.connect"], "timeout_ms": 2000, "expected_from": "CONFIGURED", "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "tcp_connects"}], "discriminates": ["it_feels_slow"], "cost": "cheap"}}
   ],
   "readings_accepted": [
     {

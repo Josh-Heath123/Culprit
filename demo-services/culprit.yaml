@@ -131,3 +131,57 @@ environments:
       # environment, so this answers "is INVENTORY_SERVICE_URL set where
       # order-service runs". Names only — no config.read.values.
       config.read.names: true
+
+# Two vantages, one per environment, because the `process` adapter reads
+# the environment of the one component culprit runs inside (Phase 30). The
+# fault library (cli/cmd/culprit/faultlib_test.go) copies the binary into
+# that container and runs `culprit diagnose --from <it>` there.
+#
+# health_path is /ready, not /health: /health is exempt from the demo's
+# injected faults, so a request there succeeds whatever is wrong — the
+# shallow check the walk must not be pointed at (docs/LIMITS.md).
+  faults-order:
+    adapter: process
+    components:
+      order-service:
+        tokens:
+          inventory-service: INVENTORY_TOKEN
+    endpoints: &fault-endpoints
+      order-service: { host: order-service, port: 8001 }
+      inventory-service: { host: inventory-service, port: 8002, health_path: /ready }
+      payments-service: { host: payments-service, port: 8003, health_path: /ready }
+    grants: &fault-grants
+      net.dns.resolve: true
+      net.tcp.connect: true
+      net.http.outbound: true
+      config.read.names: true
+  faults-payments:
+    adapter: process
+    components:
+      payments-service: {}
+    endpoints: *fault-endpoints
+    grants: *fault-grants
+
+# --- Phase 32: the fault library ------------------------------------------
+#
+# What the demo declares, so the isolation walk has INTENT to compare
+# against. Each is a rank-100 assertion (an invariant), because the demo
+# deliberately has no `extract:` (see above).
+invariants:
+  - subject: "auth:order-service->inventory-service/audience"
+    predicate: audience
+    value: inventory-service
+    why: >-
+      inventory-service accepts only tokens minted for it
+      (EXPECTED_AUDIENCE); the audience fault is order-service presenting
+      one minted for another.
+  - subject: "http:inventory-service/GET /stock"
+    predicate: exists
+    why: inventory-service serves stock levels at this route.
+  - subject: "http:inventory-service/GET /stock"
+    predicate: calls
+    why: order-service reads stock here before it reserves.
+  - subject: "config:payments-service/PAYMENTS_PROVIDER_KEY"
+    predicate: required
+    value: true
+    why: payments-service cannot charge anyone without its provider key.

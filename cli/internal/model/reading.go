@@ -162,6 +162,14 @@ func (m ProbeManifest) Validate() error {
 	default:
 		return fmt.Errorf("probe %q has unknown cost %q", m.ID, m.Cost)
 	}
+	for _, kind := range m.Discriminates {
+		if !knownHypothesisKind(kind) {
+			return fmt.Errorf(
+				"probe %q discriminates %q, which is not a hypothesis kind the "+
+					"isolation walk knows; a probe that names one it does not would "+
+					"never be chosen, silently", m.ID, kind)
+		}
+	}
 	for _, name := range m.Capabilities {
 		if strings.HasSuffix(name, ".write") {
 			return fmt.Errorf(
@@ -312,4 +320,13 @@ func redactMap(values map[string]any) map[string]any {
 		}
 	}
 	return redacted
+}
+
+func knownHypothesisKind(kind string) bool {
+	for _, known := range HypothesisKinds {
+		if known == kind {
+			return true
+		}
+	}
+	return false
 }

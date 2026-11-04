@@ -21,7 +21,10 @@ type dnsResolve struct{}
 
 func (dnsResolve) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.net.dns_resolve",
+		ID: "probe.net.dns_resolve",
+		// No Discriminates: a name that resolves says nothing about whether a
+		// connection opens. probe.net.tcp_connect resolves the name too, so it
+		// alone rules out connection_unreachable (found in Phase 32's first run).
 		Version:      1,
 		Effect:       model.EffectInspect,
 		Capabilities: []string{"net.dns.resolve"},
@@ -70,12 +73,13 @@ type tcpConnect struct{}
 
 func (tcpConnect) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.net.tcp_connect",
-		Version:      1,
-		Effect:       model.EffectInspect,
-		Capabilities: []string{"net.tcp.connect"},
-		TimeoutMS:    5_000,
-		ExpectedFrom: model.PlaneConfigured,
+		ID:            "probe.net.tcp_connect",
+		Discriminates: []string{model.HypothesisConnectionUnreachable},
+		Version:       1,
+		Effect:        model.EffectInspect,
+		Capabilities:  []string{"net.tcp.connect"},
+		TimeoutMS:     5_000,
+		ExpectedFrom:  model.PlaneConfigured,
 		Produces: []model.Produces{
 			{SubjectTemplate: "connection:{from}->{to}", Predicate: "tcp_connects"},
 		},
@@ -132,9 +136,10 @@ type tlsValidity struct{}
 
 func (tlsValidity) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:      "probe.net.tls_validity",
-		Version: 1,
-		Effect:  model.EffectInspect,
+		ID:            "probe.net.tls_validity",
+		Discriminates: []string{model.HypothesisTLSInvalid},
+		Version:       1,
+		Effect:        model.EffectInspect,
 		// A TLS handshake is a TCP connection first, so both are needed.
 		// Declaring only the TLS one would let a grant of it alone open a
 		// socket the operator did not agree to.

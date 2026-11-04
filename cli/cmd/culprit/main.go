@@ -59,6 +59,10 @@ func main() {
 		if errors.As(err, &findings) {
 			os.Exit(exitFindings)
 		}
+		var partial *partialDiagnosisError
+		if errors.As(err, &partial) {
+			os.Exit(exitFindings)
+		}
 		fmt.Fprintln(os.Stderr, "culprit:", err)
 		os.Exit(exitError)
 	}
@@ -101,6 +105,7 @@ docs/PERMISSIONS.md before granting it access to an environment.`,
 	root.AddCommand(newEnvCommand())
 	root.AddCommand(newDiffCommand())
 	root.AddCommand(newProbeCommand())
+	root.AddCommand(newDiagnoseCommand())
 	return root
 }
 

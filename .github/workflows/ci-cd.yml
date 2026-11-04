@@ -351,6 +351,25 @@ jobs:
       - name: Capture it
         run: cd cli && CULPRIT_KIND_TESTS=1 CULPRIT_KIND_CONTEXT=kind-culprit-capture go test ./internal/capture -run TestKubernetesCaptureAgainstKind -v
 
+  # Phase 32's fault library: every fault the demo services can be given
+  # (demo-services/faults/), injected one at a time and walked by `culprit
+  # diagnose` from inside the vantage container, compared with
+  # cli/testdata/faultlib/expected.json. The regression suite for the
+  # product's core claim — the walk finds the root, not the symptom — and
+  # field 15 of the phase says it runs on every push. Same as `just
+  # fault-library` locally.
+  fault-library:
+    needs: cli
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: cli/go.sum
+      - name: Walk every fault in the library
+        run: cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 20m
+
   test:
     needs: typecheck
     runs-on: ubuntu-latest

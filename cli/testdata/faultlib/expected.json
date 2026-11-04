@@ -1,0 +1,140 @@
+{
+  "why": [
+    "Phase 32's fault library: every fault the demo services can be given, with the diagnosis `culprit diagnose` must reach. cli/cmd/culprit/faultlib_test.go injects each one into demo-services/faults/docker-compose.yml, runs the walk inside the named vantage container, and compares.",
+    "This is the regression suite for the product's core claim — the walk finds the root, not the symptom — and it runs in CI on every push (DIAGNOSTIC_PLAN.md Phase 32 field 15).",
+    "relations is the set of relations the fault tree must contain, exactly. rubric is §2.9; verified is always false until Phase 34."
+  ],
+  "symptom": "POST http://order-service:8001/orders",
+  "faults": [
+    {
+      "name": "auth-audience",
+      "inject": "order-service presents a token minted for audience 'inventory', where inventory-service expects 'inventory-service'",
+      "vantage": "order-service",
+      "environment": "faults-order",
+      "root_subject": "auth:order-service->inventory-service/audience",
+      "complete": true,
+      "relations": [
+        "caused_by",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:order-service/POST /orders -[symptom_of]-> component:order-service",
+        "component:order-service -[caused_by]-> auth:order-service->inventory-service/audience"
+      ]
+    },
+    {
+      "name": "network-partition",
+      "inject": "a REJECT rule in order-service's network namespace for inventory-service's address; neither container is stopped",
+      "vantage": "order-service",
+      "environment": "faults-order",
+      "root_subject": "connection:order-service->inventory-service",
+      "complete": true,
+      "relations": [
+        "caused_by",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": false,
+        "counterfactual": false,
+        "verified": false
+      },
+      "note": "From inside order-service a refused connection to inventory-service is equally consistent with 'the path is cut' and 'inventory-service is down'; no reading from that vantage separates them, so discriminated is false. The root is the edge because the edge's own probe failed. Telling the two apart needs a second vantage, which arrives with the production agent (Phase 33).",
+      "edges": [
+        "http:order-service/POST /orders -[symptom_of]-> component:order-service",
+        "component:order-service -[caused_by]-> connection:order-service->inventory-service"
+      ]
+    },
+    {
+      "name": "contract",
+      "inject": "inventory-service serves stock at /stock-levels; order-service calls /stock",
+      "vantage": "order-service",
+      "environment": "faults-order",
+      "root_subject": "http:inventory-service/GET /stock",
+      "complete": true,
+      "relations": [
+        "caused_by",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:order-service/POST /orders -[symptom_of]-> component:order-service",
+        "component:order-service -[caused_by]-> http:inventory-service/GET /stock"
+      ]
+    },
+    {
+      "name": "config",
+      "inject": "payments-service runs without PAYMENTS_PROVIDER_KEY",
+      "vantage": "payments-service",
+      "environment": "faults-payments",
+      "root_subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "complete": true,
+      "relations": [
+        "caused_by",
+        "propagates_to",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:order-service/POST /orders -[symptom_of]-> component:order-service",
+        "component:payments-service -[propagates_to]-> component:order-service",
+        "component:payments-service -[caused_by]-> config:payments-service/PAYMENTS_PROVIDER_KEY"
+      ]
+    },
+    {
+      "name": "error-rate",
+      "inject": "inventory-service answers 500 to every request through its fault middleware (shared/faults.py, rate 1.0)",
+      "vantage": "order-service",
+      "environment": "faults-order",
+      "root_subject": "component:inventory-service",
+      "complete": true,
+      "relations": [
+        "propagates_to",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:order-service/POST /orders -[symptom_of]-> component:order-service",
+        "component:inventory-service -[propagates_to]-> component:order-service"
+      ]
+    },
+    {
+      "name": "latency",
+      "inject": "inventory-service adds 800 ms to every request (shared/faults.py)",
+      "vantage": "order-service",
+      "environment": "faults-order",
+      "root_subject": "component:order-service",
+      "complete": false,
+      "relations": [],
+      "rubric": {
+        "reproduced": false,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "note": "No read-only probe discriminates 'slow'; every probe passes, and the walk says the cause is inside order-service or something it cannot observe, such as added latency — a partial diagnosis, not a wrong one. Latency waits for impedance to have a CLI source (docs/LIMITS.md).",
+      "edges": []
+    }
+  ]
+}

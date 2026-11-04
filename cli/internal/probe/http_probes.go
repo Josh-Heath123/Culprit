@@ -29,12 +29,13 @@ type httpReachable struct{}
 
 func (httpReachable) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.http.reachable",
-		Version:      1,
-		Effect:       model.EffectInterrogate,
-		Capabilities: []string{"net.http.outbound"},
-		TimeoutMS:    10_000,
-		ExpectedFrom: model.PlaneConfigured,
+		ID:            "probe.http.reachable",
+		Discriminates: []string{model.HypothesisComponentFails},
+		Version:       1,
+		Effect:        model.EffectInterrogate,
+		Capabilities:  []string{"net.http.outbound"},
+		TimeoutMS:     10_000,
+		ExpectedFrom:  model.PlaneConfigured,
 		Produces: []model.Produces{
 			{SubjectTemplate: "component:{component}", Predicate: "http_reachable"},
 		},
@@ -94,7 +95,8 @@ type httpRouteConformance struct{}
 
 func (httpRouteConformance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID: "probe.http.route_conformance",
+		ID:            "probe.http.route_conformance",
+		Discriminates: []string{model.HypothesisContractMismatch},
 		// Version 2 (Phase 31.1): the produced predicate is `exists`, the
 		// predicate every route extractor emits, rather than
 		// `route_exists`, which none does — so version 1's expectation
@@ -227,12 +229,13 @@ type httpSchemaConformance struct{}
 
 func (httpSchemaConformance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.http.schema_conformance",
-		Version:      1,
-		Effect:       model.EffectInterrogate,
-		Capabilities: []string{"net.http.outbound"},
-		TimeoutMS:    15_000,
-		ExpectedFrom: model.PlaneIntent,
+		ID:            "probe.http.schema_conformance",
+		Discriminates: []string{model.HypothesisContractMismatch},
+		Version:       1,
+		Effect:        model.EffectInterrogate,
+		Capabilities:  []string{"net.http.outbound"},
+		TimeoutMS:     15_000,
+		ExpectedFrom:  model.PlaneIntent,
 		Produces: []model.Produces{
 			{SubjectTemplate: "http:{component}/{method} {path}#response.body",
 				Predicate: "response_fields"},

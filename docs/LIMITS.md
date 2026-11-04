@@ -1154,10 +1154,10 @@ Culprit's own CI until Phase 32.1 restores it.
 
 `culprit probe` executes the probes you ask for, against the target you
 give it. It does not choose probes, order them, stop early when one
-answers the question, or build a fault tree from the results. Selection
-and isolation are the next phase's work, and shipping half of it here
-would have produced a tool that looks like it is reasoning when it is
-iterating a list.
+answers the question, or build a fault tree from the results. That is
+`culprit diagnose` (Phase 32), which chooses each probe by what it rules
+out — the `discriminates` field of its manifest — and has its own limits,
+below.
 
 Practically: if you do not pass `-p`, every probe in the catalogue runs
 against your target, and most of them will return `inconclusive` because
@@ -1536,3 +1536,115 @@ regenerated image differs in small ways that are real rather than drift:
 the port the throwaway probe server got, and the number of environment
 variables `env capture` counted, which is the size of the environment the
 script runs in (11 on the machine that made the committed ones).
+
+## The isolation walk trusts a request probe to exercise what it calls
+
+`culprit diagnose` bisects the request path: if a request entering at a
+component succeeds, that one reading rules out the component and
+everything it calls; if it fails, the fault is at or below it. That is
+what makes a six-hop chain cost three probes instead of six, and a
+64-component chain six instead of sixty-three (asserted by counting probe
+executions, `cli/internal/isolate`).
+
+The premise holds only if the probe sends a real request through the
+component. The walk asks the endpoint's `health_path`. A shallow health
+check that answers 200 without touching the component's dependencies
+makes the walk rule out a branch it should have searched. The demo
+services' `/health` is exactly that — it is exempt from their injected
+faults — so the fault library points the walk at `/ready`, which is not.
+Point `health_path` at something that exercises the request path.
+
+## The symptom is taken as given, and a write cannot be replayed
+
+Probes never send a request body and never write, so a failing
+`POST /orders` cannot be reproduced to confirm it. The walk takes the
+symptom as an assertion, tests what lies beneath it, and establishes the
+`symptom_of` edge with the readings that establish the cause. The
+`reproduced` criterion then means the *cause's* probe failed twice, not
+that the user's request was replayed.
+
+## One vantage per run, and some faults are only visible from inside
+
+A probe sees the network from wherever the binary runs. Name that
+component with `--from`: only from inside a component can the walk test
+its outbound connections, the token it presents, or — under the `process`
+adapter — its own configuration. Every such hypothesis about any other
+component is recorded as *unexplored*, with the reason, and the diagnosis
+is marked partial.
+
+From inside the caller, a refused connection to a callee is equally
+consistent with "the path is cut" and "the callee is down". The walk
+names the edge as the root, because the edge's own probe failed, but the
+rubric's `discriminated` is false, and says so. Separating the two needs a
+second vantage, which arrives with the production agent (Phase 33).
+
+## Added latency is not isolated
+
+No read-only probe discriminates "slow" from "working". Under an injected
+800 ms delay every probe passes, and the walk reports a *partial*
+diagnosis — the cause is inside the entry component, or something no
+probe observes, such as added latency — rather than blaming the entry by
+elimination. Latency waits for impedance to have a CLI source. A root
+that only elimination points at is never reported as complete.
+
+## Contract checks need a route with no path parameter
+
+The walk tests a contract by asking whether each route a caller declares
+calling is served (`probe.http.route_conformance`). On a route with a path
+parameter (`GET /stock/{sku}`) the probe cannot tell a missing route from a
+missing item — both answer 404 — so it is inconclusive, the hypothesis is
+unexplored, and the diagnosis is partial. Only parameter-free routes are
+checked. (The demo's stock route takes the sku as a query parameter for
+this reason.) Contract hypotheses come from `calls` facts; a caller whose
+client calls were not extracted contributes none.
+
+## Which auth faults the walk can see
+
+An audience mismatch is tested only when the environment names the
+variable holding the token a component presents
+(`environments.<env>.components.<caller>.tokens`) *and* something declares
+the audience the callee expects — an invariant on
+`auth:<caller>-><callee>/audience`. Without both, the edge is treated as
+unauthenticated and no auth hypothesis is generated. A downstream that
+rejects otherwise-valid credentials (`auth_rejected`) is never tested:
+`culprit.yaml` has nowhere yet to say which protected URL to present a
+token to. The token is read from the agent's own environment, passed to
+`probe.auth.token_shape` as an input, and never appears in a reading or
+an investigation — only its audience, issuer and expiry do.
+
+## The walk follows one branch, and edges back up the path are ignored
+
+The request path is a tree built breadth first from the entry: an edge
+back to a component already reached (the demo declares
+`inventory-service -> order-service`) is not followed, because a request
+entering at the entry does not travel it. At a fan-out the walk descends
+into the first failing child in name order and stops there: it assumes a
+single fault, and a second, simultaneous fault in another branch is not
+found.
+
+## Investigation budgets
+
+One `culprit diagnose` runs at most **40 probes** and **2 minutes** by
+default, counting the reproduction and counterfactual runs.
+`isolation.max_probes`, `isolation.max_wall_clock` and
+`isolation.environments.<env>.max_probes` change that; where both a global
+and a per-environment cap are set, the tighter wins. A walk that reaches a
+limit stops: the hypothesis it was about to test is unexplored, with the
+limit as its reason, and the diagnosis is partial. Hypotheses on branches
+it never needed stay `open` — not tested, and not claimed either way.
+
+## An empty variable counts as set
+
+`probe.config.present` — and so the walk's config hypotheses — reads
+*membership* of a variable in the environment, not whether its value is
+empty. `PAYMENTS_PROVIDER_KEY=` passes. (The fault library's config fault
+removes the variable rather than blanking it, for this reason.)
+
+## Locally, `go test` does not notice the catalogue mirror changing
+
+`TestTheAPICatalogueIsGeneratedFromTheBinary` reads
+`api/app/readings/catalogue.json`, which is outside the Go module, and Go's
+test cache does not track it: after editing that file by hand, a cached
+`go test` still reports the old result. CI always runs fresh. Locally, use
+`go test -count=1`, or regenerate with `just probe-catalogue` rather than
+editing.

@@ -132,6 +132,31 @@ Without `--env` there is no environment to read, and these probes say so.
 readings are produced by the worker, which has the telemetry
 (`docs/LIMITS.md`).
 
+## What each probe rules out — `discriminates`
+
+`culprit diagnose` (Phase 32) chooses probes by the `discriminates` field of
+their manifests and nothing else: a probe that *passes* on a subject rules
+out the hypotheses of the kinds it lists, on that subject. Where two probes
+discriminate the same kind, the cheapest runs first, then by id.
+
+| Hypothesis kind | Ruled out by |
+|---|---|
+| `component_fails` — a request entering here fails | `probe.http.reachable` |
+| `connection_unreachable` | `probe.net.tcp_connect` |
+| `tls_invalid` | `probe.net.tls_validity` |
+| `auth_audience_mismatch` | `probe.auth.token_shape` |
+| `auth_rejected` | `probe.auth.propagation` (the walk does not yet generate this hypothesis — docs/LIMITS.md) |
+| `contract_mismatch` | `probe.http.route_conformance`, `probe.http.schema_conformance` |
+| `config_missing` | `probe.config.present` |
+| `database_unreachable` | `probe.db.connect` |
+
+`probe.net.dns_resolve` deliberately discriminates nothing: a name that
+resolves says nothing about whether a connection opens, and
+`probe.net.tcp_connect` resolves the name itself. The vocabulary is
+`model.HypothesisKinds`, held to Python by
+`shared/tests/investigation_conformance.json`; a manifest naming a kind the
+walk does not know fails validation.
+
 ## Where expectations come from
 
 A reading is a measurement against a reference, and the reference is a

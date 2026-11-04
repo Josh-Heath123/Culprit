@@ -61,6 +61,9 @@ type Manifest struct {
 	// apply. Capabilities are not configurable here — they belong to the
 	// probe's manifest and the environment's grants. See probes.go.
 	Probes map[string]ProbeSpec `yaml:"probes"`
+
+	// Isolation bounds `culprit diagnose` (Phase 32 field 10).
+	Isolation IsolationSpec `yaml:"isolation"`
 }
 
 // ManifestComponent is one component. Only the fields extraction and
@@ -195,6 +198,9 @@ func LoadManifest(path string) (*Manifest, error) {
 		return nil, &ManifestError{Path: path, Message: err.Error()}
 	}
 	if err := manifest.validateEnvironments(); err != nil {
+		return nil, &ManifestError{Path: path, Message: err.Error()}
+	}
+	if err := manifest.validateIsolation(); err != nil {
 		return nil, &ManifestError{Path: path, Message: err.Error()}
 	}
 	if err := manifest.validateProbes(); err != nil {

@@ -22,7 +22,8 @@ type dbConnect struct{}
 
 func (dbConnect) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID: "probe.db.connect",
+		ID:            "probe.db.connect",
+		Discriminates: []string{model.HypothesisDatabaseUnreachable},
 		// Version 2 (Phase 31.1): no `dsn` input. Which database is named
 		// by the target; how to reach it is culprit.yaml's `dsn_env`, read
 		// by the data source. See DatabaseInspector.

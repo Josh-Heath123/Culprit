@@ -210,6 +210,24 @@ Named by the plan for later phases (the production agent). No code in
 this release uses them; granting one changes nothing and is recorded as
 unused.
 
+## What `culprit diagnose` reads without a grant — `tokens:`
+
+`environments.<env>.components.<caller>.tokens` names, for each component
+the caller presents a bearer token to, the *variable* holding that token
+in the environment `culprit diagnose` runs in. The walk reads the variable's
+value and passes it to `probe.auth.token_shape`, which reports only the
+token's audience, issuer and expiry; the token never reaches a reading, a
+reason or the investigation, and the fault library asserts that on every
+fault, in JSON and in text.
+
+That read is **not** behind a capability today: `probe.auth.token_shape`
+opens nothing and declares none, and no grant names the variable. A DSN,
+by contrast, is read only for probes that `db.metadata.read` permits.
+Whether reading a token should require a grant of its own is an open
+decision for the architecture review of Phase 32 (`docs/HANDOFF.md` §5).
+Until then, name a token variable only in an environment you are content
+for `culprit diagnose` to read it in.
+
 ## How Culprit reaches an environment
 
 | Adapter | Reads through | Needs on the machine running Culprit |
