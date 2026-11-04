@@ -1729,6 +1729,67 @@ one transaction with the admin rows locked, so two admins demoting each other
 at the same moment cannot both succeed. A test for each route and one for the
 concurrent case. Found by Phase 31.2's truth pass.
 
+
+**How Phase 32 is run — decided 2026-11-04.** Where this block and the fields
+above differ, this block wins.
+
+**Two parts, two `/next` runs, one architecture review between them.** This is
+the largest phase in the plan, and its core claim — the walk finds the root,
+not the symptom — should be proven before storage and screens are built
+around it.
+
+- **Part 1 — the walk, in the binary.** Carried-in items 1 and 2; the
+  `Investigation`, `Hypothesis` and `FaultEdge` model in `culprit_model`, Go
+  and Python, with a conformance fixture both read, written first as
+  `Reading`'s was — a `FaultEdge` with no establishing reading cannot be
+  constructed; `cli/internal/isolate/`; `culprit diagnose`; `isolation:` in
+  `culprit.yaml`; the fault library and its CI job. Output is the
+  investigation as text and JSON. Criteria: all four of field 14, and field
+  15's fault library running in CI. No migration, no API, no frontend, no
+  worker change.
+- **Part 2 — the investigation in the control plane.** Field 8's tables, with
+  field 7's rule enforced by the database; `POST /investigations` (ingesting
+  what `culprit diagnose` wrote) and the reads; the Investigation view, built
+  functionally; `Evidence.tsx` repointed at readings; the correlation engine
+  removed with its data migration (field 6); the third carried-in item (the
+  last admin); and README, quickstart and LIMITS brought back in line. After
+  this part the quickstart's fault no longer produces an incident, so what the
+  README shows must change with it — Phase 31.2's standard holds. Its criteria
+  are written when part 1 is signed off.
+
+**Decisions.**
+- **`culprit diagnose` accepts a subject URI, a failing endpoint
+  (`METHOD URL`) or a component name.** Not a trace id or an error signature:
+  resolving either needs telemetry, which the binary cannot read — it has no
+  client to the control plane before Phase 33's transport (D1 and D2,
+  amended). They come back when the agent can read telemetry.
+- **No postmortem prior in Phase 32.** Field 5 assumed the walk ran where the
+  corpus lives. It runs in the binary, which never sees it. The walk is
+  deterministic and chooses probes by `discriminates` alone. The incident
+  narrative job goes with the correlation engine in part 2; the postmortem
+  corpus and its editor stay. Ranking open hypotheses with the corpus belongs
+  to the narrator, in Phase 35, under D8.
+- **`POST /investigations/{id}/probe` is not built until Phase 33.** Running a
+  probe from the control plane needs an agent, and an endpoint that can only
+  answer 503 is not added a second time.
+- **The binary does not upload.** `culprit diagnose --format json` writes the
+  investigation; the quickstart and CI post it to `POST /investigations`,
+  authenticated like the capture endpoints. The binary gains a client to the
+  control plane only with Phase 33's transport — which is also when the
+  project token is scoped down.
+- **The confidence rubric (§2.9).** `reproduced`: the failing probe is run
+  again and fails again. `discriminated`: at least one reading ruled out a
+  competing hypothesis. `counterfactual`: the same probe passes in a
+  reference environment named on the command line. `verified`: always false,
+  with its reason, until Phase 34.
+- **The fault library's faults are test harness.** The demo services gain what
+  the criteria need — a config fault, a contract fault, an audience check
+  between two services, and Phase 31.1's partition — in `demo-services/`,
+  beside the existing fault injection. None of it is a probe, a capability, or
+  anything the binary does.
+- **The six-hop criterion runs against a synthetic model and a fake runner
+  that counts executions**, not the demo stack, which has three services.
+
 ---
 
 ### Phase 32.1 — Design system and the investigation-first interface
