@@ -45,10 +45,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
-| Current phase | **32, part 2 — The investigation in the control plane** — status `implemented, awaiting commit and CI`. Every criterion met locally and both audits run (§5); the commit and the CI run on the merge result are the human's next step, so the phase is **not complete** until that run is green. |
-| Previous phase | **32, part 1 — The isolation walk: complete**, signed off 2026-11-04 by the architecture session. Merged via PR #22 (`972f288`); CI green on every job on the merge result (run 41815764073), the `fault-library` job 6/6 on Linux. |
+| Current phase | **32.1, part 1 — The system, on the Investigation screens** — status `not started`. Starts only once §5 records the part 2 quickstart verification on `main` as passed. Brief in §4. |
+| Previous phase | **32 — Fault isolation and the Investigation: complete** (parts 1 and 2), signed off 2026-11-04 by the architecture session, subject to one verification: `just quickstart` from a fresh clone of `main` (`a22da56`), which part 2 could not finish on its final tree. Part 2 merged via PR #23 (`a22da56`). Decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. Every merge to `main` runs `deploy` (PR #19 `a3f110a`, PR #20 `4f69ab3`), and it is expected to fail as before until Q16 is resolved. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
-| Branch | `phase-32-control-plane` (renamed from `handoff-32-1-complete`), cut from `origin/main` = `972f288`; its first commits are part 1's record-keeping and its sign-off. Do not stage `shared/uv.lock`. |
+| Branch | `phase-32.1-interface`, cut from `origin/main` = `a22da56`; its first commit is the Phase 32 sign-off. Do not stage `shared/uv.lock`. |
 | Blocking questions | **None.** Open questions are in §3. |
 
 ---
@@ -60,7 +60,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q16 | **Where did the VM remediation land?** Is SSH access to `culprit-vm` restored, and has anything changed on it since 2026-09-12? The answer decides whether Phase 31.2's README may link `culprit.co.za`, and the VM must deploy green before Phase 33. | 2026-11-03, architecture | Nothing yet — Phase 31.2's live link, then Phase 33 |
+| Q16 | **Where did the VM remediation land?** Is SSH access to `culprit-vm` restored, and has anything changed on it since 2026-09-12? The answer decides whether Phase 31.2's README may link `culprit.co.za`, and the VM must deploy green before Phase 33. | 2026-11-03, architecture | **Phase 33, the phase after 32.1:** the VM must deploy green before it starts. (Phase 31.2 shipped with no live link.) |
 
 ---
 
@@ -82,8 +82,9 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 31.1 | Close the probe loop | **complete** | **Signed off 2026-11-04** (architecture session): PR #20 (`4f69ab3`), CI green on the merge result (run 41789133416). Criteria 2 and 4 refined and the auditor's risks decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31.1. **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Phase 31 is merged; the branch `phase-31.1-probe-loop` is cut from `origin/main` = `a3f110a`, with the sign-off as its first commit. Order within the phase: the two gate repairs first — the boundary allowlist (it must exist before anything else lands under `cli/internal/`) and the emptied `.trivyignore` — then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 31.2 | Present what works | **complete** | **Signed off 2026-11-04** (architecture session): PR #21 green on every job; the review's five corrections and the lockfile change verified on disk in `a18c73e`, with the self-check's numbers evidenced in §5. **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.2, with `docs/PRODUCTISATION.md` as its requirements — §5, §6 and §10 apply now; the redesign (§2) and the video (§7) belong to Phase 32.1. Present only what works. The web UI is made honest here, not restyled. **Go-ahead 2026-11-04:** the branch `phase-31.2-present-what-works` exists, cut from `origin/main` = `4f69ab3`. Read Phase 31.2 in the plan including "Carried in from Phase 31.1". **Review 2026-11-04 (before CI):** justfile fix ratified with one change (types generated from the lockfile, as CI does); criterion 4 refined; five README and LIMITS corrections to make on this branch before merge — `DIAGNOSTIC_PLAN.md`, end of Phase 31.2. The last-admin guard is Phase 32's third item. |
 | 32, part 1 | The isolation walk | **complete** | **Signed off 2026-11-04** (architecture session): PR #22 (`972f288`), CI green on the merge result with the fault library 6/6 on Linux (run 41815764073). Criteria 1 and 3 refined; decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — all 17 fields, read with "How Phase 32 is run" at the end of the section, which wins where they differ. This run is **part 1 only: the walk, in the binary** — no migration, no API, no frontend, no worker change; those are part 2. Order: the two carried-in items first (CONFIGURED values rendered as shapes; the generated catalogue mirror), then the shared Investigation model and its conformance fixture, then `internal/isolate` and `culprit diagnose`, then the fault library and its CI job. Branch `phase-32-isolation-walk`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 32, part 2 | The investigation in the control plane | **implemented, awaiting commit and CI** | 2026-11-04: all eight criteria met locally (§5), both audits run and their findings fixed; not committed, no CI run yet. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — "How Phase 32 is run", then "Part 2 — the investigation in the control plane" at the end of the section, which holds the work order, the criteria and what not to build. Branch `phase-32-control-plane`. Order: the carried-in items first (the token grant, the symptom's attestation, untested versus unexplored branches; then the last admin), then storage, the API, the view, the correlation engine's removal, and the quickstart, README and LIMITS last. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 32.1 | Design system and the investigation-first interface | not started | Folded in from `docs/PRODUCTISATION.md` on 2026-11-03. The full brief is written when Phase 32 is complete. |
+| 32, part 2 | The investigation in the control plane | **complete** | **Signed off 2026-11-04** (architecture session), subject to the quickstart verification on `main` recorded in §5. Merged via PR #23 (`a22da56`). Decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — "How Phase 32 is run", then "Part 2 — the investigation in the control plane" at the end of the section, which holds the work order, the criteria and what not to build. Branch `phase-32-control-plane`. Order: the carried-in items first (the token grant, the symptom's attestation, untested versus unexplored branches; then the last admin), then storage, the API, the view, the correlation engine's removal, and the quickstart, README and LIMITS last. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 32.1, part 1 | The system, on the Investigation screens | not started | **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — all 17 fields, read with "Carried in from Phase 32" and "How Phase 32.1 is run" at the end of the section, which win where they differ. Requirements: `docs/PRODUCTISATION.md` §2 and §4. Start only once §5 records the part 2 quickstart verification on `main` as passed. **Part 1 only:** the carried-in items first (connection kinds, the browser test and its runner, the CLI's partial-diagnosis wording), then the tokens and the component set, then the investigation list and view. No other route is restyled. End with the screenshots at four widths in the run report, for Malcolm. Branch `phase-32.1-interface`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 32.1, part 2 | Everywhere else | not started | Written after Malcolm reviews part 1's screenshots; his notes go into it. |
 | 33 | Production agent and permission model | not started | — |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
@@ -277,6 +278,53 @@ LEFT OPEN (decisions for the architecture session)
     closed set does not have; only `just intent` (Go) reads it.
   - config.read.values for a token also lets `culprit env capture` store
     that token's value (PERMISSIONS says so).
+```
+
+### VERIFICATION, 2026-11-04
+
+Part 2's criterion 4 (quickstart from a fresh clone) re-run on the merged
+tree, as the sign-off required. **PASS.**
+
+```
+Freed memory   docker compose ls -a -> one Culprit stack, culprit-freshclone
+               (restarting). Taken down with
+               `docker compose -p culprit-freshclone -f infra/docker-compose.quickstart.yml down -v --remove-orphans`.
+               No other compose project was running.
+
+Clone          git clone https://github.com/Josh-Heath123/Culprit.git
+                 C:\Users\flosh\culprit\culprit-verify-32   (outside %TEMP%)
+               HEAD = a22da5651b1d6fe15e5c18f6c59098a870201426 (main, PR #23 merge)
+
+Run            COMPOSE_PROJECT_NAME=culprit-verify-32 QUICKSTART_HTTP_PORT=8088 \
+                 just quickstart        (README, "The control plane and dashboard")
+               exit 0. Printed
+                 http://localhost:8088/investigations/inv-728cb9815e53da93
+                 "Its root should be auth:order-service->inventory-service/audience."
+
+Stored root    Logged in as the printed admin, through Caddy at :8088/api:
+               GET /investigations -> one item, inv-728cb9815e53da93,
+                 root_subject auth:order-service->inventory-service/audience,
+                 complete=true, attestation=reported
+               GET /investigations/{id}        diagnosis.root_subject the same
+               GET /investigations/{id}/tree   200
+
+Opens          Headless Chromium (Playwright, scratchpad script, not in the
+               repository): http://localhost:8088/investigations/inv-728cb9815e53da93
+               -> login -> lands on the same URL and renders the root subject;
+               no console errors.
+
+CI             PR #23, run 41837179727 (pull_request; checkout is
+               "Merge 2a6d58c into 972f288", i.e. the merge result):
+               conclusion=success; every job success (lint, typecheck, cli,
+               test, migration-round-trip, self-check, kind-capture,
+               fault-library, build x5), deploy skipped.
+               https://github.com/Josh-Heath123/Culprit/actions/runs/41837179727
+               main push of a22da56, run 41841336643: every job success except
+               deploy, failure ("dial tcp ***:22: i/o timeout", Q16), as expected.
+
+Teardown       `docker compose -p culprit-verify-32 -f infra/docker-compose.quickstart.yml
+                 --env-file infra/.env.prod --profile demo down -v --remove-orphans`;
+               docker compose ls -a empty, no containers running.
 ```
 
 
