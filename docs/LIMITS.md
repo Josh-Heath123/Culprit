@@ -87,6 +87,16 @@ correspondingly little to ground against. Confidence level and cited
 evidence are shown specifically so you can judge that for yourself
 instead of trusting a bare paragraph.
 
+**Without keys there is no narrative, and the dashboard cannot tell.** The
+job needs `VOYAGE_API_KEY` (retrieval) and an LLM key. Without them it
+fails inside the worker on every attempt, and the incident's root-cause
+status stays `pending` for good — "Generate now" re-queues a job that fails
+the same way. The `--local` quickstart sets neither key. The incident
+panel says this instead of promising the narrative is seconds away; the
+worker log records the actual failure (`AuthenticationError` from the
+Voyage client). Recording the failure as a status the dashboard can show is
+not done.
+
 ## RAG retrieval quality depends on your postmortem corpus
 
 `worker/app/rag/retrieval.py` always returns its top 3 most-similar
@@ -1466,3 +1476,60 @@ section overclaimed it and the Phase 31 audit caught the overclaim:
 Which means the gap above is real: a credential in a URL in a shape the
 pattern does not match reaches a reading, and `api-reader` can read the
 90-day store it lands in.
+
+## The API lets an admin remove the last admin
+
+`PATCH /users/{id}` and `DELETE /users/{id}` do not refuse a change that
+leaves no enabled admin. Phase 31.2's truth pass did exactly that from the
+dashboard — the quickstart's only admin clicked "Make member" on their own
+row — and every admin page then answered 403, with no way back short of
+`just create-user <name> --role admin` on the host.
+
+The dashboard no longer offers a role or disable control on your own row.
+That closes the one-click route, not the hole: two admins can still demote
+each other, and anything that calls the API directly can still demote the
+last one. Refusing it is a server-side change and has not been made.
+
+## A member's timeline has a lane only for services with incidents
+
+The component registry (`/model`) is admin-only, so a member's browser
+cannot read which services exist. The timeline draws a member's lanes from
+the services the incidents themselves name instead. Two consequences: a
+service with no incident has no lane for a member, and a disabled service
+that still has incidents keeps its lane for a member while an admin's
+timeline drops it. The incidents, bands and anomalies are the same for
+both. Before Phase 31.2 a member's timeline drew no lanes at all — the
+header counted incidents and the chart was empty.
+
+## The dashboard answers only to the name it was configured with
+
+Caddy routes by host name. The quickstart configures `localhost`, so
+<http://localhost> is the dashboard and <http://127.0.0.1> — the same
+machine — returns an empty `200` page, which looks like a broken frontend
+and is not. On a real install the same applies to the domain in `DOMAIN`.
+
+## The quickstart needs port 80, and a clone outside Windows' temp folder
+
+`just quickstart` publishes the dashboard on port 80 and has no setting to
+move it; if another server holds 80, that server answers instead (on the
+machine Phase 31.2 was verified on, an Apache inside WSL did). Its compose
+project is always named `culprit-quickstart`, so a second checkout's
+quickstart reuses the first one's database volume — whose passwords were
+fixed by the first checkout's `infra/.env.prod`.
+
+Under Git Bash on Windows, a clone inside `%TEMP%` cannot run the
+quickstart at all: Git Bash maps that folder to `/tmp`, the recipe hands
+`$(pwd)` to `docker run -v`, and Docker reads `/tmp/...` as a path inside
+its own VM, which is empty. The secrets step then fails with
+"can't open file '/repo/scripts/bootstrap_env.py'". Clone anywhere else.
+
+## The README's captures are regenerated, and vary a little by machine
+
+`just readme-captures` reruns the three commands behind the README's
+images. It needs Go, uv and Node, and `npm ci` once in `extractors/node`;
+without that last step the Node extractor exits 1 and `culprit check` on
+the demo reports 4 divergences and 19 gaps instead of 5 and 17. A
+regenerated image differs in small ways that are real rather than drift:
+the port the throwaway probe server got, and the number of environment
+variables `env capture` counted, which is the size of the environment the
+script runs in (11 on the machine that made the committed ones).

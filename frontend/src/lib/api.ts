@@ -40,7 +40,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  { unauthorizedEndsSession = true }: { unauthorizedEndsSession?: boolean } = {},
+): Promise<T> {
   const token = getToken();
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -50,7 +54,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  if (response.status === 401) {
+  if (response.status === 401 && unauthorizedEndsSession) {
     // Session token missing/expired/rejected — drop it so App.tsx's
     // useAuthToken() falls back to the login screen. The ApiError below
     // still throws for this in-flight request, but the component tree
@@ -95,10 +99,17 @@ export function fetchCurrentUser(): Promise<UserOut> {
 }
 
 export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  return request<void>("/auth/change-password", {
-    method: "POST",
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-  });
+  // A 401 here means the *current password* was wrong, not that the
+  // session is — so it is shown in the dialog instead of logging you out
+  // (Phase 31.2 truth pass: one typo used to end the session).
+  return request<void>(
+    "/auth/change-password",
+    {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    },
+    { unauthorizedEndsSession: false },
+  );
 }
 
 export function fetchUsers(): Promise<UsersOut> {

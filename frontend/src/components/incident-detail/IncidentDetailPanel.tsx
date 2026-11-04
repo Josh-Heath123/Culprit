@@ -169,9 +169,13 @@ function PendingRootCause({ justRegenerated }: { justRegenerated: boolean }) {
           {justRegenerated ? "Regenerating narrative…" : "Narrative pending…"}
         </span>
       </div>
+      {/* Not "usually finishes within a few seconds": without the keys the
+          job fails inside the worker and this status never leaves pending,
+          which the panel cannot see (Phase 31.2 truth pass). */}
       <p className="text-xs text-muted-foreground">
-        Culprit hasn't finished analyzing this incident yet. This isn't an error — the
-        root-cause job runs asynchronously and usually finishes within a few seconds.
+        The narrative is written by a background job, usually within seconds — but only
+        if the worker has an embedding key (VOYAGE_API_KEY) and an LLM key. Without
+        them it stays pending. The anomalies and evidence here are complete either way.
       </p>
     </div>
   );

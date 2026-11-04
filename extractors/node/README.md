@@ -1,11 +1,12 @@
 # culprit-extract-node
 
-The JavaScript/TypeScript intent extractor for [Culprit](https://culprit.co.za).
+The JavaScript/TypeScript intent extractor for [Culprit](https://github.com/Josh-Heath123/Culprit).
 
 Install it as a **dev-dependency of the project you want to analyse**:
 
 ```bash
-npm install --save-dev culprit-extract-node
+# Not published to npm yet: install it from your clone of Culprit.
+npm install --save-dev /path/to/culprit/extractors/node
 ```
 
 Then point `culprit.yaml` at it:

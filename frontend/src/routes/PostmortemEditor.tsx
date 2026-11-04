@@ -8,11 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useIncident } from "@/hooks/useIncident";
 import {
   useCreatePostmortem,
+  useDeletePostmortem,
   usePatchPostmortem,
   usePostmortem,
   useRetryPostmortemEmbedding,
 } from "@/hooks/usePostmortems";
-import { deletePostmortem } from "@/lib/api";
 import type { EmbeddingStatus } from "@/lib/types";
 
 /** Matches the eight fixture postmortems' own structure
@@ -63,11 +63,15 @@ export function PostmortemEditor() {
   const createPostmortem = useCreatePostmortem();
   const patchPostmortem = usePatchPostmortem(postmortemId ?? "");
   const retryEmbedding = useRetryPostmortemEmbedding(postmortemId ?? "");
+  // The hook, not a bare deletePostmortem() call: it invalidates the
+  // ["postmortems"] list, without which the list a successful delete
+  // navigates to still showed the postmortem just deleted (Phase 31.2
+  // truth pass).
+  const deletePostmortem = useDeletePostmortem();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [initialized, setInitialized] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // Pre-fill exactly once, the moment the data it depends on arrives —
   // an existing postmortem's own title/body, or (for a brand-new one
@@ -107,17 +111,18 @@ export function PostmortemEditor() {
 
   async function handleDelete() {
     if (!postmortemId) return;
-    setDeleting(true);
     try {
-      await deletePostmortem(postmortemId);
-      navigate("/postmortems");
-    } finally {
-      setDeleting(false);
+      await deletePostmortem.mutateAsync(postmortemId);
+    } catch {
+      return; // shown below from deletePostmortem.error
     }
+    navigate("/postmortems");
   }
 
   const saving = createPostmortem.isPending || patchPostmortem.isPending;
   const saveError = createPostmortem.error ?? patchPostmortem.error;
+  const deleteError = deletePostmortem.error;
+  const deleting = deletePostmortem.isPending;
 
   if (!isNew && existing.isPending) {
     return <p className="p-6 text-xs text-muted-foreground">Loading postmortem…</p>;
@@ -197,6 +202,11 @@ export function PostmortemEditor() {
         {saveError ? (
           <p className="font-mono text-xs text-destructive">
             {saveError instanceof Error ? saveError.message : "Couldn't save this postmortem."}
+          </p>
+        ) : null}
+        {deleteError ? (
+          <p className="font-mono text-xs text-destructive">
+            {deleteError instanceof Error ? deleteError.message : "Couldn't delete this postmortem."}
           </p>
         ) : null}
 

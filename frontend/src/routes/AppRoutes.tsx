@@ -7,6 +7,7 @@ import { useAuthToken } from "@/hooks/useAuth";
 import { NotFound } from "./NotFound";
 import { PostmortemEditor } from "./PostmortemEditor";
 import { PostmortemList } from "./PostmortemList";
+import { RequireAdmin } from "./RequireAdmin";
 import { RequireAuth } from "./RequireAuth";
 import { SettingsServices } from "./SettingsServices";
 import { SettingsUsers } from "./SettingsUsers";
@@ -53,8 +54,10 @@ export function AppRoutes() {
         <Route path="/postmortems" element={<PostmortemList />} />
         <Route path="/postmortems/new" element={<PostmortemEditor />} />
         <Route path="/postmortems/:postmortemId" element={<PostmortemEditor />} />
-        <Route path="/settings/services" element={<SettingsServices />} />
-        <Route path="/settings/users" element={<SettingsUsers />} />
+        <Route element={<RequireAdmin />}>
+          <Route path="/settings/services" element={<SettingsServices />} />
+          <Route path="/settings/users" element={<SettingsUsers />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<NotFound />} />

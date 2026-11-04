@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1068" height="428" viewBox="0 0 1068 428" role="img">
+<rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<text x="16" y="29" fill="#58a6ff" xml:space="preserve">$ culprit env capture staging -o staging.capture</text>
+<text x="16" y="47" fill="#58a6ff" xml:space="preserve">$ culprit env capture production -o production.capture</text>
+<text x="16" y="65" fill="#58a6ff" xml:space="preserve">$ culprit diff staging.capture production.capture</text>
+<text x="16" y="83" fill="#c9d1d9" xml:space="preserve">1 divergence(s)</text>
+<text x="16" y="101" fill="#c9d1d9" xml:space="preserve"></text>
+<text x="16" y="119" fill="#f85149" xml:space="preserve">  [breaks_request_path] config:api/PAYMENTS_API_KEY</text>
+<text x="16" y="137" fill="#c9d1d9" xml:space="preserve">      api/.env.example refers to PAYMENTS_API_KEY, which production (process) does not have</text>
+<text x="16" y="155" fill="#c9d1d9" xml:space="preserve">      true                                       api/.env.example L2 (rank 80)</text>
+<text x="16" y="173" fill="#c9d1d9" xml:space="preserve">      false                                      process (in production)</text>
+<text x="16" y="191" fill="#c9d1d9" xml:space="preserve">      why breaks_request_path: api is on the request path from web, and the key is read</text>
+<text x="16" y="209" fill="#c9d1d9" xml:space="preserve"></text>
+<text x="16" y="227" fill="#c9d1d9" xml:space="preserve"></text>
+<text x="16" y="245" fill="#8b949e" xml:space="preserve">Refused (2) — not looked at, because the capability was not granted</text>
+<text x="16" y="263" fill="#c9d1d9" xml:space="preserve">  staging/api                  config values          the values of 11 key(s) were not captured — only their shape (config.read.val…</text>
+<text x="16" y="281" fill="#c9d1d9" xml:space="preserve">  production/api               config values          the values of 10 key(s) were not captured — only their shape (config.read.val…</text>
+<text x="16" y="299" fill="#c9d1d9" xml:space="preserve"></text>
+<text x="16" y="317" fill="#8b949e" xml:space="preserve">Not checked (10) — these are gaps, not clean results</text>
+<text x="16" y="335" fill="#c9d1d9" xml:space="preserve">  api                client_calls     culprit-extract-python@0.1.0 does not extract client_calls</text>
+<text x="16" y="353" fill="#c9d1d9" xml:space="preserve">  api                config_keys      no docker-compose file found</text>
+<text x="16" y="371" fill="#c9d1d9" xml:space="preserve">  api                db_schema        no FastAPI, Flask or Django application found. Tried app.main:app, main:app, app:app, src.mai…</text>
+<text x="16" y="389" fill="#c9d1d9" xml:space="preserve">  api                db_schema        no alembic versions/ directory with migrations was found; no alembic.ini found; migration hea…</text>
+<text x="16" y="407" fill="#c9d1d9" xml:space="preserve">  …</text>
+</g>
+</svg>

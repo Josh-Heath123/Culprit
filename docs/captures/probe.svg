@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1311" height="518" viewBox="0 0 1311 518" role="img">
+<rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<text x="16" y="29" fill="#58a6ff" xml:space="preserve">$ culprit probe 'http:api/GET /health' --env local -p probe.http.route_conformance --input base_url=http://127.0.0.1:61642</text>
+<text x="16" y="47" fill="#3fb950" xml:space="preserve">PASSING (1)</text>
+<text x="16" y="65" fill="#c9d1d9" xml:space="preserve">  probe.http.route_conformance  http:api/GET /health</text>
+<text x="16" y="83" fill="#c9d1d9" xml:space="preserve">      measured: method=GET status=200 url=http://127.0.0.1:61642/health</text>
+<text x="16" y="101" fill="#c9d1d9" xml:space="preserve">0 failing, 0 inconclusive, 0 refused, 1 passing</text>
+<text x="16" y="119" fill="#c9d1d9" xml:space="preserve"></text>
+<text x="16" y="137" fill="#58a6ff" xml:space="preserve">$ culprit probe 'http:api/GET /orders' --env local -p probe.http.route_conformance --input base_url=http://127.0.0.1:61642</text>
+<text x="16" y="155" fill="#f85149" xml:space="preserve">FAILING (1)</text>
+<text x="16" y="173" fill="#c9d1d9" xml:space="preserve">  probe.http.route_conformance  http:api/GET /orders</text>
+<text x="16" y="191" fill="#c9d1d9" xml:space="preserve">      GET http://127.0.0.1:61642/orders is declared but the running service answers 404</text>
+<text x="16" y="209" fill="#c9d1d9" xml:space="preserve">      measured: method=GET status=404 url=http://127.0.0.1:61642/orders</text>
+<text x="16" y="227" fill="#c9d1d9" xml:space="preserve">1 failing, 0 inconclusive, 0 refused, 0 passing</text>
+<text x="16" y="245" fill="#c9d1d9" xml:space="preserve"></text>
+<text x="16" y="263" fill="#58a6ff" xml:space="preserve">$ culprit probe 'http:api/GET /health' --env local -p probe.http.route_conformance --input base_url=http://127.0.0.1:61642 --format json   # excerpt of the reading</text>
+<text x="16" y="281" fill="#c9d1d9" xml:space="preserve">{</text>
+<text x="16" y="299" fill="#c9d1d9" xml:space="preserve">  "verdict": "pass",</text>
+<text x="16" y="317" fill="#c9d1d9" xml:space="preserve">  "expected": {</text>
+<text x="16" y="335" fill="#c9d1d9" xml:space="preserve">    "exists": true</text>
+<text x="16" y="353" fill="#c9d1d9" xml:space="preserve">  },</text>
+<text x="16" y="371" fill="#c9d1d9" xml:space="preserve">  "expected_source": {</text>
+<text x="16" y="389" fill="#c9d1d9" xml:space="preserve">    "source_kind": "spec",</text>
+<text x="16" y="407" fill="#c9d1d9" xml:space="preserve">    "extractor": "culprit@dev",</text>
+<text x="16" y="425" fill="#c9d1d9" xml:space="preserve">    "artefact": "api/openapi.json",</text>
+<text x="16" y="443" fill="#c9d1d9" xml:space="preserve">    "locator": "$.paths./health.get",</text>
+<text x="16" y="461" fill="#c9d1d9" xml:space="preserve">    "confidence_rank": 80</text>
+<text x="16" y="479" fill="#c9d1d9" xml:space="preserve">  }</text>
+<text x="16" y="497" fill="#c9d1d9" xml:space="preserve">}</text>
+</g>
+</svg>

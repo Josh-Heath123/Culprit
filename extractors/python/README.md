@@ -1,6 +1,6 @@
 # culprit-extract-python
 
-The Python intent extractor for [Culprit](https://culprit.co.za).
+The Python intent extractor for [Culprit](https://github.com/Josh-Heath123/Culprit).
 
 Install it as a **dev-dependency of the project you want to analyse**, not
 of Culprit itself. It has to run inside your project's own virtualenv:
@@ -8,7 +8,8 @@ introspecting a FastAPI app means importing it, which means having your
 dependencies importable.
 
 ```bash
-uv add --dev culprit-extract-python     # or: pip install culprit-extract-python
+# Not published to PyPI yet: install it from your clone of Culprit.
+uv add --dev /path/to/culprit/extractors/python    # or: pip install /path/to/culprit/extractors/python
 ```
 
 Then point `culprit.yaml` at it:

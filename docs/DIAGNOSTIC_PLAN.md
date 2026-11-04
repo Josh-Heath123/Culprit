@@ -1255,10 +1255,12 @@ that guesses.
 **14. Acceptance criteria.**
 - With the demo stack running, `culprit probe connection:order-service->inventory-service`
   returns readings for reachability, TLS, route conformance and impedance.
-- *(Reworded 2026-11-03 — see the review below.)* With the `culprit` binary run
-  inside container A, blocking the network path from A to B flips exactly A's
-  reachability probe for B to `fail`, while both components' own health probes,
-  taken from the host, stay `pass` — the broken-relationship case, demonstrated.
+- *(Reworded 2026-11-03, refined 2026-11-04 — see the reviews below.)* With the
+  `culprit` binary run inside container A, blocking the network path from A to B
+  flips A's reachability probes for B — `probe.net.tcp_connect` and
+  `probe.http.reachable`, the same path at two layers — to `fail`, while both
+  components' own health probes, taken from the host, stay `pass`: the
+  broken-relationship case, demonstrated.
 - Every probe returns `inconclusive` with a reason rather than a guess when its
   preconditions are unmet.
 - No probe in the catalogue declares `effect: mutate`; manifest validation
@@ -1401,8 +1403,9 @@ with no edit to the test.
   the declaring artefact; with the declaration changed to disagree with what is
   served, it returns `fail`. INTENT against OBSERVED, end to end.
 - `probe.db.schema_conformance` against the demo database returns `pass`, and
-  returns `fail` naming the column after a column the migrations declare is
-  dropped by hand.
+  returns `fail` naming the column after a column the code declares is dropped
+  by hand. *(Refined 2026-11-04: the expectation comes from the highest-ranked
+  source — ORM introspection at rank 90, not the migration chain at 80 (§2.4).)*
 - No fixture credential appears in any reading, in text or in JSON.
 - A new package under `cli/internal/` that links `net/http` turns the boundary
   test red with no edit to the test.
@@ -1419,6 +1422,42 @@ intent; Phase 32 selects probes by what they discriminate.
 **17. Do NOT implement yet.** No probe selection, no fault trees, no new probes,
 no new capabilities, no agent transport, and no change to how impedance is
 produced.
+
+
+**Architecture review, 2026-11-04 — signed off.** Complete: merged via PR #20
+(`4f69ab3`), CI green on the merge result (run 41789133416, every job, Trivy
+blocking with `.trivyignore` empty), every criterion executed against the live
+demo stack and executed again by `phase-auditor`. Checked on disk: the ignore
+file holds no entries, and `TestTheNetworkBoundaryIsAnAllowlist` enumerates
+`internal/...` rather than naming packages. Decisions on what the run report
+left open:
+
+- **Criterion 2** refined, above. Claude Code was right: a REJECT rule in A's
+  namespace cuts both directions, and `tcp_connect` and `http.reachable` are
+  one path at two layers, so "exactly one probe" could never be true.
+- **Criterion 4** refined, above. It named the lower-ranked source.
+- **Criteria 3 and 4 ran against Culprit's own api**, not the demo services,
+  because the demo declares no `extract:`. Accepted: a real FastAPI service
+  introspected at rank 90 is the stronger test.
+- **Field 13 is partly met.** `probe.config.present` and `probe.dep.version`
+  were never run against a live stack. Carried into Phase 31.2, which may not
+  show either until it has run them.
+- **Conflict evidence renders a fact's value verbatim** (`conflictEvidence` in
+  `internal/probe/expect.go`). Unreachable for a secret today, because no probe
+  measures against a CONFIGURED expectation, but it is redaction by call site
+  again (standing invariant 11). **First item of Phase 32**, before any probe
+  can measure against CONFIGURED.
+- **The catalogue mirror's test checks three fields.** Phase 32 starts selecting
+  probes by their manifests, so a hand-maintained mirror becomes a liability.
+  **Second item of Phase 32:** the mirror is generated from the Go catalogue
+  and compared whole, like the schema-drift check.
+- **The partition used for criterion 2 is fault injection.** It may become part
+  of Phase 32's fault library — test harness, demo stack, CI — because Phase
+  32's field 13 requires network-partition faults. It never becomes a probe, a
+  capability, or anything the `culprit` binary or an agent does: injecting a
+  fault mutates the system, and §0.4 holds.
+- **The local stack's `infra/.env.prod` predates Phase 28.** That is a task for
+  the human, not a phase, and LIMITS now says why `just quickstart` cannot fix it.
 
 ---
 
@@ -1505,6 +1544,18 @@ leaves out.
 features, no new dependencies, no demonstration video, and no publication —
 `v0.1.0`, PyPI and npm still wait for a confirmed finding in a project neither
 written nor controlled by us (§5).
+
+
+**Carried in from Phase 31.1 (2026-11-04).**
+- `probe.config.present` and `probe.dep.version` were never run against a live
+  stack. Run each against the demo stack before the README shows it. If
+  `dep.version` cannot reach a verdict there (the demo declares no `packages:`
+  command), the README says so rather than showing it.
+- The fresh-clone run (field 13) must not share the existing stack's volumes or
+  ports — give it its own compose project name. Expect what 31.1 met on this
+  machine: a stale `infra/.env.prod`, and port 80 already held by another
+  server. What a new user would also hit goes into the README; what is
+  particular to this machine goes into the run report.
 
 ---
 
@@ -1616,6 +1667,17 @@ agent.
   `refused`.
 - **Build the Investigation view functionally, on the existing component
   library.** The visual system arrives in Phase 32.1; do not design it twice.
+
+
+**Carried in from Phase 31.1 (2026-11-04) — do these first.**
+1. **Evidence never renders a CONFIGURED value.** Every place a reading's
+   evidence or reason renders a fact's value goes through one function, and
+   that function renders a CONFIGURED fact as its `ValueShape`, never its
+   value. Test it with a granted config value: absent from text and JSON output,
+   on pass and on fail.
+2. **The probe catalogue mirror is generated.** `api/app/readings/catalogue.json`
+   is produced from the Go catalogue by a command, and a drift check compares
+   the whole document, not three fields. Mutation-tested (standing invariant 10).
 
 ---
 

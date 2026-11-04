@@ -110,6 +110,14 @@ check-migration-round-trip:
 cli-build:
     cd cli && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=$(cat ../VERSION)" -o bin/culprit ./cmd/culprit
 
+# Regenerate the README's terminal captures (docs/captures/*.svg) from
+# real runs of `check`, `env capture` + `diff`, and `probe` — nothing in
+# the README is drawn by hand. Needs Go, uv and Node, and `npm ci` in
+# extractors/node once. Read the diff before committing it: it is the
+# README's evidence.
+readme-captures:
+    uv run --no-project python scripts/render_captures.py
+
 # Cross-compile every released platform into cli/dist/ (what CI publishes)
 cli-release:
     #!/usr/bin/env bash
@@ -365,6 +373,33 @@ quickstart:
         echo "==> infra/.env.prod already exists, reusing it"
     fi
     COMPOSE=(docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod)
+    # The frontend image needs src/lib/api-types.generated.ts, which is
+    # gitignored and generated from the api's OpenAPI schema. CI generates
+    # it on the runner before its Docker build; `just generate-types` does
+    # it with uv and npm. This recipe promises Docker only, so it does both
+    # halves in containers: the schema from the api image this recipe builds
+    # anyway, the types with the openapi-typescript version the lockfile
+    # pins. Without this, `just quickstart` from a fresh clone failed at
+    # `tsc -b` with "Cannot find module '@/lib/api-types.generated'" — it
+    # had only ever worked from a checkout that had already generated the
+    # file (found by Phase 31.2's fresh-clone run).
+    #
+    # `env -i`: the api service loads infra/.env.prod, and nothing from it
+    # belongs anywhere near a file that is baked into the frontend image.
+    # The dump sees only the placeholder values `just generate-types` uses.
+    echo "==> Generating the frontend's API types from the api's OpenAPI schema"
+    "${COMPOSE[@]}" build api
+    unused=postgresql+asyncpg://unused:unused@localhost:5432/unused
+    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm --no-deps -T api env -i PATH=/app/.venv/bin:/usr/bin:/bin \
+        JWT_SECRET_KEY=local-schema-dump-not-a-real-secret \
+        INGEST_GATEWAY_DATABASE_URL=$unused API_READER_DATABASE_URL=$unused \
+        REGISTRY_ADMIN_DATABASE_URL=$unused AUTH_SERVICE_DATABASE_URL=$unused \
+        POSTMORTEM_WRITER_DATABASE_URL=$unused FACT_WRITER_DATABASE_URL=$unused \
+        CAPTURE_WRITER_DATABASE_URL=$unused PROBE_WRITER_DATABASE_URL=$unused \
+        /app/.venv/bin/python -m scripts.dump_openapi_schema > frontend/openapi.schema.json
+    MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+        -v "$(pwd)/frontend:/app" -w /app node:22-alpine \
+        npx -y openapi-typescript@7.13.0 openapi.schema.json -o src/lib/api-types.generated.ts
     echo "==> Building and starting Culprit"
     "${COMPOSE[@]}" up -d --build postgres redis api ingest-gateway worker frontend
     echo "==> Running bootstrap (migrations, demo service registration, admin user)"
@@ -417,8 +452,9 @@ quickstart:
     admin_user=$(grep -E '^QUICKSTART_ADMIN_USERNAME=' infra/.env.prod | cut -d= -f2-)
     admin_pass=$(grep -E '^QUICKSTART_ADMIN_PASSWORD=' infra/.env.prod | cut -d= -f2-)
     echo "Log in as: ${admin_user} / ${admin_pass}"
-    echo "A fault will auto-inject in ~90s; an incident with a root-cause narrative"
-    echo "should appear within about 5 minutes. To trigger another fault yourself:"
+    echo "A fault will auto-inject in ~90s; an incident should appear within about"
+    echo "5 minutes. Its root-cause narrative is written only if infra/.env.prod has"
+    echo "VOYAGE_API_KEY and an LLM key. To trigger another fault yourself:"
     echo "  docker run --rm --network culprit-quickstart_default curlimages/curl:latest \\"
     echo "    -X POST http://inventory-service:8002/admin/fault/latency \\"
     echo "    -H 'Content-Type: application/json' -d '{\"delay_ms\": 800, \"duration_s\": 30}'"
