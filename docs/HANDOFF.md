@@ -45,7 +45,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2 and 32.1 inserted 2026-11-03) |
-| Current phase | **32, part 1 — The isolation walk** — status `in progress`, **awaiting the human's commit and then `/ci`**. Built; fault library 6/6 against real containers; both audits run, actionable findings fixed; every local gate green (§5). Not `complete`: field 15 needs the fault library green in CI. Brief in §4. |
+| Current phase | **32, part 1 — The isolation walk — complete, awaiting architecture sign-off.** Merged via PR #22 (`972f288`). CI green on every job on the merge result: run 41815764073 on `facd700` (tree identical to `972f288`), the `fault-library` job included — 6/6 faults walked on Linux. Part 2 not started; it waits for sign-off. |
 | Previous phase | **31.2 — Present what works: complete**, signed off 2026-11-04 by the architecture session. PR #21 (`be9d151`, run 41805277023) green on every job; the review's pre-merge fixes (`a18c73e`) reached `main` as `87c1cad` by a direct push rather than a pull request, so the run on `main` is their CI. |
 | Deploy | **Out of the phase gate, decided 2026-09-12.** A red `deploy` no longer holds a phase open. Every merge to `main` runs `deploy` (PR #19 `a3f110a`, PR #20 `4f69ab3`), and it is expected to fail as before until Q16 is resolved. `main` run 34641745097 on `bb73a9b`: all 12 test/build/scan jobs success, `deploy` failure — production has not deployed since Phase 13 (2026-08-04), the VM pulls pre-rename `ghcr.io/josh-heath123/view/*` images, and `culprit.co.za` serves a pre-Phase-14 API. That is now operations, tracked as the **VM remediation** task in §4, not a phase blocker. |
 | Branch | `phase-32-isolation-walk`, cut from `origin/main` = `87c1cad`; its first commit is the 31.2 sign-off and the Phase 32 brief. Do not stage `shared/uv.lock`. |
@@ -81,7 +81,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 31 | Probes | **complete** | **Signed off 2026-11-03** (architecture session): merged via PR #19 (`a3f110a`), CI green on every job after two ambient dependency fixes (`335aa3b`, `96ac919`). Criteria 3 and 4 met; 1 and 2 carried into 31.1. History — as of 2026-09-12: built and locally green; CI not run. Criteria 3 and 4 PASS; 1 and 2 only partly demonstrable without the demo stack. One enforced invariant was deliberately changed (the binary-wide `net/http` ban, replaced by a per-package one) and one role was widened (`anomaly-detector` SELECT on `connections`) — both argued in §5 and both wanting a human eye. Q12 answered: both surfaces exist. (Carried from the retired Q12: Phase 30 field 4 asked capture for DNS resolvability, TLS certificate expiry and reachable ports, and built them as passive CONFIGURED facts — `component:X dns_resolves` and the like — that stop at a handshake, reading field 17 as "no application requests". Phase 31's own field list names `probe.net.dns_resolve`, `probe.net.tcp_connect` and `probe.net.tls_validity`. **Phase 31 must either re-site them as probes or state that both exist and why.**) **Review 2026-11-03:** every open item decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31. To complete: the human commits, then `/ci` green on the merge result, then merge. |
 | 31.1 | Close the probe loop | **complete** | **Signed off 2026-11-04** (architecture session): PR #20 (`4f69ab3`), CI green on the merge result (run 41789133416). Criteria 2 and 4 refined and the auditor's risks decided — `DIAGNOSTIC_PLAN.md`, end of Phase 31.1. **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.1, all 17 fields. Phase 31 is merged; the branch `phase-31.1-probe-loop` is cut from `origin/main` = `a3f110a`, with the sign-off as its first commit. Order within the phase: the two gate repairs first — the boundary allowlist (it must exist before anything else lands under `cli/internal/`) and the emptied `.trivyignore` — then expectations, then data sources, then the demo-stack criteria. Replace the whole of §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 31.2 | Present what works | **complete** | **Signed off 2026-11-04** (architecture session): PR #21 green on every job; the review's five corrections and the lockfile change verified on disk in `a18c73e`, with the self-check's numbers evidenced in §5. **Brief (2026-11-03):** `DIAGNOSTIC_PLAN.md` Phase 31.2, with `docs/PRODUCTISATION.md` as its requirements — §5, §6 and §10 apply now; the redesign (§2) and the video (§7) belong to Phase 32.1. Present only what works. The web UI is made honest here, not restyled. **Go-ahead 2026-11-04:** the branch `phase-31.2-present-what-works` exists, cut from `origin/main` = `4f69ab3`. Read Phase 31.2 in the plan including "Carried in from Phase 31.1". **Review 2026-11-04 (before CI):** justfile fix ratified with one change (types generated from the lockfile, as CI does); criterion 4 refined; five README and LIMITS corrections to make on this branch before merge — `DIAGNOSTIC_PLAN.md`, end of Phase 31.2. The last-admin guard is Phase 32's third item. |
-| 32, part 1 | The isolation walk | **in progress — built and audited, CI not run** | **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — all 17 fields, read with "How Phase 32 is run" at the end of the section, which wins where they differ. This run is **part 1 only: the walk, in the binary** — no migration, no API, no frontend, no worker change; those are part 2. Order: the two carried-in items first (CONFIGURED values rendered as shapes; the generated catalogue mirror), then the shared Investigation model and its conformance fixture, then `internal/isolate` and `culprit diagnose`, then the fault library and its CI job. Branch `phase-32-isolation-walk`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 32, part 1 | The isolation walk | **complete, awaiting sign-off** | **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — all 17 fields, read with "How Phase 32 is run" at the end of the section, which wins where they differ. This run is **part 1 only: the walk, in the binary** — no migration, no API, no frontend, no worker change; those are part 2. Order: the two carried-in items first (CONFIGURED values rendered as shapes; the generated catalogue mirror), then the shared Investigation model and its conformance fixture, then `internal/isolate` and `culprit diagnose`, then the fault library and its CI job. Branch `phase-32-isolation-walk`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32, part 2 | The investigation in the control plane | not started | Scope in `DIAGNOSTIC_PLAN.md` Phase 32, "How Phase 32 is run". Brief written when part 1 is signed off. |
 | 32.1 | Design system and the investigation-first interface | not started | Folded in from `docs/PRODUCTISATION.md` on 2026-11-03. The full brief is written when Phase 32 is complete. |
 | 33 | Production agent and permission model | not started | — |
@@ -123,12 +123,21 @@ Branch:       phase-32-isolation-walk, cut from origin/main = 87c1cad; first
               commit 2054b22 (31.2 sign-off + this brief). origin/main has
               not moved, so the working tree is the merge result.
 Run:          2026-11-04, /next. Part 2 NOT started.
-Status:       IN PROGRESS — built, both audits run and their actionable
-              findings fixed, every local gate green, the fault library
-              6/6 against real containers. CI NOT RUN: it needs a commit,
-              and the human commits. Field 15 ("the fault library running
-              in CI on every push") is therefore not yet met.
-Committed:    NO, by protocol — staged, message written; the human commits.
+Status:       COMPLETE, awaiting architecture sign-off. Every criterion met,
+              field 15 included; both audits run; CI green on the merge
+              result.
+Committed:    facd700 (by the human), pushed, merged as PR #22 = 972f288.
+CI:           run 41815764073 (pull_request, i.e. GitHub's merge ref),
+              head facd700, conclusion success. Every job success: lint,
+              typecheck, cli, test, migration-round-trip, self-check,
+              kind-capture, fault-library, build+Trivy for api, worker,
+              frontend, mcp_server, cli. deploy skipped (PR). The
+              fault-library job's log shows all six faults PASS on Linux
+              (auth-audience, network-partition, contract, config,
+              error-rate, latency; 61.6s). facd700 and 972f288 have
+              identical trees. The main push run 41817094537 was in
+              progress when this was written; its deploy is expected red
+              (Q16, outside the phase gate).
 
 WHAT WAS BUILT (in the brief's order)
   1. Carried in: evidence never renders a CONFIGURED value.
@@ -226,8 +235,8 @@ ACCEPTANCE CRITERIA (field 14, and field 15)
   4. LLM_PROVIDER=none gives a complete, correct tree               PASS
      True by construction — nothing in the binary reads it; the real
      command against a local server, with it set, gives a complete tree.
-  F15. Fault library in CI on every push           local PASS 6/6; CI
-     NOT RUN.
+  F15. Fault library in CI on every push                        PASS
+     local 6/6, and 6/6 in CI run 41815764073 (job fault-library).
   Scope: no migration, API, frontend or worker change — PASS (only
   api/app/readings/catalogue.json, which carried item 2 regenerates).
 
@@ -257,7 +266,7 @@ GATES (working tree = merge result), after the last edit
   self-check (1023 facts, no divergences), LLM_PROVIDER=none       PASS
   check-migration-round-trip                                        PASS
     (earlier in the run; no migration in this phase)
-  CI on the merge result                                            NOT RUN
+  CI on the merge result                            PASS (41815764073)
 
 DELIBERATELY NOT BUILT (part 1 scope, field 17)
   No migration, no API, no frontend, no worker change — part 2. No
