@@ -1,0 +1,27 @@
+# Every text file is stored and checked out with LF, on every platform.
+# This overrides core.autocrlf, so a Windows checkout no longer shows the
+# whole tree as modified from line-ending churn alone.
+* text=auto eol=lf
+
+# Binary: never normalised, never diffed as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.mp4   binary
+*.webm  binary
+*.zip   binary
+*.gz    binary
+*.tgz   binary
+
+# Must stay CRLF: Windows batch files misparse labels and line continuations
+# with LF endings. None are tracked today; named so the first one is safe.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
