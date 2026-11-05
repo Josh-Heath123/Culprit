@@ -20,6 +20,10 @@ twice.
   blocking; the architecture session deletes it when answered and records the
   answer in the plan. It came back because without it, a question raised in a
   run report — the D2 revisit trigger — had nowhere to live and was dropped.
+- **Phases land on `main` through a pull request** (2026-11-05). Its run on the
+  merge result is the gate; a direct push changes `main` before anything has
+  run. The human pushes the branch, opens the pull request, and merges it when
+  every check is green.
 - **Both read the whole file first.**
 
 **CI is part of the gate set.** A phase is not complete until CI is green on the
@@ -45,11 +49,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **32.2 — Close-out** — status `in progress`: commit 1 (line endings, `2e05980`) committed; commit 2 implemented, every local gate green, both audits run, **staged and awaiting the human's commit**, then `/ci`. Not complete until CI is green on the merge result and the scheduled scan has been started by hand once after the merge (§5). |
-| Previous phase | **32.1 — Design system and the investigation-first interface: complete** (parts 1 and 2), signed off 2026-11-05 by the architecture session, subject to PR #25's final run (on `e97189f`, the bootstrap fix) being recorded green — Phase 32.2's first step. Merged via PR #24 (`5a7acfe`) and PR #25 (`072fb4f`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
+| Current phase | **33, part 1 — The agent, standing alone** — status `not started`. Brief in §4. |
+| Previous phase | **32.2 — Close-out: complete**, signed off 2026-11-05 by the architecture session. On `main` as `2e05980` + `2e187fc` by a direct push (run 42083753833 green, `deploy` skipped); its record commit `7130927` and this sign-off land by pull request. Decisions at the end of Phase 32.2 in `DIAGNOSTIC_PLAN.md`; Q17 ruled there. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-32.2-close-out`, cut from `origin/main` = `072fb4f`; its first commit is this sign-off. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** Q17 (machine vocabulary in the walk's text) is open in §3 and does not block. |
+| Branch | `phase-33-agent`, to be cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. Do not stage `shared/uv.lock`. |
+| Blocking questions | **None.** §3 is empty. |
 
 ---
 
@@ -60,7 +64,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q17 | **How much machine vocabulary may the walk's text keep?** Phase 32.2 removed every phase number and raw hypothesis kind (the criterion, tested in Go on every simulated and real walk) and describes subjects in words. Work order item 5 also says "no … machine phrasing", and what a user still reads includes probe ids (`probe.auth.token_shape was refused`), grant names (`needs config.read.values for order-service/INVENTORY_TOKEN`), hypothesis and reading ids in rubric reasons (`(h2, h4, h5)`, `(r5, then r7)`), and an arrow pair in a placement reason (`order-service -> inventory-service`). Each is precise, and the interface shows the same ids beside the readings they name, so Claude Code kept them — but that is a ruling, not a fact. Accept them as vocabulary, or name which to replace (a later brief). | 2026-11-05, Phase 32.2 phase audit | Nothing |
+| — | None open. Q17 was ruled at 32.2's review (`DIAGNOSTIC_PLAN.md`, end of Phase 32.2). | | |
 
 ---
 
@@ -85,8 +89,10 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32, part 2 | The investigation in the control plane | **complete** | **Signed off 2026-11-04** (architecture session), subject to the quickstart verification on `main` recorded in §5. Merged via PR #23 (`a22da56`). Decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — "How Phase 32 is run", then "Part 2 — the investigation in the control plane" at the end of the section, which holds the work order, the criteria and what not to build. Branch `phase-32-control-plane`. Order: the carried-in items first (the token grant, the symptom's attestation, untested versus unexplored branches; then the last admin), then storage, the API, the view, the correlation engine's removal, and the quickstart, README and LIMITS last. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32.1, part 1 | The system, on the Investigation screens | **complete** (PR #24 merged, run 41875987970 green) | **Reviewed 2026-11-04** (architecture session); look approved by Malcolm on the screenshots. PR #24 (`bd29351`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
 | 32.1, part 2 | Everywhere else | **complete** (PR #25 merged, `072fb4f`) | **Signed off 2026-11-05** (architecture session), subject to the final run on `e97189f` being recorded green — 32.2's first step. Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. History: 2026-11-04: `2a851ee`, PR #25; run 41916090503 red on `e2e` only (quickstart bootstrap, Linux bind-mount ownership), fixed in the justfile, awaiting commit and CI. SARIF upload accepted (`self-check` green). Screenshots of every route were committed for review and removed from the tree in Phase 32.2 (they remain in history at `072fb4f`). **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — "Malcolm's review of the screenshots" and "Part 2 — everywhere else" at the end of the section, which hold the four review changes, the work order, the criteria and what not to build; field 14 as refined applies. Requirements: `docs/PRODUCTISATION.md` §2, §4, §7 and §8. First confirm with `gh` that PR #24 is merged with CI green; if not, stop. Follow the work order: the review changes first, the fresh-eyes review last. Branch `phase-32.1-part-2`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 32.2 | Close-out | **in progress** — commit 1 `2e05980`; commit 2 staged, local gates green, awaiting commit and CI (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 33 | Production agent and permission model | not started | — |
+| 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 1 | The agent, standing alone | not started | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 33 — all 17 fields and the three "Added" notes, read with "How Phase 33 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The carried-in items come first. Branch `phase-33-agent`, cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. It lands on `main` through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 2 | The agent meets the control plane | not started | Criteria written at part 1's review. Before it runs, the local `infra/.env.prod` is regenerated and the local quickstart volume recreated (32.2 review). |
+| 33, part 3 | The operator's surface | not started | Criteria written at part 2's review. |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
 
@@ -122,16 +128,14 @@ reports are in `git log -p docs/HANDOFF.md`.
 ```
 Phase:        32.2 — Close-out
 Branch:       phase-32.2-close-out, cut from origin/main = 072fb4f; 2aadd71
-              (the sign-off), 2e05980 (commit 1, the human's). Commit 2 is
-              STAGED, not committed: message ..\phase-32.2-2-close-out.txt.
-              shared/uv.lock not staged. origin/main has not moved.
+              (the sign-off), 2e05980 (commit 1) and 2e187fc (commit 2),
+              both committed by the human. Both reached main by a direct
+              push, not a pull request, so main = 2e187fc = the merge
+              result. shared/uv.lock not staged.
 Run:          2026-11-05, /next.
-Status:       IMPLEMENTED, NOT COMPLETE. Every criterion that can be run
-              before the merge is met locally; both audits ran and their
-              findings are fixed or listed. Needs: the human's commit 2,
-              /ci green on the merge result, and — after the merge — the
-              scheduled scan started by hand once (it cannot be started
-              before: workflow_dispatch needs the file on main).
+Status:       COMPLETE. Every criterion met, CI green on the merge
+              result (main itself), the scheduled scan started by hand
+              once and green. Q17 (§3) is open and does not block.
 
 STEP 1 — THE RECORD
   PR #25's final run, on e97189f (the bootstrap fix): run 41919870968,
@@ -161,7 +165,7 @@ GATES (local, Windows, final staged tree)
                                                      by the phase auditor)
   just e2e (fresh quickstart, see below)       PASS 16/16
   After commit 1 alone, the same set was run: all PASS.
-  /ci                                          NOT RUN — needs the human's commit 2
+  /ci                                          GREEN — see CI below
 
 CRITERIA
   PR #25's final run recorded green, e2e included      MET (above).
@@ -178,12 +182,13 @@ CRITERIA
       quoted). The architecture walkthrough and the CI/Docker traps moved
       word for word to docs/ARCHITECTURE.md, annotated where the pipeline
       changed. Rules stay in .claude/rules/.
-  deploy skipped rather than failed on the merge         MET AS STAGED, not yet
-      observed: deploy's `if` requires workflow_dispatch + the deploy input
-      + main. Observable only on the merge's push run.
-  Scheduled workflow started by hand once, result in §5  NOT RUN — cannot be
-      before the merge (the file must be on the default branch). Its
-      build-and-scan path runs on this PR through workflow_call.
+  deploy skipped rather than failed on the merge         MET. The push run on
+      main for 2e187fc (42083753833): deploy skipped, every other job
+      success — where 072fb4f's push run failed on deploy.
+  Scheduled workflow started by hand once, result in §5  MET. `gh workflow
+      run images.yml --ref main` -> run 42084489435, workflow_dispatch on
+      2e187fc: build x5 success (every image built and Trivy-clean),
+      publish skipped — it published nothing, as designed.
   No phase number or raw kind in the walk's user text;   MET.
     one label map; a missing label fails in both
     languages; fault library 7/7, same roots
@@ -281,10 +286,31 @@ HOW THE LOCAL BROWSER RUN WAS MADE (and what it left)
   (scripts/bootstrap_env.py --local --force, which rotates every secret;
   the old culprit-quickstart database volume would then need recreating).
 
+CI (/ci)
+  commit   2e187fc7e2bb366425a5d3b65275f5be83fbb315
+  run      42083753833  https://github.com/Josh-Heath123/Culprit/actions/runs/42083753833
+  Merge result: main was pushed to 2e187fc directly, so the run on main
+  IS the merge result (no pull request run exists for this phase).
+  Jobs: success lint, typecheck, cli, test, migration-round-trip,
+    self-check, kind-capture, fault-library, e2e (the per-route tour, on
+    Linux), build x5 (images.yml through workflow_call), publish x5 (the
+    new job: :sha and :latest pushed from the scanned images); skipped
+    deploy.
+  Verdict: GREEN.
+  Images, by hand: run 42084489435
+    https://github.com/Josh-Heath123/Culprit/actions/runs/42084489435
+    workflow_dispatch on main, 2e187fc: build x5 success, publish
+    skipped. Verdict: GREEN. The weekly schedule (Mondays 04:17 UTC) is
+    now registered.
+
 LEFT OPEN
   - Q17 (§3).
-  - After the merge: `gh workflow run images.yml --ref main`, watch it,
-    record it here — the one criterion that cannot run before.
+  - Both commits went to main without a pull request, past the "Protect
+    Main" ruleset (its `update` rule): no pull_request run, no review
+    surface. The push run above is the gate that ran. Whether that is how
+    phases should land is Malcolm's to say.
+  - This report's own update (recording the two runs) is uncommitted;
+    message ..\phase-32.2-3-record.txt.
   - actionlint could not be run (fetching it was refused); CI's own
     workflow parsing is the check.
   - The e2e job still rebuilds every image (accepted, Phase 32.1 review).
