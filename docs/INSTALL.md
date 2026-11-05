@@ -1,7 +1,7 @@
 # Installing Culprit on your own VM
 
-This is the real-deployment path — a domain you control, TLS, and CI/CD
-pushing every `main` commit to it automatically. If you just want to try
+This is the real-deployment path — a domain you control, TLS, and a CI/CD
+deploy you start by hand once `main` is green. If you just want to try
 Culprit locally first, use `just quickstart` instead (see the
 [README](../README.md)); nothing here is required for that.
 
@@ -82,8 +82,11 @@ In your fork's repo settings → Secrets and variables → Actions, add:
 | `SSH_PRIVATE_KEY` | a private key whose public half is in that user's `~/.ssh/authorized_keys` on the VM |
 | `SSH_PORT` | optional, defaults to 22 |
 
-`.github/workflows/ci-cd.yml`'s `deploy` job only runs on pushes to
-`main`, after lint/typecheck/pytest/Trivy all pass, and copies
+`.github/workflows/ci-cd.yml`'s `deploy` job runs only when you start it
+by hand — Actions → CI/CD → Run workflow, on `main`, with **deploy**
+ticked — never on a push (since 2026-11-05, when this project's own hosted
+server was taken offline). It waits for lint, typecheck, the tests, the
+image scans and the browser suite to pass, then copies
 `infra/docker-compose.prod.yml` + `infra/deploy.sh` to `~/culprit` on the
 VM (flattened — they land as `~/culprit/docker-compose.prod.yml` and
 `~/culprit/deploy.sh`, not under an `infra/` subdirectory) before running
@@ -96,9 +99,10 @@ with a **classic** PAT that has `read:packages` scope (fine-grained PATs
 don't support Packages access — confirmed against GitHub's own docs
 during Phase 11).
 
-## 6. Push to `main`
+## 6. Push to `main`, then deploy by hand
 
-CI builds and pushes the three images, then SSHes into the VM and runs
+A push to `main` builds, scans and publishes the images. Then start the
+deploy (step 5): CI SSHes into the VM and runs
 `deploy.sh`: pull → `alembic upgrade head` → restart containers → health
 check (`https://your-domain.com/api/incidents` and
 `https://your-domain.com/ingest/healthz`, polled for up to a minute —
@@ -141,7 +145,7 @@ value if you're running it remotely, or SSH in and run it there.
 
 ## Upgrading
 
-Every push to `main` redeploys automatically (step 6). `infra/.env.prod`
+Push to `main`, then start the deploy by hand (step 6). `infra/.env.prod`
 is never touched by a deploy — a new required env var (a future phase
 adding one) needs a manual one-line addition to it before that deploy,
 documented in that phase's own notes when it happens.

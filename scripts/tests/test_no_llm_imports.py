@@ -3,8 +3,8 @@ Phase 22's deterministic-check scripts import an LLM/embedding client,
 for the same reason `lint-imports` already enforces invariant 1
 (worker/app/anomaly <-> worker/app/rag isolation) structurally rather
 than by convention -- a hook that could reach an LLM client is exactly
-the failure mode CLAUDE.md's "Where the AI must stay deterministic"
-section rules out for this whole plan.
+the failure mode .claude/rules/determinism.md
+rules out for this whole plan.
 
 check_invariants.sh (bash, not Python) is checked by substring search
 over its raw text instead of ast import parsing -- it never `import`s

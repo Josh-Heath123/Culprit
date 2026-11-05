@@ -35,7 +35,7 @@ def test_the_hypothesis_status_set_matches_the_shared_fixture() -> None:
 
 
 def test_the_hypothesis_kinds_match_the_shared_fixture() -> None:
-    assert set(FIXTURE["hypothesis_kinds"]) == HYPOTHESIS_KINDS
+    assert set(FIXTURE["hypothesis_labels"]) == HYPOTHESIS_KINDS
 
 
 def test_the_attestation_kinds_match_the_shared_fixture() -> None:

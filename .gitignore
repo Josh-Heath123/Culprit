@@ -62,3 +62,6 @@ cli/bin/
 # machines whose antivirus objects to linking in the system temp dir.
 culprit.sarif
 cli/.gobuildtmp/
+
+# Review screenshot sets go to CI artifacts, not the tree (Phase 32.2).
+docs/review/

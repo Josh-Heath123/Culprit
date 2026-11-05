@@ -1,7 +1,7 @@
 {
-  "id": "inv-25509a2549d2c36d",
-  "opened_at": "2026-11-04T16:15:06.802446601Z",
-  "closed_at": "2026-11-04T16:15:06.80676468Z",
+  "id": "inv-9050371b7ee90b48",
+  "opened_at": "2026-11-05T17:18:33.636499464Z",
+  "closed_at": "2026-11-05T17:18:33.640436257Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -84,7 +84,7 @@
           "url": "http://inventory-service:8002/ready"
         },
         "reason": "http://inventory-service:8002/ready answered 500; the service is reachable but failing",
-        "taken_at": "2026-11-04T16:15:06.804871524Z",
+        "taken_at": "2026-11-05T17:18:33.638690864Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -103,7 +103,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-04T16:15:06.8056488Z",
+        "taken_at": "2026-11-05T17:18:33.639398359Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -124,7 +124,7 @@
           "url": "http://inventory-service:8002/ready"
         },
         "reason": "http://inventory-service:8002/ready answered 500; the service is reachable but failing",
-        "taken_at": "2026-11-04T16:15:06.806704844Z",
+        "taken_at": "2026-11-05T17:18:33.640368319Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -160,7 +160,7 @@
       },
       "discriminated": {
         "holds": true,
-        "reason": "1 competing hypotheses were ruled out by readings (h2)"
+        "reason": "1 competing explanation was ruled out by readings (h2)"
       },
       "counterfactual": {
         "holds": false,
@@ -168,7 +168,7 @@
       },
       "verified": {
         "holds": false,
-        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+        "reason": "no fix has been applied and checked: Culprit cannot yet re-run an investigation after a change"
       }
     },
     "complete": true

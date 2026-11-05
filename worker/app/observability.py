@@ -6,7 +6,7 @@ running both together, not two disconnected features bolted on side by
 side.
 
 A separate module from api/app/observability.py — api/ and worker/ are
-separate Python packages, per CLAUDE.md's "no shared internals" rule —
+separate Python packages, per docs/ARCHITECTURE.md's "no shared internals" rule —
 but follows the exact same pattern (env-var-driven OTLP endpoint,
 Resource with service.name set per caller), matching
 demo-services/shared/otel.py's precedent too.

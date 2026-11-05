@@ -193,7 +193,7 @@ does and does not do is in [`docs/LIMITS.md`](docs/LIMITS.md).
 
 | Role | Used |
 |---|---|
-| CLI and probe agent | Go 1.25, `cobra`, `yaml.v3`, `pgx` (database probes and live-schema capture). One static binary, no cgo. |
+| CLI and probe agent | Go 1.27, `cobra`, `yaml.v3`, `pgx` (database probes and live-schema capture). One static binary, no cgo. |
 | Extractors | Python (FastAPI, Flask and Django introspection, SQLAlchemy, Alembic, `ast`), Node (`@babel/parser`) |
 | Backend | Python 3.12, FastAPI, SQLAlchemy, Alembic, `arq` jobs on Redis, managed with `uv` |
 | Data | PostgreSQL 16 with TimescaleDB and pgvector, one instance, fourteen least-privilege roles |
@@ -244,7 +244,7 @@ the exceptions on record are argued there.
 
 ### The CLI
 
-Prerequisites: [Go 1.25+](https://go.dev/dl/), [`just`](https://github.com/casey/just),
+Prerequisites: [Go 1.27+](https://go.dev/dl/), [`just`](https://github.com/casey/just),
 [`uv`](https://docs.astral.sh/uv/) and [Node.js 22](https://nodejs.org/) — `uv`
 and Node run the Python and Node extractors.
 

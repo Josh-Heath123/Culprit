@@ -15,7 +15,7 @@ type investigationFixture struct {
 	Relations              []string            `json:"relations"`
 	HypothesisStatuses     []string            `json:"hypothesis_statuses"`
 	SymptomKinds           []string            `json:"symptom_kinds"`
-	HypothesisKinds        []string            `json:"hypothesis_kinds"`
+	HypothesisLabels       map[string]string   `json:"hypothesis_labels"`
 	AttestationKinds       []string            `json:"attestation_kinds"`
 	InvestigationsAccepted []investigationCase `json:"investigations_accepted"`
 	InvestigationsRejected []investigationCase `json:"investigations_rejected"`
@@ -49,8 +49,13 @@ func TestRelationAndStatusSetsMatchTheSharedFixture(t *testing.T) {
 	if len(fixture.HypothesisStatuses) != 4 {
 		t.Errorf("fixture has %d statuses, Go knows 4", len(fixture.HypothesisStatuses))
 	}
-	if strings.Join(fixture.HypothesisKinds, ",") != strings.Join(HypothesisKinds, ",") {
-		t.Errorf("fixture hypothesis kinds %v, Go knows %v", fixture.HypothesisKinds, HypothesisKinds)
+	if len(fixture.HypothesisLabels) != len(HypothesisKinds) {
+		t.Errorf("fixture has %d hypothesis kinds, Go knows %d", len(fixture.HypothesisLabels), len(HypothesisKinds))
+	}
+	for _, kind := range HypothesisKinds {
+		if _, ok := fixture.HypothesisLabels[kind]; !ok {
+			t.Errorf("Go hypothesis kind %q is not in the fixture", kind)
+		}
 	}
 	if strings.Join(fixture.AttestationKinds, ",") != string(AttestedReproduced)+","+string(AttestedReported) {
 		t.Errorf("fixture attestation kinds %v, Go knows reproduced, reported", fixture.AttestationKinds)
@@ -108,6 +113,33 @@ func TestAnEmptyInvestigationMarshalsListsNotNull(t *testing.T) {
 	for _, field := range []string{`"hypotheses":[]`, `"readings":[]`, `"fault_tree":[]`} {
 		if !strings.Contains(string(encoded), field) {
 			t.Errorf("%s missing from %s", field, encoded)
+		}
+	}
+}
+
+// TestHypothesisLabelsAreTheSharedMap: the fixture's hypothesis_labels is
+// the one source of the words; Go's copy must equal it, so a kind with no
+// label (or a label edited here alone) fails.
+func TestHypothesisLabelsAreTheSharedMap(t *testing.T) {
+	fixture := readFixture[investigationFixture](t, "investigation_conformance.json")
+	if len(fixture.HypothesisLabels) == 0 {
+		t.Fatal("the shared fixture has no hypothesis labels")
+	}
+	for kind, label := range fixture.HypothesisLabels {
+		if got, ok := HypothesisLabels[kind]; !ok {
+			t.Errorf("kind %q has no label in Go", kind)
+		} else if got != label {
+			t.Errorf("kind %q: Go says %q, the shared map says %q", kind, got, label)
+		}
+	}
+	for kind := range HypothesisLabels {
+		if _, ok := fixture.HypothesisLabels[kind]; !ok {
+			t.Errorf("Go labels kind %q, which the shared map does not have", kind)
+		}
+	}
+	for _, kind := range HypothesisKinds {
+		if HypothesisLabels[kind] == "" {
+			t.Errorf("kind %q has no label", kind)
 		}
 	}
 }

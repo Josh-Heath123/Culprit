@@ -4,7 +4,7 @@ of "wiring the flywheel," alongside .claude/hooks/check_invariants.sh's
 own violation-persisting edit (Phase 22 -> Phase 21).
 
 Pure rule-based logic throughout, no LLM anywhere in this module (invariant
-8, CLAUDE.md's "Where the AI must stay deterministic" section): a fixed
+8, .claude/rules/determinism.md): a fixed
 30-minute lookback before the incident opened, plus a deliberately crude
 substring match between an incident's service names and a change record's
 changed file paths. This only *annotates* an incident that already

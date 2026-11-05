@@ -2770,16 +2770,17 @@
       }
     }
   ],
-  "hypothesis_kinds": [
-    "component_fails",
-    "connection_unreachable",
-    "database_unreachable",
-    "tls_invalid",
-    "auth_audience_mismatch",
-    "auth_rejected",
-    "contract_mismatch",
-    "config_missing"
-  ],
+  "hypothesis_labels_why": "Every hypothesis kind, and the words a person reads for it. This map is the one source of both: its keys are the kind set Go and Python validate against, and its values are the labels. cli/internal/model/investigation.go (HypothesisLabels) and frontend/src/lib/hypotheses.ts carry copies, because neither build can reach this file at run time; a test in each language fails unless its copy equals this map exactly, so a kind with no label, or a label that differs, cannot ship.",
+  "hypothesis_labels": {
+    "component_fails": "Component fails",
+    "connection_unreachable": "Connection unreachable",
+    "database_unreachable": "Database unreachable",
+    "tls_invalid": "TLS certificate invalid",
+    "auth_audience_mismatch": "Auth audience mismatch",
+    "auth_rejected": "Auth rejected",
+    "contract_mismatch": "Contract mismatch",
+    "config_missing": "Config missing"
+  },
   "attestation_kinds": [
     "reproduced",
     "reported"

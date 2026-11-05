@@ -18,6 +18,9 @@ export interface E2EState {
   partialRefused: string;
   partialNothingFailed: string;
   partialBoundary: string;
+  /** A member account, created here so the member's test does not depend
+   * on the users test having run (or passed) first. */
+  member: { username: string; password: string };
 }
 
 function env(name: string): string {
@@ -67,7 +70,17 @@ export default async function globalSetup(): Promise<void> {
   );
   if (!complete) throw new Error("no complete audience investigation is stored — run `just quickstart` first");
 
+  // Each run leaves this account in the stack (docs/LIMITS.md).
+  const stamp = Date.now().toString(36);
+  const member = { username: `e2e-member-${stamp}`, password: `e2e-password-${stamp}-long` };
+  const created = await fetch(`${base}/api/users`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ...member, role: "member" }),
+  });
+  if (created.status !== 201) throw new Error(`creating the member: ${created.status} ${await created.text()}`);
+
   mkdirSync(path.dirname(STATE), { recursive: true });
-  const state: E2EState = { complete: complete.id, partialRefused, partialNothingFailed, partialBoundary };
+  const state: E2EState = { complete: complete.id, partialRefused, partialNothingFailed, partialBoundary, member };
   writeFileSync(STATE, JSON.stringify(state, null, 2));
 }

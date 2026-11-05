@@ -108,6 +108,22 @@ var HypothesisKinds = []string{
 	HypothesisContractMismatch, HypothesisConfigMissing,
 }
 
+// HypothesisLabels is each kind as a person reads it. The source is
+// shared/tests/investigation_conformance.json's hypothesis_labels, which
+// the frontend copies too; TestHypothesisLabelsAreTheSharedMap fails
+// unless this map equals it exactly. The walk's statements and reasons
+// use these words, never the kind itself.
+var HypothesisLabels = map[string]string{
+	HypothesisComponentFails:        "Component fails",
+	HypothesisConnectionUnreachable: "Connection unreachable",
+	HypothesisDatabaseUnreachable:   "Database unreachable",
+	HypothesisTLSInvalid:            "TLS certificate invalid",
+	HypothesisAuthAudience:          "Auth audience mismatch",
+	HypothesisAuthRejected:          "Auth rejected",
+	HypothesisContractMismatch:      "Contract mismatch",
+	HypothesisConfigMissing:         "Config missing",
+}
+
 // SymptomKind is how the symptom was named on the command line.
 type SymptomKind string
 

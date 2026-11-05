@@ -451,7 +451,7 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 		}
 		return map[string]any{}, ""
 	}
-	return nil, "the walk does not place probes for " + h.Kind
+	return nil, "the walk has no way yet to place a probe that tests for this"
 }
 
 // mustRunAt is the vantage rule (Phase 31.1, Phase 32 "Added 2026-11-03"):

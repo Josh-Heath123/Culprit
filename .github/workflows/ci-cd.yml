@@ -1,13 +1,17 @@
 name: CI/CD
 
 # PRs: lint -> typecheck -> test -> build+scan (no push, no deploy).
-# Pushes to main: the same, then push to ghcr.io (:sha + :latest) and
-# deploy to the VM. Pushes of a `vX.Y.Z` tag (Phase 20, docs/UPGRADING.md):
-# the same, then push to ghcr.io (:vX.Y.Z only — never :latest, so cutting
-# a release tag against an older commit than main's current tip can't move
-# :latest backward) but never deploy — a tag push doesn't necessarily
-# happen from the VM's actual current commit, only `main` pushes trigger
-# deploy.
+# Pushes to main: the same, then push to ghcr.io (:sha + :latest). Pushes
+# of a `vX.Y.Z` tag (Phase 20, docs/UPGRADING.md): the same, then push to
+# ghcr.io (:vX.Y.Z only — never :latest, so cutting a release tag against
+# an older commit than main's current tip can't move :latest backward).
+# Build+scan lives in images.yml, which also runs weekly on main and by
+# hand, publishing nothing.
+#
+# Deploy runs only when started by hand (Actions -> CI/CD -> Run workflow
+# on main, with "deploy" ticked) — never on a push. The hosted server was
+# taken offline on 2026-11-05 (docs/HANDOFF.md §1); a push to main skips
+# the job rather than failing it against a VM that is not there.
 # Each job only starts if the one before it succeeded (`needs:`) — a
 # broken lint stops everything downstream, including any deploy.
 on:
@@ -16,6 +20,12 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy main to the VM after every gate passes (the VM must be back online first).
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -387,7 +397,7 @@ jobs:
     # is all testcontainers-python needs to spin up real Postgres/Redis
     # for any integration test that uses it — no extra setup. (As of
     # this workflow, no test in this repo actually exercises
-    # testcontainers yet — see CLAUDE.md; every current test is a pure
+    # testcontainers yet; every current test is a pure
     # unit test. This job runs real pytest either way, and will pick up
     # testcontainers-backed tests automatically the day one is added.)
     steps:
@@ -522,159 +532,24 @@ jobs:
 
   build:
     needs: [test, migration-round-trip, cli]
-    runs-on: ubuntu-latest
+    # Build and Trivy-scan every image; publish only on a push to main or a
+    # vX.Y.Z tag. The same workflow runs weekly on main and by hand,
+    # publishing nothing (images.yml).
+    uses: ./.github/workflows/images.yml
     permissions:
       contents: read
       packages: write
-    strategy:
-      # Every image is built and scanned in the same run. With the
-      # default (true) the first failing scan cancels the rest, so
-      # findings in different images surfaced one image per run.
-      # Nothing is loosened: each scan still fails its own job.
-      fail-fast: false
-      matrix:
-        # api/ and worker/ both depend on shared/ (culprit-shared, a
-        # path dependency — see api/Dockerfile's comment), which is
-        # outside their own directory, so they build from the repo root
-        # instead of `context: ${{ matrix.image }}`. frontend/ has no
-        # such dependency and keeps its own directory as context.
-        include:
-          - image: api
-            context: .
-            dockerfile: api/Dockerfile
-          - image: worker
-            context: .
-            dockerfile: worker/Dockerfile
-          - image: frontend
-            context: frontend
-            dockerfile: frontend/Dockerfile
-          # Phase 24 (docs/AI_NATIVE_PLAN.md): mcp_server has no
-          # culprit-shared dependency (unlike api/worker), so its own
-          # directory is a sufficient build context — see its own
-          # Dockerfile's comment. Built, scanned, and pushed like every
-          # other image here, but never wired into
-          # docker-compose.prod.yml/deploy.sh (Out of scope) — a team
-          # runs this themselves.
-          - image: mcp_server
-            context: mcp_server
-            dockerfile: mcp_server/Dockerfile
-          # Phase 30: the `culprit` binary on distroless, for the optional
-          # capture agent in docker-compose.prod.yml (off by default, under
-          # the `agent` profile). Built, Trivy-scanned and pushed like the
-          # rest, which is the point of building it here rather than
-          # leaving the agent pointing at an image nobody scans.
-          - image: cli
-            context: cli
-            dockerfile: cli/Dockerfile
-    steps:
-      - uses: actions/checkout@v4
-
-      # frontend/src/lib/api-types.generated.ts is gitignored — it's
-      # regenerated from api's live OpenAPI schema, same as local dev's
-      # `just generate-types` (which `just frontend`/`frontend-build`
-      # both depend on). frontend/Dockerfile's own build can't reach
-      # api's Python at all (see its comments), so this has to happen
-      # here, on the runner, before the Docker build step even starts —
-      # otherwise `COPY . .` inside that build has nothing to copy and
-      # `tsc -b` fails on the missing module. Only frontend needs any
-      # of this; api and worker skip these three steps entirely.
-      - name: Set up uv (frontend type generation only)
-        if: matrix.image == 'frontend'
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - name: Dump api's OpenAPI schema
-        if: matrix.image == 'frontend'
-        # Same dummy, CI-only values as the pytest (api) step above —
-        # app.main imports app.auth.config (JWT_SECRET_KEY, no default)
-        # and, transitively via app.model.router ->
-        # app.registry.service -> app.registry.keys ->
-        # app.ingest_gateway.auth, app.ingest_gateway.config's
-        # INGEST_GATEWAY_DATABASE_URL (also no default) — missing here
-        # the same way it was missing from the pytest (api) step (see
-        # that step's comment). dump_openapi_schema.py never actually
-        # touches auth or ingest-gateway logic; this only exists to
-        # satisfy both import-time reads. Phase 26 added the four
-        # `*_DATABASE_URL` entries below for the same reason: those
-        # config modules used to fall back to a committed
-        # `<role>-dev-password` connection string when unset, and now
-        # correctly refuse to import without a value. Nothing here
-        # connects to a database — this step only serialises the
-        # OpenAPI schema.
-        env:
-          JWT_SECRET_KEY: ci-test-jwt-secret-not-a-real-secret
-          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          API_READER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          REGISTRY_ADMIN_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          FACT_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-          INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://ci-test:ci-test-not-a-real-secret@localhost:5432/ci-test
-        run: cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
-      - name: Generate frontend types from schema
-        if: matrix.image == 'frontend'
-        run: cd frontend && npm ci && npm run generate-types
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build (local, for scanning)
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: false
-          load: true
-          tags: local/${{ matrix.image }}:ci
-          build-args: |
-            ${{ matrix.image == 'frontend' && 'VITE_API_URL=/api' || '' }}
-
-      - name: Trivy scan
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: local/${{ matrix.image }}:ci
-          severity: CRITICAL,HIGH
-          exit-code: "1"
-          ignore-unfixed: true
-
-      # Only pushes to ghcr.io on a push to main or a vX.Y.Z tag — PRs
-      # stop here, image scanned but not published. GITHUB_TOKEN
-      # (built-in, scoped to this repo) is all ghcr.io needs; no separate
-      # registry credential.
-      - name: Log in to ghcr.io
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute lowercase image repository
-        if: github.event_name == 'push'
-        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-
-      # main push: :sha + :latest, the existing continuous-deployment
-      # behaviour deploy.sh/docker-compose.prod.yml's default IMAGE_TAG
-      # depend on. Version tag push: :vX.Y.Z only — see the `on:` block
-      # above for why :latest never moves from a tag build.
-      - name: Tag and push (main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.sha }}
-          docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:latest
-          docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.sha }}
-          docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:latest
-
-      - name: Tag and push (version tag)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        run: |
-          docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
-          docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
+    with:
+      # A push to main or a version tag publishes. So does a hand-started
+      # deploy of main: it publishes this commit as :sha and :latest first,
+      # so the VM pulls the commit whose deploy files it was just sent,
+      # never an older :latest.
+      publish: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main') }}
 
   deploy:
     needs: [build, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # By hand only, from main: never on a push (see the header).
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

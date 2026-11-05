@@ -2,7 +2,7 @@
 
 No Redis, no DB, no arq, no imports outside the standard library and
 River. This must stay a pure, deterministic statistical computation —
-per CLAUDE.md, anomaly detection is explicitly the one place in this
+per .claude/rules/determinism.md, anomaly detection is explicitly the one place in this
 project where reaching for "just ask the LLM" is banned even for edge
 cases like cold start or NaN guarding. See the import-linter contract in
 pyproject.toml, which enforces this module never imports app.rag
@@ -34,7 +34,7 @@ MIN_STD = 1e-9
 #: (latency, error rate, request count) would ever have.
 RELATIVE_STD_FLOOR = 1e-6
 
-#: The one global anomaly threshold. Per CLAUDE.md, this must NOT be
+#: The one global anomaly threshold. Per .claude/rules/determinism.md, this must NOT be
 #: tuned per service or per metric — only the rolling *state* is kept
 #: per (service_name, metric_name); the detection sensitivity itself
 #: stays uniform. 3.0 is the standard "3-sigma" convention.

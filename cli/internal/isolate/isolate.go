@@ -396,7 +396,7 @@ func (w *Walk) test(ctx context.Context, h *model.Hypothesis) (string, *Request)
 		return id, &request
 	}
 	if len(reasons) == 0 {
-		reasons = append(reasons, "no probe in the catalogue discriminates "+h.Kind)
+		reasons = append(reasons, "no probe in the catalogue can test for "+kindPhrase(h.Kind))
 	}
 	w.markUnexplored(h, "no probe could be placed: "+strings.Join(reasons, "; "), "")
 	return "", nil
@@ -651,7 +651,7 @@ func (w *Walk) boundary(ctx context.Context, component string, below []string, f
 	}
 	for _, h := range candidates {
 		if h.Status == model.HypothesisUnexplored {
-			found.partial = append(found.partial, h.Kind+" on "+h.Subject+": "+h.Reason)
+			found.partial = append(found.partial, couldNotCheck(*h))
 		}
 	}
 }
@@ -746,15 +746,15 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 	switch {
 	case found.root != "" && len(found.partial) > 0:
 		// A boundary failed a probe, but not every alternative was tested,
-		// so it is where the walk stopped — never stated as the cause
-		// (Phase 32.1 field 14).
+		// so it is where the walk stopped — never stated as the cause.
 		diagnosis.Statement = fmt.Sprintf(
 			"The walk stopped at %s: a reading there fails. It could not check every alternative: %s.",
-			found.root, strings.Join(found.partial, "; "))
+			describe(found.root), strings.Join(found.partial, "; "))
 	case found.root != "":
 		diagnosis.Statement = fmt.Sprintf(
-			"%s fails because of %s; the readings rule out the alternatives they reached.",
-			deepest, found.root)
+			"%s fails because of %s: a probe of it fails, and every other explanation the walk "+
+				"could test was ruled out by a reading.",
+			deepest, describe(found.root))
 		diagnosis.Remediation = remediation(found.root)
 		diagnosis.Complete = len(found.partial) == 0
 	case len(found.partial) == 0 && found.fail[deepest] != "":
@@ -794,7 +794,7 @@ func treeReaches(tree []model.FaultEdge, subject string) bool {
 // rubric is §2.9, computed from readings, never estimated.
 func (w *Walk) rubric(ctx context.Context, found *located) model.ConfidenceRubric {
 	rubric := model.ConfidenceRubric{
-		Verified: model.Criterion{Reason: "verification needs a change and the loop that checks it, which is Phase 34"},
+		Verified: model.Criterion{Reason: "no fix has been applied and checked: Culprit cannot yet re-run an investigation after a change"},
 	}
 
 	// The reading the diagnosis rests on, and the request behind it.
@@ -832,9 +832,9 @@ func (w *Walk) rubric(ctx context.Context, found *located) model.ConfidenceRubri
 	}
 	if len(ruledOut) > 0 {
 		rubric.Discriminated = model.Criterion{Holds: true, Reason: fmt.Sprintf(
-			"%d competing hypotheses were ruled out by readings (%s)", len(ruledOut), strings.Join(ruledOut, ", "))}
+			"%s ruled out by readings (%s)", competing(len(ruledOut)), strings.Join(ruledOut, ", "))}
 	} else {
-		rubric.Discriminated.Reason = "no reading ruled out a competing hypothesis"
+		rubric.Discriminated.Reason = "no reading ruled out a competing explanation"
 	}
 
 	switch {
@@ -851,7 +851,7 @@ func (w *Walk) rubric(ctx context.Context, found *located) model.ConfidenceRubri
 func (w *Walk) counterfactual(ctx context.Context, request Request) model.Criterion {
 	h := w.hypothesisFor(request.Target)
 	if h == nil || w.options.ReferencePlacement == nil {
-		return model.Criterion{Reason: "the root's probe cannot be placed in " + w.options.ReferenceName}
+		return model.Criterion{Reason: "the probe that found the fault cannot be run in " + w.options.ReferenceName}
 	}
 	var manifest model.ProbeManifest
 	for _, candidate := range w.manifests {
@@ -861,7 +861,7 @@ func (w *Walk) counterfactual(ctx context.Context, request Request) model.Criter
 	}
 	inputs, reason := w.options.ReferencePlacement.Inputs(manifest, *h)
 	if reason != "" {
-		return model.Criterion{Reason: fmt.Sprintf("%s cannot be placed in %s: %s", request.ProbeID, w.options.ReferenceName, reason)}
+		return model.Criterion{Reason: fmt.Sprintf("%s cannot be run in %s: %s", request.ProbeID, w.options.ReferenceName, reason)}
 	}
 	if budget := w.outOfBudget(); budget != "" {
 		return model.Criterion{Reason: "not run: " + budget}
@@ -911,7 +911,7 @@ func (w *Walk) requestFor(readingID string) *Request {
 }
 
 // remediation says what to change. Culprit recommends; it never applies
-// a change (Phase 32 field 17).
+// a change.
 func remediation(root string) string {
 	kind, parts, err := model.ParseSubject(root)
 	if err != nil {
@@ -933,6 +933,15 @@ func remediation(root string) string {
 		return fmt.Sprintf("Serve %s %s on %s, or stop calling it.", parts["method"], parts["path"], parts["component"])
 	}
 	return ""
+}
+
+// competing is "1 competing explanation was" or "3 competing
+// explanations were".
+func competing(n int) string {
+	if n == 1 {
+		return "1 competing explanation was"
+	}
+	return fmt.Sprintf("%d competing explanations were", n)
 }
 
 func sortedKeys(set map[string]bool) []string {

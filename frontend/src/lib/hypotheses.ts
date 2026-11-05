@@ -1,8 +1,9 @@
-/** Hypothesis kinds as words (Phase 32.1 review): the
- * label reads as English, and the exact kind is shown beneath it in
- * monospace. One map; lib/hypotheses.test.ts fails if a kind in the shared
- * model (shared/tests/investigation_conformance.json) has no label here,
- * so a new kind cannot ship unlabelled. */
+/** Hypothesis kinds as words: the label reads as English, and the exact
+ * kind is shown beneath it in monospace. The source is
+ * shared/tests/investigation_conformance.json's hypothesis_labels, which the
+ * Go binary copies too; this build cannot read that file at run time, so
+ * lib/hypotheses.test.ts fails unless this copy equals it exactly — a new
+ * kind cannot ship unlabelled, and a label cannot drift from the CLI's. */
 export const HYPOTHESIS_LABELS: Readonly<Record<string, string>> = {
   component_fails: "Component fails",
   connection_unreachable: "Connection unreachable",

@@ -670,7 +670,7 @@ func renderSARIF(writer io.Writer, input Input) error {
 		Tool: sarifTool{Driver: sarifDriver{
 			Name:           "Culprit",
 			Version:        input.Version,
-			InformationURI: "https://culprit.co.za",
+			InformationURI: "https://github.com/Josh-Heath123/Culprit",
 			Rules:          ruleList,
 		}},
 		Results: results,

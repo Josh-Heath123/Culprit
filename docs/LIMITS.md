@@ -7,8 +7,8 @@ worth knowing before you depend on this for something real.
 ## Scale
 
 This project targets one self-hosted VM on the shape of an Oracle Cloud
-Always Free instance (2 OCPU / 11 GB, `CLAUDE.md`'s Production deployment
-section) — not a cluster, not autoscaling. Rough guidance, not a
+Always Free instance (2 OCPU / 11 GB, `docs/ARCHITECTURE.md`'s Production
+deployment section) — not a cluster, not autoscaling. Rough guidance, not a
 guarantee, since actual headroom depends heavily on traffic shape:
 
 - **A handful of services** (the demo ships three) — dozens, not hundreds.
@@ -57,8 +57,8 @@ scorer starts its warm-up over.
 
 ## Redis Streams, not Kafka — deliberately
 
-Ingestion transport is Redis Streams (`CLAUDE.md`'s scope discipline
-section), not Kafka. This is the right choice for the scale this project
+Ingestion transport is Redis Streams (`CLAUDE.md`'s scope
+ceilings), not Kafka. This is the right choice for the scale this project
 targets and the wrong one if you need durable multi-consumer-group
 fan-out, partition-level ordering guarantees at real throughput, or
 retention measured in weeks rather than however long the stream stays
@@ -1050,13 +1050,16 @@ password, the JWT key) and attributes them all to `culprit-api`. Values
 are never read without `config.read.values`, and the root `culprit.yaml`
 grants none; the names are what `config.read.names` means.
 
-## The Go CLI needs Go 1.25 or later to build
+## The Go CLI needs Go 1.27 or later to build
 
-The patched releases of pgx (a memory-safety CVE, fixed in 5.9.0) and of
-`golang.org/x/text` require Go 1.25, so `cli/go.mod` now declares it and
-CI builds with Go 1.27. Go 1.24 is past its support window: a binary
-built with it carries standard-library CVEs that will not be fixed, which
-the image scan now catches.
+`cli/go.mod` declares the version CI builds with — Go 1.27, in every job,
+the release workflow and `cli/Dockerfile` — because a floor CI never
+exercises is not one anyone can rely on (Phase 32.2; it said 1.25 until
+then). The lowest version the dependencies themselves need is lower: the
+patched releases of pgx (a memory-safety CVE, fixed in 5.9.0) and of
+`golang.org/x/text` need 1.25. An older Go is past its support window, and
+a binary built with it carries standard-library CVEs that will not be
+fixed, which the image scan catches.
 
 ## Where a stored value is guarded by code rather than by the database
 
@@ -1682,6 +1685,14 @@ so an older partial one may still read "fails because of …" or "The cause is
 inside …" in its statement. The list and the view label it as partial
 either way.
 
+The same holds for Phase 32.2's wording pass. Since then the walk names a
+hypothesis kind by its label and a subject in words ("the token audience
+order-service presents to inventory-service"), and no reason mentions a plan
+phase. An investigation stored before then keeps its original text, which
+can quote a raw kind (`auth_audience_mismatch on auth:…`) or say
+verification "is Phase 34". The subject itself is still shown exactly,
+in monospace, wherever the view names one.
+
 ## Text on glass is measured over the page, not over what scrolls beneath it
 
 Every text-and-background pair in the interface is checked for WCAG 2.2 AA
@@ -1725,11 +1736,16 @@ reflows to one column instead.
 it mocks the API. CI builds that stack on every pull request, which makes
 the `e2e` job the slowest in the pipeline. Sign-in is limited to 10 attempts
 a minute per address (`api/app/auth/router.py`) and the session lives only in
-memory, so the suite signs in six times per run and moves between pages by
-clicking; running it twice inside a minute fails with a 429 on sign-in.
-Each run also creates a user (`e2e-member-…`) and creates and deletes a
-postmortem in the stack it runs against — never point it at a stack whose
-data matters.
+memory, so the suite signs in six times per run and moves between pages
+inside the app; running it twice inside a minute fails with a 429 on sign-in.
+The tour of every route is one test per route (Phase 32.2) sharing one
+signed-in page, so a broken route fails only its own test — but each failing
+test costs one more sign-in, because Playwright starts the next test on a
+fresh page. Four or more failures in one run can therefore push the rest of
+the run into the rate limit, and a 429 on sign-in in a red run is a symptom,
+not the cause: read the first failure. Each run also creates two users
+(`e2e-member-…`, `e2e-user-…`) and creates and deletes a postmortem in the
+stack it runs against — never point it at a stack whose data matters.
 
 ## Development-only dependencies still carry moderate advisories
 
@@ -1752,3 +1768,24 @@ that the entry fails. The quickstart's investigation shows this: one reading
 the symptom was not replayed; "reproduced" in the confidence rubric means the
 root's failing reading was taken again and failed again, not that the
 symptom was.
+
+## There is no hosted instance, and deploy runs only by hand
+
+The project's own server (`culprit.co.za`) was taken offline on 2026-11-05:
+it had been serving an API from before Phase 14 since August. Nothing in the
+repository deploys on a push any more. The `deploy` job in
+`.github/workflows/ci-cd.yml` runs only when started by hand on `main`, with
+its **deploy** box ticked, after every other job has passed; a push to
+`main` builds, scans and publishes the images and skips the deploy. If you
+run your own instance from a fork (`docs/INSTALL.md`), the same applies to
+you: a merge does not reach your server until you start the deploy.
+
+## A new advisory against a pinned dependency is found within a week
+
+Every image is built and Trivy-scanned (CRITICAL and HIGH, blocking) on every
+pull request and push, and again every Monday at 04:17 UTC on `main`
+(`.github/workflows/images.yml`, which can also be started by hand). An
+advisory published between those runs is not seen until the next one, so
+`main` can carry a newly-known vulnerable dependency for up to a week. The
+scheduled run publishes and deploys nothing; when it is red, the fix is its
+own small pull request.

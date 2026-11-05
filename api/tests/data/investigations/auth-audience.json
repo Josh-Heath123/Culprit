@@ -1,7 +1,7 @@
 {
-  "id": "inv-11a8724cdbcd483f",
-  "opened_at": "2026-11-04T16:14:20.743221843Z",
-  "closed_at": "2026-11-04T16:14:20.75216917Z",
+  "id": "inv-7607f3671146aa5e",
+  "opened_at": "2026-11-05T17:17:42.105974858Z",
+  "closed_at": "2026-11-05T17:17:42.116641233Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -98,7 +98,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-04T16:14:20.746043976Z",
+        "taken_at": "2026-11-05T17:17:42.108944282Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -118,7 +118,7 @@
           "status": 200,
           "url": "http://payments-service:8003/ready"
         },
-        "taken_at": "2026-11-04T16:14:20.748415712Z",
+        "taken_at": "2026-11-05T17:17:42.111983812Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -137,7 +137,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-04T16:14:20.74923495Z",
+        "taken_at": "2026-11-05T17:17:42.112951986Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -156,7 +156,7 @@
           "host": "payments-service",
           "port": 8003
         },
-        "taken_at": "2026-11-04T16:14:20.749991164Z",
+        "taken_at": "2026-11-05T17:17:42.113787271Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -176,14 +176,14 @@
             "inventory"
           ],
           "expired": false,
-          "expires_in_seconds": 3596,
+          "expires_in_seconds": 3595,
           "issuer": "order-service"
         },
         "expected": {
           "audience": "inventory-service"
         },
         "reason": "the token will not be accepted: its audience is [inventory], not \"inventory-service\"",
-        "taken_at": "2026-11-04T16:14:20.750134988Z",
+        "taken_at": "2026-11-05T17:17:42.113951204Z",
         "agent_id": "fault-library"
       }
     },
@@ -210,7 +210,7 @@
           "locator": "invariants[1]",
           "confidence_rank": 100
         },
-        "taken_at": "2026-11-04T16:14:20.752045122Z",
+        "taken_at": "2026-11-05T17:17:42.116502236Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -230,14 +230,14 @@
             "inventory"
           ],
           "expired": false,
-          "expires_in_seconds": 3596,
+          "expires_in_seconds": 3595,
           "issuer": "order-service"
         },
         "expected": {
           "audience": "inventory-service"
         },
         "reason": "the token will not be accepted: its audience is [inventory], not \"inventory-service\"",
-        "taken_at": "2026-11-04T16:14:20.752132832Z",
+        "taken_at": "2026-11-05T17:17:42.116603128Z",
         "agent_id": "fault-library"
       }
     }
@@ -262,7 +262,7 @@
   ],
   "diagnosis": {
     "root_subject": "auth:order-service-\u003einventory-service/audience",
-    "statement": "order-service fails because of auth:order-service-\u003einventory-service/audience; the readings rule out the alternatives they reached.",
+    "statement": "order-service fails because of the token audience order-service presents to inventory-service: a probe of it fails, and every other explanation the walk could test was ruled out by a reading.",
     "confidence": {
       "reproduced": {
         "holds": true,
@@ -270,7 +270,7 @@
       },
       "discriminated": {
         "holds": true,
-        "reason": "6 competing hypotheses were ruled out by readings (h2, h4, h5, h6, h7, h8)"
+        "reason": "6 competing explanations were ruled out by readings (h2, h4, h5, h6, h7, h8)"
       },
       "counterfactual": {
         "holds": false,
@@ -278,7 +278,7 @@
       },
       "verified": {
         "holds": false,
-        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+        "reason": "no fix has been applied and checked: Culprit cannot yet re-run an investigation after a change"
       }
     },
     "remediation": "Make the audience order-service presents to inventory-service match the one inventory-service expects.",

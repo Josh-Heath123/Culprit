@@ -4,7 +4,7 @@
 #
 # Order matters and is deliberate: pull -> migrate -> restart. Migrating
 # before restarting means the containers are never running code that
-# expects a schema the DB doesn't have yet (see CLAUDE.md / Phase 11).
+# expects a schema the DB doesn't have yet (docs/ARCHITECTURE.md, Phase 11).
 set -euo pipefail
 
 cd "$(dirname "$0")"

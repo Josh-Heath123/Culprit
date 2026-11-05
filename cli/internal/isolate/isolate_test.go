@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -40,10 +41,10 @@ func (r *countingRunner) Run(_ context.Context, request Request) model.Reading {
 	verdict := r.world(request.ProbeID, request.Target)
 	reading := model.Reading{
 		ProbeID: request.ProbeID, ProbeVersion: 1, Target: request.Target,
-		Environment: "test", Verdict: verdict, TakenAt: clock, AgentID: "test-runner",
+		Environment: "simulated", Verdict: verdict, TakenAt: clock, AgentID: "simulated-runner",
 	}
 	if verdict.NeedsReason() {
-		reading.Reason = "the test world declines to say"
+		reading.Reason = "the simulated world gives no reason"
 	}
 	return reading
 }
@@ -118,7 +119,7 @@ func componentFault(names []string, faulty int) world {
 
 func diagnose(t *testing.T, w *Walk, entry string) model.Investigation {
 	t.Helper()
-	symptom := model.Symptom{Kind: model.SymptomComponent, Subject: component(entry), Source: "test"}
+	symptom := model.Symptom{Kind: model.SymptomComponent, Subject: component(entry), Source: "simulated"}
 	inv, err := w.Diagnose(context.Background(), symptom, entry)
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +128,83 @@ func diagnose(t *testing.T, w *Walk, entry string) model.Investigation {
 	if err := inv.Validate(); err != nil {
 		t.Fatalf("the walk built an investigation the model rejects: %v", err)
 	}
+	assertReadable(t, inv)
 	return inv
+}
+
+// assertReadable: every sentence the walk writes for a person — the
+// statement, the suggested fix, each hypothesis's reason and each rubric
+// reason — names no plan phase and no raw hypothesis kind. Every walk in
+// this file passes through it.
+func assertReadable(t *testing.T, inv model.Investigation) {
+	t.Helper()
+	for where, text := range userFacingText(inv) {
+		if phaseNumber.MatchString(text) {
+			t.Errorf("%s names a plan phase: %q", where, text)
+		}
+		for _, kind := range model.HypothesisKinds {
+			if strings.Contains(text, kind) {
+				t.Errorf("%s contains the raw kind %s: %q", where, kind, text)
+			}
+		}
+	}
+}
+
+var phaseNumber = regexp.MustCompile(`(?i)\bphase \d`)
+
+func userFacingText(inv model.Investigation) map[string]string {
+	texts := map[string]string{}
+	for _, h := range inv.Hypotheses {
+		texts["hypothesis "+h.ID+" reason"] = h.Reason
+	}
+	if d := inv.Diagnosis; d != nil {
+		texts["statement"] = d.Statement
+		texts["remediation"] = d.Remediation
+		texts["reproduced reason"] = d.Confidence.Reproduced.Reason
+		texts["discriminated reason"] = d.Confidence.Discriminated.Reason
+		texts["counterfactual reason"] = d.Confidence.Counterfactual.Reason
+		texts["verified reason"] = d.Confidence.Verified.Reason
+	}
+	return texts
+}
+
+// TestEveryKindHasALabel: the walk's words for a kind come from the shared
+// label map; a kind with no label there fails here as well as in
+// internal/model and the frontend.
+func TestEveryKindHasALabel(t *testing.T) {
+	for _, kind := range model.HypothesisKinds {
+		if model.HypothesisLabels[kind] == "" {
+			t.Errorf("kind %s has no label", kind)
+		}
+		if phrase := kindPhrase(kind); strings.Contains(phrase, "_") || phrase == "" {
+			t.Errorf("kind %s reads as %q", kind, phrase)
+		}
+	}
+	if got := kindPhrase(model.HypothesisTLSInvalid); got != "TLS certificate invalid" {
+		t.Errorf("an acronym is lower-cased: %q", got)
+	}
+	if got := kindPhrase(""); got == "" {
+		t.Error("an empty kind reads as nothing")
+	}
+	if got := kindPhrase(model.HypothesisAuthAudience); got != "auth audience mismatch" {
+		t.Errorf("auth_audience_mismatch reads as %q", got)
+	}
+}
+
+func TestSubjectsAreDescribedInWords(t *testing.T) {
+	cases := map[string]string{
+		"component:order-service":                        "order-service",
+		"connection:order-service->inventory-service":    "the connection from order-service to inventory-service",
+		"auth:order-service->inventory-service/audience": "the token audience order-service presents to inventory-service",
+		"config:payments-service/PAYMENTS_PROVIDER_KEY":  "PAYMENTS_PROVIDER_KEY in payments-service's configuration",
+		"http:inventory-service/GET /stock":              "GET /stock on inventory-service",
+		"not a subject":                                  "not a subject",
+	}
+	for subject, want := range cases {
+		if got := describe(subject); got != want {
+			t.Errorf("describe(%q) = %q, want %q", subject, got, want)
+		}
+	}
 }
 
 // ---- criterion 3: O(log n), counted ------------------------------------------
@@ -140,7 +217,7 @@ func TestASixHopChainIsBisectedNotWalked(t *testing.T) {
 	bound := int(math.Ceil(math.Log2(float64(len(names)))))
 	for faulty := 0; faulty < len(names); faulty++ {
 		runner := newRunner(componentFault(names, faulty))
-		walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test"})
+		walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated"})
 		inv := diagnose(t, walk, "c0")
 
 		searched := runner.count["probe.http.reachable"]
@@ -164,7 +241,7 @@ func TestASixHopChainIsBisectedNotWalked(t *testing.T) {
 func TestBisectionScalesLogarithmically(t *testing.T) {
 	components, connections, names := chain(64)
 	runner := newRunner(componentFault(names, 41))
-	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test", MaxProbes: 200})
+	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated", MaxProbes: 200})
 	inv := diagnose(t, walk, "c0")
 	if searched := runner.count["probe.http.reachable"] - 1; searched > 6 {
 		t.Errorf("%d request probes on a 64-component chain, want <= 6", searched)
@@ -195,8 +272,8 @@ func TestTheTreeSeparatesSymptomPropagationAndRoot(t *testing.T) {
 		}
 		return model.VerdictPass
 	})
-	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test"})
-	symptom := model.Symptom{Kind: model.SymptomEndpoint, Subject: "http:c0/GET /checkout", Source: "test"}
+	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated"})
+	symptom := model.Symptom{Kind: model.SymptomEndpoint, Subject: "http:c0/GET /checkout", Source: "simulated"}
 	inv, err := walk.Diagnose(context.Background(), symptom, "c0")
 	if err != nil {
 		t.Fatal(err)
@@ -254,8 +331,8 @@ func TestAnAudienceMismatchIsTheRootNotTheEdge(t *testing.T) {
 		}
 		return model.VerdictPass
 	})
-	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test"})
-	symptom := model.Symptom{Kind: model.SymptomEndpoint, Subject: "http:order-service/POST /orders", Source: "test"}
+	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated"})
+	symptom := model.Symptom{Kind: model.SymptomEndpoint, Subject: "http:order-service/POST /orders", Source: "simulated"}
 	inv, err := walk.Diagnose(context.Background(), symptom, "order-service")
 	if err != nil {
 		t.Fatal(err)
@@ -284,7 +361,7 @@ func TestARefusedProbeLeavesTheDiagnosisVisiblyPartial(t *testing.T) {
 	placement := openPlacement{refuse: map[string]string{
 		KindAuthAudience: "no token for order-service -> inventory-service is available to this agent",
 	}}
-	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "test"})
+	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "simulated"})
 	inv := diagnose(t, walk, "order-service")
 
 	if inv.Diagnosis.Complete {
@@ -324,7 +401,7 @@ func TestABoundaryWithUntestedAlternativesIsWhereTheWalkStopped(t *testing.T) {
 	placement := openPlacement{refuse: map[string]string{
 		KindAuthAudience: "no token for order-service -> inventory-service is available to this agent",
 	}}
-	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "test"})
+	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "simulated"})
 	inv := diagnose(t, walk, "order-service")
 
 	d := inv.Diagnosis
@@ -369,7 +446,7 @@ func TestABoundaryWithUntestedAlternativesIsWhereTheWalkStopped(t *testing.T) {
 func TestTheProbeBudgetIsABudget(t *testing.T) {
 	components, connections, names := chain(7)
 	runner := newRunner(componentFault(names, 5))
-	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test", MaxProbes: 2})
+	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated", MaxProbes: 2})
 	inv := diagnose(t, walk, "c0")
 	if runner.total > 2 {
 		t.Errorf("ran %d probes on a budget of 2", runner.total)
@@ -398,7 +475,7 @@ func TestTheWalkIsDeterministic(t *testing.T) {
 	var outputs []string
 	for run := 0; run < 3; run++ {
 		walk := New(components, connections, nil, manifests(), newRunner(componentFault(names, 4)),
-			openPlacement{}, Options{Environment: "test", Now: func() time.Time { return clock }})
+			openPlacement{}, Options{Environment: "simulated", Now: func() time.Time { return clock }})
 		inv := diagnose(t, walk, "c0")
 		encoded, err := json.Marshal(inv)
 		if err != nil {
@@ -430,7 +507,7 @@ func TestAPartitionSeenFromInsideTheCallerBlamesTheEdge(t *testing.T) {
 		return model.VerdictPass
 	})
 	walk := New(components, connections, nil, manifests(), runner,
-		openPlacement{vantage: "order-service"}, Options{Environment: "test"})
+		openPlacement{vantage: "order-service"}, Options{Environment: "simulated"})
 	inv := diagnose(t, walk, "order-service")
 	if inv.Diagnosis.RootSubject != edge || !inv.Diagnosis.Complete {
 		t.Fatalf("diagnosis %+v, want a complete one rooted at %s", inv.Diagnosis, edge)
@@ -438,7 +515,7 @@ func TestAPartitionSeenFromInsideTheCallerBlamesTheEdge(t *testing.T) {
 
 	// The same failure seen from outside every component did not cross the
 	// edge: there, inventory-service is what failed.
-	walk = New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test"})
+	walk = New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated"})
 	inv = diagnose(t, walk, "order-service")
 	if inv.Diagnosis.RootSubject != component("inventory-service") {
 		t.Errorf("from outside, root %s, want inventory-service", inv.Diagnosis.RootSubject)
@@ -451,7 +528,7 @@ func TestAPartitionSeenFromInsideTheCallerBlamesTheEdge(t *testing.T) {
 func TestNothingFailingIsNotADiagnosis(t *testing.T) {
 	components, connections, _ := chain(3)
 	runner := newRunner(func(string, string) model.Verdict { return model.VerdictPass })
-	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "test"})
+	walk := New(components, connections, nil, manifests(), runner, openPlacement{}, Options{Environment: "simulated"})
 	inv := diagnose(t, walk, "c0")
 	if inv.Diagnosis.Complete {
 		t.Fatalf("a walk in which nothing failed claimed a complete diagnosis: %+v", inv.Diagnosis)

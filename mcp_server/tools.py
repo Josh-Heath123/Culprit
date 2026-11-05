@@ -4,8 +4,8 @@ read (via the `mcp-reader` role, granted SELECT only -- see the phase's
 own migration) plus, for the two search-flavored tools, one Voyage
 `embed_query` call. No business logic beyond what Phase 21/23 already
 computed and stored; no LLM call generates a narrative, summary, or
-judgment of its own here (invariant 8/CLAUDE.md's "Where the AI must
-stay deterministic" section extends to MCP tools, not just hooks).
+judgment of its own here (invariant 8 / .claude/rules/determinism.md
+extends to MCP tools, not just hooks).
 
 Every result returned here is a historical/observed fact from this
 specific repository's own records -- never a live static analysis of

@@ -11,8 +11,9 @@ its database URL") says what to do.
 ## The order, and why it's fixed
 
 Always: **pull the new images, run migrations, then restart containers.**
-This is exactly what `infra/deploy.sh` does automatically on every push to
-`main`, and it's the same order for a manual upgrade:
+This is exactly what `infra/deploy.sh` does when the `deploy` job is started
+by hand (`docs/INSTALL.md` step 6 — it no longer runs on a push), and it's
+the same order for a manual upgrade:
 
 ```bash
 cd ~/culprit

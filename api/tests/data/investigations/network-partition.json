@@ -1,7 +1,7 @@
 {
-  "id": "inv-419ac25b7b0abce5",
-  "opened_at": "2026-11-04T16:14:39.174977654Z",
-  "closed_at": "2026-11-04T16:14:39.179039917Z",
+  "id": "inv-b9dfc83a1094322b",
+  "opened_at": "2026-11-05T17:18:00.832391174Z",
+  "closed_at": "2026-11-05T17:18:00.834960799Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -81,8 +81,8 @@
         "measured": {
           "url": "http://inventory-service:8002/ready"
         },
-        "reason": "no HTTP response from http://inventory-service:8002/ready: Get \"http://inventory-service:8002/ready\": dial tcp 172.18.0.2:8002: connect: connection refused",
-        "taken_at": "2026-11-04T16:14:39.17592745Z",
+        "reason": "no HTTP response from http://inventory-service:8002/ready: Get \"http://inventory-service:8002/ready\": dial tcp 172.18.0.4:8002: connect: connection refused",
+        "taken_at": "2026-11-05T17:18:00.833240338Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -101,8 +101,8 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.18.0.2:8002: connect: connection refused",
-        "taken_at": "2026-11-04T16:14:39.178429175Z",
+        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.18.0.4:8002: connect: connection refused",
+        "taken_at": "2026-11-05T17:18:00.834307701Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -121,8 +121,8 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.18.0.2:8002: connect: connection refused",
-        "taken_at": "2026-11-04T16:14:39.178993674Z",
+        "reason": "cannot open a TCP connection to inventory-service:8002: dial tcp 172.18.0.4:8002: connect: connection refused",
+        "taken_at": "2026-11-05T17:18:00.834906498Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -150,7 +150,7 @@
   ],
   "diagnosis": {
     "root_subject": "connection:order-service-\u003einventory-service",
-    "statement": "order-service fails because of connection:order-service-\u003einventory-service; the readings rule out the alternatives they reached.",
+    "statement": "order-service fails because of the connection from order-service to inventory-service: a probe of it fails, and every other explanation the walk could test was ruled out by a reading.",
     "confidence": {
       "reproduced": {
         "holds": true,
@@ -158,7 +158,7 @@
       },
       "discriminated": {
         "holds": false,
-        "reason": "no reading ruled out a competing hypothesis"
+        "reason": "no reading ruled out a competing explanation"
       },
       "counterfactual": {
         "holds": false,
@@ -166,7 +166,7 @@
       },
       "verified": {
         "holds": false,
-        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+        "reason": "no fix has been applied and checked: Culprit cannot yet re-run an investigation after a change"
       }
     },
     "remediation": "Restore the network path from order-service to inventory-service.",

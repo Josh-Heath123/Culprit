@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -123,6 +124,10 @@ func TestTheFaultLibrary(t *testing.T) {
 	}
 }
 
+// phaseNumber is the same pattern internal/isolate's tests use: a plan
+// phase named in text a person reads.
+var phaseNumber = regexp.MustCompile(`(?i)\bphase \d`)
+
 func checkDiagnosis(t *testing.T, want faultExpectation, inv model.Investigation) {
 	t.Helper()
 	if err := inv.Validate(); err != nil {
@@ -131,6 +136,27 @@ func checkDiagnosis(t *testing.T, want faultExpectation, inv model.Investigation
 	d := inv.Diagnosis
 	if d == nil {
 		t.Fatal("no diagnosis")
+	}
+	// The wording changes, the verdicts do not: what a person reads names
+	// no plan phase and no raw hypothesis kind, on a real walk as on the
+	// simulated ones in internal/isolate.
+	readable := map[string]string{
+		"statement": d.Statement, "remediation": d.Remediation,
+		"reproduced reason": d.Confidence.Reproduced.Reason, "discriminated reason": d.Confidence.Discriminated.Reason,
+		"counterfactual reason": d.Confidence.Counterfactual.Reason, "verified reason": d.Confidence.Verified.Reason,
+	}
+	for _, h := range inv.Hypotheses {
+		readable["hypothesis "+h.ID+" reason"] = h.Reason
+	}
+	for where, text := range readable {
+		if phaseNumber.MatchString(text) {
+			t.Errorf("%s names a plan phase: %q", where, text)
+		}
+		for _, kind := range model.HypothesisKinds {
+			if strings.Contains(text, kind) {
+				t.Errorf("%s contains the raw kind %s: %q", where, kind, text)
+			}
+		}
 	}
 	if d.RootSubject != want.RootSubject {
 		t.Errorf("root %s, want %s\nstatement: %s", d.RootSubject, want.RootSubject, d.Statement)

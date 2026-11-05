@@ -1,7 +1,7 @@
 {
-  "id": "inv-6acfa6977fb18d3f",
-  "opened_at": "2026-11-04T16:15:00.832943027Z",
-  "closed_at": "2026-11-04T16:15:00.838646942Z",
+  "id": "inv-3544993decfd3a43",
+  "opened_at": "2026-11-05T17:18:27.033896309Z",
+  "closed_at": "2026-11-05T17:18:27.040393887Z",
   "environment": "faults-payments",
   "symptom": {
     "kind": "endpoint",
@@ -86,7 +86,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-04T16:15:00.835969904Z",
+        "taken_at": "2026-11-05T17:18:27.037022068Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -107,7 +107,7 @@
           "url": "http://payments-service:8003/ready"
         },
         "reason": "http://payments-service:8003/ready answered 503; the service is reachable but failing",
-        "taken_at": "2026-11-04T16:15:00.838415122Z",
+        "taken_at": "2026-11-05T17:18:27.040127198Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -137,7 +137,7 @@
           "confidence_rank": 100
         },
         "reason": "payments-service reads PAYMENTS_PROVIDER_KEY with no default, and it is not set in this environment",
-        "taken_at": "2026-11-04T16:15:00.838535911Z",
+        "taken_at": "2026-11-05T17:18:27.040273359Z",
         "agent_id": "fault-library",
         "grants_used": [
           "config.read.names"
@@ -167,7 +167,7 @@
           "confidence_rank": 100
         },
         "reason": "payments-service reads PAYMENTS_PROVIDER_KEY with no default, and it is not set in this environment",
-        "taken_at": "2026-11-04T16:15:00.838603374Z",
+        "taken_at": "2026-11-05T17:18:27.040349066Z",
         "agent_id": "fault-library",
         "grants_used": [
           "config.read.names"
@@ -203,7 +203,7 @@
   ],
   "diagnosis": {
     "root_subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
-    "statement": "payments-service fails because of config:payments-service/PAYMENTS_PROVIDER_KEY; the readings rule out the alternatives they reached.",
+    "statement": "payments-service fails because of PAYMENTS_PROVIDER_KEY in payments-service's configuration: a probe of it fails, and every other explanation the walk could test was ruled out by a reading.",
     "confidence": {
       "reproduced": {
         "holds": true,
@@ -211,7 +211,7 @@
       },
       "discriminated": {
         "holds": true,
-        "reason": "1 competing hypotheses were ruled out by readings (h5)"
+        "reason": "1 competing explanation was ruled out by readings (h5)"
       },
       "counterfactual": {
         "holds": false,
@@ -219,7 +219,7 @@
       },
       "verified": {
         "holds": false,
-        "reason": "verification needs a change and the loop that checks it, which is Phase 34"
+        "reason": "no fix has been applied and checked: Culprit cannot yet re-run an investigation after a change"
       }
     },
     "remediation": "Set PAYMENTS_PROVIDER_KEY for payments-service.",

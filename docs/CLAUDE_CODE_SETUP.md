@@ -72,6 +72,10 @@ from a description.
 
 ## 3. The highest-leverage thing left to do: fix `CLAUDE.md`
 
+*Done in Phase 32.2 (2026-11-05): `CLAUDE.md` is about 5 KB; the
+architecture walkthrough moved to `docs/ARCHITECTURE.md`. Kept below as the
+reasoning, and as the budget to hold it to.*
+
 This matters more than every agent and hook above combined, and it is not in any
 generic Claude Code advice.
 

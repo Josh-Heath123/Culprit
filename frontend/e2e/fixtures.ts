@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type ConsoleMessage, type Page, type Request, type Response } from "@playwright/test";
 
 import { STATE, type E2EState } from "./global-setup.ts";
 
@@ -14,21 +14,31 @@ export const test = base.extend<{ expectedFailures: RegExp[]; guard: void }>({
     async ({ page, expectedFailures }, use) => {
       const problems: string[] = [];
       const expected = (url: string) => expectedFailures.some((pattern) => pattern.test(url));
-      page.on("console", (message) => {
+      const onConsole = (message: ConsoleMessage) => {
         if (message.type() !== "error") return;
         // The browser's own line for a provoked failure ("Failed to load
         // resource") names the URL only in its location.
         if (message.text().startsWith("Failed to load resource") && expected(message.location().url)) return;
         problems.push(`console: ${message.text()} (${message.location().url})`);
-      });
-      page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
-      page.on("requestfailed", (request) => problems.push(`failed: ${request.method()} ${request.url()}`));
-      page.on("response", (response) => {
+      };
+      const onPageError = (error: Error) => problems.push(`page error: ${error.message}`);
+      const onRequestFailed = (request: Request) => problems.push(`failed: ${request.method()} ${request.url()}`);
+      const onResponse = (response: Response) => {
         if (response.status() >= 400 && !expected(response.url())) {
           problems.push(`HTTP ${response.status()}: ${response.request().method()} ${response.url()}`);
         }
-      });
+      };
+      page.on("console", onConsole);
+      page.on("pageerror", onPageError);
+      page.on("requestfailed", onRequestFailed);
+      page.on("response", onResponse);
       await use();
+      // The tour shares one page across its tests, so each test's guard
+      // listens only while that test runs.
+      page.off("console", onConsole);
+      page.off("pageerror", onPageError);
+      page.off("requestfailed", onRequestFailed);
+      page.off("response", onResponse);
       expect(problems, "console errors or failed requests").toEqual([]);
     },
     { auto: true },

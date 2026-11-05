@@ -3,7 +3,7 @@ docs/AI_NATIVE_PLAN.md: generalized across postmortems/architecture_
 decisions/ai_change_records).
 
 Plain SQL against the same Postgres instance used for time-series data —
-no separate vector DB, per CLAUDE.md's "one database, two roles" rule.
+no separate vector DB, per docs/ARCHITECTURE.md's storage layer (one Postgres instance).
 Read-only: embedding writes live in worker/app/rag/embed_job.py (the live
 job path) and worker/scripts/seed_postmortems.py (a one-off
 fixture-loading script for postmortems specifically).

@@ -10,8 +10,9 @@
 # if this repo checkout ever sits next to a dev .env, which is exactly
 # what local verification of this file surfaced.
 #
-# Deployed via infra/deploy.sh, run over SSH by .github/workflows/ci-cd.yml
-# on pushes to main only. Not started with `just up` — that's local-dev-only.
+# Deployed via infra/deploy.sh, run over SSH by .github/workflows/ci-cd.yml's
+# `deploy` job, which runs only when started by hand on main (never on a
+# push, since Phase 32.2). Not started with `just up` — that's local-dev-only.
 #
 # Always invoke with --env-file .env.prod explicitly (deploy.sh does):
 # env_file: (above) controls what's injected into each container, but

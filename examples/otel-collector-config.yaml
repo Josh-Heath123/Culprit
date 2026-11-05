@@ -2,7 +2,7 @@
 # OpenTelemetry Collector, pointing it at a Culprit instance instead of
 # (or alongside) instrumenting each service directly — see
 # docs/INSTRUMENTATION.md. Culprit's own ingest-gateway is a small custom
-# service, not a Collector itself (CLAUDE.md's Architecture section) —
+# service, not a Collector itself (docs/ARCHITECTURE.md, step 1) —
 # this config is what lets a *real* Collector hand telemetry off to it.
 #
 # Fill in <your-domain> and <api-key>, then merge the `exporters` and
