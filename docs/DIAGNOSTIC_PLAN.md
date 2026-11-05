@@ -2257,6 +2257,35 @@ stops; the human commits it and says continue.
 **Do NOT.** No feature work, nothing from Phase 33, no change to what the walk
 decides — only what it says.
 
+**Architecture review, 2026-11-05 — signed off.** On `main` as `2e05980` and
+`2e187fc`: run 42083753833 green on every job with `deploy` skipped, and the
+scheduled images workflow, started by hand, green and publishing nothing
+(42084489435). Checked on disk: `CLAUDE.md` is 5.2 KB; `.gitattributes` sets
+`* text=auto eol=lf`; `deploy` runs only on a hand-started `workflow_dispatch`
+on `main`; the images workflow runs Mondays at 04:17 UTC. Every standing task
+from September is closed. Decisions:
+
+- **Q17, ruled.** Keep, exactly as they are, the identifiers a user can look
+  up or act on: probe ids (the names in `docs/PROBES.md` and on the command
+  line), grant names (an instruction to grant something is only usable if it
+  names the grant exactly), and reading and hypothesis ids (the interface
+  shows each beside what it names). Wherever the interface shows one, render
+  it as code. Replace what is notation rather than a name: an arrow pair in a
+  sentence becomes "from order-service to inventory-service". Done in Phase 33
+  part 1, which rewrites the refusal text anyway.
+- **Phases land on `main` through a pull request.** 32.2 reached `main` by a
+  direct push past the "Protect Main" ruleset, so `main` changed before any
+  check ran on it. The push run afterwards was green, so nothing was lost this
+  time. Recorded in the handoff's protocol. The ruleset should refuse a direct
+  push from anyone: Malcolm removes himself from its bypass list, or limits
+  his bypass to pull requests (his setting).
+- **The local quickstart cannot migrate with Malcolm's `infra/.env.prod`**,
+  which predates four writer roles. Phase 33 part 2 builds against a local
+  control plane, so before it runs, the local file is regenerated
+  (`scripts/bootstrap_env.py --local --force`) and the local quickstart's
+  volume recreated. It holds only demo data. This supersedes the 31.1 note
+  about copying seven saved passwords in.
+
 ---
 
 ### Phase 33 — The production agent and the permission model
@@ -2361,6 +2390,121 @@ separate Compose network that can reach the control plane only outbound — the
 same arrangement CI can run, which a VM never was. "Deploy must be green by
 Phase 33" (2026-09-12) is superseded. A hosted demo comes back when Culprit is
 published, through the existing runbook (handoff §4, VM remediation).
+
+**How Phase 33 is run — decided 2026-11-05.** Where this block and the fields
+above differ, this block wins.
+
+**Three parts, three `/next` runs, an architecture review after each.** This is
+the most security-sensitive phase in the plan. The transport is not built
+until the agent's authority over itself has been proven without one.
+
+- **Part 1 — the agent, standing alone.** The carried-in items; `culprit agent`
+  running tasks from a local source; its configuration, its authority over its
+  own grants, its audit log; its container image. No transport, no
+  control-plane change, no migration, no interface.
+- **Part 2 — the agent meets the control plane.** Pairing, per-agent
+  credentials, the task transport, revocation, audit ingestion, readings and
+  investigations written under the agent's credential, the project token
+  scoped down, and the dashboard able to open an investigation by handing a
+  symptom to an agent. Proven against a local control plane, with the agent in
+  its own Compose network that reaches the control plane only outbound.
+- **Part 3 — the operator's surface.** The agents settings screen, the
+  deployment recipes, `docs/SECURITY.md`, the minimum grant set for each
+  investigation class, and README, LIMITS and PERMISSIONS brought in line.
+
+Parts 2 and 3 get their criteria at the review before each.
+
+**Decisions.**
+- **Per-agent credentials are Ed25519 keys that sign every request, not mutual
+  TLS.** Field 12 says mutual TLS. The control plane sits behind Caddy, so a
+  client certificate would be checked at the proxy and reach the API as a
+  header the API has to trust — a new trust boundary in front of the one that
+  matters. A signed request is verified by the API itself and needs nothing
+  from the proxy, and it gives everything field 12 asks for: per agent,
+  rotatable (a new key), revocable (the key is withdrawn and the next request
+  is refused), and testable in Go and Python alike. The agent generates its key
+  and never sends the private half. Pairing is a one-time code the operator
+  copies from the dashboard, which registers the public key. Each request signs
+  its method, path, a digest of its body, a timestamp and a nonce; the API
+  refuses a stale timestamp or a repeated nonce. Still over TLS. The binary
+  already signs capture envelopes with Ed25519.
+- **The agent is the authority on its grants; the control plane can only
+  narrow them.** Field 9's `PATCH /agents/{id}/grants` cannot widen anything.
+  The grants an agent uses for a task are its local configuration's grants
+  intersected with the allowance the control plane sends with that task. A
+  compromised control plane can withhold a grant; it cannot add one. The agent
+  re-reads its configuration before every task, so a grant removed on either
+  side takes effect on the next task with no restart (field 14).
+- **The audit log is append-only twice over.** The agent writes each entry to
+  a local, hash-chained, append-only file before it returns the result, so an
+  edited or deleted entry is detectable. Part 2 ships the entries to
+  `agent_audit_log`, which no role can update or delete — a database rule,
+  not a convention. An entry records the task, the probe, the target, the
+  grants exercised and the verdict.
+- **One new package may reach the network.** Part 2's transport lives in
+  `cli/internal/transport`, added to the D8 allowlist beside `probe` and
+  `capture`, and it talks only to the control-plane address in the agent's
+  configuration.
+- **What a task can be:** run a named probe on a target, or run the walk for a
+  symptom. The walk runs in the binary (D1 and D2, amended); the control plane
+  stores the tree that comes back. `POST /investigations/{id}/probe`, and a
+  dashboard control that opens an investigation, arrive in part 2, as tasks.
+- **Who writes what, after part 2.** `POST /readings` accepts an agent's
+  credential only, and `agent_id` comes from the credential (2026-11-03).
+  `POST /investigations` accepts an agent's credential or the project token —
+  CI still posts what `culprit diagnose` writes — and records which. The
+  project token keeps the three capture endpoints and that one, nothing else.
+
+**Part 1 — the agent, standing alone. Brief and criteria, 2026-11-05.**
+
+**Work order.**
+1. **Carried in, first.**
+   - `grants_used` records what a probe exercised (2026-11-04); `secretSource`
+     gets tests of its own.
+   - Inspecting a secret is not storing it (2026-11-04). The new per-key grant
+     is **`config.inspect.values`**: a probe may read the value in memory to
+     inspect its structure, and nothing may store or emit it.
+     `probe.auth.token_shape` needs it, and `config.read.values` no longer
+     satisfies it; `config.inspect.values` never lets capture store a value.
+     The shared model's grant list, the generated catalogue mirror,
+     `docs/PERMISSIONS.md` and the walk's refusal text follow.
+   - Q17 as ruled at 32.2's review: no arrow pair in a sentence.
+2. **`culprit agent`**, a long-lived subcommand that takes tasks from a source
+   behind an interface: in this part, a local directory the tests write to; in
+   part 2, the transport.
+3. **Its configuration**, a local file listing grants explicitly per
+   environment. The parser refuses a wildcard, `all`, or an unknown grant
+   name, naming the line. Re-read before every task.
+4. **Its authority.** A task needing a grant the configuration does not give
+   is refused before anything is dialled, and the refusal is both a reading
+   and an audit entry.
+5. **Its audit log**: append-only, hash-chained, one entry per task and per
+   probe, written before the result is returned.
+6. **Its image**: the static binary on a scratch or distroless base.
+
+**Acceptance criteria (part 1).**
+- A `token_shape` reading that read a credential names `config.inspect.values`
+  in `grants_used`; a refused reading names no grant it did not use.
+  `secretSource` has tests of its own.
+- With only `config.read.values` granted, `token_shape` is refused; with only
+  `config.inspect.values`, `culprit env capture` stores no value for that key.
+- The configuration parser refuses a wildcard, `all` and an unknown grant,
+  each with its line.
+- A task asking for an ungranted capability is refused without dialling — a
+  test counts dials on a fake network — and is recorded (field 13's chaos
+  test, against the local source).
+- A grant removed from the configuration takes effect on the next task, with
+  no restart.
+- Every executed probe has exactly one audit entry, and editing or deleting an
+  entry is caught by the chain check.
+- The agent image is under 30 MB, runs as a non-root user, and runs with a
+  read-only root filesystem — checked in CI.
+- No arrow pair in the walk's user-facing text, added to 32.2's wording test.
+
+**Do NOT implement in part 1.** No transport and no client to the control
+plane. No change to `api/`, `worker/`, the database or the frontend, except the
+generated catalogue mirror and the shared model's grant list. No deployment
+recipe beyond the image. No write capability.
 
 ---
 

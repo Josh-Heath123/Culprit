@@ -20,6 +20,10 @@ twice.
   blocking; the architecture session deletes it when answered and records the
   answer in the plan. It came back because without it, a question raised in a
   run report — the D2 revisit trigger — had nowhere to live and was dropped.
+- **Phases land on `main` through a pull request** (2026-11-05). Its run on the
+  merge result is the gate; a direct push changes `main` before anything has
+  run. The human pushes the branch, opens the pull request, and merges it when
+  every check is green.
 - **Both read the whole file first.**
 
 **CI is part of the gate set.** A phase is not complete until CI is green on the
@@ -45,11 +49,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **32.2 — Close-out** — status `complete`, awaiting the architecture session's sign-off. On `main` as `2e05980` + `2e187fc` (pushed to `main` directly, without a pull request). CI/CD on `main` green on every job, `deploy` skipped (run 42083753833); the scheduled scan started by hand once, green, publishing nothing (run 42084489435). §5. |
-| Previous phase | **32.1 — Design system and the investigation-first interface: complete** (parts 1 and 2), signed off 2026-11-05 by the architecture session, subject to PR #25's final run (on `e97189f`, the bootstrap fix) being recorded green — Phase 32.2's first step. Merged via PR #24 (`5a7acfe`) and PR #25 (`072fb4f`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
+| Current phase | **33, part 1 — The agent, standing alone** — status `not started`. Brief in §4. |
+| Previous phase | **32.2 — Close-out: complete**, signed off 2026-11-05 by the architecture session. On `main` as `2e05980` + `2e187fc` by a direct push (run 42083753833 green, `deploy` skipped); its record commit `7130927` and this sign-off land by pull request. Decisions at the end of Phase 32.2 in `DIAGNOSTIC_PLAN.md`; Q17 ruled there. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-32.2-close-out`, cut from `origin/main` = `072fb4f`; its first commit is this sign-off. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** Q17 (machine vocabulary in the walk's text) is open in §3 and does not block. |
+| Branch | `phase-33-agent`, to be cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. Do not stage `shared/uv.lock`. |
+| Blocking questions | **None.** §3 is empty. |
 
 ---
 
@@ -60,7 +64,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q17 | **How much machine vocabulary may the walk's text keep?** Phase 32.2 removed every phase number and raw hypothesis kind (the criterion, tested in Go on every simulated and real walk) and describes subjects in words. Work order item 5 also says "no … machine phrasing", and what a user still reads includes probe ids (`probe.auth.token_shape was refused`), grant names (`needs config.read.values for order-service/INVENTORY_TOKEN`), hypothesis and reading ids in rubric reasons (`(h2, h4, h5)`, `(r5, then r7)`), and an arrow pair in a placement reason (`order-service -> inventory-service`). Each is precise, and the interface shows the same ids beside the readings they name, so Claude Code kept them — but that is a ruling, not a fact. Accept them as vocabulary, or name which to replace (a later brief). | 2026-11-05, Phase 32.2 phase audit | Nothing |
+| — | None open. Q17 was ruled at 32.2's review (`DIAGNOSTIC_PLAN.md`, end of Phase 32.2). | | |
 
 ---
 
@@ -85,8 +89,10 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32, part 2 | The investigation in the control plane | **complete** | **Signed off 2026-11-04** (architecture session), subject to the quickstart verification on `main` recorded in §5. Merged via PR #23 (`a22da56`). Decisions at the end of Phase 32 in `DIAGNOSTIC_PLAN.md`. **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32 — "How Phase 32 is run", then "Part 2 — the investigation in the control plane" at the end of the section, which holds the work order, the criteria and what not to build. Branch `phase-32-control-plane`. Order: the carried-in items first (the token grant, the symptom's attestation, untested versus unexplored branches; then the last admin), then storage, the API, the view, the correlation engine's removal, and the quickstart, README and LIMITS last. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32.1, part 1 | The system, on the Investigation screens | **complete** (PR #24 merged, run 41875987970 green) | **Reviewed 2026-11-04** (architecture session); look approved by Malcolm on the screenshots. PR #24 (`bd29351`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
 | 32.1, part 2 | Everywhere else | **complete** (PR #25 merged, `072fb4f`) | **Signed off 2026-11-05** (architecture session), subject to the final run on `e97189f` being recorded green — 32.2's first step. Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. History: 2026-11-04: `2a851ee`, PR #25; run 41916090503 red on `e2e` only (quickstart bootstrap, Linux bind-mount ownership), fixed in the justfile, awaiting commit and CI. SARIF upload accepted (`self-check` green). Screenshots of every route were committed for review and removed from the tree in Phase 32.2 (they remain in history at `072fb4f`). **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — "Malcolm's review of the screenshots" and "Part 2 — everywhere else" at the end of the section, which hold the four review changes, the work order, the criteria and what not to build; field 14 as refined applies. Requirements: `docs/PRODUCTISATION.md` §2, §4, §7 and §8. First confirm with `gh` that PR #24 is merged with CI green; if not, stop. Follow the work order: the review changes first, the fresh-eyes review last. Branch `phase-32.1-part-2`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 32.2 | Close-out | **complete** — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 33 | Production agent and permission model | not started | — |
+| 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 1 | The agent, standing alone | not started | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 33 — all 17 fields and the three "Added" notes, read with "How Phase 33 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The carried-in items come first. Branch `phase-33-agent`, cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. It lands on `main` through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 2 | The agent meets the control plane | not started | Criteria written at part 1's review. Before it runs, the local `infra/.env.prod` is regenerated and the local quickstart volume recreated (32.2 review). |
+| 33, part 3 | The operator's surface | not started | Criteria written at part 2's review. |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
 
