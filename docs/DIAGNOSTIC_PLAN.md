@@ -402,6 +402,14 @@ other package under `cli/internal/` may link none of them, enumerated with
 `go list ./internal/...` so that a new package is covered the day it exists.
 Fixed in Phase 31.1.
 
+**Amended 2026-11-05 — there is no `LLM_PROVIDER=none` job today.** Phase 32
+part 2 removed the narrative job and every LLM client, so nothing reads the
+variable and a job that sets it would test nothing. What holds D8 now is
+structural: no deterministic package can import an LLM client
+(`check_no_llm_imports`, the `lint-imports` contracts). The job returns with
+the narrator in Phase 35, where it means something again: every command
+complete, only the prose absent.
+
 ---
 
 ## §2. The core model
@@ -2169,6 +2177,86 @@ screen; no dashboard control that opens an investigation (Phase 33); no new
 component, chart, animation or CSS library; no change to what the walk
 decides; no recording of the video itself.
 
+**Architecture review of part 2, 2026-11-05 — signed off, subject to one
+record.** Merged via PR #25 (`072fb4f`). Every route on the token system, the
+gate over all of `frontend/src` and shown red, contrast tested on every pair,
+the four review changes each under test, browser journeys in CI, the README's
+screenshots taken by them, Culprit annotating its own pull requests, and the
+video materials written. The fresh-eyes review earned its place: it found the
+admin password in CI logs and password field values in a failure artifact.
+The one thing not on record is the run on `e97189f`, the bootstrap fix — the
+only proof the quickstart and the browser journeys pass on Linux. Phase 32.2
+records it first. Decisions on what the run report left open:
+
+- **The walk's own wording** — a phase number in a rubric reason, a raw kind
+  in a partial statement, machine prose in a complete one — is Phase 32.2's,
+  with one label map the CLI and the frontend both read.
+- **The recorded partial investigation says environment `test`**, and the
+  README's list screenshot shows it. Phase 32.2.
+- **The browser tour is one long test with soft assertions**, so an early
+  failure hides every route after it. Phase 32.2 splits it per route.
+- **Go 1.25+ is claimed; CI builds only 1.27.** The stated floor follows what
+  CI builds (Phase 32.2).
+- **Review screenshots are not committed from now on.** They served Malcolm's
+  review; the README's own screenshots stay. `docs/review/` leaves the tree
+  in Phase 32.2 (history keeps it), and later review sets go to CI artifacts.
+- **The `e2e` job rebuilds every image.** Accepted as its cost for now.
+- **No incident can be created any more**, so the incident panel is never
+  rendered by a test. Accepted: the incident tables are dropped in Phase 34
+  (field 6 of Phase 32), and the screens with them.
+- **D8 no longer has an `LLM_PROVIDER=none` job** to point at — amended.
+
+### Phase 32.2 — Close-out
+
+**Why.** Phase 32.1 left a short list of things that are wrong or untidy
+rather than missing, and the standing tasks have waited since September.
+Phase 33 is the most security-sensitive phase in the plan; it should start on
+a clean tree. Malcolm also decided, on 2026-11-05, to take the hosted server
+offline (Phase 33, "Added 2026-11-05"), and the pipeline has to say so.
+
+**Work order.** Two commits. The first touches hundreds of files and must be
+reviewable on its own, so Claude Code stages it, writes its message file and
+stops; the human commits it and says continue.
+1. **First, the record.** With `gh`, confirm PR #25's final run (on
+   `e97189f`) concluded success on every job, `e2e` included; put the run id
+   in §5. If it did not, stop and report.
+2. **Commit 1 — line endings, alone.** `.gitattributes` (`* text=auto eol=lf`, binary
+   types named, anything that must stay CRLF named) and one `git add
+   --renormalize .`. Nothing else in that commit.
+3. **Commit 2 begins — `CLAUDE.md` under 8 KB.** What the product is now, the current
+   phase and branch, the scope ceilings, the commands table, a pointer to the
+   plan and the handoff. History and rules move out (`.claude/rules/` already
+   holds them).
+4. **The pipeline.** `deploy` runs only on `workflow_dispatch`,
+   never on a push; a weekly scheduled run of the image builds and Trivy on
+   `main`, which can also be started by hand, publishes nothing and deploys
+   nothing; the stated Go version follows the one CI builds with (`go.mod`
+   and README).
+5. **The rest.** The walk's wording, from one label map in the
+   shared investigation fixture that Go and the frontend both read: no phase
+   number, raw kind or machine phrasing in any statement or rubric reason a
+   user sees. The recorded partial investigation re-recorded with an honest
+   environment name, and the README's screenshots regenerated. The browser
+   tour split into one test per route. `docs/review/` removed. LIMITS,
+   PERMISSIONS and INSTALL brought in line with the paused deploy.
+
+**Acceptance criteria.**
+- PR #25's final run is recorded green, `e2e` included.
+- The line-endings commit is empty under `git diff --ignore-space-at-eol`, and
+  every gate is green after it.
+- `CLAUDE.md` is under 8 KB and contradicts nothing in handoff §1.
+- On the merge of this phase, `deploy` is skipped rather than failed; the
+  scheduled workflow has been started by hand once and its result is in §5.
+- No user-facing text from the walk contains a phase number or a raw kind;
+  the label map has one source, and a kind with no label fails a test in both
+  languages; the fault library still finds the same roots, 7 of 7 — the
+  wording changes, the verdicts do not.
+- One deliberately broken route fails only its own browser test.
+- Nothing references `docs/review/`.
+
+**Do NOT.** No feature work, nothing from Phase 33, no change to what the walk
+decides — only what it says.
+
 ---
 
 ### Phase 33 — The production agent and the permission model
@@ -2264,6 +2352,15 @@ then, it gets its own scoped credential, not the project token.
   memory to inspect its structure gets its own per-key grant; it permits no
   storage, by capture or anywhere else. `config.read.values` remains the
   grant that lets a value be stored. Granting one never implies the other.
+
+**Added 2026-11-05 — no hosted deployment before or during this phase.**
+Malcolm decided to take `culprit-vm` offline rather than repair it: it had
+served an unpatched, pre-Phase-14 API publicly since August. This phase builds
+and proves the agent against a local control plane, with the agent in a
+separate Compose network that can reach the control plane only outbound — the
+same arrangement CI can run, which a VM never was. "Deploy must be green by
+Phase 33" (2026-09-12) is superseded. A hosted demo comes back when Culprit is
+published, through the existing runbook (handoff §4, VM remediation).
 
 ---
 
