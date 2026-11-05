@@ -102,3 +102,35 @@ def test_an_empty_scope_directory_is_an_error(tmp_path: Path) -> None:
     (tmp_path / "frontend/src/components/gone").mkdir(parents=True)
     with pytest.raises(FileNotFoundError):
         gate.check(tmp_path, ("frontend/src/components/gone",))
+
+
+def test_the_scope_is_all_of_frontend_src() -> None:
+    """Phase 32.1 part 2 widened the gate from the investigation screens to
+    every page, components/ui included."""
+    assert gate.SCOPE == ("frontend/src",)
+    gitignore = (gate.ROOT / ".gitignore").read_text(encoding="utf-8")
+    for excluded, reason in gate.EXCLUDED.items():
+        # A generated file exists only after `just generate-types`, which a
+        # fresh CI checkout running this test never does; it must then be
+        # gitignored, so it can never be committed with styling in it.
+        if excluded.endswith(".generated.ts"):
+            assert excluded in gitignore, f"{excluded} is generated but not gitignored"
+        else:
+            assert (gate.ROOT / excluded).is_file(), (
+                f"EXCLUDED names a file that does not exist: {excluded}"
+            )
+        assert len(reason) > 40, f"EXCLUDED[{excluded!r}] has no real reason"
+
+
+def test_dates_are_formatted_in_one_place(tmp_path: Path) -> None:
+    """Malcolm's review of part 1: one date format, from lib/datetime.ts.
+    A page that calls toLocaleString() itself is refused; the formatter
+    is the one file allowed to."""
+    page = _page(tmp_path, "<span>{new Date(when).toLocaleString()}</span>")
+    assert "locale formatting outside lib/datetime.ts" in {v.rule for v in gate.check_file(page)}
+    formatter = tmp_path / "frontend" / "src" / "lib" / "datetime.ts"
+    formatter.parent.mkdir(parents=True)
+    formatter.write_text(
+        "export const f = (d: Date) => d.toLocaleDateString();\n", encoding="utf-8"
+    )
+    assert gate.check_file(formatter) == []

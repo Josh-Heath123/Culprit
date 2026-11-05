@@ -32,9 +32,9 @@
  * own token set, always paired with an icon and a word so it is never
  * carried by colour alone, and orange is in none of it.
  *
- * The shadcn/ui names (--background, --primary, ...) are kept as
- * aliases onto these tokens, so the routes Phase 32.1 part 2 has not yet
- * redesigned keep rendering through the same values.
+ * Since Phase 32.1 part 2 every route uses these names; the shadcn/ui
+ * aliases (--background, --primary, ...) the earlier screens used are
+ * gone, so there is one name for each colour.
  */
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -44,6 +44,9 @@
      metadata, so no page needs an arbitrary text-[11px]. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  /* Inline code inside prose: a touch smaller, so mono does not look
+     larger than the sans around it. */
+  --text-code: 0.92em;
 
   /* Surfaces, from the page up. */
   --color-surface-0: var(--surface-0);
@@ -110,30 +113,6 @@
   --shadow-glass: var(--shadow-3);
 
   --blur-glass: 16px;
-
-  /* shadcn/ui aliases — see the header. */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  /* Anomaly magnitude on the incident timeline (history). */
-  --color-severity-warning: var(--severity-warning);
-  --color-severity-warning-foreground: var(--severity-warning-foreground);
 }
 
 :root {
@@ -208,30 +187,6 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-2: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
   --shadow-3: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px -16px rgba(0, 0, 0, 0.8);
-
-  /* ---- shadcn/ui aliases ---- */
-  --background: var(--surface-0);
-  --foreground: var(--fg);
-  --card: var(--surface-1);
-  --card-foreground: var(--fg);
-  --popover: var(--surface-3);
-  --popover-foreground: var(--fg);
-  --primary: var(--brand);
-  --primary-foreground: #04070d;
-  --secondary: var(--surface-2);
-  --secondary-foreground: var(--fg);
-  --muted: var(--surface-2);
-  --muted-foreground: var(--fg-muted);
-  --accent: var(--surface-3);
-  --accent-foreground: var(--fg);
-  --destructive: var(--fail);
-  --destructive-foreground: #1a0509;
-  --severity-warning: var(--degrades);
-  --severity-warning-foreground: #1a1002;
-  --border: var(--line);
-  --input: var(--line-strong);
-  --ring: var(--brand);
-  --radius: var(--radius-2);
 }
 
 html {
@@ -273,7 +228,7 @@ pre {
    draw their own ring, but none may remove this one without replacing
    it. */
 :focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 

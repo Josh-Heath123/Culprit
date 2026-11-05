@@ -46,10 +46,28 @@ export function state(): E2EState {
  * /login?next=…, and signing in lands back on it. Sign-in is limited to
  * 10 a minute per address (api/app/auth/router.py), so a test signs in
  * once and then moves by clicking, as a user would. */
-export async function open(page: Page, path: string): Promise<void> {
+export async function open(
+  page: Page,
+  path: string,
+  as: { username: string; password: string } = {
+    username: process.env.CULPRIT_E2E_USERNAME ?? "",
+    password: process.env.CULPRIT_E2E_PASSWORD ?? "",
+  },
+): Promise<void> {
   await page.goto(path);
-  await page.getByLabel("Username").fill(process.env.CULPRIT_E2E_USERNAME ?? "");
-  await page.getByLabel("Password").fill(process.env.CULPRIT_E2E_PASSWORD ?? "");
+  await page.getByLabel("Username").fill(as.username);
+  await page.getByLabel("Password").fill(as.password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL((url) => url.pathname === path);
+}
+
+/** Moves to a path inside the app without a page load, so the in-memory
+ * session survives (a full load would sign out). react-router follows
+ * popstate. */
+export async function go(page: Page, path: string): Promise<void> {
+  await page.evaluate((target) => {
+    window.history.pushState({}, "", target);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, path);
   await page.waitForURL((url) => url.pathname === path);
 }

@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError, changePassword } from "@/lib/api";
 
 const MIN_PASSWORD_LENGTH = 12;
 
-/** Self-service password change (Phase 16), opened from Nav.tsx's user
+/** Self-service password change (Phase 16), opened from AppHeader.tsx's account
  * menu. Invalidates nothing else on success — tokens are short-lived
  * and there's no server-side session store to revoke (see
  * api/app/auth/router.py's own comment), so the current session just
@@ -35,18 +35,18 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="p-5">
+      <DialogContent aria-describedby={undefined} className="p-5 sm:p-6">
         <form
           onSubmit={(event) => {
             event.preventDefault();
             if (currentPassword && valid) mutation.mutate();
           }}
-          className="flex flex-col gap-3"
+          className="flex flex-col gap-4"
         >
-          <p className="text-sm font-semibold text-foreground">Change your password</p>
+          <DialogTitle className="text-base">Change your password</DialogTitle>
 
           <div className="flex flex-col gap-1">
-            <label htmlFor="current-password" className="text-xs font-medium text-muted-foreground">
+            <label htmlFor="current-password" className="text-xs font-medium text-fg-muted">
               Current password
             </label>
             <Input
@@ -60,7 +60,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label htmlFor="new-password" className="text-xs font-medium text-muted-foreground">
+            <label htmlFor="new-password" className="text-xs font-medium text-fg-muted">
               New password
             </label>
             <Input
@@ -73,7 +73,11 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-xs text-fail">
+              {error}
+            </p>
+          ) : null}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>

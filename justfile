@@ -383,7 +383,20 @@ quickstart:
         # argument that looks like a Unix absolute path (e.g. /repo)
         # into a Windows path before docker ever sees it, breaking -w.
         # A no-op everywhere else (Linux/macOS bash don't look at it).
-        MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --local
+        # Under CI (GitHub Actions sets CI=true) the generated admin
+        # password is not echoed: a public repository's job logs are
+        # readable by anyone. Locally it is printed, as Known Trap 4 allows.
+        # --user: the script writes infra/.env.prod with mode 0600. As
+        # root, on Linux, that file would be root's and unreadable by the
+        # `docker compose --env-file` and `just e2e` that follow (Docker
+        # Desktop does not enforce the ownership, which is why it only
+        # showed on a Linux runner).
+        bootstrap_out=$(MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --local)
+        if [ -n "${CI:-}" ]; then
+            printf '%s\n' "$bootstrap_out" | grep -v '^QUICKSTART_ADMIN_PASSWORD=' || true
+        else
+            printf '%s\n' "$bootstrap_out"
+        fi
     else
         echo "==> infra/.env.prod already exists, reusing it"
     fi
@@ -449,7 +462,12 @@ quickstart:
     # database at fbf4cb16570a (Phase 16) while every other container ran
     # current code. A fresh machine never sees it, which is exactly why
     # it went unnoticed since Phase 17.
-    "${COMPOSE[@]}" run --rm --build bootstrap
+    # --user, as for bootstrap_env.py above: this step writes
+    # demo-services/.env through a bind mount, and the image's `app` user
+    # cannot create files in a directory the host user owns. Docker
+    # Desktop does not enforce that, so it first failed on a Linux runner
+    # (the e2e job's first run, Phase 32.1 part 2).
+    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm --build --user "$(id -u):$(id -g)" -e HOME=/tmp bootstrap
     echo "==> Building and starting the demo services"
     # Phase 32 part 2: order-service presents a bearer token to
     # inventory-service, which checks its audience — the check the fault
@@ -537,7 +555,11 @@ quickstart:
     echo "Culprit is running at $base"
     admin_user=$(grep -E '^QUICKSTART_ADMIN_USERNAME=' infra/.env.prod | cut -d= -f2-)
     admin_pass=$(grep -E '^QUICKSTART_ADMIN_PASSWORD=' infra/.env.prod | cut -d= -f2-)
-    echo "Log in as: ${admin_user} / ${admin_pass}"
+    if [ -n "${CI:-}" ]; then
+        echo "Log in as: ${admin_user} (password: QUICKSTART_ADMIN_PASSWORD in infra/.env.prod)"
+    else
+        echo "Log in as: ${admin_user} / ${admin_pass}"
+    fi
     echo ""
     echo "The injected fault has been diagnosed. See the investigation at:"
     echo "  $base/investigations/$investigation_id"
@@ -549,7 +571,7 @@ quickstart:
 # End-to-end journeys in a browser (Phase 32.1), against the stack `just
 # quickstart` started: sign in, open and read investigations, the
 # partial-diagnosis wording, keyboard-only, and the screenshots at four
-# widths. Seeds the two partial investigations itself. The credentials go
+# widths. Seeds the three partial investigations itself. The credentials go
 # to Playwright as environment, never argv. Needs `npx playwright install
 # chromium` once.
 e2e *ARGS:
@@ -579,7 +601,7 @@ quickstart-down:
     docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod --profile demo down
 
 # Generate infra/.env.prod for a real install (docs/INSTALL.md) -- prompts
-# for DOMAIN, LLM_PROVIDER, and the relevant API keys. e.g.:
+# for DOMAIN and, optionally, VOYAGE_API_KEY. e.g.:
 #   just bootstrap-env --domain example.com
 # `just quickstart` calls scripts/bootstrap_env.py --local directly
 # instead of this recipe (no prompts needed there).

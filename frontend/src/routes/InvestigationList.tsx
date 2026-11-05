@@ -1,12 +1,13 @@
 import { ChevronRightIcon, CrosshairIcon, SignpostIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { AppHeader } from "@/components/layout/AppHeader";
-import { EmptyPanel, ErrorPanel, LoadingRows } from "@/components/investigation/States";
+import { Page } from "@/components/layout/Page";
+import { EmptyPanel, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { DiagnosisBadge } from "@/components/ui/status";
 import { useInvestigations } from "@/hooks/useInvestigations";
 import type { InvestigationSummary } from "@/lib/types";
+import { formatDateTime } from "@/lib/datetime";
 
 /** Every stored investigation, newest first. They arrive from
  * `culprit diagnose` posted with the project token (README, "The control
@@ -16,49 +17,46 @@ export function InvestigationList() {
   const items = data?.items ?? [];
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <AppHeader />
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">Investigations</h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-fg-muted">
-            Each one is a <code className="font-mono text-xs text-fg">culprit diagnose</code> run: a walk from a
-            symptom down the request path, with every edge cited by the readings that established it.
-          </p>
-        </div>
+    <Page
+      title="Investigations"
+      description={
+        <>
+          Each one is a <code className="font-mono text-code text-fg">culprit diagnose</code> run: a walk from a
+          symptom down the request path, with every edge cited by the readings that established it.
+        </>
+      }
+    >
+      {isPending ? <LoadingRows label="Loading investigations" /> : null}
+      {isError ? (
+        <ErrorPanel
+          title="Couldn't load investigations."
+          message={error instanceof Error ? error.message : "The request failed."}
+          onRetry={() => refetch()}
+        />
+      ) : null}
+      {!isPending && !isError && items.length === 0 ? (
+        <EmptyPanel title="No investigations yet">
+          Run <code className="font-mono text-xs text-fg">culprit diagnose</code> where the environment is and
+          post its JSON to <code className="font-mono text-xs text-fg">POST /investigations</code>.{" "}
+          <code className="font-mono text-xs text-fg">just quickstart</code> does both against the demo.
+        </EmptyPanel>
+      ) : null}
 
-        {isPending ? <LoadingRows label="Loading investigations" /> : null}
-        {isError ? (
-          <ErrorPanel
-            title="Couldn't load investigations."
-            message={error instanceof Error ? error.message : "The request failed."}
-            onRetry={() => refetch()}
-          />
-        ) : null}
-        {!isPending && !isError && items.length === 0 ? (
-          <EmptyPanel title="No investigations yet">
-            Run <code className="font-mono text-xs text-fg">culprit diagnose</code> where the environment is and
-            post its JSON to <code className="font-mono text-xs text-fg">POST /investigations</code>.{" "}
-            <code className="font-mono text-xs text-fg">just quickstart</code> does both against the demo.
-          </EmptyPanel>
-        ) : null}
-
-        {items.length > 0 ? (
-          <section aria-labelledby="list-heading" className="flex flex-col gap-3">
-            <h2 id="list-heading" className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">
-              {items.length} investigation{items.length === 1 ? "" : "s"}, newest first
-            </h2>
-            <ul className="flex flex-col gap-2">
-              {items.map((item) => (
-                <li key={item.id}>
-                  <Row item={item} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-      </main>
-    </div>
+      {items.length > 0 ? (
+        <section aria-labelledby="list-heading" className="flex flex-col gap-3">
+          <h2 id="list-heading" className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">
+            {items.length} investigation{items.length === 1 ? "" : "s"}, newest first
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {items.map((item) => (
+              <li key={item.id}>
+                <Row item={item} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </Page>
   );
 }
 
@@ -74,7 +72,7 @@ function Row({ item }: { item: InvestigationSummary }) {
           <span className="font-mono text-sm font-medium wrap-anywhere text-fg">{item.symptom_subject}</span>
           <span className="text-2xs text-fg-subtle">
             {item.environment} ·{" "}
-            <time dateTime={item.opened_at}>{new Date(item.opened_at).toLocaleString()}</time>
+            <time dateTime={item.opened_at}>{formatDateTime(item.opened_at)}</time>
           </span>
         </div>
         <Outcome item={item} />

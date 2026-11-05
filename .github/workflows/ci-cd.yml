@@ -89,7 +89,7 @@ jobs:
       # Phase 32.1: a redesigned page that styles itself with a raw colour,
       # a Tailwind palette colour or an arbitrary value has stepped outside
       # the tokens whose contrast scripts/tests/test_design_tokens.py
-      # measures. Scoped to the investigation screens until part 2.
+      # measures. All of frontend/src since Phase 32.1 part 2.
       - name: Check frontend tokens
         run: uv run --project api python scripts/check_frontend_tokens.py
       # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
@@ -254,38 +254,28 @@ jobs:
           # frontend/node_modules.
           cd ../extractors/node && npm ci
 
-      # `continue-on-error`, deliberately, and only on this step.
+      # Culprit checks itself and fails the build on any
+      # breaks_request_path divergence (no continue-on-error since
+      # 60e53fd). The false-positive corpus in `cli/testdata/faults/`,
+      # run in the `cli` job above, is the exact assertion; this is the
+      # same tool pointed at a real repository.
       #
-      # A finding here should be visible on the pull request, and it
-      # should not be able to block an unrelated change from merging on
-      # the day the tool first gets something wrong about our own
-      # repository. The gate that *can* fail the build is the false
-      # positive corpus in `cli/testdata/faults/`, which runs in the
-      # `cli` job above and is an exact assertion. This step is the
-      # noisier, more valuable, less trustworthy signal, and it is
-      # treated as one.
-      #
-      # If it stays green for a few releases, remove this line.
-      # `just self-check-sarif`, not the binary directly.
-      #
-      # The recipe carries the placeholder environment
-      # `api/app/*/config.py` needs at import time, and introspecting a
-      # FastAPI app means importing it. Without it the extractor reports
+      # The step needs the placeholder environment `api/app/*/config.py`
+      # reads at import time, because introspecting a FastAPI app means
+      # importing it. Without it the extractor reports
       # `KeyError: JWT_SECRET_KEY` and skips `http_routes` and
-      # `db_schema` — the two rank-90 enumerating sources — so the job
-      # would check a fact set with the route table and the ORM schema
-      # missing and report a confident, meaningless zero.
+      # `db_schema` — the two rank-90 enumerating sources — and the job
+      # would report a confident, meaningless zero. That is this
+      # product's own failure mode, and it shipped in this job until the
+      # Phase 29 audit caught it.
       #
-      # That is this product's own failure mode, and it shipped in this
-      # job until the Phase 29 audit caught it. Invoking through `just`
-      # is what keeps the two from drifting apart again.
-      # The placeholder environment, duplicated from the justfile's
-      # `_self-check-env` recipe rather than shelled through `just` —
-      # no other job here needs `just`, and adding an action to install
-      # it is supply-chain surface for one step. The duplication is held
-      # in step by `scripts/tests/test_self_check_env.py`, which parses
-      # both this file and the justfile and fails if they diverge. Same
-      # technique, and same reason, as the stop hook's exclusion list.
+      # The environment is duplicated from the justfile's
+      # `_self-check-env` recipe rather than run through `just`, so this
+      # job needs nothing installed beyond Go, uv and Node. The
+      # duplication is held in step by `scripts/tests/test_self_check_env.py`,
+      # which parses both this file and the justfile and fails if they
+      # diverge. (The `e2e` job installs `just` from Ubuntu's archive
+      # because the quickstart is a just recipe.)
       - name: culprit check (this repository)
         id: check
         env:
@@ -331,6 +321,18 @@ jobs:
           name: culprit-sarif
           path: culprit.sarif
           if-no-files-found: error
+
+      # Phase 32.1 part 2: restored now that the repository is public and
+      # code scanning is enabled (63cea12 had replaced it with the artifact
+      # above when the upload was refused). This is what puts the
+      # self-check's findings on the changed lines of Culprit's own pull
+      # requests. `category` keeps them apart from CodeQL's.
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles('culprit.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: culprit.sarif
+          category: culprit
 
   # Phase 30 field 13: "Capture against ... a kind cluster." The
   # Kubernetes adapter reads a real API server here: a Deployment with a
@@ -457,6 +459,66 @@ jobs:
       # anywhere in this workflow is the SSH deploy key).
       - name: Migration round trip
         run: uv run --project api python scripts/check_migration_round_trip.py
+
+  # Phase 32.1 part 2: the interface, end to end, in a browser, against the
+  # stack `just quickstart` builds from this commit — sign in, read a
+  # complete and a partial investigation, every surviving route at four
+  # widths, the settings journeys, keyboard alone, and a deliberate error
+  # path. Any console error or failed request outside that path fails it.
+  # The frontend's lint and unit tests run here too: this is the one job
+  # with node_modules installed. The screenshots are kept as an artifact;
+  # the README's are taken by this same suite (docs/screenshots/).
+  e2e:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # `just` from Ubuntu's own archive rather than a third-party action:
+      # the self-check job above avoids one for the same reason.
+      - name: Install just
+        run: sudo apt-get update -q && sudo apt-get install -y -q just
+      - name: Frontend lint and unit tests
+        run: |
+          cd frontend
+          npm ci
+          npx oxlint
+          npm test
+      - name: Install Chromium for Playwright
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Quickstart (builds every image from this commit)
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+        run: just quickstart
+      - name: End-to-end journeys
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+          CULPRIT_E2E_SCREENSHOTS: ${{ github.workspace }}/e2e-screenshots
+          CI: "true"
+        run: just e2e
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots
+          if-no-files-found: ignore
+      # Screenshots only. No traces are recorded (frontend/playwright.config.ts:
+      # they would hold the sign-in password), and each failure's
+      # error-context.md is left out too: its page snapshot includes input
+      # values, password fields included. The error itself is in the log.
+      - name: Keep failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failures
+          path: frontend/test-results/**/*.png
+          if-no-files-found: ignore
 
   build:
     needs: [test, migration-round-trip, cli]
@@ -611,7 +673,7 @@ jobs:
           docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
 
   deploy:
-    needs: build
+    needs: [build, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

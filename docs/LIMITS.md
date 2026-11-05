@@ -1111,32 +1111,18 @@ is the record of what is pinned and why. To see what a release asks for
 before deciding a pin, read its `go.mod`
 (`go mod download -json github.com/caddyserver/caddy/v2@<version>`).
 
-## Culprit's own pull requests get no SARIF annotations
+## SARIF annotations on Culprit's own pull requests
 
-`culprit check --format sarif` works, and the `self-check` CI job writes a
-valid file. Uploading it to GitHub's code scanning is what turns findings
-into pull-request annotations. While this repository was private that
-needed a paid feature, and the upload failed on every run from Phase 29
-until 2026-09-11, when it was replaced (`63cea12`, `docs/HANDOFF.md` §3
-Q14) by `actions/upload-artifact`: the SARIF file is kept as a build
-artifact named `culprit-sarif`, and the step fails if the file was not
-written.
-
-The repository is public now, so that reason no longer holds; nothing
-but the workflow stands in the way. Restoring the upload is planned for
-Phase 32.1. Until then the artifact is still all CI produces.
-
-So the pull-request annotations described for Phase 29 have never
-appeared on Culprit's own pull requests, and still do not. A finding
-from the self-check is visible only in that job's log (the second,
-human-readable run) or by downloading the artifact. Since `60e53fd` the
-check step is no longer `continue-on-error`, so a self-check finding does
-now fail the job — but it is still never annotated onto the diff, so
-finding out *what* it was means opening the log or the artifact. A user's
-public repository, or a private one with GitHub Code Security, can still
-upload SARIF and get annotations; that path is simply not exercised by
-Culprit's own CI until Phase 32.1 restores it.
-
+`culprit check --format sarif` writes a valid file, and the `self-check` CI
+job uploads it to GitHub code scanning (`github/codeql-action/upload-sarif`,
+category `culprit`), which is what turns a finding into an annotation on the
+changed line of a pull request. The upload failed while the repository was
+private and was replaced by a build artifact (`63cea12`); Phase 32.1 part 2
+restored it once the repository was public and code scanning enabled. The
+artifact, `culprit-sarif`, is still kept beside it. Annotations appear only
+for findings on lines a pull request changes; a finding elsewhere is in the
+repository's code-scanning alerts and in the job's log. Since `60e53fd` a
+self-check finding at `breaks_request_path` also fails the job.
 ## Probes run what you name them to run
 
 `culprit probe` executes the probes you ask for, against the target you
@@ -1716,3 +1702,53 @@ did not, so a `culprit.yaml` saying `kind: queue` loaded for `culprit check`
 and `culprit diagnose` and then matched no probe at all, leaving that edge
 silently unexamined. It is now refused when the file loads (exit 2), naming
 the component and the edge. A queue is `message`. See docs/UPGRADING.md.
+
+## Times are shown in your browser's time zone, without naming it
+
+Every date and time in the dashboard has one format, `4 Nov 2026, 18:18`
+(day, month, year, 24-hour clock), from one formatter. It is your browser's
+local time, and the zone is not printed: two people in different zones
+looking at the same investigation see different clock times for it. The API
+stores and returns UTC; the exact instant is in each `<time>` element's
+`datetime` attribute and in the API's JSON.
+
+## The incident timeline scrolls sideways on a narrow screen
+
+Below about 576 px of width the timeline's service lanes could not be read
+if they shrank further, so the chart keeps that width and scrolls inside its
+card on a phone; the page itself never scrolls sideways. Every other page
+reflows to one column instead.
+
+## The browser tests need the whole stack, and sign-in is rate limited
+
+`just e2e` runs against a stack `just quickstart` has started; nothing in
+it mocks the API. CI builds that stack on every pull request, which makes
+the `e2e` job the slowest in the pipeline. Sign-in is limited to 10 attempts
+a minute per address (`api/app/auth/router.py`) and the session lives only in
+memory, so the suite signs in six times per run and moves between pages by
+clicking; running it twice inside a minute fails with a 429 on sign-in.
+Each run also creates a user (`e2e-member-…`) and creates and deletes a
+postmortem in the stack it runs against — never point it at a stack whose
+data matters.
+
+## Development-only dependencies still carry moderate advisories
+
+`npm audit` reports no high or critical advisory. It does report moderate
+and low ones in two development tools that never reach the dashboard image
+or a browser: the `shadcn` component generator (through `deepmerge`) and
+`openapi-typescript` (through `minimatch`), which generates the API types at
+build time. Each fix available is a downgrade to an older major version;
+they are left for the standing dependency task in `docs/HANDOFF.md`.
+
+## A symptom edge can rest on the root's reading
+
+Every edge in a fault tree cites the readings that established it, but not
+always a reading on its own two ends. When the symptom was reported rather
+than reproduced (a write the walk will not replay), nothing measured the
+symptom itself, so the `symptom of` edge from the symptom to the entry
+component cites the reading that established the root — the only evidence
+that the entry fails. The quickstart's investigation shows this: one reading
+(`probe.auth.token_shape`) establishes both its edges. The symptom card says
+the symptom was not replayed; "reproduced" in the confidence rubric means the
+root's failing reading was taken again and failed again, not that the
+symptom was.

@@ -117,23 +117,6 @@ def _pairs(tokens: dict[str, str]) -> list[tuple[str, str, float]]:
         pairs.append((accent, tint, contrast(colour[accent], under)))
     for fill in ("brand-fill", "brand-fill-hover"):
         pairs.append(("on-brand-fill", fill, contrast(colour["on-brand-fill"], colour[fill])))
-    # The shadcn aliases the routes part 2 has not redesigned still use.
-    for text, background in (
-        ("foreground", "background"),
-        ("foreground", "card"),
-        ("foreground", "popover"),
-        ("muted-foreground", "background"),
-        ("muted-foreground", "card"),
-        ("muted-foreground", "popover"),
-        ("muted-foreground", "muted"),
-        ("muted-foreground", "accent"),
-        ("primary", "background"),
-        ("primary", "card"),
-        ("primary-foreground", "primary"),
-        ("destructive", "card"),
-        ("severity-warning", "card"),
-    ):
-        pairs.append((text, background, contrast(colour[text], colour[background])))
     return pairs
 
 
@@ -164,22 +147,15 @@ def test_every_status_has_a_tint_and_a_line() -> None:
 
 def test_no_text_token_escapes_the_check() -> None:
     """A text token the pair list does not name would go unmeasured. Every
-    token that is not a surface, a line, a tint, a fill or an alias must be
-    one of TEXT or STATUS."""
+    token that is not a surface, a line, a tint or a fill must be one of
+    TEXT or STATUS. (Since Phase 32.1 part 2 there are no shadcn aliases
+    left to exempt.)"""
     checked = set(TEXT) | set(STATUS) | {"on-brand-fill"}
     structural = re.compile(
         r"^(surface-\d|glass(-line)?|scrim|line(-strong)?|.*-tint|.*-line|brand-fill(-hover)?|radius-\d|shadow-\d)$"
     )
-    aliases = {
-        "background", "foreground", "card", "card-foreground", "popover", "popover-foreground",
-        "primary", "primary-foreground", "secondary", "secondary-foreground", "muted",
-        "muted-foreground", "accent", "accent-foreground", "destructive", "destructive-foreground",
-        "severity-warning", "severity-warning-foreground", "border", "input", "ring", "radius",
-    }  # fmt: skip
     unchecked = sorted(
-        name
-        for name in TOKENS
-        if name not in checked and name not in aliases and not structural.match(name)
+        name for name in TOKENS if name not in checked and not structural.match(name)
     )
     assert unchecked == [], f"tokens with no contrast check: {unchecked}"
 

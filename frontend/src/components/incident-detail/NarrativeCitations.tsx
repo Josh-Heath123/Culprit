@@ -8,15 +8,15 @@ import type { CitedEvidenceOut } from "@/lib/types";
  * 'trust me' black box." Never just the hypothesis text alone. */
 export function NarrativeCitations({ evidence }: { evidence: CitedEvidenceOut[] }) {
   if (evidence.length === 0) {
-    return <p className="text-xs text-muted-foreground">No cited evidence.</p>;
+    return <p className="text-xs text-fg-muted">No cited evidence.</p>;
   }
 
   return (
     <ol className="flex flex-col gap-3">
       {evidence.map((item, index) => (
-        <li key={`${item.postmortem_title}-${index}`} className="border-l-2 border-border pl-3">
+        <li key={`${item.postmortem_title}-${index}`} className="border-l-2 border-line pl-3">
           <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-xs text-muted-foreground">[{index + 1}]</span>
+            <span className="font-mono text-xs text-fg-muted">[{index + 1}]</span>
             {/* root_cause_evidence is a JSONB snapshot (api/app/db/models.py's
              * IncidentCandidate docstring), so the title/passage text survives
              * a deleted postmortem regardless — only this link can go stale,
@@ -28,15 +28,15 @@ export function NarrativeCitations({ evidence }: { evidence: CitedEvidenceOut[] 
             {item.postmortem_id ? (
               <Link
                 to={`/postmortems/${item.postmortem_id}`}
-                className="text-xs font-medium text-foreground underline hover:text-primary"
+                className="text-xs font-medium text-fg underline-offset-2 hover:text-brand hover:underline"
               >
                 {item.postmortem_title}
               </Link>
             ) : (
-              <span className="text-xs font-medium text-foreground">{item.postmortem_title}</span>
+              <span className="text-xs font-medium text-fg">{item.postmortem_title}</span>
             )}
           </div>
-          <blockquote className="mt-1 text-xs text-muted-foreground italic">
+          <blockquote className="mt-1 text-xs text-fg-muted italic">
             &ldquo;{item.passage}&rdquo;
           </blockquote>
         </li>
