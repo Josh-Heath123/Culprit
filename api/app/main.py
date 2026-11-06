@@ -25,6 +25,12 @@ from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 from starlette.responses import JSONResponse, Response  # noqa: E402
 
+from app.agents.config import (  # noqa: E402
+    AGENT_ADMIN_DATABASE_URL,
+    AGENT_GATEWAY_DATABASE_URL,
+    AGENT_REGISTRAR_DATABASE_URL,
+)
+from app.agents.router import router as agents_router  # noqa: E402
 from app.auth.config import AUTH_SERVICE_DATABASE_URL  # noqa: E402
 from app.auth.dependencies import require_admin, require_auth  # noqa: E402
 from app.auth.router import router as auth_router  # noqa: E402
@@ -150,6 +156,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.investigation_writer_session_factory = async_sessionmaker(
         investigation_engine, expire_on_commit=False
     )
+    # Phase 33 part 2: the agent routes, one engine per role
+    # (migrations/versions/d7a3e5f1b9c2_agents.py). hide_parameters: a
+    # registration carries a public key and a pairing code, an audit entry
+    # a probe's reason.
+    agent_engines = {
+        name: create_async_engine(url, pool_size=2, max_overflow=3, hide_parameters=True)
+        for name, url in (
+            ("agent_admin", AGENT_ADMIN_DATABASE_URL),
+            ("agent_registrar", AGENT_REGISTRAR_DATABASE_URL),
+            ("agent_gateway", AGENT_GATEWAY_DATABASE_URL),
+        )
+    }
+    for name, agent_engine in agent_engines.items():
+        setattr(
+            app.state,
+            f"{name}_session_factory",
+            async_sessionmaker(agent_engine, expire_on_commit=False),
+        )
     # For POST /incidents/{id}/regenerate-root-cause and POST/PATCH
     # /postmortems to enqueue arq jobs by name — this API process never
     # runs arq jobs itself.
@@ -165,6 +189,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await capture_engine.dispose()
     await probe_engine.dispose()
     await investigation_engine.dispose()
+    for agent_engine in agent_engines.values():
+        await agent_engine.dispose()
 
 
 app = FastAPI(title="Culprit API", lifespan=lifespan)
@@ -275,10 +301,13 @@ app.include_router(divergences_router)
 # session -- declared per route, as above, for the same reason.
 app.include_router(captures_router)
 # Phase 31: /readings and /probes. Same per-route rule -- POST /readings
-# takes the project token a probe runner holds, the two /probes routes a
-# user session. POST /probes/{id}/run answers 503: probes run in the
-# culprit binary, and this API has no agent transport until Phase 33.
+# takes an agent's signature (Phase 33 part 2; it took the project token
+# until then), the two /probes routes a user session. POST /probes/{id}/run
+# answers 503: probes run in an agent, as tasks addressed to it.
 app.include_router(readings_router)
 # Phase 32 part 2. No router-level dependency, as for readings: the upload
 # takes the project token, the reads a user session, declared per route.
 app.include_router(investigations_router)
+# Phase 33 part 2: pairing, allowances, tasks and the audit log. Per route
+# again: an admin's session, a pairing code, or an agent's signature.
+app.include_router(agents_router)

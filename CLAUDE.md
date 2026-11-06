@@ -11,9 +11,9 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 33, part 1 — the agent, standing alone, on branch
-  `phase-33-agent`. Phases 26–32.2 are merged. Parts 2 (the control plane)
-  and 3 (the operator's surface) follow, each after a review.
+- **Current phase:** 33, part 2 — the agent meets the control plane, on
+  branch `phase-33-control-plane`. Phases 26–33 part 1 are merged. Part 3 (the
+  operator's surface) follows after a review.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Read §1 (D1–D8),
   §2 (the core model) and the phase you are working on — not the whole file.
 - **Deploy is paused** (2026-11-05): the hosted VM is offline, and the `deploy`

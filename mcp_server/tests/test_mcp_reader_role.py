@@ -61,6 +61,9 @@ _MIGRATION_ROLE_PASSWORDS = {
     "CAPTURE_WRITER_DB_PASSWORD": "test-capture-writer-password",
     "PROBE_WRITER_DB_PASSWORD": "test-probe-writer-password",
     "INVESTIGATION_WRITER_DB_PASSWORD": "test-investigation-writer-password",
+    "AGENT_ADMIN_DB_PASSWORD": "test-agent-admin-password",
+    "AGENT_REGISTRAR_DB_PASSWORD": "test-agent-registrar-password",
+    "AGENT_GATEWAY_DB_PASSWORD": "test-agent-gateway-password",
 }
 
 

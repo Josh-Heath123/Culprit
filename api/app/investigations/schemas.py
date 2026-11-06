@@ -29,6 +29,8 @@ class InvestigationSummary(BaseModel):
     attestation: str
     root_subject: str | None
     complete: bool | None
+    #: Who stored it: "project-token", or "agent:<id>" (Phase 33 part 2).
+    submitted_by: str
 
 
 class InvestigationList(BaseModel):

@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -62,6 +63,24 @@ type Config struct {
 	AgentID      string
 	Manifest     string // resolved against the configuration's directory
 	Environments map[string]capability.Grants
+	// ControlPlane is the control plane's API root, when the agent takes
+	// its tasks from one (Phase 33 part 2): the only address
+	// internal/transport will dial. Empty for an agent that reads a local
+	// task directory.
+	ControlPlane string
+	// Key is the agent's Ed25519 private key file, resolved against the
+	// configuration's directory. `culprit agent init` writes it.
+	Key string
+}
+
+// GrantNames is every environment's grants by name: what the agent
+// reports holding when it pairs, and all an operator may then allow.
+func (c Config) GrantNames() map[string][]string {
+	names := map[string][]string{}
+	for environment, grants := range c.Environments {
+		names[environment] = grants.Names()
+	}
+	return names
 }
 
 // ConfigError is a configuration the agent refuses to run under. It
@@ -152,6 +171,21 @@ func ParseConfig(path string, data []byte) (Config, error) {
 				manifest = filepath.Join(filepath.Dir(path), manifest)
 			}
 			config.Manifest = manifest
+		case "control_plane":
+			address, err := controlPlane(value)
+			if err != nil {
+				return fail(value.Line, "%s", err.Error())
+			}
+			config.ControlPlane = address
+		case "key":
+			if value.Kind != yaml.ScalarNode || strings.TrimSpace(value.Value) == "" {
+				return fail(value.Line, "key must be the path to the agent's key file")
+			}
+			keyPath := strings.TrimSpace(value.Value)
+			if !filepath.IsAbs(keyPath) {
+				keyPath = filepath.Join(filepath.Dir(path), keyPath)
+			}
+			config.Key = keyPath
 		case "environments":
 			if value.Kind != yaml.MappingNode {
 				return fail(value.Line, "environments must map each environment name to its grants")
@@ -173,7 +207,8 @@ func ParseConfig(path string, data []byte) (Config, error) {
 				config.Environments[name] = grants
 			}
 		default:
-			return fail(key.Line, "%s is not a configuration key (version, agent_id, manifest, environments)", key.Value)
+			return fail(key.Line, "%s is not a configuration key "+
+				"(version, agent_id, manifest, environments, control_plane, key)", key.Value)
 		}
 	}
 	switch {
@@ -185,6 +220,8 @@ func ParseConfig(path string, data []byte) (Config, error) {
 		return fail(root.Line, "manifest is required: the culprit.yaml that describes the system")
 	case len(config.Environments) == 0:
 		return fail(root.Line, "environments is required: an agent with no environment can run nothing")
+	case config.ControlPlane != "" && config.Key == "":
+		return fail(root.Line, "an agent with a control_plane needs key: the file its signing key is in")
 	}
 	return config, nil
 }
@@ -292,4 +329,36 @@ func rawGrant(value *yaml.Node) (capability.Raw, error) {
 		return capability.Raw{Items: items}, nil
 	}
 	return capability.Raw{}, fmt.Errorf("expected true, false or a list of items")
+}
+
+// controlPlane reads `control_plane: {url: ...}`: an http or https URL
+// with a host, no credentials in it, no query and no fragment. The URL's
+// path is the API root every request is relative to (".../api" behind
+// the dashboard's proxy).
+func controlPlane(node *yaml.Node) (string, error) {
+	if node.Kind != yaml.MappingNode {
+		return "", fmt.Errorf("control_plane must be a mapping with url:")
+	}
+	address := ""
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		key, value := node.Content[index], node.Content[index+1]
+		if key.Value != "url" {
+			return "", fmt.Errorf("control_plane.%s is not a key (url)", key.Value)
+		}
+		address = strings.TrimSpace(value.Value)
+	}
+	parsed, err := url.Parse(address)
+	switch {
+	case address == "" || err != nil:
+		return "", fmt.Errorf("control_plane.url must be the control plane's API root, e.g. https://culprit.example.com/api")
+	case parsed.Scheme != "https" && parsed.Scheme != "http":
+		return "", fmt.Errorf("control_plane.url must be http or https")
+	case parsed.Host == "" || parsed.Hostname() == "":
+		return "", fmt.Errorf("control_plane.url names no host")
+	case parsed.User != nil:
+		return "", fmt.Errorf("control_plane.url must not carry credentials: the agent signs with its key")
+	case parsed.RawQuery != "" || parsed.Fragment != "":
+		return "", fmt.Errorf("control_plane.url must not have a query or fragment")
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
 }

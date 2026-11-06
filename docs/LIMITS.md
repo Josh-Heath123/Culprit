@@ -1829,3 +1829,67 @@ answers them in `<tasks>/outbox`, polling every 2 seconds (`--poll`); tasks
 run one at a time, in file-name order. There is no transport to the
 control plane yet (Phase 33 part 2), so nothing in the dashboard can send
 one a task.
+
+## An agent's clock must be within five minutes of the control plane's
+
+Every request a paired agent sends is signed with a timestamp, and the
+control plane refuses one more than 300 seconds from its own clock, either
+way. An agent on a host whose clock has drifted further is refused on
+every request, with the same `401` as a forged one — the refusal does not
+say which check failed, by design. Keep both hosts on NTP. Nonces are kept
+for twice that window; a request is never accepted twice.
+
+## An allowance can only name what the agent reported when it paired
+
+When an agent pairs it reports the grants its configuration gives, per
+environment, and an admin can allow only from that list. If the operator
+later adds a grant to the agent's configuration, the control plane does
+not learn of it: the agent can use it only once an allowance names it,
+and an allowance cannot name it until the agent pairs again with a new
+code. Removing a grant from the configuration needs nothing — the agent
+re-reads it before every task and runs without it.
+
+## A revoked agent's task in flight is lost
+
+Revoking an agent refuses its very next request. A task it had already
+claimed runs to its end on the agent's host — the probes are local — but
+its readings, its investigation and its result are then refused, so the
+control plane keeps the task as claimed and never completed, and the
+agent's local audit log is the only record of what that task did.
+
+## Agents poll for tasks
+
+A paired agent asks the control plane for its next task every 2 seconds
+when it has none (`--poll`), one task at a time. Nothing is pushed to it —
+the agent only ever connects out — so a task waits up to that interval
+before it starts.
+
+## An agent's control plane should be reached over https
+
+`control_plane.url` accepts `http` as well as `https`, because a control
+plane on the same host or a private network (the CI scenario) has no
+certificate. Every request is signed, so a request cannot be forged or
+altered on the way, but over plain `http` its body — task specs, readings,
+the pairing code while pairing — can be read by anything on the path. Use
+`https` anywhere the path is not yours. Give the pairing code as
+`culprit agent pair --code -`, on stdin, to keep it out of shell history
+and the process list.
+
+## What a leaked agent database credential could do
+
+The API binds every agent request to the agent whose key signed it; the
+database roles do not know which agent is which. Someone holding the
+`agent-gateway` role's password — not an agent's key — could delete
+recorded nonces (reopening replay inside the five-minute window), claim or
+complete any agent's task, and rewrite the allowance stamped on a claimed
+task. The last cannot widen what an agent does, which intersects any
+allowance with its own configuration. None of them can touch
+`agent_audit_log` beyond appending to a chain. Treat the role passwords in
+`infra/.env.prod` as you would the control plane's own.
+
+## A malformed request body is refused before its signature is checked
+
+The agent routes refuse an unsigned or wrongly signed request with one
+`401` that does not say why. A request whose body is not valid JSON is
+refused first, with a `422`, before the signature is read: it reveals that
+the route exists, and nothing else.

@@ -29,6 +29,12 @@ services:
   order-service:
     <<: *demo
     command: uvicorn order_service.main:app --host 0.0.0.0 --port 8001
+    # Phase 33 part 2's agent scenario runs `culprit agent` in here. This
+    # stack shares no network with the control plane, so the agent reaches
+    # it the only way a real one would: through the address the host
+    # publishes. host-gateway makes that name work on Linux too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       INVENTORY_SERVICE_URL: http://inventory-service:8002
       PAYMENTS_SERVICE_URL: http://payments-service:8003

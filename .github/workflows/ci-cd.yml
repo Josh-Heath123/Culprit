@@ -300,6 +300,9 @@ jobs:
           CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
@@ -320,6 +323,9 @@ jobs:
           CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
@@ -511,6 +517,17 @@ jobs:
           CULPRIT_E2E_SCREENSHOTS: ${{ github.workspace }}/e2e-screenshots
           CI: "true"
         run: just e2e
+      # Phase 33 part 2: the agent against this same control plane, from
+      # the fault library's demo stack — its own Compose network, reaching
+      # the API only through the published port (just agent-e2e).
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache-dependency-path: cli/go.sum
+      - name: The agent, end to end
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+        run: just agent-e2e
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4
