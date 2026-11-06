@@ -77,11 +77,13 @@ func TestTheAgentEndToEnd(t *testing.T) {
 	}
 
 	// Agent B: the same, and config.inspect.values for the token it must
-	// inspect, over the demo model as it is.
+	// inspect, over the demo model as it is. The fault first: it recreates
+	// order-service with the wrong token, which would take an agent already
+	// installed in that container with it.
+	restore = stack.inject("auth-audience")
 	audience := newInContainerAgent(t, stack, base, admin, plane, "e2e-audience",
 		network+"      config.inspect.values: [order-service/INVENTORY_TOKEN]\n", "")
 	audience.allow(t, append([]string{"config.inspect.values"}, networkGrants...))
-	restore = stack.inject("auth-audience")
 	rooted := audience.diagnose(t, "POST http://order-service:8001/orders")
 	restore()
 	if rooted["root_subject"] != "auth:order-service->inventory-service/audience" {
