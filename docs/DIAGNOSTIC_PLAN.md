@@ -2346,8 +2346,10 @@ test where the control plane requests an ungranted capability and the agent
 refuses.
 
 **14. Acceptance criteria.**
-- An agent with only `net.*` and `config.read.names` can complete a reachability
-  investigation and visibly cannot complete a schema one.
+- An agent with only `net.dns.resolve`, `net.tcp.connect`, `net.tls.inspect`,
+  `net.http.outbound` and `config.read.names` can complete a reachability
+  investigation and visibly cannot complete a schema one. *(Grants named
+  2026-11-06: the configuration parser refuses wildcards, `net.*` included.)*
 - Revoking a grant takes effect on the next task, with no restart.
 - The audit log accounts for every probe run.
 - Agent container is under 30 MB and runs as non-root with a read-only filesystem.
@@ -2405,10 +2407,11 @@ until the agent's authority over itself has been proven without one.
 - **Part 2 — the agent meets the control plane.** Pairing, per-agent
   credentials, the task transport, revocation, audit ingestion, readings and
   investigations written under the agent's credential, the project token
-  scoped down, and the dashboard able to open an investigation by handing a
-  symptom to an agent. Proven against a local control plane, with the agent in
+  scoped down, and the API able to open an investigation by handing a symptom to
+  an agent — the dashboard's control for it moved to part 3 (2026-11-06). Proven against a local control plane, with the agent in
   its own Compose network that reaches the control plane only outbound.
 - **Part 3 — the operator's surface.** The agents settings screen, the
+  dashboard control that opens an investigation through an agent, the
   deployment recipes, `docs/SECURITY.md`, the minimum grant set for each
   investigation class, and README, LIMITS and PERMISSIONS brought in line.
 
@@ -2505,6 +2508,112 @@ Parts 2 and 3 get their criteria at the review before each.
 plane. No change to `api/`, `worker/`, the database or the frontend, except the
 generated catalogue mirror and the shared model's grant list. No deployment
 recipe beyond the image. No write capability.
+
+**Architecture review of part 1, 2026-11-06 — signed off.** Merged via PR #27
+(`57541e3`), CI green on the merge result (reported by Malcolm; the run id is
+recorded by part 2's first step). Checked on disk: the D8 allowlist still names
+only `probe` and `capture`, and `internal/agent` takes its probe runner through
+an interface rather than importing `probe`. Every criterion was executed by the
+tests and again by `phase-auditor` against the real binary; the invariant
+auditor found a CI-only failure in the image check that Docker Desktop hid, and
+it was fixed before merge. Decisions:
+
+- **Field 14's `net.*`** is the four network grants by name (reworded above).
+- **Stale records.** The recorded investigations, one browser assertion and
+  the README's partial screenshot still show `config.read.values` and
+  `token_shape` v2. Part 2 re-records them first.
+- **The rename breaks a user's `culprit.yaml`** that granted
+  `config.read.values` for a token. LIMITS says so; `docs/UPGRADING.md` does
+  not yet. Part 2 adds it.
+- **`process.exec.allowlist` is recorded when authorised, not after the
+  command ran.** Accepted: an audit record that may overstate access errs the
+  safe way; one that understates it does not.
+- **`POST /investigations/{id}/probe` is dropped.** A stored investigation is
+  a final record (Phase 32.1); appending readings to it would make it mutable.
+  Probing again is a new task, and diagnosing again a new investigation. This
+  supersedes the decision above that it arrives in part 2.
+- **The dashboard control that opens an investigation moves to part 3**, with
+  the rest of the operator's surface, so part 2 is backend and binary only —
+  the security-critical part, reviewed without interface changes beside it.
+
+**Part 2 — the agent meets the control plane. Brief and criteria, 2026-11-06.**
+
+**Work order.**
+0. **Record part 1's CI run** (PR #27's merge result) in §5. Then regenerate the
+   local `infra/.env.prod` and recreate the local quickstart volume, as 32.2's
+   review required — its demo data is lost, and that is accepted.
+1. **Carried in.** Re-record `api/tests/data/investigations/`
+   (`CULPRIT_FAULT_LIBRARY_RECORD`), the browser assertion and the README's
+   partial screenshot under `config.inspect.values`; add the rename to
+   `docs/UPGRADING.md`.
+2. **The signing contract, first**, as `Reading`'s was: the canonical request
+   (method, path, body digest, timestamp, nonce), Ed25519 verification, and a
+   conformance fixture Go and Python both read — a valid request; then a
+   tampered body, a changed path, a stale timestamp, a replayed nonce, a wrong
+   key and a revoked key, each refused.
+3. **Storage.** Agents, single-use pairing codes (stored hashed), allowances,
+   tasks, seen nonces and `agent_audit_log`. A new role per write surface
+   (standing invariant 3). No role holds UPDATE or DELETE on
+   `agent_audit_log`, and a trigger refuses both even to the owner.
+4. **The API.** Pairing code (admin), registration, list, allowances (narrow
+   only), tasks (admin), and the agent's own endpoints: claim its next task,
+   post a result, post audit entries. A claim is atomic, and an agent can
+   claim only tasks addressed to it. Readings under the agent's credential;
+   investigations under either credential, recording which; the project token
+   scoped down (the decision above).
+5. **The binary.** `culprit agent init` (writes the key `0600`, never
+   overwrites one) and `culprit agent pair`; `cli/internal/transport` as the
+   agent's task source, added to the D8 allowlist.
+6. **CI.** The two-network topology and the end-to-end scenario below.
+7. LIMITS, PERMISSIONS, UPGRADING (the project token's narrower scope breaks
+   any CI that posts readings with it).
+
+**Defaults.** A request older than 300 seconds is refused, and nonces are kept
+at least that long. A pairing code expires after 15 minutes and works once. A
+newly paired agent's allowance is empty: the operator grants explicitly, and
+only from what the agent reports it holds. The API's refusal of a bad request
+does not say which check failed.
+
+**Acceptance criteria (part 2).**
+- Every case in the signing fixture behaves as written, in Go and in Python.
+- A pairing code works once and not after it expires; every byte the agent
+  sends while pairing is captured, and no private key is in it.
+- Revoking an agent refuses its very next request; removing a grant from its
+  allowance takes effect on its next task — neither needs a restart.
+- An allowance naming a grant the agent does not report holding, a wildcard,
+  or `all` is refused with 422. A task whose allowance names a grant the
+  agent's configuration lacks runs without it, refused and recorded — field
+  13's chaos test, over the real transport.
+- `POST /readings` accepts only an agent's credential; `agent_id` is the
+  credential's, a body naming another agent is refused, and the project token
+  is refused.
+- A test lists every route and the credentials each accepts: the project
+  token works on exactly the three capture endpoints and `POST /investigations`,
+  and adding it to any other route turns the test red.
+- A stored investigation records whether an agent or the project token
+  submitted it.
+- Every probe the CI scenario runs has exactly one `agent_audit_log` row. The
+  API refuses an entry that does not extend that agent's stored chain. No
+  role, the owner included, can update or delete a row — shown red by
+  removing the trigger.
+- In CI, the agent shares no Compose network with the control plane and
+  reaches it only through its published address. A test fails if anything in
+  `cli/` calls a listen function. `internal/transport` dials only the
+  configured address and follows no redirect, and it is the allowlist's third
+  package, mutation-tested.
+- End to end in CI: an investigation opened through the API is run by an agent
+  with the four network grants and `config.read.names` — a reachability
+  investigation completes, a schema one is visibly partial and names
+  `db.metadata.read`. The audience fault, run by an agent holding
+  `config.inspect.values`, still roots at the audience.
+- The migration round-trips with agents, tasks and audit rows present.
+- `LLM_PROVIDER=none` changes nothing.
+
+**Do NOT implement in part 2.** No frontend change: the agents screen and the
+dashboard control that opens an investigation are part 3's. No deployment
+recipe beyond the CI topology, and no `docs/SECURITY.md` (part 3). No mutual
+TLS, no write capability, no multi-tenancy, no hosted deployment, no
+`POST /investigations/{id}/probe`.
 
 ---
 
