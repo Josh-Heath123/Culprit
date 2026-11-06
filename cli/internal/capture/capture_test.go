@@ -873,3 +873,42 @@ func TestAnAbsoluteComposeFileIsUsedAsWritten(t *testing.T) {
 		t.Errorf("a relative compose file was not resolved against the manifest: %q", argv[7])
 	}
 }
+
+// TestConfigInspectValuesNeverLetsCaptureStoreAValue (Phase 33 part 1):
+// config.inspect.values lets a probe read a value in memory to inspect
+// its structure. It is not config.read.values, and a capture granted only
+// it, for the very keys whose values a capture would otherwise store,
+// stores no value and emits none.
+func TestConfigInspectValuesNeverLetsCaptureStoreAValue(t *testing.T) {
+	inspectOnly := strings.Replace(composeManifest,
+		"      config.read.values: [orders-api/LOG_LEVEL]\n",
+		"      config.inspect.values: [orders-api/LOG_LEVEL, orders-api/JWT_SECRET_KEY]\n", 1)
+	if inspectOnly == composeManifest {
+		t.Fatal("the manifest was not rewritten")
+	}
+	bundle := runCapture(t, loadManifest(t, inspectOnly), "staging", Options{Runner: composeRunner()})
+
+	for _, fact := range bundle.Facts {
+		if fact.Predicate == PredicateValue && strings.HasPrefix(fact.Subject, "config:") {
+			t.Errorf("a config value was stored under config.inspect.values: %s = %v", fact.Subject, fact.Value)
+		}
+		if fact.GrantRef != "" && strings.HasPrefix(fact.GrantRef, "config.inspect.values") {
+			t.Errorf("a fact names config.inspect.values as its grant: %+v", fact)
+		}
+	}
+	if _, ok := find(bundle, "config:orders-api/LOG_LEVEL", model.PredicateValueShape); !ok {
+		t.Error("LOG_LEVEL lost its shape: the key should still be captured, as a shape")
+	}
+
+	_, key, _ := ed25519.GenerateKey(nil)
+	envelope, err := Seal(bundle, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := base64.StdEncoding.DecodeString(envelope.Payload)
+	for _, secret := range []string{plantedJWT, "planted-log-level-value"} {
+		if strings.Contains(string(payload), secret) {
+			t.Errorf("the capture carries %q, a value granted only for inspection", secret)
+		}
+	}
+}

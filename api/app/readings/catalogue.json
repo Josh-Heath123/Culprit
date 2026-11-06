@@ -36,7 +36,7 @@
   },
   {
     "id": "probe.auth.token_shape",
-    "version": 2,
+    "version": 3,
     "effect": "inspect",
     "capabilities": [],
     "inputs": {

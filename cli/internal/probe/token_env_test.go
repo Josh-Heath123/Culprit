@@ -10,10 +10,10 @@ import (
 )
 
 // fakeSecrets stands for the environment the agent runs in. It refuses the
-// way secretSource does when config.read.values does not name the key.
+// way secretSource does when config.inspect.values does not name the key.
 type fakeSecrets struct {
 	values  map[string]string // "component/KEY" -> value
-	granted map[string]bool   // "component/KEY" -> config.read.values allows it
+	granted map[string]bool   // "component/KEY" -> config.inspect.values allows it
 	asked   []string
 }
 
@@ -21,8 +21,8 @@ func (f *fakeSecrets) Secret(_ context.Context, component, key string) (string, 
 	item := component + "/" + key
 	f.asked = append(f.asked, item)
 	if !f.granted[item] {
-		return "", &RefusedError{Capability: "config.read.values",
-			Reason: "reading " + key + " needs config.read.values for " + item}
+		return "", &RefusedError{Capability: "config.inspect.values",
+			Reason: "reading " + key + " needs config.inspect.values for " + item}
 	}
 	value, ok := f.values[item]
 	if !ok {
@@ -45,7 +45,7 @@ func tokenEnvReading(t *testing.T, secrets *fakeSecrets) model.Reading {
 
 // TestATokenIsReadOnlyUnderItsOwnGrant is part 2's first item (Phase 32
 // part 1's review): reading a service's own credential needs
-// config.read.values for that variable. Without it the reading is refused
+// config.inspect.values for that variable. Without it the reading is refused
 // and says why; with it, the probe measures the token as before.
 func TestATokenIsReadOnlyUnderItsOwnGrant(t *testing.T) {
 	_, parts, _ := model.ParseSubject(authTarget)
@@ -53,8 +53,8 @@ func TestATokenIsReadOnlyUnderItsOwnGrant(t *testing.T) {
 
 	ungranted := &fakeSecrets{values: map[string]string{holder: wrongAudienceToken}}
 	reading := tokenEnvReading(t, ungranted)
-	if reading.Verdict != model.VerdictRefused || !strings.Contains(reading.Reason, "config.read.values") {
-		t.Fatalf("without the grant: %s (%q), want refused naming config.read.values", reading.Verdict, reading.Reason)
+	if reading.Verdict != model.VerdictRefused || !strings.Contains(reading.Reason, "config.inspect.values") {
+		t.Fatalf("without the grant: %s (%q), want refused naming config.inspect.values", reading.Verdict, reading.Reason)
 	}
 	if len(reading.GrantsUsed) != 0 {
 		t.Errorf("a refused reading lists grants_used %v", reading.GrantsUsed)

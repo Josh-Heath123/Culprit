@@ -155,9 +155,11 @@ environments:
       net.tcp.connect: true
       net.http.outbound: true
       config.read.names: true
-      # Reading order-service's own token, to check its audience, needs
-      # this (Phase 32 part 2): it is that service's credential.
-      config.read.values: [order-service/INVENTORY_TOKEN]
+      # Inspecting order-service's own token, to check its audience, needs
+      # this: it is that service's credential, read in memory and never
+      # stored (Phase 33 part 1; config.read.values, which would store it,
+      # does not satisfy it).
+      config.inspect.values: [order-service/INVENTORY_TOKEN]
   # The same vantage without the token grant: the audience hypothesis is
   # refused, and the diagnosis is partial and says why.
   faults-order-ungranted:

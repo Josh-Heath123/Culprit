@@ -15,6 +15,7 @@
     {"name": "repo.read", "allowlist": false},
     {"name": "config.read.names", "allowlist": false},
     {"name": "config.read.values", "allowlist": true},
+    {"name": "config.inspect.values", "allowlist": true},
     {"name": "db.metadata.read", "allowlist": false},
     {"name": "db.rows.read", "allowlist": true},
     {"name": "net.dns.resolve", "allowlist": false},

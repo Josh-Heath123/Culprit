@@ -161,6 +161,10 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	// What the run actually uses, recorded by the data sources as the
+	// ledger allows it: grants_used is what was exercised, not only what
+	// the manifest declares (Phase 33 part 1).
+	runCtx, used := capability.WithExercised(runCtx)
 
 	// Resolve the expectation after the capability gate, so a refused
 	// probe never even looks for one, and before Run, so the probe
@@ -198,7 +202,39 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 			"probe did not complete within %s; no verdict was reached", timeout))
 	}
 
-	return r.emit(request, manifest, outcome, manifest.Capabilities)
+	return r.emit(request, manifest, outcome, union(manifest.Capabilities, r.held(used.List())))
+}
+
+// held keeps only the exercised grants this run's ledger actually holds.
+// The data sources record a grant after the ledger allowed it, so this
+// drops nothing today; it makes that a property of the runner rather
+// than a convention every source must keep. A probe cannot widen what a
+// reading claims.
+func (r *Runner) held(exercised []string) []string {
+	kept := make([]string, 0, len(exercised))
+	for _, name := range exercised {
+		if r.ledger.Holds(capability.Capability(name)) {
+			kept = append(kept, name)
+		}
+	}
+	return kept
+}
+
+// union is the sorted, de-duplicated union of two grant lists.
+func union(declared, exercised []string) []string {
+	set := map[string]bool{}
+	for _, name := range declared {
+		set[name] = true
+	}
+	for _, name := range exercised {
+		set[name] = true
+	}
+	names := make([]string, 0, len(set))
+	for name := range set {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // permitted asks the ledger about every capability the manifest declares.

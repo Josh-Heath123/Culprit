@@ -157,6 +157,9 @@ func checkDiagnosis(t *testing.T, want faultExpectation, inv model.Investigation
 				t.Errorf("%s contains the raw kind %s: %q", where, kind, text)
 			}
 		}
+		if strings.Contains(text, "->") {
+			t.Errorf("%s contains an arrow pair: %q", where, text)
+		}
 	}
 	if d.RootSubject != want.RootSubject {
 		t.Errorf("root %s, want %s\nstatement: %s", d.RootSubject, want.RootSubject, d.Statement)

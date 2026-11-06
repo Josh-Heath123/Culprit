@@ -1593,8 +1593,11 @@ unauthenticated and no auth hypothesis is generated. A downstream that
 rejects otherwise-valid credentials (`auth_rejected`) is never tested:
 `culprit.yaml` has nowhere yet to say which protected URL to present a
 token to. Reading the token is reading a credential, so it needs
-`config.read.values` naming that exact key —
-`config.read.values: [order-service/INVENTORY_TOKEN]`. Without it the probe
+`config.inspect.values` naming that exact key —
+`config.inspect.values: [order-service/INVENTORY_TOKEN]` (Phase 33; until
+then it was `config.read.values`, which no longer counts: a `culprit.yaml`
+written for the older binary now has the audience hypothesis refused until
+the grant is renamed). Without it the probe
 is refused, the audience hypothesis is left *unexplored*, and the diagnosis
 is partial and names the missing grant; a grant for any other key does not
 count. With it, the token is read from the agent's own environment by the
@@ -1789,3 +1792,40 @@ advisory published between those runs is not seen until the next one, so
 `main` can carry a newly-known vulnerable dependency for up to a week. The
 scheduled run publishes and deploys nothing; when it is red, the fix is its
 own small pull request.
+
+## The agent's audit log is tamper-evident, not tamper-proof
+
+`culprit agent` writes every task and every probe to an append-only,
+hash-chained log, and `culprit agent verify` names the first line that was
+edited, removed or reordered by someone who did not also recompute the
+chain. The chain has no key. Anyone who can write the file can rewrite an
+entry and recompute every hash after it, and the log will still verify;
+and removing the newest entries together leaves a valid chain too. So the
+log catches a careless edit and accident, not a deliberate one by whoever
+holds the file. Phase 33 part 2 ships every entry to the control plane's
+`agent_audit_log`, which no database role can update or delete; until
+then, protect the log's file the way you would any audit record.
+
+An agent refuses to start on a log whose chain is broken. Two agents must
+not share one log file: they would fork the chain, and after that neither
+would start.
+
+## The agent reads INTENT with the built-in readers only
+
+For every task, `culprit agent` reads the system's INTENT — the
+expectations probes are measured against, and the audiences and routes the
+walk tests — from `culprit.yaml`, its invariants and the artefacts the
+binary reads itself (OpenAPI, `.env.example`, Compose, migrations,
+manifests). It never runs an extractor plugin: a plugin imports the target
+project's code, which an agent on a production host has no business
+running. So a fact only a plugin extracts (a route registered in code, a
+client call site) is not known to an agent's walk, and a probe that needs
+one says so as inconclusive.
+
+## The agent takes tasks from a local directory, every two seconds
+
+In this release `culprit agent` reads tasks from `<tasks>/inbox` and
+answers them in `<tasks>/outbox`, polling every 2 seconds (`--poll`); tasks
+run one at a time, in file-name order. There is no transport to the
+control plane yet (Phase 33 part 2), so nothing in the dashboard can send
+one a task.
