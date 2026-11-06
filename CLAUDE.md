@@ -19,10 +19,12 @@ the handoff describes where the work is. If they disagree, the handoff wins.
 - **Deploy is paused** (2026-11-05): the hosted VM is offline, and the `deploy`
   job runs only when started by hand. Phase 33 builds against a local control
   plane.
-- **The human commits.** Stage the work, write the message to a file, stop,
-  and print the one `git commit -F <file>` command. A phase is complete only
-  when CI is green on the merge result (`/ci`), and the next phase never starts
-  without a human keystroke.
+- **Claude Code commits, pushes and opens the pull request; only the human
+  merges.** Commit on the phase branch (`git commit -F <file>`, never
+  `shared/uv.lock`), push it, open the PR with `gh pr create`, run `/ci`. Never
+  push to `main`, force-push, merge or approve. A phase is complete only when
+  CI is green on the merge result, and the next phase never starts without a
+  human keystroke.
 
 ## What Culprit is
 

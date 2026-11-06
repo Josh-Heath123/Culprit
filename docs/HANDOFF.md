@@ -22,8 +22,8 @@ twice.
   run report — the D2 revisit trigger — had nowhere to live and was dropped.
 - **Phases land on `main` through a pull request** (2026-11-05). Its run on the
   merge result is the gate; a direct push changes `main` before anything has
-  run. The human pushes the branch, opens the pull request, and merges it when
-  every check is green.
+  run. Claude Code pushes the branch, opens the pull request and runs `/ci`;
+  the human merges it, after the architecture review, when every check is green.
 - **Both read the whole file first.**
 
 **CI is part of the gate set.** A phase is not complete until CI is green on the
@@ -32,10 +32,16 @@ alone. Local `/verify` covers neither: it runs a subset of the checks, on a tree
 that is not what gets merged, on Windows rather than Linux. Run `/ci` before
 reporting any phase complete.
 
-**Committing — the human does it.** Claude Code stages the work and writes the
-message to a file, then stops and prints the one command for the human to run.
-Do not attempt `git commit` yourself; it has been denied five runs running and
-the cause is the interactive decision, not the ruleset.
+**Committing and pushing — Claude Code does it; merging — only the human**
+(changed 2026-11-06, Malcolm's decision). Claude Code commits its own work on
+the phase branch with `git commit -F <message-file>`, pushes that branch, opens
+the pull request with `gh pr create`, and runs `/ci` on it. It never pushes to
+`main`, never force-pushes, and never merges or approves a pull request: the
+merge is the human's, after the architecture review, and it is the one
+checkpoint this protocol keeps. (The earlier refusals of `git commit` and
+`git push` were most likely this file and `CLAUDE.md` saying the human commits,
+which auto mode reads as a boundary, together with `ask` rules on `git push`
+and `gh pr create`. Both changed together.)
 
 **The one rule that makes this work:** a phase does not advance on a red gate,
 and Claude Code does not auto-start the next phase. One human keystroke per
