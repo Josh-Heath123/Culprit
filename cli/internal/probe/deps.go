@@ -200,9 +200,10 @@ type ConfigReader interface {
 // SecretReader returns one variable's value, for the one probe that must
 // inspect a credential to answer (probe.auth.token_shape reads a token's
 // audience, issuer and expiry, and nothing else). It answers only under
-// `config.read.values` granted for exactly that `component/KEY` — the
-// same grant that lets a capture record a value (Phase 32 part 1's
-// review: a service's own credential is what that grant exists to gate).
+// `config.inspect.values` granted for exactly that `component/KEY`: the
+// value is read in memory to inspect, never stored or emitted. Not
+// `config.read.values`, the grant that lets a capture store a value —
+// inspecting a secret is not storing it (Phase 33 part 1).
 // Kept apart from ConfigReader so that interface still has no method
 // that can return a value.
 type SecretReader interface {

@@ -49,10 +49,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **33, part 1 — The agent, standing alone** — status `not started`. Brief in §4. |
+| Current phase | **33, part 1 — The agent, standing alone** — status `in progress`: implemented, every part-1 criterion passes locally, both audits run; **staged, awaiting the human's commit**, then a pull request and `/ci` (criterion 7 is checked in CI). §5. |
 | Previous phase | **32.2 — Close-out: complete**, signed off 2026-11-05 by the architecture session. On `main` as `2e05980` + `2e187fc` by a direct push (run 42083753833 green, `deploy` skipped); its record commit `7130927` and this sign-off land by pull request. Decisions at the end of Phase 32.2 in `DIAGNOSTIC_PLAN.md`; Q17 ruled there. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-33-agent`, to be cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. Do not stage `shared/uv.lock`. |
+| Branch | `phase-33-agent`, cut from `origin/main` = `71c1b3b` (PR #26 merged; its push run 42090677582 green, `deploy` skipped). Do not stage `shared/uv.lock`. |
 | Blocking questions | **None.** §3 is empty. |
 
 ---
@@ -90,7 +90,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32.1, part 1 | The system, on the Investigation screens | **complete** (PR #24 merged, run 41875987970 green) | **Reviewed 2026-11-04** (architecture session); look approved by Malcolm on the screenshots. PR #24 (`bd29351`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
 | 32.1, part 2 | Everywhere else | **complete** (PR #25 merged, `072fb4f`) | **Signed off 2026-11-05** (architecture session), subject to the final run on `e97189f` being recorded green — 32.2's first step. Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. History: 2026-11-04: `2a851ee`, PR #25; run 41916090503 red on `e2e` only (quickstart bootstrap, Linux bind-mount ownership), fixed in the justfile, awaiting commit and CI. SARIF upload accepted (`self-check` green). Screenshots of every route were committed for review and removed from the tree in Phase 32.2 (they remain in history at `072fb4f`). **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — "Malcolm's review of the screenshots" and "Part 2 — everywhere else" at the end of the section, which hold the four review changes, the work order, the criteria and what not to build; field 14 as refined applies. Requirements: `docs/PRODUCTISATION.md` §2, §4, §7 and §8. First confirm with `gh` that PR #24 is merged with CI green; if not, stop. Follow the work order: the review changes first, the fresh-eyes review last. Branch `phase-32.1-part-2`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 33, part 1 | The agent, standing alone | not started | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 33 — all 17 fields and the three "Added" notes, read with "How Phase 33 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The carried-in items come first. Branch `phase-33-agent`, cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. It lands on `main` through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 1 | The agent, standing alone | **in progress** — staged, local criteria all PASS, awaiting commit, PR and CI (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 33 — all 17 fields and the three "Added" notes, read with "How Phase 33 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The carried-in items come first. Branch `phase-33-agent`, cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. It lands on `main` through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 33, part 2 | The agent meets the control plane | not started | Criteria written at part 1's review. Before it runs, the local `infra/.env.prod` is regenerated and the local quickstart volume recreated (32.2 review). |
 | 33, part 3 | The operator's surface | not started | Criteria written at part 2's review. |
 | 34 | Verification loop and calibration | not started | — |
@@ -126,194 +126,146 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        32.2 — Close-out
-Branch:       phase-32.2-close-out, cut from origin/main = 072fb4f; 2aadd71
-              (the sign-off), 2e05980 (commit 1) and 2e187fc (commit 2),
-              both committed by the human. Both reached main by a direct
-              push, not a pull request, so main = 2e187fc = the merge
-              result. shared/uv.lock not staged.
+Phase:        33, part 1 — the agent, standing alone
+Branch:       phase-33-agent, cut from origin/main = 71c1b3b (PR #26's merge,
+              carrying 32.2's record and the sign-off). Its push run on main,
+              42090677582, was green on every job, deploy skipped. Nothing
+              committed: the work is STAGED; message ..\phase-33-1-agent.txt.
+              shared/uv.lock not staged.
 Run:          2026-11-05, /next.
-Status:       COMPLETE. Every criterion met, CI green on the merge
-              result (main itself), the scheduled scan started by hand
-              once and green. Q17 (§3) is open and does not block.
+Status:       IMPLEMENTED, NOT COMPLETE. Every part-1 criterion PASSES
+              locally, executed by the phase auditor as well as the tests.
+              Needs: the human's commit, the branch pushed and a pull
+              request opened (handoff protocol), and CI green on its merge
+              result — criterion 7 says "checked in CI", and only CI runs
+              the image check on a classic Docker daemon, on Linux.
 
-STEP 1 — THE RECORD
-  PR #25's final run, on e97189f (the bootstrap fix): run 41919870968,
-  pull_request, conclusion success on every job — lint, typecheck, cli,
-  test, migration-round-trip, self-check, kind-capture, fault-library,
-  e2e, build x5; deploy skipped. Phase 32.1 part 2's sign-off condition
-  is met. (The push run on main after the merge, 41979307020, was green
-  on every job but deploy, which failed against the offline VM — the
-  failure this phase removes.)
-
-GATES (local, Windows, final staged tree)
-  just lint / typecheck / lint-imports         PASS (4 contracts kept)
-  just check-schema-drift / no-llm-imports     PASS
+GATES (local, Windows, staged tree)
+  just lint / typecheck / lint-imports         PASS
+  just check-schema-drift / no-llm-imports     PASS (no-llm: 8 packages, cli included)
   just check-invariants / check-scan-coverage  PASS
   just check-frontend-tokens                   PASS
-  just cli-lint / cli-build                    PASS
-  just test                                    PASS  api+scripts+shared 1080 / 4 skipped
-                                                     (pre-existing), worker 65, mcp 21,
-                                                     extractors 31, Go all ok
-  frontend tsc -b, oxlint, npm test            PASS  (npm test 14/14; oxlint 0 errors,
-                                                     2 pre-existing warnings: ui/badge,
-                                                     ui/button only-export-components)
-  npm audit --audit-level=high                 PASS
-  check_coupled_files --base origin/main       PASS
-  culprit check --fail-on=breaks_request_path / LLM_PROVIDER=none   exit 0 / 0
-  just fault-library                           PASS 7/7 (twice: once recording, once
-                                                     by the phase auditor)
-  just e2e (fresh quickstart, see below)       PASS 16/16
-  After commit 1 alone, the same set was run: all PASS.
-  /ci                                          GREEN — see CI below
+  just cli-lint / cli-build / cli-test         PASS (go test ./...: 13 packages)
+  just test                                    PASS  api 1080 / 4 skipped (pre-existing),
+                                                     worker, mcp, Go
+  just extractors-test                         PASS
+  shared + scripts tests                       PASS  755 / 4 skipped
+  frontend tsc -b, npm test                    PASS
+  check_coupled_files --base origin/main       PASS (nothing committed yet; vacuous)
+  culprit check / LLM_PROVIDER=none            exit 0 / 0
+  TestTheNetworkBoundaryIsAnAllowlist          PASS — internal/agent links no net,
+                                                     net/http or crypto/tls
+  just fault-library                           PASS 7/7 (twice: once by this run, once by
+                                                     the phase auditor), with the wording
+                                                     check now refusing "->"
+  scripts/check_agent_image.sh                 PASS locally (Docker Desktop)
+  /ci                                          NOT RUN — needs the commit and a pull request
 
-CRITERIA
-  PR #25's final run recorded green, e2e included      MET (above).
-  Line-endings commit empty under --ignore-space-at-eol, gates green
-    after it                                           MET. 2aadd71..2e05980 is
-      .gitattributes alone. `git add --renormalize .` changed nothing: the
-      index already held every text file as LF (0 i/crlf, 0 i/mixed). THE
-      BRIEF WAS WRONG IN ONE RESPECT: it expected hundreds of files; the
-      churn CLAUDE.md warned of existed only in Windows working copies
-      (core.autocrlf=true), which `eol=lf` now overrides. Gates green
-      after it locally; in CI with commit 2.
-  CLAUDE.md under 8 KB, contradicting nothing in §1     MET. 5,221 bytes (was
-      53,246 in the index — it had grown past the 37 KB the standing task
-      quoted). The architecture walkthrough and the CI/Docker traps moved
-      word for word to docs/ARCHITECTURE.md, annotated where the pipeline
-      changed. Rules stay in .claude/rules/.
-  deploy skipped rather than failed on the merge         MET. The push run on
-      main for 2e187fc (42083753833): deploy skipped, every other job
-      success — where 072fb4f's push run failed on deploy.
-  Scheduled workflow started by hand once, result in §5  MET. `gh workflow
-      run images.yml --ref main` -> run 42084489435, workflow_dispatch on
-      2e187fc: build x5 success (every image built and Trivy-clean),
-      publish skipped — it published nothing, as designed.
-  No phase number or raw kind in the walk's user text;   MET.
-    one label map; a missing label fails in both
-    languages; fault library 7/7, same roots
-      - one source: hypothesis_labels in investigation_conformance.json;
-        Go (model.HypothesisLabels) and frontend (lib/hypotheses.ts) copies
-        are held to it exactly by a test each; Python checks the kind set.
-        The phase auditor showed it with scratch copies: a kind added to
-        the fixture fails Go and 2 node tests; a kind added to Go alone
-        fails internal/model and internal/isolate.
-      - every isolate test walk, and every fault-library walk, asserts no
-        phase number and no raw kind in the statement, the fix, each
-        hypothesis reason and each rubric reason. Mutation-tested: putting
-        "Phase 34" back fails 17 assertions; putting the raw-kind clause
-        back fails 3 tests.
-      - the 8 re-recorded investigations, stripped of prose, ids and
-        timestamps, are identical to their predecessors (root, complete,
-        rubric, hypothesis statuses, tree, verdicts): wording changed,
-        verdicts did not.
-  One broken route fails only its own browser test       MET, locally. Against
-      a fresh quickstart: 16 passed. With SettingsServices made to throw
-      and the frontend rebuilt: 1 failed ("settings: services"), 15 passed
-      — every tour test after it included. Reverted.
-  Nothing references docs/review/                        MET. Removed (history
-      at 072fb4f) and added to .gitignore; remaining mentions are the
-      plan's own description of the removal and this handoff's history.
+PART 1 CRITERIA
+  1 token_shape names config.inspect.values in grants_used; a refused
+    reading names no grant; secretSource has tests of its own   PASS.
+      secret_source_test.go drives the real source over the process
+      adapter (5 tests) and the runner (3). On real walks: the
+      auth-audience reading is `fail ['config.inspect.values'] v3`; the
+      ungranted one `refused`, no grants_used. Mutation: an empty
+      exercised list fails 2 tests.
+  2 only config.read.values -> token_shape refused; only
+    config.inspect.values -> env capture stores no value         PASS.
+      Unit test, and the auditor on the real binary: a planted value
+      granted only config.inspect.values is absent from the payload; the
+      control run with config.read.values has it.
+  3 parser refuses a wildcard, `all`, an unknown grant, each with its
+    line                                                          PASS.
+      9 subtests (net.*, "*", all, a typo, `all`/`*` as value or item,
+      *.write, true for a per-item grant); the binary prints file:line.
+  4 an ungranted task is refused without dialling, and recorded  PASS.
+      Counting fake network: 0 dials; a refused reading; audit entries
+      probe(refused, grants []) then task(refused). An allowance naming the
+      missing grant changes nothing and lands in allowance_ignored.
+  5 a removed grant takes effect on the next task, no restart    PASS.
+      Test, and the auditor with one long-lived process: granted, then
+      the file rewritten, then refused, same PID.
+  6 one audit entry per executed probe; an edit or deletion is
+    caught by the chain check                                     PASS.
+      A real walk: readings and probe entries match one to one, grants
+      included. Edited line, deleted line, renumbered successor and
+      reordering each named by line; the agent will not start on a
+      broken log.
+  7 image under 30 MB, non-root, read-only root fs, checked in CI
+                                                       PASS locally; CI NOT RUN.
+      distroless/static nonroot (uid 65532); binary layer 12.7 MB, about
+      13 MB in all (Docker Desktop's containerd store reports 5.5 MB
+      compressed; CI's classic store reports uncompressed, the stricter
+      figure). The agent ran --read-only --network none, refused the
+      ungranted task, completed the granted one, chain intact. Step
+      "Agent image checks" in images.yml runs it for the cli image.
+  8 no arrow pair in the walk's text, in 32.2's wording test     PASS.
+      assertReadable and the fault library's check refuse "->"; the one
+      sentence that had one ("for %s -> %s") now says "from ... to ...".
 
 WHAT WAS BUILT
-  - The walk's words: cli/internal/isolate/describe.go (kindPhrase,
-    describe, couldNotCheck); isolate.go's statements and rubric reasons
-    rewritten ("order-service fails because of the token audience
-    order-service presents to inventory-service: a probe of it fails, and
-    every other explanation the walk could test was ruled out by a
-    reading"; verified: "no fix has been applied and checked: Culprit
-    cannot yet re-run an investigation after a change"); one placement
-    reason in cmd/culprit/diagnose.go.
-  - Recordings: the 7 fault-library investigations re-recorded from real
-    walks; partial-with-boundary from its simulated world, whose
-    environment, agent and reporter now say "simulated" (was "test").
-  - Pipeline: .github/workflows/images.yml (workflow_call + weekly
-    schedule, Mondays 04:17 UTC + workflow_dispatch). Build-and-scan holds
-    a read-only token; a separate publish job (packages: write) pushes the
-    exact scanned images (saved as an artifact, never rebuilt), only when
-    the caller passes publish. ci-cd.yml: deploy only on workflow_dispatch
-    from main with "deploy" ticked; such a run publishes its own commit
-    first, so the VM never pulls an older :latest.
-  - Go 1.27 in cli/go.mod (CI's version); README and LIMITS follow.
-  - Browser tour: one test per route on a worker-scoped signed-in page;
-    the guard detaches its listeners per test; the member is created in
-    global setup; a failure screenshot of the shared page.
-  - README screenshots regenerated from a fresh quickstart (the list shows
-    "simulated"; the complete view shows the new statement). The list
-    shows two complete quickstart runs because the quickstart ran twice
-    (port 80 is held on this machine by WSL's Apache — LIMITS).
-  - CLAUDE.md rewritten; docs/ARCHITECTURE.md; stale pointers to its old
-    sections repointed (LIMITS, examples/, mcp_server, worker comments,
-    a scripts test, deploy.sh, the docker-compose.prod.yml header).
-  - LIMITS: no hosted instance and manual deploy; the weekly scan's
-    up-to-a-week lag; the tour's extra sign-in per failing test; stored
-    investigations keep their old wording; the Go floor. INSTALL and
-    UPGRADING describe the manual deploy. PERMISSIONS says nothing about
-    deploy behaviour, so it needed no change.
-  - The SARIF informationUri pointed at the offline culprit.co.za; it now
-    names the GitHub repository.
+  - config.inspect.values: Go capability, the shared Python enum and the
+    conformance fixture; secretSource requires it per key and
+    config.read.values no longer satisfies it; capture never stores under
+    it. token_shape -> version 3; catalogue mirror regenerated; the fault
+    environments and quickstart (demo-services/culprit.yaml) and the fault
+    library's expectation renamed; PERMISSIONS, PROBES, LIMITS.
+  - grants_used = declared ∪ exercised: capability.WithExercised /
+    RecordExercised; sources record after the ledger allows and (for a
+    secret) after the value was read; the runner keeps only names the
+    ledger holds, so no probe can widen a reading's claim.
+  - cli/internal/agent: config (line-numbered refusals, re-read every
+    task), Task/Result, the hash-chained audit log and verify, DirSource
+    (id = file name, no reuse, nothing overwritten), the loop; an agent
+    that cannot write its audit stops. capability.Grants.Narrow.
+  - cli/cmd/culprit/agent.go: `culprit agent` (--config, --tasks, --audit,
+    --once, --poll) and `culprit agent verify` (0 intact, 1 broken, 2
+    unreadable); the executor runs probe tasks and walks under the agent's
+    grants only, through probeRunnerUnder/walkRunnerUnder (diagnose.go
+    refactored; `culprit diagnose` unchanged). Plugins are never run by
+    the agent.
+  - scripts/check_agent_image.sh and its CI step; cli/Dockerfile comment.
 
-DELIBERATELY NOT DONE
-  No feature work, nothing from Phase 33, no change to what the walk
-  decides (verified field by field above). Probe ids, grant names and
-  reading/hypothesis ids in the walk's text kept — Q17.
+DELIBERATELY NOT BUILT (part 1's Do-NOT)
+  No transport, no control-plane client, no migration, no api/ worker/ or
+  frontend change beyond the catalogue mirror and the shared grant list,
+  no deployment recipe beyond the image, no write capability.
 
 AUDITS
-  invariant-auditor: CLEAN, 0 violations. Risks fixed: a hand-started
-    deploy could ship new deploy files against an older :latest (it now
-    publishes first); the weekly scan held packages: write (now split);
-    kindPhrase("") would panic (guarded, tested); the two readability
-    checks used different patterns (one regex now). Risks left: no lint
-    covers hand-built subjects in Go (test inputs only today); Python
-    holds the kind set, not a label copy (it renders no labels).
-  phase-auditor: every pre-merge criterion it could execute PASS; the
-    hand-started scheduled run NOT RUN (cannot be, before the merge); CI
-    NOT RUN. Defects fixed: ARCHITECTURE.md and docker-compose.prod.yml
-    still described deploy-on-push; six stale CLAUDE.md section pointers;
-    the SARIF URL. Raised for a ruling: Q17.
+  invariant-auditor: CLEAN, 0 violations. Defect fixed: the image check
+    would have failed on a Linux runner (the agent's 0700/0600 output,
+    unreadable by the runner's user; Docker Desktop hid it) — it now runs
+    as the host user, after the non-root check on the image's own user.
+    Risks fixed: grants_used filtered through the ledger; inspect recorded
+    only after a read; task id must equal file name, ids not reused,
+    results never overwritten; LIMITS now says the chain is
+    tamper-evident, not tamper-proof (anyone with write access can
+    rewrite it consistently) and that two agents must not share a log;
+    a stale secret-reader comment. Risks left: process.exec.allowlist is
+    recorded when authorised, not after the command succeeded; the size
+    check is daemon-dependent (CI's is the stricter).
+  phase-auditor: all eight criteria PASS locally, criterion 7's CI half
+    NOT RUN. Defects fixed: `agent verify` on an unreadable log exited 1
+    (now 2); a YAML syntax error named no line (now does, without quoting
+    the file); ARCHITECTURE.md's token sentence.
 
-HOW THE LOCAL BROWSER RUN WAS MADE (and what it left)
-  The local infra/.env.prod predates the fact-, capture-, probe- and
-  investigation-writer roles, so neither a fresh nor the existing
-  quickstart database could be migrated with it. Reading or regenerating
-  it was declined, rightly — it is Malcolm's. Instead a throwaway git
-  worktree (no .env.prod, so its quickstart generated its own) ran under
-  COMPOSE_PROJECT_NAME=culprit-qs-322b on port 8088. The worktree and its
-  env are deleted; the stacks are down. Left behind, for Malcolm to remove
-  if wanted: Docker volumes culprit-qs-322_* and culprit-qs-322b_*. The
-  local infra/.env.prod still lacks those keys, so `just quickstart` in
-  this checkout fails in migration until it is regenerated
-  (scripts/bootstrap_env.py --local --force, which rotates every secret;
-  the old culprit-quickstart database volume would then need recreating).
-
-CI (/ci)
-  commit   2e187fc7e2bb366425a5d3b65275f5be83fbb315
-  run      42083753833  https://github.com/Josh-Heath123/Culprit/actions/runs/42083753833
-  Merge result: main was pushed to 2e187fc directly, so the run on main
-  IS the merge result (no pull request run exists for this phase).
-  Jobs: success lint, typecheck, cli, test, migration-round-trip,
-    self-check, kind-capture, fault-library, e2e (the per-route tour, on
-    Linux), build x5 (images.yml through workflow_call), publish x5 (the
-    new job: :sha and :latest pushed from the scanned images); skipped
-    deploy.
-  Verdict: GREEN.
-  Images, by hand: run 42084489435
-    https://github.com/Josh-Heath123/Culprit/actions/runs/42084489435
-    workflow_dispatch on main, 2e187fc: build x5 success, publish
-    skipped. Verdict: GREEN. The weekly schedule (Mondays 04:17 UTC) is
-    now registered.
+PLAN NOTES
+  - Field 14's "an agent with only net.* and config.read.names" writes a
+    wildcard the part-1 parser (rightly) refuses; read it as the net.*
+    capabilities listed by name.
+  - The recorded investigations in api/tests/data/investigations/ and
+    frontend/e2e/investigations.spec.ts:101 still say config.read.values,
+    and auth-audience.json records token_shape v2 with no grants_used —
+    stale, not just old wording. Part 1 may not change api/ or the
+    frontend, and nothing fails because of them; part 2 should re-record
+    them (CULPRIT_FAULT_LIBRARY_RECORD) and update the e2e assertion, and
+    the README's partial screenshot with them.
+  - A user's culprit.yaml that granted config.read.values for a token
+    now has the audience hypothesis refused until renamed (LIMITS).
 
 LEFT OPEN
-  - Q17 (§3).
-  - Both commits went to main without a pull request, past the "Protect
-    Main" ruleset (its `update` rule): no pull_request run, no review
-    surface. The push run above is the gate that ran. Whether that is how
-    phases should land is Malcolm's to say.
-  - This report's own update (recording the two runs) is uncommitted;
-    message ..\phase-32.2-3-record.txt.
-  - actionlint could not be run (fetching it was refused); CI's own
-    workflow parsing is the check.
-  - The e2e job still rebuilds every image (accepted, Phase 32.1 review).
+  - Commit, push, pull request, /ci.
+  - The re-recording above (part 2).
 ```
 
 

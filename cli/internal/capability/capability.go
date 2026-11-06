@@ -36,6 +36,7 @@
 package capability
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -55,10 +56,16 @@ type Capability string
 // and recorded as granted-and-unused so the capture says so. An unknown
 // name is refused; see Parse.
 const (
-	ModelRead            Capability = "model.read"
-	RepoRead             Capability = "repo.read"
-	ConfigReadNames      Capability = "config.read.names"
-	ConfigReadValues     Capability = "config.read.values"
+	ModelRead        Capability = "model.read"
+	RepoRead         Capability = "repo.read"
+	ConfigReadNames  Capability = "config.read.names"
+	ConfigReadValues Capability = "config.read.values"
+	// ConfigInspectValues lets a probe read one key's value in memory to
+	// inspect its structure — a token's audience, say — and nothing more:
+	// nothing may store or emit the value (Phase 33 part 1). It is not
+	// config.read.values, which is what lets a value be stored, and
+	// granting either one never implies the other.
+	ConfigInspectValues  Capability = "config.inspect.values"
 	DBMetadataRead       Capability = "db.metadata.read"
 	DBRowsRead           Capability = "db.rows.read"
 	NetDNSResolve        Capability = "net.dns.resolve"
@@ -74,9 +81,9 @@ const (
 
 // known is every capability, and whether it takes an allowlist.
 //
-// The three that take one are the three §2.7 marks "opt-in, per-key" or
-// "named commands only": reading a config *value*, reading database
-// *rows*, and executing a command. For those, `true` is refused. A
+// The ones that take one are those §2.7 marks "opt-in, per-key" or
+// "named commands only": reading a config *value*, inspecting one,
+// reading database *rows*, and executing a command. For those, `true` is refused. A
 // blanket grant is precisely the thing the per-item rule exists to
 // prevent, and accepting `config.read.values: true` as "every key" would
 // turn the most sensitive capability in the list into the easiest one to
@@ -86,6 +93,7 @@ var known = map[Capability]bool{
 	RepoRead:             false,
 	ConfigReadNames:      false,
 	ConfigReadValues:     true,
+	ConfigInspectValues:  true,
 	DBMetadataRead:       false,
 	DBRowsRead:           true,
 	NetDNSResolve:        false,
@@ -190,6 +198,18 @@ func Parse(raw map[string]Raw) (Grants, error) {
 
 // Has reports whether a capability was granted at all.
 func (g Grants) Has(capability Capability) bool { return g.granted[capability] }
+
+// Holds reports whether the ledger's grant set includes capability. The
+// runner filters what a run says it exercised through this, so a name
+// recorded without being granted never reaches grants_used.
+func (l *Ledger) Holds(capability Capability) bool {
+	if l == nil {
+		return false
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	return l.grants.Has(capability)
+}
 
 // Allows reports whether one item is on a capability's allowlist.
 func (g Grants) Allows(capability Capability, item string) bool {
@@ -313,4 +333,103 @@ func (l *Ledger) Records() []model.Grant {
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].Capability < records[j].Capability })
 	return records
+}
+
+// --- what a run actually exercised ---------------------------------------
+
+// Exercised records the grants one probe run actually used, as opposed to
+// the ones its manifest declares. A reading's `grants_used` is the
+// union of the two, and the audit log is only as true as that field: a
+// token_shape reading that read a credential under config.inspect.values
+// must say so, though its manifest declares nothing.
+//
+// Only the code that asked the ledger and was allowed records here — a
+// data source, never a probe — so a probe still cannot claim an authority
+// it was not given. Safe for concurrent use.
+type Exercised struct {
+	mutex sync.Mutex
+	used  map[Capability]bool
+}
+
+type exercisedKey struct{}
+
+// WithExercised returns a context carrying a fresh recorder, and the
+// recorder. One per probe run.
+func WithExercised(ctx context.Context) (context.Context, *Exercised) {
+	recorder := &Exercised{used: map[Capability]bool{}}
+	return context.WithValue(ctx, exercisedKey{}, recorder), recorder
+}
+
+// RecordExercised notes that capability was used in the run ctx belongs
+// to. Without a recorder in ctx it does nothing.
+func RecordExercised(ctx context.Context, capability Capability) {
+	recorder, ok := ctx.Value(exercisedKey{}).(*Exercised)
+	if !ok || recorder == nil {
+		return
+	}
+	recorder.mutex.Lock()
+	defer recorder.mutex.Unlock()
+	recorder.used[capability] = true
+}
+
+// List is every capability recorded, sorted.
+func (e *Exercised) List() []string {
+	if e == nil {
+		return nil
+	}
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	names := make([]string, 0, len(e.used))
+	for capability := range e.used {
+		names = append(names, string(capability))
+	}
+	sort.Strings(names)
+	return names
+}
+
+// Narrow returns the grants that are both held here and named in
+// allowance: the agent's rule for a task (Phase 33). An allowance can
+// withhold a grant; it can never add one — a name in allowance this set
+// does not hold is dropped, and returned in ignored so the caller can
+// record that something asked for more than it was given. A nil
+// allowance narrows nothing.
+func (g Grants) Narrow(allowance []string) (narrowed Grants, ignored []string) {
+	if allowance == nil {
+		return g, nil
+	}
+	allowed := map[Capability]bool{}
+	for _, name := range allowance {
+		capability := Capability(name)
+		if !g.granted[capability] {
+			ignored = append(ignored, name)
+			continue
+		}
+		allowed[capability] = true
+	}
+	narrowed = Grants{granted: map[Capability]bool{}, allow: map[Capability]map[string]bool{}}
+	for capability := range g.granted {
+		if !allowed[capability] {
+			continue
+		}
+		narrowed.granted[capability] = true
+		if items, ok := g.allow[capability]; ok {
+			copied := map[string]bool{}
+			for item := range items {
+				copied[item] = true
+			}
+			narrowed.allow[capability] = copied
+		}
+	}
+	sort.Strings(ignored)
+	return narrowed, ignored
+}
+
+// Names lists every capability granted, sorted.
+func (g Grants) Names() []string {
+	names := make([]string, 0, len(g.granted))
+	for capability := range g.granted {
+		names = append(names, string(capability))
+	}
+	sort.Strings(names)
+	return names
 }

@@ -26,6 +26,10 @@ class Capability(StrEnum):
     REPO_READ = "repo.read"
     CONFIG_READ_NAMES = "config.read.names"
     CONFIG_READ_VALUES = "config.read.values"
+    #: Read one key's value in memory to inspect its structure; never
+    #: stored or emitted. Not CONFIG_READ_VALUES, and neither implies the
+    #: other (Phase 33 part 1).
+    CONFIG_INSPECT_VALUES = "config.inspect.values"
     DB_METADATA_READ = "db.metadata.read"
     DB_ROWS_READ = "db.rows.read"
     NET_DNS_RESOLVE = "net.dns.resolve"
@@ -44,6 +48,7 @@ class Capability(StrEnum):
 ALLOWLISTED: frozenset[Capability] = frozenset(
     {
         Capability.CONFIG_READ_VALUES,
+        Capability.CONFIG_INSPECT_VALUES,
         Capability.DB_ROWS_READ,
         Capability.PROCESS_EXEC_ALLOWLIST,
     }

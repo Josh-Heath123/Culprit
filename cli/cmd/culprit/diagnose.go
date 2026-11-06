@@ -315,6 +315,28 @@ func newWalkRunner(manifest *extract.Manifest, manifestPath, environment, agentI
 	if err != nil {
 		return walkRunner{}, err
 	}
+	return walkRunnerUnder(manifest, manifestPath, environment, agentID, timeout, catalogue, facts,
+		grants, realWire(timeout)), nil
+}
+
+// wire is what a probe reaches the network through: real for the
+// commands, a fake in tests that count dials.
+type wire struct {
+	Network probe.Network
+	HTTP    probe.HTTPClient
+}
+
+func realWire(timeout time.Duration) wire {
+	return wire{Network: probe.NewRealNetwork(timeout), HTTP: probe.NewRealHTTPClient(timeout)}
+}
+
+// probeRunnerUnder builds a probe runner whose every reading is decided
+// by grants — the environment's from culprit.yaml for `culprit diagnose`
+// and `culprit probe`, the agent's own for `culprit agent`.
+func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, agentID string,
+	timeout time.Duration, catalogue *probe.Catalogue, facts []model.Fact,
+	grants capability.Grants, through wire,
+) *probe.Runner {
 	ledger := capability.NewLedger(grants)
 	sources := &probe.Sources{
 		Environment: environment, Spec: manifest.Environments[environment],
@@ -322,18 +344,26 @@ func newWalkRunner(manifest *extract.Manifest, manifestPath, environment, agentI
 		Runner: capture.ExecRunner{Timeout: timeout}, Reader: capture.PostgresReader{Timeout: timeout},
 	}
 	deps := probe.Deps{
-		Network: probe.NewRealNetwork(timeout), HTTP: probe.NewRealHTTPClient(timeout), Now: time.Now,
+		Network: through.Network, HTTP: through.HTTP, Now: time.Now,
 		Database: sources.Database(), Config: sources.Config(), Packages: sources.Packages(),
 		Secrets: sources.Secrets(),
 	}
+	return probe.NewRunner(probe.Options{
+		Catalogue: catalogue, Ledger: ledger, AgentID: agentID,
+		Overrides: overridesFrom(manifest), Deps: deps,
+		Expectations: probe.NewExpectations(facts),
+	})
+}
+
+func walkRunnerUnder(manifest *extract.Manifest, manifestPath, environment, agentID string,
+	timeout time.Duration, catalogue *probe.Catalogue, facts []model.Fact,
+	grants capability.Grants, through wire,
+) walkRunner {
 	return walkRunner{
 		environment: environment,
-		runner: probe.NewRunner(probe.Options{
-			Catalogue: catalogue, Ledger: ledger, AgentID: agentID,
-			Overrides: overridesFrom(manifest), Deps: deps,
-			Expectations: probe.NewExpectations(facts),
-		}),
-	}, nil
+		runner: probeRunnerUnder(manifest, manifestPath, environment, agentID, timeout, catalogue, facts,
+			grants, through),
+	}
 }
 
 // ---- where each probe points ------------------------------------------------------
@@ -422,15 +452,15 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 		}
 		variable, named := p.spec.Components[from].Tokens[to]
 		if !named {
-			return nil, fmt.Sprintf("no token variable is named for %s -> %s (environments.*.components.%s.tokens)", from, to, from)
+			return nil, fmt.Sprintf("no token variable is named for the calls from %s to %s (environments.*.components.%s.tokens)", from, to, from)
 		}
 		audience, declared := p.expectedAudience(h.Subject)
 		if !declared {
 			return nil, fmt.Sprintf("nothing declares the audience %s expects (an invariant on %s)", to, h.Subject)
 		}
 		// The variable's name, never its value: the probe reads the token
-		// through the environment's source, and only under
-		// config.read.values for <caller>/<variable> (Phase 32 part 2).
+		// through the environment's source, in memory, and only under
+		// config.inspect.values for <caller>/<variable> (Phase 33 part 1).
 		return map[string]any{"token_env": variable, "expect_audience": audience}, ""
 
 	case model.HypothesisContractMismatch:

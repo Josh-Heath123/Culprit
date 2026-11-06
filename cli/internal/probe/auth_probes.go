@@ -33,13 +33,16 @@ func (authTokenShape) Manifest() model.ProbeManifest {
 		ID:            "probe.auth.token_shape",
 		Discriminates: []string{model.HypothesisAuthAudience},
 		// Version 2 (Phase 32 part 2): token_env, so the token can be read
-		// under config.read.values instead of handed in by the caller.
-		Version: 2,
+		// from the environment instead of handed in by the caller.
+		// Version 3 (Phase 33 part 1): that read needs config.inspect.values,
+		// and config.read.values no longer satisfies it.
+		Version: 3,
 		Effect:  model.EffectInspect,
 		// No manifest capability: this probe opens nothing. A token passed
 		// as `token` is one the caller already holds. One named by
-		// `token_env` is a service's own credential, read only under
-		// config.read.values for that variable — enforced by the source,
+		// `token_env` is a service's own credential, read in memory only
+		// under config.inspect.values for that variable — enforced by the
+		// source, which records the grant so grants_used names it,
 		// as process.exec.allowlist is for installed packages. An empty list,
 		// not nil: nil marshals as `null`, which the Python ProbeManifest
 		// rejects — the hand-kept API mirror said `[]` and hid that until

@@ -106,6 +106,7 @@ docs/PERMISSIONS.md before granting it access to an environment.`,
 	root.AddCommand(newDiffCommand())
 	root.AddCommand(newProbeCommand())
 	root.AddCommand(newDiagnoseCommand())
+	root.AddCommand(newAgentCommand())
 	return root
 }
 

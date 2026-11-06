@@ -31,7 +31,7 @@
     },
     {
       "name": "auth-audience-ungranted",
-      "inject": "the audience fault again, walked in an environment that does not grant config.read.values for order-service/INVENTORY_TOKEN",
+      "inject": "the audience fault again, walked in an environment that does not grant config.inspect.values for order-service/INVENTORY_TOKEN",
       "vantage": "order-service",
       "environment": "faults-order-ungranted",
       "root_subject": "component:order-service",
@@ -44,7 +44,7 @@
         "verified": false
       },
       "edges": [],
-      "statement_contains": "config.read.values",
+      "statement_contains": "config.inspect.values",
       "note": "Phase 32 part 2's token grant: without it the audience hypothesis is refused, the tree records the branch as unexplored, and the diagnosis is partial and names the missing grant.",
       "attestation": "reported"
     },

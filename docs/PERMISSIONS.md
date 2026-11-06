@@ -108,8 +108,24 @@ key's shape, or "(a value, not shown)", whatever the capture holds.
 **Grant it for:** keys whose value you need compared and that are not
 secret — `LOG_LEVEL`, `FEATURE_FLAGS`, a region. Do not list secrets; the
 shape already tells you whether a secret is set and what kind of thing
-it is. The one exception is a bearer token `culprit
-diagnose` must inspect — see "Reading a token" below.
+it is. A bearer token `culprit diagnose` must inspect does not need this
+grant, and is not satisfied by it: see `config.inspect.values`.
+
+### `config.inspect.values` — per key
+
+**Reads:** the value of each key you list, as `<component>/<KEY>`, in
+memory, so a probe can inspect its structure — today, the audience,
+issuer and expiry of a bearer token (`probe.auth.token_shape`).
+
+**Where it goes:** nowhere. Nothing may store or emit the value: not a
+capture, not a reading, not a reason, not an investigation. A reading
+taken under it names it in `grants_used`.
+
+**Not `config.read.values`.** Storing a value and inspecting one are
+different permissions (Phase 33): `config.read.values` does not let a
+probe inspect a token, and `config.inspect.values` never lets
+`culprit env capture` store one. Granting either never implies the
+other.
 
 ### `db.metadata.read`
 
@@ -211,17 +227,17 @@ Named by the plan for later phases (the production agent). No code in
 this release uses them; granting one changes nothing and is recorded as
 unused.
 
-## Reading a token for `culprit diagnose` — `tokens:` and `config.read.values`
+## Reading a token for `culprit diagnose` — `tokens:` and `config.inspect.values`
 
 `environments.<env>.components.<caller>.tokens` names, for each component
 the caller presents a bearer token to, the *variable* holding that token
 in the environment `culprit diagnose` runs in. Naming it grants nothing.
-Reading it is reading a credential, so it is behind `config.read.values`
-for that exact key (Phase 32 part 2):
+Reading it is reading a credential, so it is behind `config.inspect.values`
+for that exact key (Phase 33; it was `config.read.values` until then):
 
 ```yaml
 grants:
-  config.read.values: [order-service/INVENTORY_TOKEN]
+  config.inspect.values: [order-service/INVENTORY_TOKEN]
 ```
 
 With the grant, `probe.auth.token_shape` reads the variable itself and
@@ -230,9 +246,36 @@ reaches a reading, a reason or the investigation, and the fault library
 asserts that on every fault, in JSON and in text. Without it — or with a
 grant for some other key — the probe is **refused**, the audience
 hypothesis is left unexplored, and the diagnosis is partial and names the
-missing grant. Granting this key also lets `culprit env capture` record
-the token's value in a capture (see `config.read.values` above), so grant
-it only for an environment you run `diagnose` in.
+missing grant. `config.read.values` for the same key does not count, and
+`config.inspect.values` never lets `culprit env capture` record the
+token's value.
+
+## The agent's grants — `culprit agent`
+
+`culprit agent` (Phase 33) does not read the grants in `culprit.yaml`.
+Its authority is its own configuration file, written by whoever runs it
+and listing grants explicitly per environment:
+
+```yaml
+version: 1
+agent_id: prod-eu-1
+manifest: ./culprit.yaml     # the system model; its grants are ignored here
+environments:
+  production:
+    grants:
+      net.dns.resolve: true
+      net.tcp.connect: true
+      config.inspect.values: [order-service/INVENTORY_TOKEN]
+```
+
+The file is read again before every task, so removing a grant takes
+effect on the next task with no restart. The parser refuses a wildcard
+(`net.*`, `"*"`, an item containing `*`), `all`, any `*.write`, and any
+name that is not a capability, each with its line. A task may carry an
+allowance that narrows these grants for that one task; it can never add
+one. A task that needs a grant the agent does not hold is refused before
+anything is dialled; the refusal is a reading and an entry in the agent's
+audit log.
 
 ## How Culprit reaches an environment
 

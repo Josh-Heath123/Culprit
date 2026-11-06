@@ -147,6 +147,11 @@ func assertReadable(t *testing.T, inv model.Investigation) {
 				t.Errorf("%s contains the raw kind %s: %q", where, kind, text)
 			}
 		}
+		// Q17, ruled at 32.2's review: an arrow pair is notation, not a
+		// name; a sentence says "from A to B".
+		if strings.Contains(text, "->") {
+			t.Errorf("%s contains an arrow pair: %q", where, text)
+		}
 	}
 }
 
@@ -359,7 +364,7 @@ func TestARefusedProbeLeavesTheDiagnosisVisiblyPartial(t *testing.T) {
 	connections := []Connection{{From: "order-service", To: "inventory-service", Kind: "http", OnRequestPath: true}}
 	runner := newRunner(func(string, string) model.Verdict { return model.VerdictPass })
 	placement := openPlacement{refuse: map[string]string{
-		KindAuthAudience: "no token for order-service -> inventory-service is available to this agent",
+		KindAuthAudience: "no token for the calls from order-service to inventory-service is available to this agent",
 	}}
 	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "simulated"})
 	inv := diagnose(t, walk, "order-service")
@@ -399,7 +404,7 @@ func TestABoundaryWithUntestedAlternativesIsWhereTheWalkStopped(t *testing.T) {
 		return model.VerdictPass
 	})
 	placement := openPlacement{refuse: map[string]string{
-		KindAuthAudience: "no token for order-service -> inventory-service is available to this agent",
+		KindAuthAudience: "no token for the calls from order-service to inventory-service is available to this agent",
 	}}
 	walk := New(components, connections, nil, manifests(), runner, placement, Options{Environment: "simulated"})
 	inv := diagnose(t, walk, "order-service")

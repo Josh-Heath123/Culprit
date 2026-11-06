@@ -82,7 +82,7 @@ func (s *Sources) component(name string) (extract.EnvironmentComponent, error) {
 }
 
 // requireCommand is the extra grant a source that runs a command needs.
-func (s *Sources) requireCommand(command, component, check string) error {
+func (s *Sources) requireCommand(ctx context.Context, command, component, check string) error {
 	if !s.Grants.Has(capability.ProcessExecAllowlist) {
 		s.Ledger.Require(capability.ProcessExecAllowlist, component, check)
 		return &RefusedError{Capability: string(capability.ProcessExecAllowlist), Reason: fmt.Sprintf(
@@ -94,7 +94,14 @@ func (s *Sources) requireCommand(command, component, check string) error {
 			"reading this runs %s, which is not on this environment's process.exec.allowlist",
 			command)}
 	}
+	exercised(ctx, capability.ProcessExecAllowlist)
 	return nil
+}
+
+// exercised records a grant this run used, once the ledger allowed it, so
+// the reading's grants_used names it (capability.Exercised).
+func exercised(ctx context.Context, granted capability.Capability) {
+	capability.RecordExercised(ctx, granted)
 }
 
 // workloadOf reads a component's environment through the adapter, once.
@@ -106,7 +113,7 @@ func (s *Sources) workloadOf(ctx context.Context, component string) (capture.Wor
 		return capture.Workload{}, err
 	}
 	if s.Spec.Adapter == extract.AdapterExec {
-		if err := s.requireCommand(settings.EnvCommand, component, "environment"); err != nil {
+		if err := s.requireCommand(ctx, settings.EnvCommand, component, "environment"); err != nil {
 			return capture.Workload{}, err
 		}
 	}
@@ -129,7 +136,11 @@ func (s *Sources) workloadOf(ctx context.Context, component string) (capture.Wor
 
 // --- a credential's value -----------------------------------------------
 
-// Secrets reads one variable's value under config.read.values for it.
+// Secrets reads one variable's value, in memory, under
+// config.inspect.values for exactly that component/KEY. The value is for
+// inspecting its structure and is never stored or emitted.
+// config.read.values does not satisfy it: that grant lets a value be
+// stored, which is a different permission (Phase 33 part 1).
 func (s *Sources) Secrets() SecretReader { s.withDefaults(); return secretSource{s} }
 
 type secretSource struct{ s *Sources }
@@ -137,15 +148,15 @@ type secretSource struct{ s *Sources }
 func (c secretSource) Secret(ctx context.Context, component, key string) (string, error) {
 	item := component + "/" + key
 	check := "the value of " + key
-	if !c.s.Grants.Has(capability.ConfigReadValues) {
-		c.s.Ledger.Require(capability.ConfigReadValues, component, check)
-		return "", &RefusedError{Capability: string(capability.ConfigReadValues), Reason: fmt.Sprintf(
-			"reading %s needs config.read.values for %s, and config.read.values is not "+
+	if !c.s.Grants.Has(capability.ConfigInspectValues) {
+		c.s.Ledger.Require(capability.ConfigInspectValues, component, check)
+		return "", &RefusedError{Capability: string(capability.ConfigInspectValues), Reason: fmt.Sprintf(
+			"inspecting %s needs config.inspect.values for %s, and config.inspect.values is not "+
 				"granted for this environment", key, item)}
 	}
-	if !c.s.Ledger.RequireItem(capability.ConfigReadValues, item, component, check) {
-		return "", &RefusedError{Capability: string(capability.ConfigReadValues), Reason: fmt.Sprintf(
-			"reading %s needs config.read.values for %s, which is not on this "+
+	if !c.s.Ledger.RequireItem(capability.ConfigInspectValues, item, component, check) {
+		return "", &RefusedError{Capability: string(capability.ConfigInspectValues), Reason: fmt.Sprintf(
+			"inspecting %s needs config.inspect.values for %s, which is not on this "+
 				"environment's allowlist", key, item)}
 	}
 	workload, err := c.s.workloadOf(ctx, component)
@@ -162,6 +173,9 @@ func (c secretSource) Secret(ctx context.Context, component, key string) (string
 		return "", &UnavailableError{Reason: fmt.Sprintf(
 			"%s is set by reference for %s, so its value is not visible to this agent", key, component)}
 	}
+	// Recorded only once a value was actually read, so a reading that
+	// found the key unset does not claim it inspected a credential.
+	exercised(ctx, capability.ConfigInspectValues)
 	return value.Value, nil
 }
 
@@ -210,7 +224,7 @@ func (p *packageSource) Version(ctx context.Context, component, name string) (st
 		return "", false, &UnavailableError{Reason: fmt.Sprintf(
 			"environment %s declares no packages command for %s", p.s.Environment, component)}
 	}
-	if err := p.s.requireCommand(settings.Packages, component, "packages"); err != nil {
+	if err := p.s.requireCommand(ctx, settings.Packages, component, "packages"); err != nil {
 		return "", false, err
 	}
 

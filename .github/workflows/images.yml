@@ -149,6 +149,13 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
 
+      # The agent image's promises (Phase 33): under 30 MB, a non-root
+      # user, and `culprit agent` working with a read-only root filesystem
+      # — refusing a task it holds no grant for, with an intact audit chain.
+      - name: Agent image checks
+        if: matrix.image == 'cli'
+        run: bash scripts/check_agent_image.sh local/cli:ci
+
       # Hand the exact image that was scanned to the publish job, so what
       # is pushed is what Trivy passed, never a rebuild of it.
       - name: Save the scanned image for publishing

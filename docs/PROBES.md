@@ -89,7 +89,7 @@ from is the next section.
 | `probe.http.reachable` | `url` | interrogate | `net.http.outbound` | CONFIGURED | the service answers 5xx, or the connection is refused (a timeout or a 4xx is inconclusive) |
 | `probe.http.route_conformance` (v2) | `url`, or an `http:` target + `base_url`; `method` | interrogate | `net.http.outbound` | INTENT (`exists`) | a **declared** route answers 404, or 405 for its declared method |
 | `probe.http.schema_conformance` | `url`, `expect_fields` | interrogate | `net.http.outbound` | INTENT | a declared response field is absent |
-| `probe.auth.token_shape` | `token`, `expect_audience`, `expect_issuer` | inspect | *none* | INTENT | the token is expired, not yet valid, or carries the wrong audience or issuer |
+| `probe.auth.token_shape` | `token` or `token_env`, `expect_audience`, `expect_issuer` | inspect | *none*; `config.inspect.values` for the key, when it reads `token_env` | INTENT | the token is expired, not yet valid, or carries the wrong audience or issuer |
 | `probe.auth.propagation` | `url`, `token` | interrogate | `net.http.outbound` | INTENT | the downstream answers 401 or 403 |
 | `probe.db.connect` (v2) | *none* — the target names the database | inspect | `db.metadata.read` | CONFIGURED | a read-only connection is refused |
 | `probe.db.schema_conformance` (v2) | a `schema:` target, or `table`, `schema`; optional `expect_columns` | inspect | `db.metadata.read` | INTENT (`columns`) | the live table lacks a column the declaration maps, or does not exist |
@@ -194,8 +194,16 @@ culprit probe 'schema:culprit-api-db/public.users' --env quickstart     -p probe
 culprit probe 'http:culprit-api/GET /model/components' --env quickstart     -p probe.http.route_conformance --input base_url=http://127.0.0.1:18000
 ```
 
-`probe.auth.token_shape` needs no capability because it opens nothing: it
-reads a token you already hold and reports its structure.
+`probe.auth.token_shape` declares no capability because it opens nothing:
+handed a token as `token`, it reports the structure of one you already
+hold. Named a variable as `token_env`, it reads that service's own
+credential in memory, which needs `config.inspect.values` for exactly that
+`component/KEY` (docs/PERMISSIONS.md) and is refused without it.
+
+A reading's `grants_used` is what the run exercised, not only what the
+manifest declares: a `token_shape` reading that read a credential names
+`config.inspect.values`, and a probe that ran an allowlisted command names
+`process.exec.allowlist`. A refused reading names none.
 
 `probe.edge.impedance` needs at least **30 observations** before it will
 return a verdict at all; below that it is `inconclusive`. A z-score over
