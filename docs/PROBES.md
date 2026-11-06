@@ -276,10 +276,15 @@ The same contract every other command keeps:
 ## Where readings go
 
 `culprit probe` prints them. `POST /readings` stores them, under the
-`probe-writer` role, which can insert into `readings` and do nothing else.
+`probe-writer` role, which can insert into `readings` and do nothing else —
+and since Phase 33 it takes an agent's signed request and nothing else:
+every reading must name the agent that signed it (`docs/PERMISSIONS.md`,
+"Which credential writes what"). A paired `culprit agent` posts the readings
+of every probe task it runs; `culprit probe` on its own still only prints.
 
 The control plane can describe the catalogue (`GET /probes`) but cannot
 run a probe: probes execute in the `culprit` binary, where the environment
 is. `POST /probes/{id}/run` therefore answers `503` with the equivalent
-local command until an agent transport exists. That is an honest
+local command. A probe is run remotely by addressing it to a paired agent as
+a task (`POST /agents/{id}/tasks`), which runs it under its own grants. That is an honest
 not-yet-available rather than a stub that fabricates a reading.

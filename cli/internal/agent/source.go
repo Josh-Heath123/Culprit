@@ -30,8 +30,9 @@ type Incoming struct {
 	Task Task
 	// Unreadable says why the task could not be decoded, if it could not.
 	Unreadable string
-	// handle is the source's own reference (a file name).
-	handle string
+	// Handle is the source's own reference: a file name for DirSource, the
+	// task id for the transport.
+	Handle string
 }
 
 // DirSource reads tasks from <Dir>/inbox/*.json, oldest name first,
@@ -70,7 +71,7 @@ func (s DirSource) Next(context.Context) (*Incoming, error) {
 	}
 	sort.Strings(names)
 	name := names[0]
-	incoming := &Incoming{handle: name}
+	incoming := &Incoming{Handle: name}
 	data, err := os.ReadFile(filepath.Join(s.dir("inbox"), name))
 	if err != nil {
 		incoming.Unreadable = "the task file cannot be read: " + reasonOf(err)
@@ -104,7 +105,7 @@ func (s DirSource) Complete(_ context.Context, incoming *Incoming, result Result
 	id := result.TaskID
 	if !taskID.MatchString(id) {
 		// A name the task file gave is never trusted as a path.
-		id = strings.TrimSuffix(incoming.handle, ".json")
+		id = strings.TrimSuffix(incoming.Handle, ".json")
 		if !taskID.MatchString(id) {
 			id = "unnamed-task"
 		}
@@ -121,10 +122,10 @@ func (s DirSource) Complete(_ context.Context, incoming *Incoming, result Result
 	if err := os.Rename(temporary, final); err != nil {
 		return fmt.Errorf("the result for %s cannot be written: %s", id, reasonOf(err))
 	}
-	done := freeName(s.dir("done"), strings.TrimSuffix(incoming.handle, ".json"), ".json")
-	if err := os.Rename(filepath.Join(s.dir("inbox"), incoming.handle), done); err != nil &&
+	done := freeName(s.dir("done"), strings.TrimSuffix(incoming.Handle, ".json"), ".json")
+	if err := os.Rename(filepath.Join(s.dir("inbox"), incoming.Handle), done); err != nil &&
 		!errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("the task file %s cannot be moved out of the inbox: %s", incoming.handle, reasonOf(err))
+		return fmt.Errorf("the task file %s cannot be moved out of the inbox: %s", incoming.Handle, reasonOf(err))
 	}
 	return nil
 }

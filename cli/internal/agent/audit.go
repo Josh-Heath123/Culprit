@@ -199,3 +199,29 @@ func verifyChain(reader io.Reader) (int64, string, error) {
 	}
 	return seq, last, nil
 }
+
+// LinesAfter returns every entry after seq exactly as the log holds it,
+// one JSON line each, and the log's last seq — after verifying the whole
+// chain, so nothing broken is ever shipped as though it were the record.
+func (l *AuditLog) LinesAfter(seq int64) ([]string, int64, error) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	data, err := os.ReadFile(l.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, 0, nil
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("the audit log %s cannot be read: %s", l.path, reasonOf(err))
+	}
+	last, _, err := verifyChain(bytes.NewReader(data))
+	if err != nil {
+		return nil, 0, fmt.Errorf("the audit log fails its chain check, so it is not shipped: %w", err)
+	}
+	var lines []string
+	for index, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		if int64(index+1) > seq && line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines, last, nil
+}

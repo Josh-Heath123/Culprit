@@ -22,8 +22,8 @@ twice.
   run report — the D2 revisit trigger — had nowhere to live and was dropped.
 - **Phases land on `main` through a pull request** (2026-11-05). Its run on the
   merge result is the gate; a direct push changes `main` before anything has
-  run. The human pushes the branch, opens the pull request, and merges it when
-  every check is green.
+  run. Claude Code pushes the branch, opens the pull request and runs `/ci`;
+  the human merges it, after the architecture review, when every check is green.
 - **Both read the whole file first.**
 
 **CI is part of the gate set.** A phase is not complete until CI is green on the
@@ -32,10 +32,16 @@ alone. Local `/verify` covers neither: it runs a subset of the checks, on a tree
 that is not what gets merged, on Windows rather than Linux. Run `/ci` before
 reporting any phase complete.
 
-**Committing — the human does it.** Claude Code stages the work and writes the
-message to a file, then stops and prints the one command for the human to run.
-Do not attempt `git commit` yourself; it has been denied five runs running and
-the cause is the interactive decision, not the ruleset.
+**Committing and pushing — Claude Code does it; merging — only the human**
+(changed 2026-11-06, Malcolm's decision). Claude Code commits its own work on
+the phase branch with `git commit -F <message-file>`, pushes that branch, opens
+the pull request with `gh pr create`, and runs `/ci` on it. It never pushes to
+`main`, never force-pushes, and never merges or approves a pull request: the
+merge is the human's, after the architecture review, and it is the one
+checkpoint this protocol keeps. (The earlier refusals of `git commit` and
+`git push` were most likely this file and `CLAUDE.md` saying the human commits,
+which auto mode reads as a boundary, together with `ask` rules on `git push`
+and `gh pr create`. Both changed together.)
 
 **The one rule that makes this work:** a phase does not advance on a red gate,
 and Claude Code does not auto-start the next phase. One human keystroke per
@@ -49,10 +55,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **33, part 1 — The agent, standing alone** — status `in progress`: implemented, every part-1 criterion passes locally, both audits run; **staged, awaiting the human's commit**, then a pull request and `/ci` (criterion 7 is checked in CI). §5. |
-| Previous phase | **32.2 — Close-out: complete**, signed off 2026-11-05 by the architecture session. On `main` as `2e05980` + `2e187fc` by a direct push (run 42083753833 green, `deploy` skipped); its record commit `7130927` and this sign-off land by pull request. Decisions at the end of Phase 32.2 in `DIAGNOSTIC_PLAN.md`; Q17 ruled there. |
+| Current phase | **33, part 2 — The agent meets the control plane** — status `in progress`: implemented, every locally runnable criterion passes, both audits run and their findings fixed; **staged, awaiting the human's commit, a pull request and `/ci`** — the end-to-end agent scenario runs only in CI and has not run yet (§5). |
+| Previous phase | **33, part 1 — The agent, standing alone: complete**, signed off 2026-11-06 by the architecture session. Merged via PR #27 (`57541e3`); CI green on the merge result, as reported by Malcolm — part 2's first step records the run id. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-33-agent`, cut from `origin/main` = `71c1b3b` (PR #26 merged; its push run 42090677582 green, `deploy` skipped). Do not stage `shared/uv.lock`. |
+| Branch | `phase-33-control-plane`, cut from `origin/main` = `57541e3`; its first commit is the part 1 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
 | Blocking questions | **None.** §3 is empty. |
 
 ---
@@ -90,9 +96,9 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32.1, part 1 | The system, on the Investigation screens | **complete** (PR #24 merged, run 41875987970 green) | **Reviewed 2026-11-04** (architecture session); look approved by Malcolm on the screenshots. PR #24 (`bd29351`). Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. |
 | 32.1, part 2 | Everywhere else | **complete** (PR #25 merged, `072fb4f`) | **Signed off 2026-11-05** (architecture session), subject to the final run on `e97189f` being recorded green — 32.2's first step. Decisions at the end of Phase 32.1 in `DIAGNOSTIC_PLAN.md`. History: 2026-11-04: `2a851ee`, PR #25; run 41916090503 red on `e2e` only (quickstart bootstrap, Linux bind-mount ownership), fixed in the justfile, awaiting commit and CI. SARIF upload accepted (`self-check` green). Screenshots of every route were committed for review and removed from the tree in Phase 32.2 (they remain in history at `072fb4f`). **Brief (2026-11-04):** `DIAGNOSTIC_PLAN.md` Phase 32.1 — "Malcolm's review of the screenshots" and "Part 2 — everywhere else" at the end of the section, which hold the four review changes, the work order, the criteria and what not to build; field 14 as refined applies. Requirements: `docs/PRODUCTISATION.md` §2, §4, §7 and §8. First confirm with `gh` that PR #24 is merged with CI green; if not, stop. Follow the work order: the review changes first, the fresh-eyes review last. Branch `phase-32.1-part-2`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 33, part 1 | The agent, standing alone | **in progress** — staged, local criteria all PASS, awaiting commit, PR and CI (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 33 — all 17 fields and the three "Added" notes, read with "How Phase 33 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The carried-in items come first. Branch `phase-33-agent`, cut from `origin/main` once the pull request carrying 32.2's record and this sign-off has merged. It lands on `main` through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 33, part 2 | The agent meets the control plane | not started | Criteria written at part 1's review. Before it runs, the local `infra/.env.prod` is regenerated and the local quickstart volume recreated (32.2 review). |
-| 33, part 3 | The operator's surface | not started | Criteria written at part 2's review. |
+| 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
+| 33, part 2 | The agent meets the control plane | **in progress** — staged; local criteria PASS; the CI scenario NOT RUN (§5) | **Brief (2026-11-06):** `DIAGNOSTIC_PLAN.md` Phase 33 — "How Phase 33 is run", then "Part 2" at the end of the section: the work order, defaults, twelve criteria and what not to build. Step 0 records part 1's CI run and regenerates the local `infra/.env.prod` and quickstart volume (the local demo data goes). The signing contract and its conformance fixture come before anything that uses them. Backend and binary only — no frontend change. Branch `phase-33-control-plane`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 3 | The operator's surface | not started | Criteria written at part 2's review. Now also holds the dashboard control that opens an investigation through an agent (moved from part 2, 2026-11-06). |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
 
@@ -126,146 +132,165 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        33, part 1 — the agent, standing alone
-Branch:       phase-33-agent, cut from origin/main = 71c1b3b (PR #26's merge,
-              carrying 32.2's record and the sign-off). Its push run on main,
-              42090677582, was green on every job, deploy skipped. Nothing
-              committed: the work is STAGED; message ..\phase-33-1-agent.txt.
-              shared/uv.lock not staged.
-Run:          2026-11-05, /next.
-Status:       IMPLEMENTED, NOT COMPLETE. Every part-1 criterion PASSES
-              locally, executed by the phase auditor as well as the tests.
-              Needs: the human's commit, the branch pushed and a pull
-              request opened (handoff protocol), and CI green on its merge
-              result — criterion 7 says "checked in CI", and only CI runs
-              the image check on a classic Docker daemon, on Linux.
+Phase:        33, part 2 — the agent meets the control plane
+Branch:       phase-33-control-plane, cut from origin/main = 57541e3; d403259
+              is the part 1 sign-off. The work is STAGED, not committed:
+              message ..\phase-33-2-control-plane.txt. shared/uv.lock not
+              staged. Lands through a pull request.
+Run:          2026-11-06, /next.
+Status:       IMPLEMENTED, NOT COMPLETE. Every criterion that can run
+              without the CI scenario passes locally, executed by the tests
+              and by phase-auditor. NOT RUN anywhere yet: the end-to-end
+              agent scenario (criteria 8's first clause, 9's topology, 10),
+              which runs only in CI's e2e job (`just agent-e2e`) — its one
+              local attempt was stopped by the system for low memory before
+              it began. Needs: the human's commit, push and pull request,
+              then /ci.
+
+STEP 0 — THE RECORD, AND THE LOCAL ENV
+  Part 1's CI: PR #27's pull_request run 42176958562 on the merge ref,
+  success on every job — "Agent image checks" among the cli build's steps,
+  on Linux — deploy and publish skipped; the push run on main for 57541e3,
+  42177585117, success. Part 1's criterion 7 ("checked in CI") is met.
+  The local infra/.env.prod regeneration and quickstart volume recreation:
+  NOT DONE. Moving the file aside and removing the volume were both refused
+  by the permission system; they are Malcolm's to run (the commands are in
+  this report's LEFT OPEN). Nothing in this part needed them before CI.
+
+STEP 1 — CARRIED IN
+  api/tests/data/investigations/ re-recorded by the fault library under
+  config.inspect.values (token_shape v3, grants_used named, no
+  config.read.values left); the browser assertion follows; UPGRADING has the
+  rename. NOT DONE: the README's partial screenshot and its alt text — no
+  stack could run here. CI's e2e job takes that screenshot from the
+  re-recorded data; copy docs/screenshots/investigation-partial-1280.png
+  from that run's e2e-screenshots artifact, and fix README.md:63.
 
 GATES (local, Windows, staged tree)
-  just lint / typecheck / lint-imports         PASS
-  just check-schema-drift / no-llm-imports     PASS (no-llm: 8 packages, cli included)
+  just lint / typecheck / lint-imports         PASS (4 contracts kept)
+  just check-schema-drift / no-llm-imports     PASS
   just check-invariants / check-scan-coverage  PASS
   just check-frontend-tokens                   PASS
-  just cli-lint / cli-build / cli-test         PASS (go test ./...: 13 packages)
-  just test                                    PASS  api 1080 / 4 skipped (pre-existing),
-                                                     worker, mcp, Go
-  just extractors-test                         PASS
-  shared + scripts tests                       PASS  755 / 4 skipped
+  just cli-lint / cli-build                    PASS
+  go test ./... (cli)                          PASS
+  just test                                    PASS  api+scripts+shared 1137 / 4 skipped,
+                                                     worker 65, mcp 21, extractors 31
   frontend tsc -b, npm test                    PASS
-  check_coupled_files --base origin/main       PASS (nothing committed yet; vacuous)
+  just check-migration-round-trip              PASS  (agents, a task, a nonce and an
+                                                     audit row seeded)
   culprit check / LLM_PROVIDER=none            exit 0 / 0
-  TestTheNetworkBoundaryIsAnAllowlist          PASS — internal/agent links no net,
-                                                     net/http or crypto/tls
-  just fault-library                           PASS 7/7 (twice: once by this run, once by
-                                                     the phase auditor), with the wording
-                                                     check now refusing "->"
-  scripts/check_agent_image.sh                 PASS locally (Docker Desktop)
-  /ci                                          NOT RUN — needs the commit and a pull request
+  just agent-e2e                               NOT RUN (CI-only; see Status)
+  /ci                                          NOT RUN — needs the commit and a PR
 
-PART 1 CRITERIA
-  1 token_shape names config.inspect.values in grants_used; a refused
-    reading names no grant; secretSource has tests of its own   PASS.
-      secret_source_test.go drives the real source over the process
-      adapter (5 tests) and the runner (3). On real walks: the
-      auth-audience reading is `fail ['config.inspect.values'] v3`; the
-      ungranted one `refused`, no grants_used. Mutation: an empty
-      exercised list fails 2 tests.
-  2 only config.read.values -> token_shape refused; only
-    config.inspect.values -> env capture stores no value         PASS.
-      Unit test, and the auditor on the real binary: a planted value
-      granted only config.inspect.values is absent from the payload; the
-      control run with config.read.values has it.
-  3 parser refuses a wildcard, `all`, an unknown grant, each with its
-    line                                                          PASS.
-      9 subtests (net.*, "*", all, a typo, `all`/`*` as value or item,
-      *.write, true for a per-item grant); the binary prints file:line.
-  4 an ungranted task is refused without dialling, and recorded  PASS.
-      Counting fake network: 0 dials; a refused reading; audit entries
-      probe(refused, grants []) then task(refused). An allowance naming the
-      missing grant changes nothing and lands in allowance_ignored.
-  5 a removed grant takes effect on the next task, no restart    PASS.
-      Test, and the auditor with one long-lived process: granted, then
-      the file rewritten, then refused, same PID.
-  6 one audit entry per executed probe; an edit or deletion is
-    caught by the chain check                                     PASS.
-      A real walk: readings and probe entries match one to one, grants
-      included. Edited line, deleted line, renumbered successor and
-      reordering each named by line; the agent will not start on a
-      broken log.
-  7 image under 30 MB, non-root, read-only root fs, checked in CI
-                                                       PASS locally; CI NOT RUN.
-      distroless/static nonroot (uid 65532); binary layer 12.7 MB, about
-      13 MB in all (Docker Desktop's containerd store reports 5.5 MB
-      compressed; CI's classic store reports uncompressed, the stricter
-      figure). The agent ran --read-only --network none, refused the
-      ungranted task, completed the granted one, chain intact. Step
-      "Agent image checks" in images.yml runs it for the cli image.
-  8 no arrow pair in the walk's text, in 32.2's wording test     PASS.
-      assertReadable and the fault library's check refuse "->"; the one
-      sentence that had one ("for %s -> %s") now says "from ... to ...".
+CRITERIA (part 2)
+  1  signing fixture, Go and Python                       PASS. 14 cases, each
+       as written in both; each language reproduces the fixture's signatures
+       byte for byte from the seeds.
+  2  pairing code once, not after expiry; no private key
+     in any byte sent while pairing                       PASS. API tests;
+       the fake control plane dumps every request (httputil.DumpRequest)
+       until the agent is paired — exactly one — and none holds the seed or
+       key in seven encodings.
+  3  revocation refuses the next request; allowance
+     removal on the next task; no restart                 PASS (API and binary).
+  4  allowance naming an unreported grant, a wildcard or
+     `all` → 422; the chaos test over the real transport  PASS. 422s in the
+       API; the chaos case runs the real internal/transport client over HTTP
+       against a control plane that verifies signatures with agentauth: the
+       task is refused, recorded, allowance_ignored names the grant, and the
+       shipped chain equals the local log byte for byte. Not repeated
+       against the real API (the API 422s such an allowance; the case arises
+       only when a configuration shrinks after pairing).
+  5  POST /readings: an agent's credential only           PASS. Project token
+       401, none 401, signed 201, another agent named 403.
+  6  every route and its credentials                      PASS. The test reads
+       the app's dependency tree; the project token is on exactly the three
+       capture routes and POST /investigations. Mutation-tested four ways
+       (phase-auditor), and a hidden wrapper calling require_project_token
+       is now caught by a source scan (mutation-tested).
+  7  investigations record who submitted them             PASS.
+  8  one agent_audit_log row per probe in the CI
+     scenario; chain extension refused; no role can
+     update or delete, shown red without the trigger      Chain and trigger
+       PASS (dropping the trigger turns UPDATE and DELETE red; TRUNCATE has
+       its own); the CI clause NOT RUN — now one-to-one per task.
+  9  no shared Compose network in CI; no listen call;
+     transport dials only its address, no redirect, the
+     allowlist's third package, mutation-tested           Local PASS (each
+       mutation caught: allowlist, Listen, dialer, redirect, proxy). CI
+       topology NOT RUN. Defect found by the phase audit and fixed: the
+       quickstart's Caddy answered only `localhost`, so the agent's requests
+       as host.docker.internal matched no site (shown live) — the local
+       DOMAIN now names both (Caddy adapt checked; test added).
+  10 reachability completes; schema partial naming
+     db.metadata.read; audience roots at the audience     NOT RUN (CI-only).
+       Reasoned through the walk by the auditor: each would assert as
+       written. The "schema" walk is the latency fault over the demo model
+       plus an orders-db, whose edge only db.metadata.read can test.
+  11 migration round-trips with agents, tasks, audit rows PASS.
+  12 LLM_PROVIDER=none changes nothing                    PASS.
 
 WHAT WAS BUILT
-  - config.inspect.values: Go capability, the shared Python enum and the
-    conformance fixture; secretSource requires it per key and
-    config.read.values no longer satisfies it; capture never stores under
-    it. token_shape -> version 3; catalogue mirror regenerated; the fault
-    environments and quickstart (demo-services/culprit.yaml) and the fault
-    library's expectation renamed; PERMISSIONS, PROBES, LIMITS.
-  - grants_used = declared ∪ exercised: capability.WithExercised /
-    RecordExercised; sources record after the ledger allows and (for a
-    secret) after the value was read; the runner keeps only names the
-    ledger holds, so no probe can widen a reading's claim.
-  - cli/internal/agent: config (line-numbered refusals, re-read every
-    task), Task/Result, the hash-chained audit log and verify, DirSource
-    (id = file name, no reuse, nothing overwritten), the loop; an agent
-    that cannot write its audit stops. capability.Grants.Narrow.
-  - cli/cmd/culprit/agent.go: `culprit agent` (--config, --tasks, --audit,
-    --once, --poll) and `culprit agent verify` (0 intact, 1 broken, 2
-    unreadable); the executor runs probe tasks and walks under the agent's
-    grants only, through probeRunnerUnder/walkRunnerUnder (diagnose.go
-    refactored; `culprit diagnose` unchanged). Plugins are never run by
-    the agent.
-  - scripts/check_agent_image.sh and its CI step; cli/Dockerfile comment.
+  - Signing: cli/internal/agentauth, api/app/agents/signing.py,
+    shared/tests/agent_signing_conformance.json.
+  - Storage: d7a3e5f1b9c2 — six tables; agent-admin, agent-registrar,
+    agent-gateway; append-only and chain-extension triggers;
+    investigations.submitted_by; role secrets threaded everywhere.
+  - API: api/app/agents (pairing codes, register, list, allowances,
+    revoke, tasks, a task, the audit log; claim, result, audit head and
+    append for the agent); require_agent and require_project_token_or_agent;
+    POST /readings agent-only; POST /investigations records its submitter.
+  - Binary: cli/internal/transport; agent config control_plane and key;
+    `culprit agent init`, `pair` (`--code -` reads stdin); the transport
+    as the agent's task source, shipping its audit chain before results.
+  - CI: `just agent-e2e`, a step in the e2e job; the fault stack's
+    order-service gets host.docker.internal; the quickstart answers it.
+  - Docs: PERMISSIONS, UPGRADING, LIMITS, PROBES, ARCHITECTURE, the
+    database and determinism rules, CLAUDE.md.
 
-DELIBERATELY NOT BUILT (part 1's Do-NOT)
-  No transport, no control-plane client, no migration, no api/ worker/ or
-  frontend change beyond the catalogue mirror and the shared grant list,
-  no deployment recipe beyond the image, no write capability.
+DELIBERATELY NOT BUILT (part 2's Do-NOT)
+  No frontend change beyond the one re-recorded assertion; no deployment
+  recipe beyond the CI topology; no docs/SECURITY.md; no mutual TLS; no
+  write capability; no multi-tenancy; no hosted deployment; no
+  POST /investigations/{id}/probe.
 
 AUDITS
-  invariant-auditor: CLEAN, 0 violations. Defect fixed: the image check
-    would have failed on a Linux runner (the agent's 0700/0600 output,
-    unreadable by the runner's user; Docker Desktop hid it) — it now runs
-    as the host user, after the non-root check on the image's own user.
-    Risks fixed: grants_used filtered through the ledger; inspect recorded
-    only after a read; task id must equal file name, ids not reused,
-    results never overwritten; LIMITS now says the chain is
-    tamper-evident, not tamper-proof (anyone with write access can
-    rewrite it consistently) and that two agents must not share a log;
-    a stale secret-reader comment. Risks left: process.exec.allowlist is
-    recorded when authorised, not after the command succeeded; the size
-    check is daemon-dependent (CI's is the stricter).
-  phase-auditor: all eight criteria PASS locally, criterion 7's CI half
-    NOT RUN. Defects fixed: `agent verify` on an unreadable log exited 1
-    (now 2); a YAML syntax error named no line (now does, without quoting
-    the file); ARCHITECTURE.md's token sentence.
+  invariant-auditor: one violation, fixed — agent-admin held SELECT on
+    the pairing codes it never reads (now INSERT only, with no RETURNING;
+    the sequence USAGE it named as unneeded IS needed — Postgres checks it
+    for an identity default, shown by the tests — and is argued in the
+    migration). One security defect, fixed — a nonce could be deleted while
+    its request was still fresh (a replay window of up to a second at the
+    edge of future skew); now kept 2 x 300 + 60 s, with a test that replays
+    such a request after cleanup (mutation-tested). Risks fixed: a transient
+    DB error on an audit insert reported as a broken chain; the determinism
+    rule and ARCHITECTURE naming two network packages, not three; the
+    pairing code in shell history (`--code -`). Risks documented in LIMITS:
+    http allowed for control_plane.url; what a leaked agent DB credential
+    could do; a malformed body's 422 before the 401. api-reader's SELECT on
+    the four new tables argued in the migration, as c4e8a1f2b3d5's was.
+  phase-auditor: every local criterion PASS; defects fixed — the Caddy
+    host (above), the scan gap in criterion 6, and three checks weaker than
+    the wording (aggregate audit counts, networks compared only with "api"
+    containers, pairing capture limited to one path).
 
 PLAN NOTES
-  - Field 14's "an agent with only net.* and config.read.names" writes a
-    wildcard the part-1 parser (rightly) refuses; read it as the net.*
-    capabilities listed by name.
-  - The recorded investigations in api/tests/data/investigations/ and
-    frontend/e2e/investigations.spec.ts:101 still say config.read.values,
-    and auth-audience.json records token_shape v2 with no grants_used —
-    stale, not just old wording. Part 1 may not change api/ or the
-    frontend, and nothing fails because of them; part 2 should re-record
-    them (CULPRIT_FAULT_LIBRARY_RECORD) and update the e2e assertion, and
-    the README's partial screenshot with them.
-  - A user's culprit.yaml that granted config.read.values for a token
-    now has the audience hypothesis refused until renamed (LIMITS).
+  - Criterion 10's "schema investigation": the demo model has no database,
+    so the scenario adds one (orders-db) to the agent's own copy of the
+    model; adding it to demo-services/culprit.yaml would have turned the
+    fault library's audience walk partial.
+  - The project token's narrower scope breaks any CI that posts readings
+    with it (UPGRADING says so).
 
 LEFT OPEN
-  - Commit, push, pull request, /ci.
-  - The re-recording above (part 2).
+  - Commit, push, pull request, /ci — the scenario's first run.
+  - Malcolm's local env, as 32.2's review required:
+      mv infra/.env.prod infra/.env.prod.pre-33-2
+      docker volume rm culprit-quickstart_quickstart-postgres-data culprit-quickstart_quickstart-redis-data
+      just quickstart
+    Also removable: volumes culprit-qs-322_*, culprit-qs-322b_*,
+    culprit-qs-332_*.
+  - The README partial screenshot and README.md:63, from CI's artifact.
 ```
 
 

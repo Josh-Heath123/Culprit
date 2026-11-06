@@ -60,7 +60,7 @@ score.
 A partial one is shown as where the walk stopped and what it could not
 check — never as a root or a cause:
 
-![A partial investigation: "Walk stopped at component:order-service", and under "Could not check" the audience hypothesis, refused because config.read.values was not granted](docs/screenshots/investigation-partial-1280.png)
+![A partial investigation: "Walk stopped at component:order-service", and under "Could not check" the audience hypothesis, refused because config.inspect.values was not granted](docs/screenshots/investigation-partial-1280.png)
 
 <p>
   <img src="docs/screenshots/investigations-1280.png" width="66%" alt="The investigations list: each run's symptom, its root or where the walk stopped, and whether it is complete or partial">

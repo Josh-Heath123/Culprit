@@ -1,7 +1,7 @@
 {
-  "id": "inv-8fd960e1c49ac5d2",
-  "opened_at": "2026-11-05T17:17:51.102356404Z",
-  "closed_at": "2026-11-05T17:17:51.110641106Z",
+  "id": "inv-6f499039c110c3a7",
+  "opened_at": "2026-11-06T07:04:29.79058707Z",
+  "closed_at": "2026-11-06T07:04:29.799681656Z",
   "environment": "faults-order-ungranted",
   "symptom": {
     "kind": "endpoint",
@@ -34,7 +34,7 @@
       "kind": "auth_audience_mismatch",
       "subject": "auth:order-service-\u003einventory-service/audience",
       "status": "unexplored",
-      "reason": "probe.auth.token_shape was refused: reading INVENTORY_TOKEN needs config.read.values for order-service/INVENTORY_TOKEN, and config.read.values is not granted for this environment",
+      "reason": "probe.auth.token_shape was refused: inspecting INVENTORY_TOKEN needs config.inspect.values for order-service/INVENTORY_TOKEN, and config.inspect.values is not granted for this environment",
       "readings": [
         "r5"
       ]
@@ -99,7 +99,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-05T17:17:51.104930559Z",
+        "taken_at": "2026-11-06T07:04:29.793245574Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -115,11 +115,11 @@
         "environment": "faults-order-ungranted",
         "verdict": "pass",
         "measured": {
-          "elapsed_ms": 2,
+          "elapsed_ms": 3,
           "status": 200,
           "url": "http://payments-service:8003/ready"
         },
-        "taken_at": "2026-11-05T17:17:51.107200732Z",
+        "taken_at": "2026-11-06T07:04:29.796415796Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -138,7 +138,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-05T17:17:51.107893332Z",
+        "taken_at": "2026-11-06T07:04:29.797107945Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -157,7 +157,7 @@
           "host": "payments-service",
           "port": 8003
         },
-        "taken_at": "2026-11-05T17:17:51.108532588Z",
+        "taken_at": "2026-11-06T07:04:29.797666506Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -168,12 +168,12 @@
       "id": "r5",
       "reading": {
         "probe_id": "probe.auth.token_shape",
-        "probe_version": 2,
+        "probe_version": 3,
         "target": "auth:order-service-\u003einventory-service/audience",
         "environment": "faults-order-ungranted",
         "verdict": "refused",
-        "reason": "reading INVENTORY_TOKEN needs config.read.values for order-service/INVENTORY_TOKEN, and config.read.values is not granted for this environment",
-        "taken_at": "2026-11-05T17:17:51.108625018Z",
+        "reason": "inspecting INVENTORY_TOKEN needs config.inspect.values for order-service/INVENTORY_TOKEN, and config.inspect.values is not granted for this environment",
+        "taken_at": "2026-11-06T07:04:29.797742626Z",
         "agent_id": "fault-library"
       }
     },
@@ -200,7 +200,7 @@
           "locator": "invariants[1]",
           "confidence_rank": 100
         },
-        "taken_at": "2026-11-05T17:17:51.110595295Z",
+        "taken_at": "2026-11-06T07:04:29.79963397Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -211,7 +211,7 @@
   "fault_tree": [],
   "diagnosis": {
     "root_subject": "component:order-service",
-    "statement": "The failure is localised to order-service, and the walk could not finish: auth audience mismatch on the token audience order-service presents to inventory-service: probe.auth.token_shape was refused: reading INVENTORY_TOKEN needs config.read.values for order-service/INVENTORY_TOKEN, and config.read.values is not granted for this environment.",
+    "statement": "The failure is localised to order-service, and the walk could not finish: auth audience mismatch on the token audience order-service presents to inventory-service: probe.auth.token_shape was refused: inspecting INVENTORY_TOKEN needs config.inspect.values for order-service/INVENTORY_TOKEN, and config.inspect.values is not granted for this environment.",
     "confidence": {
       "reproduced": {
         "holds": false,

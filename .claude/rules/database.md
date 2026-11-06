@@ -10,7 +10,7 @@ paths:
 
 ## Least privilege
 
-One Postgres role per job. Fourteen exist: `ingestion-writer`, `api-reader`,
+One Postgres role per job. Seventeen exist: `ingestion-writer`, `api-reader`,
 `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`,
 `registry-admin`, `auth-service`, `postmortem-writer`, `mcp-reader`,
 `fact-writer`, `capture-writer` (Phase 30 — INSERT on `captures` and
@@ -25,7 +25,13 @@ which is a wider starting position than either of the two above),
 nothing else; field 7's rule, that every fault edge cites a reading of its own
 investigation, is held by the database itself, with a composite foreign key and
 a deferred constraint trigger, so a writer that skips the model still cannot
-store an uncited edge). The same migration *narrowed* two roles:
+store an uncited edge), and Phase 33's three agent roles, one per write
+surface — `agent-admin` (pairing codes, allowances, revocation, tasks),
+`agent-registrar` (spend a pairing code, insert the agent) and
+`agent-gateway` (an agent's own signed requests: nonces, claims, results,
+audit entries). No role holds UPDATE or DELETE on `agent_audit_log`, and
+triggers refuse both, and TRUNCATE, to the owner as well. The Phase 32
+migration *narrowed* two roles:
 `correlation-engine` and `root-cause-writer` lost every write on the incident
 tables, which are history now.
 

@@ -234,9 +234,12 @@ func TestNoModelProviderIsLinkedIntoTheBinary(t *testing.T) {
 func TestTheNetworkBoundaryIsAnAllowlist(t *testing.T) {
 	const module = "github.com/josh-heath123/culprit/cli/"
 	allowed := map[string]map[string]bool{
-		"net/http":   {"internal/probe": true},
-		"net":        {"internal/probe": true, "internal/capture": true},
-		"crypto/tls": {"internal/probe": true, "internal/capture": true},
+		// internal/transport (Phase 33 part 2) is the agent's connection to
+		// its control plane: it dials only the configured address, follows
+		// no redirect and opens no listener (internal/transport's tests).
+		"net/http":   {"internal/probe": true, "internal/transport": true},
+		"net":        {"internal/probe": true, "internal/capture": true, "internal/transport": true},
+		"crypto/tls": {"internal/probe": true, "internal/capture": true, "internal/transport": true},
 	}
 	reasons := map[string]string{
 		"net":        "it can open a socket",

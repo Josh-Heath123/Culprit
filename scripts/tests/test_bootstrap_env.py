@@ -59,6 +59,17 @@ def test_the_local_quickstart_builds_rather_than_pulls() -> None:
     assert env["IMAGE_TAG"] == ""
 
 
+def test_the_local_quickstart_answers_an_agent_on_this_machine() -> None:
+    """An agent in a container reaches the quickstart through the host as
+    host.docker.internal; Caddy answers only the site addresses in DOMAIN,
+    so that name has to be one (Phase 33 part 2). A real install's domain
+    is left exactly as given."""
+    local = _build(domain="localhost", local=True)
+    assert local["DOMAIN"] == "http://localhost, http://host.docker.internal"
+    real = _build(domain="culprit.example.com", local=False)
+    assert real["DOMAIN"] == "culprit.example.com"
+
+
 def test_the_generated_registry_matches_the_compose_default() -> None:
     """If these two ever disagree, one of them is pulling images nobody
     publishes — and the compose default is the one a user who never runs
@@ -77,6 +88,9 @@ def test_the_generated_registry_matches_the_compose_default() -> None:
         "CAPTURE_WRITER_DB_PASSWORD",
         "PROBE_WRITER_DB_PASSWORD",
         "INVESTIGATION_WRITER_DB_PASSWORD",
+        "AGENT_ADMIN_DB_PASSWORD",
+        "AGENT_REGISTRAR_DB_PASSWORD",
+        "AGENT_GATEWAY_DB_PASSWORD",
         "MCP_READER_DB_PASSWORD",
     ],
 )

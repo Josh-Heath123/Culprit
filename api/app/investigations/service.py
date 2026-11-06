@@ -108,7 +108,11 @@ def _sanitised(investigation: Investigation) -> Investigation:
     )
 
 
-async def store(session: AsyncSession, investigation: Investigation) -> Investigation:
+async def store(
+    session: AsyncSession, investigation: Investigation, submitted_by: str = "project-token"
+) -> Investigation:
+    """`submitted_by` is "project-token" or "agent:<id>" — who stored it,
+    recorded beside it (Phase 33 part 2)."""
     clean = _sanitised(investigation)
     diagnosis = clean.diagnosis
     try:
@@ -123,6 +127,7 @@ async def store(session: AsyncSession, investigation: Investigation) -> Investig
                 complete=diagnosis.complete if diagnosis else None,
                 diagnosis=diagnosis.model_dump(mode="json") if diagnosis else None,
                 ingested_at=datetime.now(UTC),
+                submitted_by=submitted_by,
             )
         )
         if clean.readings:
@@ -209,6 +214,7 @@ async def list_investigations(
             "attestation": row["symptom"]["attestation"]["kind"],
             "root_subject": row["root_subject"],
             "complete": row["complete"],
+            "submitted_by": row["submitted_by"],
         }
         for row in rows
     ]

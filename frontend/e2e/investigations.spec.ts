@@ -98,7 +98,7 @@ test("reading investigations: one complete, three partial", async ({ page }) => 
   await openFromList(page, partialRefused);
   const unchecked = page.getByTestId("could-not-check");
   await expect(unchecked).toContainText(AUDIENCE);
-  await expect(unchecked).toContainText("config.read.values");
+  await expect(unchecked).toContainText("config.inspect.values");
 });
 
 /** The main journey by keyboard alone (field 14): sign in, choose the

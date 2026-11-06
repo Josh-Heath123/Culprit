@@ -1,10 +1,16 @@
 """`POST /readings`, `GET /probes`, `POST /probes/{probe_id}/run` — Phase 31.
 
 Mounted in app/main.py with no router-level dependency, like the other
-Phase 28-30 routers and for the same reason: the write takes a project
-token (the credential a probe runner in CI or on a jump host holds) and
-the two probe routes take a user session. Declared per route, so an
-endpoint added here later cannot inherit a credential nobody chose for it.
+Phase 28-30 routers and for the same reason: the write takes an agent's
+signature and the two probe routes take a user session. Declared per
+route, so an endpoint added here later cannot inherit a credential nobody
+chose for it.
+
+**`POST /readings` accepts an agent's credential and nothing else** (Phase
+33 part 2; until then it took the project token). A reading is a
+measurement of a running system, so it is written only by the agent that
+took it: every reading's `agent_id` must be the signing agent's own, and a
+body naming another agent is refused whole.
 
 `POST /probes/{probe_id}/run` is the honest one. It answers 503 and does
 not run anything — see `_run_probe`.
@@ -16,8 +22,8 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.dependencies import AgentPrincipal, require_agent
 from app.auth.dependencies import require_auth
-from app.facts.dependencies import require_project_token
 from app.readings import catalogue
 from app.readings.dependencies import get_probe_writer_session
 from app.readings.schemas import (
@@ -38,16 +44,19 @@ router = APIRouter(tags=["readings"])
 _AGENT_TRANSPORT_PHASE = "Phase 33"
 
 
-@router.post(
-    "/readings",
-    response_model=ReadingsAccepted,
-    status_code=201,
-    dependencies=[Depends(require_project_token)],
-)
+@router.post("/readings", response_model=ReadingsAccepted, status_code=201)
 async def create_readings(
     payload: ReadingBatch,
+    agent: AgentPrincipal = Depends(require_agent),
     session: AsyncSession = Depends(get_probe_writer_session),
 ) -> ReadingsAccepted:
+    others = sorted({r.agent_id for r in payload.readings if r.agent_id != agent.id})
+    if others:
+        logger.warning("readings_refused_other_agent", agent=agent.id, named=others)
+        raise HTTPException(
+            status_code=403,
+            detail="every reading must name the agent that signed the request",
+        )
     try:
         stored = await store_readings(session, payload.readings)
     except RejectedByDatabase as exc:
@@ -108,8 +117,9 @@ async def run_probe(probe_id: str) -> ProbeRunUnavailable:
     return ProbeRunUnavailable(
         probe_id=probe_id,
         reason=(
-            "no probe agent is connected. Probes run in the culprit binary, "
-            "against an environment it can reach; this API cannot reach one."
+            "this route runs nothing. Probes run in the culprit binary, against "
+            "an environment it can reach: address one to a paired agent as a task "
+            "(POST /agents/{agent_id}/tasks), or run it locally."
         ),
         run_locally=f"culprit probe {probe_id} --env <environment>",
         available_from=_AGENT_TRANSPORT_PHASE,

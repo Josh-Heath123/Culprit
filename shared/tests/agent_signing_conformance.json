@@ -1,0 +1,228 @@
+{
+  "why": [
+    "The agent request-signing contract (DIAGNOSTIC_PLAN.md Phase 33), read by cli/internal/agentauth and api/app/agents/signing.py.",
+    "canonical = scheme, METHOD, path, hex sha256(body), timestamp, nonce, agent id — one per line, joined by \\n. The signature is Ed25519 over it, base64.",
+    "Keys are derived from seeds: seed = sha256(seed_sha256_of). They are test keys and are accepted nowhere else.",
+    "Regenerate with CULPRIT_WRITE_SIGNING_FIXTURE=1 go test ./internal/agentauth — and read the diff."
+  ],
+  "scheme": "culprit-agent-v1",
+  "max_skew_seconds": 300,
+  "keys": {
+    "agent-a": {
+      "seed_sha256_of": "culprit test key: agent-a (never used outside tests)",
+      "public_key": "hF80t3Gn/pIg/Z0/3dE2synPsRBK0osaszMSZej4IQ0=",
+      "revoked": false
+    },
+    "agent-b": {
+      "seed_sha256_of": "culprit test key: agent-b (never used outside tests)",
+      "public_key": "/0yn/V5s0kSp03LgnkFu/C/1uWUHObrk5j9JA+euWAg=",
+      "revoked": false
+    },
+    "agent-revoked": {
+      "seed_sha256_of": "culprit test key: agent-revoked (never used outside tests)",
+      "public_key": "qDX1wDUMUObhQx0WwqtuotHPBE8MsmDLUJizTSXJX0I=",
+      "revoked": true
+    }
+  },
+  "cases": [
+    {
+      "why": "a valid request: known key, fresh, unseen nonce, signature over exactly this request",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "canonical": "culprit-agent-v1\nPOST\n/readings\n26ca84ce35e85fbb463a453ac0d9109a3fb42131efa8b8c451aed5e2dcd9b535\n1793000000\n0123456789abcdef0123456789abcdef\nagent-a",
+      "expect": "accept"
+    },
+    {
+      "why": "a valid request with no body: the digest is SHA-256 of nothing",
+      "agent_id": "agent-a",
+      "method": "GET",
+      "path": "/agents/me/audit/head",
+      "body": "",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "jCvYP1e4SloZ22f6F956JeTkViYwFv3XGxv2pl1BSXdouXdNHSr7+Nl9x2/EYvKya29jQg+QkAfxGLQ+QHRWBQ==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "accept"
+    },
+    {
+      "why": "valid at exactly max_skew_seconds old",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000300,
+      "seen_nonces": [],
+      "expect": "accept"
+    },
+    {
+      "why": "a tampered body: signed over another body",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[{\"agent_id\":\"agent-b\"}]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a changed path: signed for /readings, sent to /investigations",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/investigations",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a changed method",
+      "agent_id": "agent-a",
+      "method": "PUT",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a stale timestamp: one second past max_skew_seconds",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000301,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a timestamp from the future, past max_skew_seconds",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1792999699,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a replayed nonce: the control plane has seen it",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "PMNE+b+QoZOmXujhS+a9zeoKiykURjXyooUuiHJj1HhVLrLjOFx8vQEmlWIKM+t/s+6rri/uNQKFV+7PdSrpDg==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [
+        "0123456789abcdef0123456789abcdef"
+      ],
+      "expect": "refuse"
+    },
+    {
+      "why": "the wrong key: agent-b's signature on a request naming agent-a",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "+vwi0HZJ6+CmQlP+vAtSqs3vl2q68Hbjc9fRzSzM5FrTENYxE3E0yRQkoLGK009sCuJwCzhBhycfbGFOYI17Cw==",
+      "signed_by": "agent-b",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a revoked key: the signature is its own and valid, and still refused",
+      "agent_id": "agent-revoked",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "4QpkXCH2HM7OGFhaMk7NyrS/68L8FjztHUOZUDJlX++qpCsZKVsf9Pz0ldRl9tKTPhVNKDOu7ekYfYA1w4kwAQ==",
+      "signed_by": "agent-revoked",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "an unknown agent id",
+      "agent_id": "agent-unknown",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "t78QpLKdCh9wQflS2EeWp6PHCQeIJhecqqog6SjrrvIPevVv3Za9h0x4WU2dpy579p0tePK7h7LXsOrBktLhDg==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a malformed nonce, correctly signed",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "not-a-nonce",
+      "signature": "hDDBOy95rhDDxCiGWU3LEEbe/tlEq5J42HfQZIYY9LXOxdnxMQlMrQ5qcJDgxc8i837VX/emWHYAZKF5e2uZAw==",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    },
+    {
+      "why": "a signature that is not base64 of 64 bytes",
+      "agent_id": "agent-a",
+      "method": "POST",
+      "path": "/readings",
+      "body": "{\"readings\":[]}",
+      "timestamp": 1793000000,
+      "nonce": "0123456789abcdef0123456789abcdef",
+      "signature": "c2lnbmF0dXJl",
+      "signed_by": "agent-a",
+      "now": 1793000000,
+      "seen_nonces": [],
+      "expect": "refuse"
+    }
+  ]
+}
