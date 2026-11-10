@@ -324,6 +324,10 @@ func newWalkRunner(manifest *extract.Manifest, manifestPath, environment, agentI
 type wire struct {
 	Network probe.Network
 	HTTP    probe.HTTPClient
+	// Database, when set, stands in for the environment's own inspector
+	// (found by dsn_env). Only tests set it; the grant that gates it is
+	// still the runner's, on the probe's manifest.
+	Database probe.DatabaseInspector
 }
 
 func realWire(timeout time.Duration) wire {
@@ -347,6 +351,9 @@ func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, age
 		Network: through.Network, HTTP: through.HTTP, Now: time.Now,
 		Database: sources.Database(), Config: sources.Config(), Packages: sources.Packages(),
 		Secrets: sources.Secrets(),
+	}
+	if through.Database != nil {
+		deps.Database = through.Database
 	}
 	return probe.NewRunner(probe.Options{
 		Catalogue: catalogue, Ledger: ledger, AgentID: agentID,

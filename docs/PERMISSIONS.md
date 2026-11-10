@@ -277,6 +277,33 @@ one. A task that needs a grant the agent does not hold is refused before
 anything is dialled; the refusal is a reading and an entry in the agent's
 audit log.
 
+## The minimum grants for each kind of investigation
+
+What an agent needs to *complete* a diagnosis of each class of fault — to
+find the root and rule out every other explanation the walk can test.
+With less, the investigation still runs, and ends **partial**: it says
+where it stopped, and names the grant it lacked.
+
+<!-- cli/cmd/culprit/grantsets_test.go reads the second column of this table
+and runs each class with exactly those grants, then with each one removed.
+Change a set here and the test runs the new one. -->
+
+| Investigation class | Minimum grants | Why each is needed |
+|---|---|---|
+| reachability | `net.tcp.connect`, `net.http.outbound` | `probe.net.tcp_connect` tests the connection itself; `probe.http.reachable` asks the service at the other end whether it fails on its own. |
+| schema | `db.metadata.read` | `probe.db.connect` tests the connection to the database, under a read-only session. No row is read. |
+| auth and audience | `config.inspect.values`, `net.tcp.connect`, `net.http.outbound` | `probe.auth.token_shape` reads the caller's token in memory — `config.inspect.values` for that one variable (`<caller>/<VARIABLE>`), never stored — to check its audience; the other two rule out the connection and the callee. |
+| configuration | `config.read.names` | `probe.config.present` checks that a required key is set where the service runs. Names only; no value is read. |
+
+Each set is for that class on its own: one service and the one thing it
+depends on. **A real request path adds the grants of every other edge on
+it** — a path with an HTTP hop before the database needs the
+reachability set as well as `db.metadata.read`, because the walk must rule
+that hop out before it can blame the database. `net.dns.resolve` and
+`net.tls.inspect` are in no minimum set: a name that resolves rules
+nothing out, and a TLS check applies only to an endpoint declared
+`tls: true` — grant `net.tls.inspect` for those.
+
 ## The agent and the control plane — keys, pairing, allowances
 
 A paired agent proves who it is with an **Ed25519 key** it generates itself
