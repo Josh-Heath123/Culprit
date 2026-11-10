@@ -78,6 +78,13 @@ async def create_verification(
     except service.Refused as exc:
         logger.warning("verification_refused", investigation=investigation_id)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    earlier = await service.source_of(reader, investigation_id)
+    if earlier is not None and earlier != body.source:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{investigation_id}'s verifications record its fault as {earlier}; "
+            f"one investigation's fault cannot also be {body.source}",
+        )
     clean = service.sanitised(verification)
     try:
         await service.store(writer, clean, body.source, submitter.label)

@@ -68,8 +68,8 @@ def render(results: dict[str, Any]) -> str:
         "## Accuracy, on faults we planted",
         "",
         f"**{verified} of {decided} planted faults verified fixed** "
-        f"({_share(verified, decided)}), one outcome per fault class, "
-        f"{report['outcomes']} outcomes in all; {inconclusive} inconclusive beside that, and "
+        f"({_share(verified, decided)}), of {len(faults)} faults planted: "
+        f"{report['outcomes']} outcomes, {inconclusive} inconclusive beside that, and "
         f"{report['partial_diagnoses_not_counted']} partial diagnoses not counted.",
         "",
         "**These are faults we planted, in Culprit's own three demo services, and "
@@ -85,6 +85,10 @@ def render(results: dict[str, Any]) -> str:
         "of a **complete** diagnosis; its fault class is the subject kind of the diagnosis's "
         "root. Per class, `verified` is counted against the decided outcomes (every verdict "
         "but inconclusive), and inconclusive is reported beside it, never folded in. "
+        "A `verified` outcome shows that the fix for the root the walk diagnosed was seen to "
+        "fix what it saw failing; a fault diagnosed at the wrong root would be counted under "
+        "that root's class, so this measures diagnosis-then-fix, not whether every diagnosis "
+        "named the true cause. "
         "`GET /outcomes/accuracy` counts verifications recorded through the control plane "
         "the same way, with the same function, and says for each count whether its faults "
         "were planted or real.",

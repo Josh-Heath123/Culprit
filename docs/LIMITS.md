@@ -2103,7 +2103,9 @@ by one directory per diagnosis.
 The control plane re-judges every verification it is given with the same
 rule `culprit verify` used, and refuses one whose verdict that rule does not
 reach, whose re-runs were taken before the investigation closed, whose
-`was` disagrees with the stored reading, or that skips a reading. It cannot
+`was` disagrees with the stored reading, that skips a reading, or that is
+stamped after its server's clock (by more than 300 seconds) or judged before
+its own last run. It cannot
 tell whether the runs were really measured: a verification is as honest as
 the credential that posted it. An agent may post only runs that name it;
 the project token, like the one that posts investigations, can post any
@@ -2122,6 +2124,9 @@ the accuracy count use. The table grows by one row per verification.
 apart from faults on a real system, and that label is the one the person,
 the task or CI gave when asking for the verification — required, never
 defaulted, and never checked. A drill posted as `real` is counted as real.
+The first verification of an investigation fixes its label: a later one
+that says otherwise is refused, so one investigation is never counted both
+ways.
 
 ### Accuracy is counted per investigation, from its newest verification
 
@@ -2137,6 +2142,10 @@ The class is the subject kind of the diagnosis's root — `auth`,
 `connection`, `http`, `config`, `component`, and the rest. It is coarse:
 every config fault is one class, whatever key; an error rate and a crash
 inside the same service are both `component`. Nothing finer is inferred.
+And it is the class of the root the walk *diagnosed*: a fault diagnosed at
+the wrong root, then fixed, is counted under that root's class. A
+`verified` outcome shows the fix for the diagnosed root was seen to fix
+what the walk saw failing — not that the diagnosis named the true cause.
 
 ### The README's number is five planted faults
 

@@ -22,7 +22,7 @@ investigation is never written to.
 """
 
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from culprit_model.investigations import Investigation
@@ -36,6 +36,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.verifications import tables
+
+#: How far past this server's clock a run may be stamped: the agents'
+#: signing skew (app/agents/signing.py, 300 s). A run from the future is a
+#: clock that is wrong, or a record that was not measured.
+FUTURE_SKEW = timedelta(seconds=300)
 
 
 class Refused(Exception):
@@ -73,6 +78,7 @@ def check_against(investigation: Investigation, verification: Verification) -> N
             + " and ".join(parts)
         )
     closed = investigation.closed_at or investigation.opened_at
+    latest = datetime.now(UTC) + FUTURE_SKEW
     for reading_id, rerun in reran.items():
         reading = stored[reading_id]
         if rerun.was is not reading.verdict:
@@ -97,6 +103,37 @@ def check_against(investigation: Investigation, verification: Verification) -> N
                     f"investigation closed at {closed.isoformat()}: a verification measures "
                     "again, and never reuses a reading"
                 )
+            if run.taken_at > latest:
+                raise Refused(
+                    f"a run of {reading_id} was taken at {run.taken_at.isoformat()}, after now: "
+                    "a verification records what was measured, never what will be"
+                )
+    # verified_at orders an investigation's verifications and picks the
+    # one its outcome is: it may not precede what it judged, nor lie in
+    # the future, or one post could stay "newest" for ever.
+    measured = max(run.taken_at for rerun in reran.values() for run in rerun.runs)
+    if verification.verified_at < measured:
+        raise Refused(
+            f"the verification says it was judged at {verification.verified_at.isoformat()}, "
+            f"before its last run at {measured.isoformat()}"
+        )
+    if verification.verified_at > latest:
+        raise Refused(
+            f"the verification says it was judged at {verification.verified_at.isoformat()}, "
+            "after now"
+        )
+
+
+async def source_of(session: AsyncSession, investigation_id: str) -> str | None:
+    """The source earlier verifications of this investigation recorded, if
+    any: one investigation's fault was planted or it was not."""
+    return (
+        await session.execute(
+            select(tables.verifications.c.source)
+            .where(tables.verifications.c.investigation_id == investigation_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
 
 
 def sanitised(verification: Verification) -> Verification:
@@ -185,7 +222,11 @@ METHOD = (
     "inconclusive is reported beside it, never folded in. A source of 'planted' means the "
     "fault was planted on purpose — a drill or the fault library — and says nothing of "
     "accuracy on a real system; 'real' means whoever asked for the verification said the "
-    "fault happened on one."
+    "fault happened on one — declared, not observed, and the same for every verification "
+    "of one investigation. What a 'verified' outcome shows is that the fix applied for the "
+    "root the walk diagnosed was seen to fix what the walk saw failing; a fault diagnosed "
+    "at the wrong root is filed under that root's class, so this is not a measure of "
+    "whether diagnoses named the true cause."
 )
 
 _NOTHING = (

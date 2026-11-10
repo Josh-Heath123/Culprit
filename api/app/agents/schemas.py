@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from culprit_model.capabilities import Capability
+from culprit_model.redaction import redact_credentials
 from culprit_model.subjects import SubjectError, build
 from culprit_model.verifications import Change, ChangeKind
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -140,6 +141,21 @@ class VerifySpec(_Strict):
         if not isinstance(value, list):
             return value
         return [parse_change(item) if isinstance(item, str) else item for item in value]
+
+    @field_validator("changes")
+    @classmethod
+    def _redact_action_words(cls, value: list[Change | str]) -> list[Change | str]:
+        # Standing invariant 11: an action's words are free text a person
+        # typed; they are stored in agent_tasks.spec, shown back and sent
+        # to the agent, so they are redacted here, at the choke point, as a
+        # verification's are when it is stored.
+        return [
+            change.model_copy(update={"description": redact_credentials(change.description)})
+            if isinstance(change, Change) and change.description
+            else change
+            for change in value
+        ]
+
     #: Whether the fault was planted (a drill) or happened on a real
     #: system: said by whoever asks, never guessed.
     source: Literal["planted", "real"]

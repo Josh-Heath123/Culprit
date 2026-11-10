@@ -156,10 +156,12 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
     });
 
     await test.step("ask the agent to verify, naming the change: the verification lands on the page", async () => {
-      // The quickstart's fault is still in place, so naming the token's fix
-      // without applying it is a wrong fix: what failed still fails. (The
-      // right fix, verified, is `just agent-e2e`'s, in the fault stack, and
-      // shown by verifications.spec.ts.)
+      // The quickstart's fault is still in place and nothing is fixed, so
+      // whatever this agent's walk saw, the verification cannot be
+      // `verified`. (Which of the other verdicts depends on what an agent
+      // outside every component, with network grants alone, could see; the
+      // exact not_resolved-then-verified loop is `just agent-e2e`'s, in the
+      // fault stack, and verifications.spec.ts shows it on its page.)
       const verifications = page.getByTestId("verifications");
       await expect(verifications.getByTestId("no-verifications")).toBeVisible();
       const form = verifications.getByTestId("ask-to-verify");
@@ -173,7 +175,9 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
       await press(page, verify, "Enter");
       await expect(verifications.getByTestId("verify-progress")).toBeVisible();
       const item = verifications.getByTestId("verification").first();
-      await expect(item).toHaveAttribute("data-verdict", "not_resolved", { timeout: 180_000 });
+      await expect(item).toHaveAttribute("data-verdict", /^(not_resolved|regressed|changed_underneath|inconclusive)$/, {
+        timeout: 180_000,
+      });
       await expect(item.getByTestId("verification-changes")).toContainText("config:order-service/INVENTORY_TOKEN");
       await expect(page.getByTestId("rubric").locator("[data-criterion=verified]")).toHaveAttribute("data-holds", "false");
       expect(taskRequests).toHaveLength(2);

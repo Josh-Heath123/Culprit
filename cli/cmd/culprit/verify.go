@@ -384,7 +384,7 @@ func parseChanges(values []string) ([]model.Change, error) {
 		var change model.Change
 		switch kind {
 		case "commit":
-			change = model.Change{Kind: model.ChangeCommit, Ref: strings.ToLower(rest)}
+			change = model.Change{Kind: model.ChangeCommit, Ref: strings.ToLower(strings.TrimSpace(rest))}
 		case "action":
 			change = model.Change{Kind: model.ChangeAction, Description: strings.TrimSpace(rest)}
 		case "image":

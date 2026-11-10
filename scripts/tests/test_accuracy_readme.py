@@ -56,8 +56,8 @@ def test_it_says_the_faults_were_planted_and_not_a_real_systems() -> None:
 
 def test_it_counts_complete_diagnoses_only_with_the_denominator_stated() -> None:
     section = accuracy.render(_results())
-    assert "**1 of 2 planted faults verified fixed** (50%)" in section
-    assert "2 outcomes in all" in section
+    assert "**1 of 2 planted faults verified fixed** (50%), of 3 faults planted" in section
+    assert ": 2 outcomes," in section
     assert "1 partial diagnoses not counted" in section
     assert "`latency` (inconclusive)" in section
     # One row per class; the partial fault in none of them.
@@ -88,4 +88,16 @@ def test_scenarios_are_listed_and_not_counted() -> None:
         )
     )
     assert "`wrong-fix` (not_resolved)" in section
-    assert "2 outcomes in all" in section
+    assert ": 2 outcomes," in section
+
+
+def test_no_fault_library_record_names_a_commit() -> None:
+    """Q20: a runtime fix is an action, in words; no record says "commit"
+    for something that was not one."""
+    expected = json.loads(
+        (accuracy.ROOT / "cli" / "testdata" / "faultlib" / "expected.json").read_text("utf-8")
+    )
+    named = [c for f in expected["faults"] for c in f.get("fix", {}).get("change", [])]
+    named += [c for s in expected["scenarios"] for c in s["change"]]
+    assert not [c for c in named if c.startswith("commit:")]
+    assert len([c for c in named if c.startswith("action:")]) == 3

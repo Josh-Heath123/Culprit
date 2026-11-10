@@ -267,6 +267,39 @@ def test_a_verification_whose_runs_predate_the_investigation_is_refused(
     assert "before the investigation closed" in response.json()["detail"]
 
 
+def test_a_verification_whose_runs_are_from_the_future_is_refused(client: TestClient) -> None:
+    investigation = store(client, "auth-audience")
+    closed = datetime.fromisoformat(investigation["closed_at"])
+    ahead = datetime.now(closed.tzinfo) - closed + timedelta(hours=2)
+    response = post(client, verification_of(investigation, after=ahead))
+    assert response.status_code == 422, response.text
+    assert "after now" in response.json()["detail"]
+
+
+def test_a_verification_cannot_be_judged_before_its_runs_or_after_now(
+    client: TestClient,
+) -> None:
+    investigation = store(client, "auth-audience")
+    early = verification_of(investigation)
+    early["verified_at"] = investigation["closed_at"]
+    response = post(client, early)
+    assert response.status_code == 422 and "before its last run" in response.text, response.text
+    late = verification_of(investigation)
+    late["verified_at"] = "2099-01-01T00:00:00+00:00"
+    response = post(client, late)
+    assert response.status_code == 422 and "after now" in response.text, response.text
+
+
+def test_one_investigations_fault_is_planted_or_real_not_both(client: TestClient) -> None:
+    investigation = store(client, "auth-audience")
+    assert (
+        post(client, verification_of(investigation, number=1), source="planted").status_code == 201
+    )
+    relabelled = post(client, verification_of(investigation, number=2), source="real")
+    assert relabelled.status_code == 409, relabelled.text
+    assert "cannot also be real" in relabelled.json()["detail"]
+
+
 def test_a_verification_whose_was_disagrees_with_the_stored_reading_is_refused(
     client: TestClient,
 ) -> None:
@@ -387,6 +420,8 @@ async def test_without_its_trigger_the_owner_could_rewrite_one(
             )
             changed = await conn.execute(text("UPDATE verifications SET verdict = 'inconclusive'"))
             assert changed.rowcount == 1
+            gone = await conn.execute(text("DELETE FROM verifications"))
+            assert gone.rowcount == 1
         finally:
             await transaction.rollback()
 

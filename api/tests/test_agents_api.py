@@ -863,5 +863,17 @@ async def test_a_verify_task_names_an_investigation_in_its_environment(
         {"kind": "config", "subject": token_key},
         {"kind": "action", "description": "restarted it"},
     ]
+    # An action's words are redacted before the task is stored (invariant 11).
+    leaked = "postgresql://svc:hunter2-not-real@db.internal:5432/app"
+    redacted = task(verify=verify | {"changes": [f"action: rotated {leaked}"]})
+    assert redacted.status_code == 201, redacted.text
+    async with db_engine.connect() as conn:
+        spec = (
+            await conn.execute(
+                text("SELECT spec::text FROM agent_tasks WHERE id = :id"),
+                {"id": redacted.json()["id"]},
+            )
+        ).scalar_one()
+    assert "hunter2-not-real" not in spec
     for wrong in ("restart:order-service", "commit:main", "action:   "):
         assert task(verify=verify | {"changes": [wrong]}).status_code == 422, wrong
