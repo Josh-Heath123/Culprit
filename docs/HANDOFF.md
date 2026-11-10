@@ -55,7 +55,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **33, part 3 — The operator's surface** — status `in progress`: implemented, every locally runnable criterion passes, both audits run and their findings addressed; committed and pushed, pull request open, `/ci` recorded in §5. The Kubernetes recipe's check runs only in CI (kind could not be fetched locally). Q19 asks the architecture session to accept one read grant. |
+| Current phase | **33, part 3 — The operator's surface** — status `in progress`: implemented; every criterion passes, the CI-only ones in CI. PR #31: CI/CD run 42805541738 green on `17b5b36`, every pull-request check green, no open code-scanning alert (§5). Awaiting the architecture review and Q19. |
 | Previous phase | **33, part 2 — The agent meets the control plane: complete**, signed off 2026-11-10 by the architecture session. Merged via PR #28 (`58e7593`), every pull-request check green including code scanning (Q18). Criteria 8–10 verified as CI-run: the `e2e` job runs `just agent-e2e` unconditionally and the test cannot skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-33-operator`, fast-forwarded to `origin/main` = `fdc6f84` (the licence merge) before the work began. Lands through a pull request. Do not stage `shared/uv.lock`. |
@@ -98,7 +98,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
-| 33, part 3 | The operator's surface | in progress — PR open, `/ci` in §5 | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 33 — "How Phase 33 is run", then "Part 3" at the end of the section: work order, nine criteria, what not to build. **Preconditions:** the licence pull request has merged, and Malcolm has regenerated the local `infra/.env.prod` and quickstart volume. Carried-in items first (signature before body; plain `http` refused). Screenshots of the new screens at four widths in the run report, for Malcolm. Branch `phase-33-operator`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 3 | The operator's surface | in progress — PR #31, CI green; awaiting review | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 33 — "How Phase 33 is run", then "Part 3" at the end of the section: work order, nine criteria, what not to build. **Preconditions:** the licence pull request has merged, and Malcolm has regenerated the local `infra/.env.prod` and quickstart volume. Carried-in items first (signature before body; plain `http` refused). Screenshots of the new screens at four widths in the run report, for Malcolm. Branch `phase-33-operator`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
 
@@ -136,10 +136,10 @@ Phase:        33, part 3 — the operator's surface
 Branch:       phase-33-operator, fast-forwarded to origin/main = fdc6f84 (the
               licence merge, PR #30). Commits 01f974e..HEAD.
 Run:          2026-11-10, /next.
-Status:       IMPLEMENTED. Every criterion that runs locally passes, executed;
-              both audits run. NOT RUN locally: the Kubernetes recipe in kind
-              (fetching the kind binary was refused by the permission system),
-              so its check runs for the first time in CI. /ci: below.
+Status:       IMPLEMENTED; CI GREEN on PR #31 (/ci below). Every criterion
+              passes, executed — locally, and the CI-only ones in CI. The
+              Kubernetes recipe could not run locally (fetching kind was
+              refused) and ran for the first time in CI: red twice, then green.
 
 PRECONDITIONS (checked, not assumed)
   Licence PR #30 merged (fdc6f84). infra/.env.prod written 10:37 and the
@@ -220,7 +220,11 @@ CRITERIA (part 3)
        locally (deploy/agent/compose.yaml unchanged, plus a CI overlay adding
        one host alias). systemd PASS (systemd-analyze verify, systemd 249,
        WSL). No recipe sets allow_plain_http (test_agent_recipes.py).
-       Kubernetes NOT RUN locally: its first run is CI's.
+       Kubernetes PASS in CI (run 42805541738): "pod culprit-agent-...:
+       ready=true restarts=0 runAsUser=65532 readOnlyRootFilesystem=true";
+       "kind-agent-78058da0 Ready, non-root, read-only root, last signed
+       request 2026-11-10T11:19:31Z" — so the key Secret, 0600 under fsGroup,
+       was readable by the agent. systemd-analyze verify PASS in CI too.
   8  every "cannot" names a test that exists                  PASS (55).
   9  tokens only; four widths; keyboard; screenshots here     PASS locally:
        check_frontend_tokens over 69 files; atEveryWidth at 375/768/1280/1920
@@ -241,7 +245,8 @@ GATES (local, Windows, Docker up)
   check-migration-round-trip                                   PASS
   culprit check / LLM_PROVIDER=none                            exit 0 / 0
   just e2e (18/18) and just agent-e2e, against culprit-qs-334  PASS
-  just agent-recipes                                           NOT RUN (kind)
+  just agent-recipes                                           NOT RUN locally
+                                                               (kind); CI PASS
 
 AUDITS
   invariant-auditor: CLEAN, no violation. Risks taken up: the migration now
@@ -260,7 +265,7 @@ DECISIONS TAKEN HERE (for review)
     DaemonSet: one key is one identity and one audit chain.
   - The key Secret is defaultMode 0600; under fsGroup the kubelet makes it
     0640 root:65532 (LIMITS), the closest Kubernetes allows for a non-root
-    reader. Unverified until kind runs in CI.
+    reader. Shown readable in CI: the pod made signed requests.
   - The dashboard gates on the reachability set only, for any symptom; a walk
     needing more starts, and ends partial naming the grant (LIMITS).
   - Partial-diagnosis wording: "could not be established" now carries the
@@ -274,9 +279,24 @@ DECISIONS TAKEN HERE (for review)
   - LIMITS corrected: re-pairing to report a new grant means a new agent id
     and key; the control plane refuses a second pairing of either.
 
+/CI — PR #31
+  commit   17b5b36aada1c78064d8c913a431cf79f8ffde0f (merge result: origin/main
+           fdc6f84 is an ancestor; `git merge origin/main` changed nothing)
+  run      42805541738  CI/CD, pull_request, success; CodeQL 42805534032 success
+  jobs     lint, typecheck, test, cli, migration-round-trip, self-check,
+           kind-capture, fault-library, e2e, build x5: success; publish and
+           deploy skipped
+  checks   gh pr checks 31: 20 pass, 2 skipping, 0 fail (CodeQL included)
+  alerts   none open (pr=31, refs/pull/31/merge, refs/pull/31/head)
+  shots    artifact e2e-screenshots (id 13757823643) of run 42805541738
+  Earlier runs on this PR, red in the new recipe step only:
+    42802523521 (69f192f) rollout timeout, no diagnostics -> 8323e54 adds them;
+    42804120023 (8323e54) ImagePullBackOff: `kind load docker-image` left the
+    image off the node -> 17b5b36 loads it through an archive, checks it with
+    crictl, and sets imagePullPolicy: Never in CI's patch.
+
 LEFT OPEN
   - Q19.
-  - The Kubernetes recipe's first run is CI's; it may need a fix there.
   - A local throwaway stack, culprit-qs-334 (port 8334), and its worktree in
     the session scratchpad: `docker compose -p culprit-qs-334 ... down -v`.
 ```
