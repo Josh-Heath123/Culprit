@@ -217,7 +217,7 @@ cli-test-docker:
 # regression suite for "the walk finds the root, not the symptom". Needs
 # Docker; also a CI job.
 fault-library:
-    cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 20m
+    cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
 
 cli-test-kind:
     #!/usr/bin/env bash
@@ -540,7 +540,7 @@ quickstart:
     MSYS_NO_PATHCONV=1 docker exec "$order_container" /tmp/walk/culprit diagnose \
         "POST http://order-service:8001/orders" -f /tmp/walk/culprit.yaml \
         --env quickstart --from order-service --no-plugins --format json \
-        --agent-id quickstart > "$investigation" || diagnose_rc=$?
+        --agent-id quickstart --state-dir /tmp/culprit-state > "$investigation" || diagnose_rc=$?
     if [ "$diagnose_rc" -gt 1 ]; then
         echo "culprit diagnose failed (exit $diagnose_rc)" >&2
         exit 1

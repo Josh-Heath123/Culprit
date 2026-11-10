@@ -1969,3 +1969,97 @@ whose `getpass` prints its prompt ("Warning: Password input may be echoed.
 Password:") even when it reads a pipe. Nothing waits on it: the bootstrap
 step runs without a terminal (`docker compose run -T`), so the password
 comes from `infra/.env.prod`, run by a person or by CI.
+
+## Verification
+
+`culprit verify` (Phase 34, part 1) judges whether a fix fixed what an
+investigation found. What follows is what it can and cannot see.
+
+### A verification sees names and shapes, not values
+
+The environment before and after is compared through two captures, and a
+capture records each config key's name and *shape* — type, length class,
+format — never its value, unless `config.read.values` allowlists that key.
+A value changed to another of the same shape (one URL for another, one
+32-character token for another) is invisible to the comparison, so it is
+neither a difference the fix explains nor a change underneath. A key
+added, removed, or changed in shape is seen.
+
+### A process capture sees one component's environment
+
+With `adapter: process`, a capture reads the environment `culprit` runs in,
+which belongs to the one component it runs inside (the fault library's
+vantage). A config key changed on any other component is not in the
+capture, so it cannot make a verdict `changed_underneath`; only the
+readings can notice it. Compose and Kubernetes captures read every
+component the environment lists. Endpoints declared under `endpoints:` are
+not captured at all — only an endpoint declared on a component is.
+
+### What a named change explains
+
+`--change` takes three kinds. `config:<component>/<key>` explains a
+difference on that key alone. `image:<component>` explains that
+component's image and its installed packages, which ship in it — not its
+config keys, even ones the image's `ENV` sets: name those too.
+`commit:<sha>` explains **nothing** a capture records, because a capture
+holds no commits: it identifies the fix, and the verdict then rests on the
+readings and on the environment not having changed. A fix that is none of
+the three — a firewall rule removed, a process restarted, an injected
+fault cleared — can only be named as a commit. The fault library does
+exactly that for three of its faults, with a ref derived from the fix's
+name, because no real commit applied them (Q20 in the handoff asks whether
+part 2 should add a kind for it).
+
+### Two runs is a floor, not a proof
+
+Every reading is run twice in a row, and a result that differs between the
+two makes the verdict `inconclusive`. A fault that comes and goes more
+slowly than two runs of the full set — seconds, for the demo — can pass
+both and be called `verified`. Running `culprit verify` again later is the
+check: each verification is kept, and a later one can disagree.
+
+### Verify must run where diagnose ran
+
+The record names the component the walk ran inside (`--from`), and every
+probe is re-run with the inputs the walk used. `culprit verify` cannot tell
+where it is running: run from somewhere else, an edge or a token probe
+measures what *that* place sees. Run it in the same place, as the fault
+library does. A change to `culprit.yaml`'s endpoints after the diagnosis
+does not move the re-run either: the recorded inputs are used, not the
+manifest's current ones. The manifest's current *grants* are used: a grant
+removed since makes its probe `refused` and the verdict `inconclusive`.
+
+### Only an investigation diagnosed on this machine can be verified
+
+`culprit diagnose` keeps what verification needs — the investigation, the
+request behind each reading, the capture before — in its state directory
+on the machine that ran it. An investigation stored before Phase 34, one
+an agent ran, or one only in the control plane has no record there, and
+`culprit verify` refuses it. An investigation diagnosed where the grants
+allow no capture *is* kept, says so in its `verified` criterion, and can
+be verified `inconclusive` at best.
+
+### A diagnosis with no failing reading cannot be verified
+
+A fix is verified by the readings that failed now passing. When the walk
+found nothing failing — the demo's added latency slows every request
+without failing any — there is nothing to see fixed, and the verdict is
+`inconclusive`, whatever was changed.
+
+### Verifications stay on the machine, and the dashboard still says "not verified"
+
+Part 1 has no API: a verification is printed, and kept beside its
+investigation in the state directory (`verifications/<id>.json`), and
+nowhere else. A stored investigation's rubric always says `verified:
+false` — a diagnosis is never edited — and the dashboard shows that until
+part 2 shows the verification next to it. Nothing in the state directory
+is ever deleted by Culprit; it grows by one directory per diagnosis.
+
+### The state directory holds what a capture holds
+
+`$CULPRIT_STATE_DIR`, else `$XDG_STATE_HOME/culprit`,
+`~/.local/state/culprit`, or `%LocalAppData%\culprit` on Windows — never
+the repository. Its files are created readable by their owner alone
+(`0600`, in `0700` directories; Windows applies its own ACLs instead). The
+capture before is the same envelope `culprit env capture` writes, so it
+carries the literal value of any key `config.read.values` allowlists.

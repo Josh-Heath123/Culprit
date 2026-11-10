@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/diverge"
+	"github.com/josh-heath123/culprit/cli/internal/isolate"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -232,16 +233,32 @@ func renamed(bundle model.CaptureBundle, side string) model.CaptureBundle {
 
 // ---- the reason, in words --------------------------------------------------
 
+// A reason is a sentence for a person: subjects in words (isolate.Describe,
+// the walk's own phrasing), never as URIs with arrows in them.
+
+// readings names re-runs, one clause per probe and subject, with the ids
+// of every reading of it: "probe.http.route_conformance on GET /stock on
+// inventory-service (r6, r7)".
+func readings(set []model.Rerun) string {
+	var order []string
+	ids := map[string][]string{}
+	for _, rerun := range set {
+		key := rerun.ProbeID + " on " + isolate.Describe(rerun.Target)
+		if _, seen := ids[key]; !seen {
+			order = append(order, key)
+		}
+		ids[key] = append(ids[key], rerun.ReadingID)
+	}
+	var parts []string
+	for _, key := range order {
+		parts = append(parts, key+" ("+strings.Join(ids[key], ", ")+")")
+	}
+	return strings.Join(parts, "; ")
+}
+
 func describe(judged model.Judgement, reran []model.Rerun, changes []model.Change,
 	differences []model.Difference, record Record,
 ) string {
-	named := func(set []model.Rerun) string {
-		var parts []string
-		for _, rerun := range set {
-			parts = append(parts, fmt.Sprintf("%s on %s (%s)", rerun.ProbeID, rerun.Target, rerun.ReadingID))
-		}
-		return strings.Join(parts, "; ")
-	}
 	where := func(was, now model.Verdict) []model.Rerun {
 		var matched []model.Rerun
 		for _, rerun := range reran {
@@ -254,55 +271,57 @@ func describe(judged model.Judgement, reran []model.Rerun, changes []model.Chang
 
 	switch judged.Verdict {
 	case model.VerificationNotResolved:
-		return "still failing on both runs: " + named(where(model.VerdictFail, model.VerdictFail))
+		return "still failing on both runs: " + readings(where(model.VerdictFail, model.VerdictFail))
 	case model.VerificationRegressed:
 		return "the readings that failed pass now, but these passed before and fail now: " +
-			named(where(model.VerdictPass, model.VerdictFail))
+			readings(where(model.VerdictPass, model.VerdictFail))
 	case model.VerificationChangedUnderneath:
 		var unexplained []string
 		for _, difference := range differences {
 			if model.Explain(difference, changes).ExplainedBy == nil {
-				unexplained = append(unexplained, difference.Subject+" ("+difference.Predicate+")")
+				unexplained = append(unexplained, isolate.Describe(difference.Subject)+" ("+difference.Predicate+")")
 			}
 		}
 		return fmt.Sprintf("the readings that failed pass now, but the environment changed where %s does not explain it: %s",
 			changeList(changes), strings.Join(unexplained, ", "))
 	case model.VerificationVerified:
-		failed := where(model.VerdictFail, model.VerdictPass)
 		since := "nothing the capture records changed since diagnosis"
 		if len(differences) > 0 {
 			since = fmt.Sprintf("every difference since diagnosis (%d) is explained by %s", len(differences), changeList(changes))
 		}
 		return fmt.Sprintf("every reading that failed passes on both runs (%s), every reading that passed still passes, and %s",
-			named(failed), since)
+			readings(where(model.VerdictFail, model.VerdictPass)), since)
 	}
 
-	// Inconclusive: the first thing that stopped it, in the order Judge asks.
-	failed, unsettled := 0, []model.Rerun{}
+	// Inconclusive: every reason it stopped short, in the order Judge asks.
+	failed := 0
+	var unsettled []string
 	for _, rerun := range reran {
 		if rerun.Was == model.VerdictFail {
 			failed++
 		}
-		if rerun.Now() == "" {
-			unsettled = append(unsettled, rerun)
+		if rerun.Now() != "" {
+			continue
+		}
+		first, second := rerun.Runs[0], rerun.Runs[1]
+		subject := fmt.Sprintf("%s on %s (%s)", rerun.ProbeID, isolate.Describe(rerun.Target), rerun.ReadingID)
+		if first.Verdict != second.Verdict {
+			unsettled = append(unsettled, fmt.Sprintf("%s was %s, then %s", subject, first.Verdict, second.Verdict))
+		} else {
+			unsettled = append(unsettled, fmt.Sprintf("%s was %s: %s", subject, first.Verdict, first.Reason))
 		}
 	}
+	var reasons []string
+	if failed == 0 {
+		reasons = append(reasons, "the investigation has no failing reading, so there is nothing a change can be seen to fix")
+	}
+	if len(unsettled) > 0 {
+		reasons = append(reasons, "not every reading could be settled: "+strings.Join(unsettled, "; "))
+	}
+	if len(reasons) > 0 {
+		return strings.Join(reasons, "; and ")
+	}
 	switch {
-	case failed == 0:
-		return "the investigation has no failing reading, so there is nothing a change can be seen to fix"
-	case len(unsettled) > 0:
-		var parts []string
-		for _, rerun := range unsettled {
-			first, second := rerun.Runs[0], rerun.Runs[1]
-			if first.Verdict != second.Verdict {
-				parts = append(parts, fmt.Sprintf("%s on %s (%s) was %s, then %s",
-					rerun.ProbeID, rerun.Target, rerun.ReadingID, first.Verdict, second.Verdict))
-				continue
-			}
-			parts = append(parts, fmt.Sprintf("%s on %s (%s) was %s: %s",
-				rerun.ProbeID, rerun.Target, rerun.ReadingID, first.Verdict, first.Reason))
-		}
-		return "not every reading could be settled: " + strings.Join(parts, "; ")
 	case len(changes) == 0:
 		return "the readings that failed pass now, but no change was named (--change), so nothing says what fixed it"
 	case record.BeforeAbsent != "":
@@ -311,16 +330,22 @@ func describe(judged model.Judgement, reran []model.Rerun, changes []model.Chang
 	}
 	for _, rerun := range reran {
 		if rerun.Now() == model.VerdictFail {
-			return fmt.Sprintf("%s on %s (%s) could not answer at diagnosis and fails now", rerun.ProbeID, rerun.Target, rerun.ReadingID)
+			return fmt.Sprintf("%s on %s (%s) could not answer at diagnosis and fails now",
+				rerun.ProbeID, isolate.Describe(rerun.Target), rerun.ReadingID)
 		}
 	}
 	return "the readings do not settle it"
 }
 
+// changeList is the changes named, in words.
 func changeList(changes []model.Change) string {
 	var labels []string
 	for _, change := range changes {
-		labels = append(labels, change.Label())
+		if change.Kind == model.ChangeCommit {
+			labels = append(labels, "commit "+change.Ref)
+			continue
+		}
+		labels = append(labels, "the change to "+isolate.Describe(change.Subject))
 	}
 	if len(labels) == 0 {
 		return "no change named"

@@ -236,7 +236,7 @@ func TestTheLoopEndToEnd(t *testing.T) {
 		if verification.Verdict != model.VerificationChangedUnderneath {
 			t.Fatalf("verdict %s: %s", verification.Verdict, verification.Reason)
 		}
-		if !strings.Contains(verification.Reason, "config:web/CULPRIT_LOOP_UNRELATED_FLAG") {
+		if !strings.Contains(verification.Reason, "CULPRIT_LOOP_UNRELATED_FLAG in web's configuration") {
 			t.Errorf("the reason does not name the change underneath: %s", verification.Reason)
 		}
 		// Naming it explains it.

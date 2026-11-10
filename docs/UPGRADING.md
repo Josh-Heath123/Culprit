@@ -188,6 +188,26 @@ If you build the frontend image yourself from a modified copy, set the new
 build argument `VITE_SOURCE_URL` to where your source is: every page links
 to it (AGPL-3.0 section 13; `LICENSING.md`).
 
+**Phase 34 part 1 adds no secret and no migration.** It changes what
+`culprit diagnose` does on the machine it runs on:
+
+- **It captures the environment before it walks,** under the grants the
+  environment already has, so a later `culprit verify` can tell a fix from a
+  change underneath. That is one more read of what `culprit env capture`
+  reads, and the same refusals; an environment that grants no capture gets
+  none, and the investigation says so.
+- **It writes files.** The investigation, the request behind each reading
+  and that capture go to a state directory: `$CULPRIT_STATE_DIR`, else
+  `$XDG_STATE_HOME/culprit`, `~/.local/state/culprit`, or
+  `%LocalAppData%\culprit` on Windows. A CI job or a read-only container
+  that runs `culprit diagnose` should set `--state-dir` (or the variable) to
+  a writable path; if nothing can be written, diagnose still prints the
+  investigation, warns, and the investigation says it cannot be verified.
+- **The `verified` criterion's reason has new words** — how to verify this
+  investigation, or why it cannot be — and is still never `true` on a
+  diagnosis. Anything that matched the old sentence should match on
+  `holds`, not the text.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

@@ -353,7 +353,7 @@ func TestAnAudienceMismatchIsTheRootNotTheEdge(t *testing.T) {
 		t.Errorf("rubric %+v: the failing probe was repeated and alternatives were ruled out", inv.Diagnosis.Confidence)
 	}
 	if inv.Diagnosis.Confidence.Verified.Holds {
-		t.Error("verified claimed before Phase 34")
+		t.Error("a diagnosis claimed verified")
 	}
 }
 

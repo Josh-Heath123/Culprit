@@ -2,7 +2,9 @@
   "why": [
     "Phase 32's fault library: every fault the demo services can be given, with the diagnosis `culprit diagnose` must reach. cli/cmd/culprit/faultlib_test.go injects each one into demo-services/faults/docker-compose.yml, runs the walk inside the named vantage container, and compares.",
     "This is the regression suite for the product's core claim — the walk finds the root, not the symptom — and it runs in CI on every push (DIAGNOSTIC_PLAN.md Phase 32 field 15).",
-    "relations is the set of relations the fault tree must contain, exactly. rubric is §2.9; verified is always false until Phase 34."
+    "relations is the set of relations the fault tree must contain, exactly. rubric is §2.9; verified is false on every diagnosis: a diagnosis is never edited, and whether it is verified is a verification's to say (Phase 34).",
+    "fix is the known fix for each fault, applied by the test once the diagnosis is checked, and the verdict `culprit verify` must then give, run in the same vantage with the changes named. Three fixes are runtime actions — a firewall rule removed, an injected fault cleared — which are none of an image, a config key or a commit; they are named as a commit with a ref derived from the fix's name (sha1 of 'culprit fault library fix: <name>', first 12 hex characters), because no real commit applied them. A commit explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed. Raised for review as Q20.",
+    "scenarios are the verdicts a fix should not get: a wrong fix, a fix that breaks what passed, and a change underneath that nothing named explains."
   ],
   "symptom": "POST http://order-service:8001/orders",
   "faults": [
@@ -27,7 +29,14 @@
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:order-service -[caused_by]-> auth:order-service->inventory-service/audience"
       ],
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "order-service recreated with a token minted for 'inventory-service'",
+        "change": [
+          "config:order-service/INVENTORY_TOKEN"
+        ],
+        "verdict": "verified"
+      }
     },
     {
       "name": "auth-audience-ungranted",
@@ -46,7 +55,15 @@
       "edges": [],
       "statement_contains": "config.inspect.values",
       "note": "Phase 32 part 2's token grant: without it the audience hypothesis is refused, the tree records the branch as unexplored, and the diagnosis is partial and names the missing grant.",
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "the same fix; the audience probe is still refused in this environment, so nothing can show it fixed",
+        "change": [
+          "config:order-service/INVENTORY_TOKEN"
+        ],
+        "verdict": "inconclusive",
+        "reason_contains": "refused"
+      }
     },
     {
       "name": "network-partition",
@@ -70,7 +87,14 @@
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:order-service -[caused_by]-> connection:order-service->inventory-service"
       ],
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "the REJECT rule removed",
+        "change": [
+          "commit:a1a58bcf42aa"
+        ],
+        "verdict": "verified"
+      }
     },
     {
       "name": "contract",
@@ -93,7 +117,14 @@
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:order-service -[caused_by]-> http:inventory-service/GET /stock"
       ],
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "inventory-service recreated without CONTRACT_FAULT, serving /stock again",
+        "change": [
+          "config:inventory-service/CONTRACT_FAULT"
+        ],
+        "verdict": "verified"
+      }
     },
     {
       "name": "config",
@@ -118,7 +149,14 @@
         "component:payments-service -[propagates_to]-> component:order-service",
         "component:payments-service -[caused_by]-> config:payments-service/PAYMENTS_PROVIDER_KEY"
       ],
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "payments-service recreated with PAYMENTS_PROVIDER_KEY set",
+        "change": [
+          "config:payments-service/PAYMENTS_PROVIDER_KEY"
+        ],
+        "verdict": "verified"
+      }
     },
     {
       "name": "error-rate",
@@ -141,7 +179,14 @@
         "http:order-service/POST /orders -[symptom_of]-> component:order-service",
         "component:inventory-service -[propagates_to]-> component:order-service"
       ],
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "the injected error rate cleared",
+        "change": [
+          "commit:3f5db2dd4bdc"
+        ],
+        "verdict": "verified"
+      }
     },
     {
       "name": "latency",
@@ -159,7 +204,57 @@
       },
       "note": "No read-only probe discriminates 'slow'; every probe passes, and the walk says the cause is inside order-service or something it cannot observe, such as added latency — a partial diagnosis, not a wrong one. Latency waits for impedance to have a CLI source (docs/LIMITS.md).",
       "edges": [],
-      "attestation": "reported"
+      "attestation": "reported",
+      "fix": {
+        "how": "the injected latency cleared; the walk found no failing reading, so there is nothing a fix can be seen to fix",
+        "change": [
+          "commit:a36e132a4699"
+        ],
+        "verdict": "inconclusive",
+        "reason_contains": "no failing reading"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "wrong-fix",
+      "fault": "auth-audience",
+      "apply": "remint-wrong-audience",
+      "how": "order-service recreated with a token minted for 'inventory-svc' — still not the audience inventory-service expects",
+      "change": [
+        "config:order-service/INVENTORY_TOKEN"
+      ],
+      "verdict": "not_resolved",
+      "reason_contains": "probe.auth.token_shape"
+    },
+    {
+      "name": "regressed",
+      "fault": "contract",
+      "apply": "fix-contract-break-payments",
+      "how": "inventory-service serves /stock again, and payments-service now answers 500 to every request",
+      "change": [
+        "config:inventory-service/CONTRACT_FAULT"
+      ],
+      "verdict": "regressed"
+    },
+    {
+      "name": "changed-underneath",
+      "fault": "contract",
+      "apply": "fix-contract-change-order-config",
+      "how": "inventory-service serves /stock again, and order-service is recreated with a config key it did not have; only the contract fix is named",
+      "change": [
+        "config:inventory-service/CONTRACT_FAULT"
+      ],
+      "verdict": "changed_underneath",
+      "reason_contains": "CULPRIT_UNRELATED_FLAG in order-service's configuration"
+    },
+    {
+      "name": "no-change-named",
+      "fault": "contract",
+      "apply": "fix-contract",
+      "how": "inventory-service serves /stock again, and nothing is named",
+      "change": [],
+      "verdict": "inconclusive"
     }
   ]
 }

@@ -11,8 +11,8 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 33, part 3 — the operator's surface, on branch
-  `phase-33-operator`. Phases 26–33 part 2 are merged. Phase 34 follows after
+- **Current phase:** 34, part 1 — the loop, in the binary (`culprit verify`),
+  on branch `phase-34-verify`. Phases 26–33 are merged. Part 2 follows after
   a review.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Read §1 (D1–D8),
   §2 (the core model) and the phase you are working on — not the whole file.
@@ -35,7 +35,8 @@ to do) and OBSERVED (what probes actually read) — and treats the divergence
 between them as the finding. `culprit check` finds contradictions in CI with
 no runtime access; `culprit diagnose` walks the request path from a symptom
 with read-only probes and records an investigation whose every edge cites a
-reading. It began as an incident-correlation copilot; that engine was removed
+reading; `culprit verify` re-measures it after a fix and judges whether the
+fix fixed it. It began as an incident-correlation copilot; that engine was removed
 in Phase 32, and the incident tables are read-only history.
 
 ## Scope ceilings
@@ -69,7 +70,7 @@ just check-migration-round-trip                     # needs Docker
 just check-frontend-tokens
 just cli-build / cli-test / cli-lint                # Go CLI -> cli/bin/culprit
 just extractors-test
-just fault-library             # every injected fault, walked for real (Docker)
+just fault-library             # every fault: injected, walked, fixed, verified (Docker)
 just intent [--format json]    # culprit intent over this repository
 just generate-types            # frontend types from the api's OpenAPI schema
 just frontend / frontend-build

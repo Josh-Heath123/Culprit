@@ -400,7 +400,7 @@ jobs:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
       - name: Walk every fault in the library
-        run: cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 20m
+        run: cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
 
   test:
     needs: typecheck

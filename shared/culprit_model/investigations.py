@@ -187,11 +187,11 @@ class ConfidenceRubric(BaseModel):
     verified: Criterion
 
     @model_validator(mode="after")
-    def _nothing_is_verified_before_phase_34(self) -> "ConfidenceRubric":
+    def _a_diagnosis_never_claims_verified(self) -> "ConfidenceRubric":
         if self.verified.holds:
             raise ValueError(
-                "a diagnosis claims verified, and nothing can verify one before "
-                "the verification loop exists (Phase 34)"
+                "a diagnosis claims verified. A diagnosis never does: whether it "
+                "is verified is a verification's to say, recorded on its own"
             )
         return self
 

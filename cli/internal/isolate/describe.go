@@ -82,6 +82,10 @@ func describe(subject string) string {
 	return subject
 }
 
+// Describe is describe, for the other packages that write a subject for a
+// person to read (internal/verify): one phrasing, never two.
+func Describe(subject string) string { return describe(subject) }
+
 // couldNotCheck is one alternative the walk could not test, as a clause
 // of a statement: "auth audience mismatch on the token audience
 // order-service presents to inventory-service: <why>".
