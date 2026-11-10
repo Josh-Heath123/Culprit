@@ -468,7 +468,12 @@ quickstart:
     # cannot create files in a directory the host user owns. Docker
     # Desktop does not enforce that, so it first failed on a Linux runner
     # (the e2e job's first run, Phase 32.1 part 2).
-    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm --build --user "$(id -u):$(id -g)" -e HOME=/tmp bootstrap
+    # -T (Phase 33 part 3): without it, `run` gives bootstrap a terminal
+    # whenever the caller has one, and create_user's getpass then reads that
+    # terminal instead of the password piped from infra/.env.prod — so a
+    # person running this stopped at "Password:", while every automated
+    # run (no terminal) passed. Reproduced under `script`, a pseudo-terminal.
+    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm -T --build --user "$(id -u):$(id -g)" -e HOME=/tmp bootstrap
     echo "==> Building and starting the demo services"
     # Phase 32 part 2: order-service presents a bearer token to
     # inventory-service, which checks its audience — the check the fault

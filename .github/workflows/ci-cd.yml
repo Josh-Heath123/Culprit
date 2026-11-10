@@ -507,10 +507,18 @@ jobs:
           npm test
       - name: Install Chromium for Playwright
         run: cd frontend && npx playwright install --with-deps chromium
-      - name: Quickstart (builds every image from this commit)
+      # Under a pseudo-terminal (Phase 33 part 3). A person runs this from a
+      # terminal, and `docker compose run` hands one to the bootstrap
+      # container whenever the caller has one — which once made
+      # create_user's getpass read that terminal instead of the password
+      # piped from infra/.env.prod, so a person's run stopped at
+      # "Password:" while every run here, with no terminal, passed. `script`
+      # gives this run a terminal too; the sign-in below fails if the admin
+      # was not created from infra/.env.prod.
+      - name: Quickstart, under a pseudo-terminal (builds every image from this commit)
         env:
           QUICKSTART_HTTP_PORT: "8088"
-        run: just quickstart
+        run: script -qefc "just quickstart" /dev/null
       - name: End-to-end journeys
         env:
           QUICKSTART_HTTP_PORT: "8088"
