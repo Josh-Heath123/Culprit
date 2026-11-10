@@ -2615,6 +2615,30 @@ recipe beyond the CI topology, and no `docs/SECURITY.md` (part 3). No mutual
 TLS, no write capability, no multi-tenancy, no hosted deployment, no
 `POST /investigations/{id}/probe`.
 
+**Q18 ruled, 2026-11-10 — `infra/.env.prod` is plaintext by design, and it is
+created private.** CodeQL's `py/clear-text-storage-sensitive-data` (alert #1,
+`scripts/bootstrap_env.py`) is right that the file holds secrets in clear text.
+That is its purpose: Compose's `env_file` reads plain `KEY=VALUE`, and every
+value is a credential a service has to present, so hashing or encrypting it at
+rest would only move the key somewhere equally plain. So it is not a false
+positive: it is an accepted, documented storage decision. Two consequences:
+
+- **The real weakness beside it is fixed.** The file was written and only then
+  set to `0600`, so on first creation the secrets were briefly readable by
+  other local users. It is now written to a temporary file created `0600` in
+  the same directory (`tempfile.mkstemp`), flushed, and moved into place with
+  `os.replace`, so it never exists with wider permissions, and an existing
+  file's mode is never relied on. A test checks the temporary file's mode
+  before it is moved into place.
+- **The alert is dismissed as "Won't fix", by Malcolm, after the fix is on
+  the branch** — never before, because the comment states the fix as fact. If
+  the fix's analysis closes or replaces the alert, the new one gets the same
+  treatment. LIMITS says the same thing in plain words.
+
+The new CVE in the frontend image (`golang.org/x/net` v0.60.0, fixed in
+v0.62.0) is ambient — published after the last green run — and is fixed by
+bumping the pin in its own commit (pattern 3: fix it, never weaken the gate).
+
 ---
 
 ### Phase 34 — The verification loop and calibration

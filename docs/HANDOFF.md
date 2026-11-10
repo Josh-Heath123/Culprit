@@ -70,7 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q18 | CodeQL alert #1, `py/clear-text-storage-sensitive-data` (high), `scripts/bootstrap_env.py:350` — `ENV_PROD_PATH.write_text(render_env_file(env))`. Claude Code's view: a false positive by design (argument in §5, "/ci, 2026-11-10"). Dismiss it as "won't fix / used in tests"-style with that reason, or rule that `.env.prod` must change shape? Not dismissed and not suppressed: that is this session's decision. | 2026-11-10, /ci on PR #28 | **Blocking**: PR #28's "Code scanning results / CodeQL" check fails on it; Phase 33 part 2 cannot complete. |
+| — | None open. Q18 was ruled 2026-11-10: `.env.prod` stays plaintext by design, is created `0600` atomically, and the alert is dismissed as "Won't fix" after that fix lands (`DIAGNOSTIC_PLAN.md`, end of Phase 33). | | |
 
 ---
 
