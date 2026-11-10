@@ -28,8 +28,13 @@ nonce row is an agent id, a random value already spent, and a time — nothing
 a reader could use: a spent nonce is refused by the insert that recorded
 it. This is a read grant on a table beside ones the role already reads, for
 the same job, as `.claude/rules/database.md` and standing invariant 3 allow
-— the third precedent after 635870479f4e and a9d2c40f7e18. The downgrade
-revokes it. `api-reader` still writes nothing.
+— the second such grant, after a9d2c40f7e18. The downgrade revokes it.
+`api-reader` still writes nothing.
+
+This reverses one sentence of d7a3e5f1b9c2, which gave `api-reader` the agent
+tables "never the codes or the nonces". The codes stay out: a pairing code's
+hash is still a secret's stand-in. The nonces come in, for the reason above:
+a spent nonce is worthless to whoever reads it.
 
 Refused requests are not recorded anywhere: a refusal is logged, never
 stored, so a stranger cannot fill a table by sending bad signatures. The

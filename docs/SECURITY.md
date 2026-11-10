@@ -127,8 +127,15 @@ chain — which is everything in section 2.
   `api/tests/test_agents_api.py::test_the_wrong_key_is_refused`
 - The key **cannot** be used after the agent is revoked.
   `api/tests/test_agents_api.py::test_revoking_an_agent_refuses_its_very_next_request`
-- It **cannot** do anything section 2 says a compromised agent cannot.
+- It **cannot** widen that agent's allowance or touch another agent: every
+  agent-management route needs an admin's session.
   `api/tests/test_route_credentials.py::test_every_agent_admin_route_needs_an_admin`
+- It **cannot** claim another agent's task, or post readings as another
+  agent. `api/tests/test_agents_api.py::test_an_agent_claims_only_its_own_tasks_and_each_once`,
+  `api/tests/test_agents_api.py::test_a_reading_naming_another_agent_is_refused`
+- It **cannot** rewrite the audit entries already stored, or append one that
+  breaks the chain. `api/tests/test_agents_api.py::test_no_role_the_owner_included_can_rewrite_the_audit_log`,
+  `api/tests/test_agents_api.py::test_an_entry_that_does_not_extend_the_stored_chain_is_refused`
 - The key **cannot** be read off the machine by another local user: it is
   written mode 0600 and never overwritten.
   `cli/cmd/culprit/agent_transport_test.go::TestInitWritesAKeyOnlyItsOwnerCanReadAndNeverOverwritesOne`
@@ -141,7 +148,8 @@ They **can**: post captures (facts, divergences, the system model's
 captures) and investigations, which are recorded as submitted by the project
 token, not by an agent.
 
-- It **cannot** be used on any route but those four.
+- It **cannot** be used on any route but `POST /facts/captures`,
+  `POST /divergences/captures`, `POST /captures` and `POST /investigations`.
   `api/tests/test_route_credentials.py::test_the_project_token_works_on_exactly_the_capture_endpoints_and_investigations`,
   `api/tests/test_route_credentials.py::test_the_project_token_is_only_checked_where_the_route_table_can_see_it`
 - It **cannot** post readings: only an agent's signature can.

@@ -291,7 +291,7 @@ Change a set here and the test runs the new one. -->
 | Investigation class | Minimum grants | Why each is needed |
 |---|---|---|
 | reachability | `net.tcp.connect`, `net.http.outbound` | `probe.net.tcp_connect` tests the connection itself; `probe.http.reachable` asks the service at the other end whether it fails on its own. |
-| schema | `db.metadata.read` | `probe.db.connect` tests the connection to the database, under a read-only session. No row is read. |
+| schema | `db.metadata.read` | `probe.db.connect` tests the connection to the database, under a read-only session. No row is read. The walk's database hypothesis is that connection; `probe.db.schema_conformance`, which compares live columns with the migrations, needs the same grant and runs as a probe of its own. |
 | auth and audience | `config.inspect.values`, `net.tcp.connect`, `net.http.outbound` | `probe.auth.token_shape` reads the caller's token in memory — `config.inspect.values` for that one variable (`<caller>/<VARIABLE>`), never stored — to check its audience; the other two rule out the connection and the callee. |
 | configuration | `config.read.names` | `probe.config.present` checks that a required key is set where the service runs. Names only; no value is read. |
 

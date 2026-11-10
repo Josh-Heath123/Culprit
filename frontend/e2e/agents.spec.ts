@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { Request } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 
 import { atEveryWidth, expect, go, open, state, test } from "./fixtures.ts";
 
@@ -32,6 +32,16 @@ function recipe(command: string, work: string, extra: string[] = [], input?: str
 }
 
 const SYMPTOM = "POST http://order-service:8001/orders";
+
+/** Every action on these screens is taken from the keyboard: the control is
+ * focused, then operated with the key a keyboard user would press — Enter
+ * on a button, Space on a checkbox, Enter in a form. (The suite's other
+ * check, atEveryWidth, shows Tab reaches each page and draws a focus ring.) */
+async function press(page: Page, target: Locator, key: string) {
+  await target.focus();
+  await expect(target).toBeFocused();
+  await page.keyboard.press(key);
+}
 const ENVIRONMENT = "quickstart";
 
 test("agents: pair a real agent, allow it, investigate through it, revoke it", async ({ page }) => {
@@ -55,18 +65,29 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
 
   try {
     await test.step("a pairing code, shown once", async () => {
-      await page.getByRole("button", { name: "Create a pairing code" }).click();
+      await press(page, page.getByRole("button", { name: "Create a pairing code" }), "Enter");
       const dialog = page.getByRole("dialog", { name: "Pairing code" });
       await expect(dialog.getByTestId("pairing-code")).toHaveText(/\S{8,}/);
       const code = (await dialog.getByTestId("pairing-code").textContent())!.trim();
-      await atEveryWidth(page, "agents-pairing-code", () => expect(dialog).toBeVisible(), "[role=dialog]");
-      await dialog.getByRole("button", { name: "Done" }).click();
-      await expect(dialog).toHaveCount(0);
 
       // The real agent: the Compose recipe, its key written by the agent's
       // own user, the code spent from standard input.
-      recipe("compose-prepare", work, [id]);
-      recipe("compose-pair", work, [], `${code}\n`);
+      try {
+        recipe("compose-prepare", work, [id]);
+        recipe("compose-pair", work, [], `${code}\n`);
+      } catch (error) {
+        // A failure screenshot of the open dialog would hold a code that
+        // still works; close it before the test fails.
+        await dialog.getByRole("button", { name: "Done" }).click();
+        throw error;
+      }
+
+      // Screenshotted only now, with the code spent: CI keeps these images
+      // as an artifact, and a code that still worked would be a credential
+      // in it.
+      await atEveryWidth(page, "agents-pairing-code", () => expect(dialog).toBeVisible(), "[role=dialog]");
+      await press(page, dialog.getByRole("button", { name: "Done" }), "Enter");
+      await expect(dialog).toHaveCount(0);
       recipe("compose-up", work);
     });
 
@@ -103,17 +124,17 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
 
     await test.step("change the allowance: the diff, then save", async () => {
       await go(page, "/settings/agents");
-      await row.getByRole("button", { name: "Edit allowance" }).click();
+      await press(page, row.getByRole("button", { name: "Edit allowance" }), "Enter");
       const dialog = page.getByRole("dialog", { name: new RegExp(`Allowance for ${id}`) });
-      await dialog.getByRole("checkbox", { name: /Open a TCP connection/ }).check();
-      await dialog.getByRole("checkbox", { name: /Send read-only HTTP requests/ }).check();
+      await press(page, dialog.getByRole("checkbox", { name: /Open a TCP connection/ }), "Space");
+      await press(page, dialog.getByRole("checkbox", { name: /Send read-only HTTP requests/ }), "Space");
       const diff = dialog.getByTestId("allowance-diff");
       await expect(diff.locator("[data-change=added]")).toHaveCount(2);
       await expect(diff).toContainText("+ net.http.outbound");
       await expect(diff).toContainText("+ net.tcp.connect");
       await expect(diff.locator("[data-change=removed]")).toHaveCount(0);
       await atEveryWidth(page, "agents-allowance", () => expect(dialog).toBeVisible(), "[role=dialog]");
-      await dialog.getByRole("button", { name: "Save allowance" }).click();
+      await press(page, dialog.getByRole("button", { name: "Save allowance" }), "Enter");
       await expect(dialog).toHaveCount(0);
       const grants = row.locator(`[data-testid=agent-grants][data-environment=${ENVIRONMENT}]`);
       await expect(grants.getByText("allowed", { exact: true })).toHaveCount(2);
@@ -126,7 +147,8 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
       await control.getByLabel("Environment").selectOption(ENVIRONMENT);
       await control.getByLabel("Symptom").fill(SYMPTOM);
       await expect(control.getByTestId("investigate-unavailable")).toHaveCount(0);
-      await control.getByRole("button", { name: "Start the investigation" }).click();
+      await expect(control.getByRole("button", { name: "Start the investigation" })).toBeEnabled();
+      await control.getByLabel("Symptom").press("Enter");
       await expect(control.getByTestId("investigate-progress")).toBeVisible();
       await page.waitForURL(/\/investigations\/inv-[0-9a-f]+$/, { timeout: 180_000 });
       await expect(page.getByTestId("diagnosis")).toBeVisible();
@@ -139,10 +161,10 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
     });
 
     await test.step("revoke: confirm, and the agent's next request is refused", async () => {
-      await row.getByRole("button", { name: "Revoke" }).click();
+      await press(page, row.getByRole("button", { name: "Revoke" }), "Enter");
       const dialog = page.getByRole("dialog", { name: new RegExp(`Revoke ${id}`) });
       await expect(dialog).toContainText("cannot be undone");
-      await dialog.getByRole("button", { name: "Revoke agent" }).click();
+      await press(page, dialog.getByRole("button", { name: "Revoke agent" }), "Enter");
       await expect(row.getByTestId("agent-status")).toHaveText("revoked");
       await expect(row.getByRole("button", { name: "Edit allowance" })).toHaveCount(0);
       // The agent polls every two seconds; its next claim is refused, and it

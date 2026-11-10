@@ -1918,7 +1918,9 @@ authenticated: the newest nonce it spent, which the control plane keeps for
 each agent however old it is. A refused request — a bad signature, a
 revoked agent — is logged, never stored, so it never moves that time: a
 revoked agent that is still trying shows the moment of its last accepted
-request. The screen refreshes every 5 seconds.
+request. The screen refreshes every 5 seconds. One nonce per agent ever
+paired is kept for good to know this — revoked agents included — so
+`agent_nonces` grows by one row per agent, not per request.
 
 ## The dashboard starts an investigation only with the reachability grants allowed
 
