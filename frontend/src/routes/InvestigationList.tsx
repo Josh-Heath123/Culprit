@@ -1,19 +1,22 @@
 import { ChevronRightIcon, CrosshairIcon, SignpostIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { InvestigateThroughAgent } from "@/components/investigation/InvestigateThroughAgent";
 import { Page } from "@/components/layout/Page";
 import { EmptyPanel, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { DiagnosisBadge } from "@/components/ui/status";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useInvestigations } from "@/hooks/useInvestigations";
 import type { InvestigationSummary } from "@/lib/types";
 import { formatDateTime } from "@/lib/datetime";
 
-/** Every stored investigation, newest first. They arrive from
- * `culprit diagnose` posted with the project token (README, "The control
- * plane"); there is deliberately no button here that starts one. */
+/** Every stored investigation, newest first. They arrive from `culprit
+ * diagnose` posted with the project token (README, "The control plane"), or
+ * from an agent's walk — which an admin can start here (Phase 33 part 3). */
 export function InvestigationList() {
   const { data, isPending, isError, error, refetch } = useInvestigations();
+  const { data: me } = useCurrentUser();
   const items = data?.items ?? [];
 
   return (
@@ -26,6 +29,8 @@ export function InvestigationList() {
         </>
       }
     >
+      {me?.role === "admin" ? <InvestigateThroughAgent /> : null}
+
       {isPending ? <LoadingRows label="Loading investigations" /> : null}
       {isError ? (
         <ErrorPanel

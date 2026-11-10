@@ -4,6 +4,8 @@
 
 import { getToken, setToken } from "@/lib/auth";
 import type {
+  AgentList,
+  Allowance,
   ComponentCreate,
   ComponentCreateResponse,
   ComponentOut,
@@ -20,10 +22,14 @@ import type {
   KeyCreateResponse,
   LoginResponse,
   PaginatedIncidents,
+  PairingCodeCreated,
   PaginatedPostmortems,
   PostmortemCreate,
   PostmortemOut,
   PostmortemPatch,
+  TaskCreate,
+  TaskCreated,
+  TaskView,
   TopologyEdgeRef,
   TopologySuggestionsOut,
   UserOut,
@@ -289,4 +295,37 @@ export function retryPostmortemEmbedding(id: string): Promise<PostmortemOut> {
 
 export function deletePostmortem(id: string): Promise<void> {
   return request<void>(`/postmortems/${id}`, { method: "DELETE" });
+}
+
+// Phase 33 part 3: agents. Every route here is an admin's.
+export function fetchAgents(): Promise<AgentList> {
+  return request<AgentList>("/agents");
+}
+
+/** A single-use code, shown once: only its hash is stored. */
+export function createPairingCode(): Promise<PairingCodeCreated> {
+  return request<PairingCodeCreated>("/agents/pairing-codes", { method: "POST" });
+}
+
+/** Narrow only: the API refuses a grant the agent does not report. */
+export function setAllowance(agentId: string, environment: string, grants: string[]): Promise<Allowance> {
+  return request<Allowance>(`/agents/${encodeURIComponent(agentId)}/grants`, {
+    method: "PATCH",
+    body: JSON.stringify({ environment, grants }),
+  });
+}
+
+export function revokeAgent(agentId: string): Promise<void> {
+  return request<void>(`/agents/${encodeURIComponent(agentId)}/revoke`, { method: "POST" });
+}
+
+export function createTask(agentId: string, body: TaskCreate): Promise<TaskCreated> {
+  return request<TaskCreated>(`/agents/${encodeURIComponent(agentId)}/tasks`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchTask(agentId: string, taskId: string): Promise<TaskView> {
+  return request<TaskView>(`/agents/${encodeURIComponent(agentId)}/tasks/${encodeURIComponent(taskId)}`);
 }
