@@ -311,10 +311,16 @@ A paired agent proves who it is with an **Ed25519 key** it generates itself
 sends is signed over its method, its path, a digest of its body, a
 timestamp and a single-use nonce; the control plane refuses a request it
 cannot verify, one more than **300 seconds** from its clock, or one whose
-nonce it has seen, and does not say which. The private key never leaves
-the agent's file: pairing sends only the public half.
+nonce it has seen, and does not say which — and it checks the signature
+over the raw body before it parses a byte of it. The private key never
+leaves the agent's file: pairing sends only the public half. The control
+plane is reached over **https**: the agent refuses a plain-`http`
+`control_plane.url` unless it is a loopback address or the configuration
+sets `allow_plain_http: true`, which it reports at every start.
+`deploy/agent/` has a recipe for Docker, Compose, Kubernetes and systemd;
+`docs/SECURITY.md` says what each compromise can and cannot do.
 
-**Pairing.** An admin makes a code (`POST /agents/pairing-codes`); it works
+**Pairing.** An admin makes a code (Settings → Agents, or `POST /agents/pairing-codes`); it works
 once and expires after **15 minutes**, and only its SHA-256 is stored.
 `culprit agent pair --code` spends it, registering the agent's id, public
 key and the grants its configuration gives in each environment.
@@ -322,7 +328,8 @@ key and the grants its configuration gives in each environment.
 **Allowances.** A newly paired agent is allowed nothing. An admin sets,
 per environment, which of the grants the agent reported it may use
 (`PATCH /agents/{id}/grants`); naming a grant it did not report, a
-wildcard or `all` is refused. The allowance is stamped on each task when
+wildcard or `all` is refused. On Settings → Agents each grant is shown in
+plain words, and a change is shown as a diff before it is saved. The allowance is stamped on each task when
 the agent claims it, and the agent intersects it with its configuration
 again — so either side can withhold a grant on the next task, and neither
 can add one. Revoking an agent (`POST /agents/{id}/revoke`) refuses its
@@ -350,7 +357,10 @@ addresses tasks; **`agent-registrar`** spends a code and inserts the agent,
 nothing more; **`agent-gateway`** looks up keys, records nonces, reads
 allowances, claims and completes tasks and appends audit entries. No role
 holds UPDATE or DELETE on `agent_audit_log`, and triggers refuse both, and
-TRUNCATE, to every role including the owner.
+TRUNCATE, to every role including the owner. **`api-reader`** serves the
+agents screen: it reads the agents, their allowances, tasks and audit log,
+and (since `e5b8a2d4c6f1`) `agent_nonces`, whose newest row per agent is
+that agent's last signed request; it writes none of them.
 
 ## How Culprit reaches an environment
 

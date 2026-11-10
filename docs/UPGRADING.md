@@ -161,6 +161,33 @@ run those probes through a paired agent instead. The project token keeps
 the three capture endpoints and `POST /investigations`, where it is now
 recorded as the submitter.
 
+**Phase 33 part 3 adds no secret.** Its migration (`e5b8a2d4c6f1`) gives
+`api-reader` SELECT on `agent_nonces`, for the agents screen's "last signed
+request", and creates no role. Three changes can still stop something that
+worked:
+
+- **An agent refuses a plain-`http` control plane.** A configuration whose
+  `control_plane.url` is `http://` to anything but a loopback address no
+  longer loads; `culprit agent` stops at start, naming the line. Move the
+  control plane behind `https` (the production compose's Caddy does it for
+  a real domain). If the path is truly yours and has no certificate, set
+  `allow_plain_http: true` under `control_plane:`; the agent then says so at
+  every start.
+- **The agent image has a `/var/lib/culprit` directory,** owned by its
+  non-root user, so a fresh named volume mounted there is writable by the
+  agent (`deploy/agent/compose.yaml`). A volume already created from an
+  older image keeps the ownership it was made with: if the agent cannot
+  write its audit log there, `chown 65532:65532` the volume's contents, or
+  start from the recipe.
+- **A body sent to an agent route without a valid signature now gets `401`,
+  not `422`.** Only a caller that relied on reading validation errors
+  without signing sees a difference; a signed request with a bad body still
+  gets the `422`.
+
+If you build the frontend image yourself from a modified copy, set the new
+build argument `VITE_SOURCE_URL` to where your source is: every page links
+to it (AGPL-3.0 section 13; `LICENSING.md`).
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

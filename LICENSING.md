@@ -26,6 +26,9 @@ contracts without taking on the AGPL.
 
 The engine is AGPL-3.0. If you run a modified Culprit as a network service,
 section 13 requires you to offer its users the source of your modified version.
+Every page of the dashboard links to its source; build the frontend image with
+`VITE_SOURCE_URL` set to yours (`frontend/Dockerfile`) and that link points
+there.
 
 The two third-party fixtures under `cli/testdata/fixtures/third-party/` are
 unmodified copies of upstream example projects, used only as test input. They

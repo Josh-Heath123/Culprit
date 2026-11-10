@@ -183,8 +183,9 @@ dashboard's **Investigations** page shows it: the tree with its root marked,
 each edge expanding to its readings, and the hypotheses the walk did not
 need kept apart from the ones it needed and could not test.
 
-The dashboard also keeps postmortems, settings for components, ingest keys
-and users, and an incident timeline that is now history: Phase 32 retired
+The dashboard also pairs and manages agents (Settings → Agents), starts an
+investigation through one, keeps postmortems, settings for components,
+ingest keys and users, and an incident timeline that is now history: Phase 32 retired
 the engine that grouped anomalies into incidents and the LLM narrative
 written over them, and the incident tables are read-only. What the dashboard
 does and does not do is in [`docs/LIMITS.md`](docs/LIMITS.md).
@@ -299,6 +300,19 @@ If it does not come up:
 
 For a real host with a domain and TLS, follow [`docs/INSTALL.md`](docs/INSTALL.md);
 to send telemetry from your own services, [`docs/INSTRUMENTATION.md`](docs/INSTRUMENTATION.md).
+
+### An agent where your services run (optional)
+
+`culprit agent` runs the same read-only probes and walk inside your network,
+under grants written in its own configuration file, and takes its tasks
+from the control plane over an outbound https connection — it opens no port.
+Pair one from **Settings → Agents** with a single-use code, choose which of
+its grants it may use (you can narrow them; nothing can widen them), and
+start an investigation from the investigations page. Recipes for Docker,
+Compose, Kubernetes and systemd are in [`deploy/agent/`](deploy/agent);
+[`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) lists the minimum grants for
+each kind of investigation, and [`docs/SECURITY.md`](docs/SECURITY.md) what
+a compromised agent or control plane can and cannot do.
 
 ## Usage: one project, end to end
 
@@ -448,7 +462,7 @@ dogfooding, and it is why the "Not checked" list is never optional.
 
 | Path | What it is |
 |---|---|
-| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose` |
+| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose`, `agent` |
 | [`extractors/`](extractors) | the Python and Node extractor plugins ([protocol](docs/EXTRACTOR_PROTOCOL.md)) |
 | [`shared/`](shared) | the core model — planes, facts, subjects, readings — shared by the Python services |
 | [`api/`](api) | FastAPI: the dashboard's API, the ingest gateway, capture and reading endpoints, migrations |
@@ -457,6 +471,7 @@ dogfooding, and it is why the "Not checked" list is never optional.
 | [`mcp_server/`](mcp_server) | read-only MCP tools over Culprit's engineering memory, for coding agents |
 | [`demo-services/`](demo-services) | three small instrumented services the quickstart runs |
 | [`infra/`](infra) | Compose files, Caddy, deployment |
+| [`deploy/agent/`](deploy/agent) | the agent's recipes: Docker, Compose, Kubernetes, systemd |
 | [`scripts/`](scripts) | the repository's own invariant checks, bootstrap and capture tooling |
 | [`docs/`](docs) | the plan, limits, permissions, probes, install and upgrade guides |
 
@@ -475,8 +490,6 @@ What comes next, as plans:
 
 - **The demonstration video,** recorded from the script, storyboard and
   checklist in [`docs/video/`](docs/video); linked here once it exists.
-- **Phase 33 — A production agent** with an auditable, least-privilege
-  permission model, so an investigation can reach a running system.
 - **Phase 34 — A verification loop:** after a fix, check the fault is really
   gone, and record the outcome so accuracy becomes measurable.
 - **Phase 35 — An agent surface,** so a coding agent can ask Culprit before

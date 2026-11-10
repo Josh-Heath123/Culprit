@@ -47,11 +47,14 @@ widen an existing one.** This is standing invariant 3 (`docs/DIAGNOSTIC_PLAN.md`
 
 So **write grants are never widened**, without exception. A **read** grant may
 be added, under all three conditions: same job, a table beside one the role
-already reads, argued in the migration with the downgrade revoking it. The one
+already reads, argued in the migration with the downgrade revoking it. The first
 instance is Phase 31's `anomaly-detector` SELECT on `connections`, beside the
 `components` it already read (Phase 27's rename carried its `services` grant
-there), to resolve which edge a metric belongs to — `a9d2c40f7e18`. A read grant
-that fails any of the three is a new role, the same as a write.
+there), to resolve which edge a metric belongs to — `a9d2c40f7e18`. The second is
+Phase 33 part 3's `api-reader` SELECT on `agent_nonces`, beside the `agents`,
+allowances, tasks and audit log it already reads for the same agents listing,
+for each agent's last signed request — `e5b8a2d4c6f1`. A read grant that fails
+any of the three is a new role, the same as a write.
 
 A role is reused only when the new surface is genuinely the same trust domain.
 **Two** such exceptions exist, and both are documented where the reuse happens:
