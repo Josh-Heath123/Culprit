@@ -21,7 +21,7 @@ import structlog
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -132,9 +132,19 @@ async def authenticate_agent(request: Request, session: AsyncSession) -> AgentPr
     # timestamp up to MAX_SKEW past the moment it arrived: so a nonce can
     # matter until 2 * MAX_SKEW after `seen_at`. Kept a minute beyond that,
     # for clocks a little apart between replicas.
+    #
+    # Each agent's newest nonce is kept whatever its age (Phase 33 part 3):
+    # its `seen_at` is when that agent last made a signed request, which the
+    # agents screen shows. Keeping a spent nonce longer only makes a replay
+    # of it more surely refused.
+    nonces = tables.agent_nonces
+    newer = nonces.alias("newer")
     await session.execute(
-        delete(tables.agent_nonces).where(
-            tables.agent_nonces.c.seen_at < sa_now(offset_seconds=-NONCE_RETENTION_SECONDS)
+        delete(nonces).where(
+            nonces.c.seen_at < sa_now(offset_seconds=-NONCE_RETENTION_SECONDS),
+            exists().where(
+                newer.c.agent_id == nonces.c.agent_id, newer.c.seen_at > nonces.c.seen_at
+            ),
         )
     )
     await session.commit()

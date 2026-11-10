@@ -117,6 +117,13 @@ async def register(session: AsyncSession, body: RegisterAgent) -> str:
 async def list_agents(session: AsyncSession) -> list[dict[str, Any]]:
     agents = (await session.execute(select(tables.agents).order_by(tables.agents.c.id))).all()
     allowances = (await session.execute(select(tables.agent_allowances))).all()
+    # When each agent last made a signed request: the newest nonce it spent,
+    # which the gateway's cleanup always keeps (app/agents/dependencies.py).
+    nonces = tables.agent_nonces
+    newest = await session.execute(
+        select(nonces.c.agent_id, func.max(nonces.c.seen_at)).group_by(nonces.c.agent_id)
+    )
+    last_request = {row[0]: row[1] for row in newest.all()}
     by_agent: dict[str, dict[str, list[str]]] = {}
     for row in allowances:
         by_agent.setdefault(row.agent_id, {})[row.environment] = list(row.grants)
@@ -127,6 +134,7 @@ async def list_agents(session: AsyncSession) -> list[dict[str, Any]]:
             "revoked_at": agent.revoked_at,
             "reported_grants": agent.reported_grants,
             "allowances": by_agent.get(agent.id, {}),
+            "last_request_at": last_request.get(agent.id),
         }
         for agent in agents
     ]

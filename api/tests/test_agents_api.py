@@ -670,3 +670,73 @@ def test_a_correctly_signed_request_with_a_bad_body_is_still_a_422(
             method, path, content=body, headers=agent.headers(method, path, body)
         )
         assert response.status_code == 422, f"{route}: {response.status_code} {response.text}"
+
+
+# ---- when an agent last made a signed request (Phase 33 part 3) ----------------------
+
+
+def _listed(client: TestClient, agent: Agent) -> dict[str, Any]:
+    return {item["id"]: item for item in client.get("/agents").json()["items"]}[agent.id]
+
+
+@pytest.mark.asyncio
+async def test_the_last_signed_request_is_listed_and_survives_nonce_cleanup(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    agent = paired(client)
+    assert _listed(client, agent)["last_request_at"] is None, "pairing is not a signed request"
+
+    assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
+    first = _listed(client, agent)["last_request_at"]
+    assert first is not None
+
+    # A refused request — signed over other bytes — moves nothing.
+    bad = agent.headers("POST", "/agents/me/tasks/claim", b"other")
+    assert client.post("/agents/me/tasks/claim", content=b"", headers=bad).status_code == 401
+    assert _listed(client, agent)["last_request_at"] == first
+
+    # Age every nonce this agent has spent far past retention, then let a
+    # second agent's request run the cleanup: this agent's newest nonce is
+    # kept, so its last request is still known; older ones of its are gone.
+    assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE agent_nonces SET seen_at = seen_at - interval '1 day' WHERE agent_id = :a"
+            ),
+            {"a": agent.id},
+        )
+    other = paired(client)
+    assert other.send("POST", "/agents/me/tasks/claim").status_code == 204
+    async with db_engine.connect() as conn:
+        kept = (
+            await conn.execute(
+                text("SELECT count(*) FROM agent_nonces WHERE agent_id = :a"), {"a": agent.id}
+            )
+        ).scalar_one()
+    assert kept == 1, f"{kept} nonces kept for an agent idle a day: want exactly its newest"
+    listed = _listed(client, agent)["last_request_at"]
+    assert listed is not None
+    age = datetime.now(UTC) - datetime.fromisoformat(listed)
+    assert age.total_seconds() > 23 * 3600, f"last request {listed} is not the aged one"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT INTO agent_nonces (agent_id, nonce, seen_at) VALUES ('x', 'y', now())",
+        "DELETE FROM agent_nonces",
+        "UPDATE agent_nonces SET nonce = 'z'",
+    ],
+)
+async def test_api_reader_reads_nonces_and_writes_none(role_database_url, statement: str) -> None:
+    reader = create_async_engine(role_database_url("api-reader", "API_READER_PASSWORD"))
+    try:
+        async with reader.connect() as conn:
+            await conn.execute(text("SELECT agent_id, seen_at FROM agent_nonces LIMIT 1"))
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with reader.begin() as conn:
+                await conn.execute(text(statement))
+    finally:
+        await reader.dispose()
