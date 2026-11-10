@@ -26,7 +26,25 @@ port="${QUICKSTART_HTTP_PORT:-80}"
 cluster="${KIND_CLUSTER:?the kind cluster to use}"
 base="http://localhost:$port/api"
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+
+# On the way out: if anything failed, say why the cluster thinks so — the
+# pod's state, its events, and what the agent itself printed (it exits on
+# any refusal, so its last lines are the reason). Then clean up; the key
+# directory is the agent user's, so it takes sudo.
+finish() {
+    local status=$?
+    if [ "$status" -ne 0 ] && command -v kubectl >/dev/null && kubectl get namespace culprit-agent >/dev/null 2>&1; then
+        echo "==> diagnostics (exit $status)"
+        kubectl -n culprit-agent get pods,pvc -o wide || true
+        kubectl -n culprit-agent describe pods || true
+        kubectl -n culprit-agent logs deployment/culprit-agent --all-containers --tail=50 || true
+        kubectl -n culprit-agent logs deployment/culprit-agent --all-containers --previous --tail=50 || true
+        kubectl -n culprit-agent get events --sort-by=.lastTimestamp || true
+    fi
+    sudo rm -rf "$work" 2>/dev/null || rm -rf "$work" 2>/dev/null || true
+    exit "$status"
+}
+trap finish EXIT
 
 read_env() { grep -E "^$1=" "$repo/infra/.env.prod" | cut -d= -f2- | sed 's/\$\$/$/g'; }
 
