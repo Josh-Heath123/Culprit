@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **33, part 3 — The operator's surface** — status `in progress`: implemented; every criterion passes, the CI-only ones in CI. PR #31: CI/CD run 42805541738 green on `17b5b36`, every pull-request check green, no open code-scanning alert (§5). Awaiting the architecture review and Q19. |
-| Previous phase | **33, part 2 — The agent meets the control plane: complete**, signed off 2026-11-10 by the architecture session. Merged via PR #28 (`58e7593`), every pull-request check green including code scanning (Q18). Criteria 8–10 verified as CI-run: the `e2e` job runs `just agent-e2e` unconditionally and the test cannot skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
+| Current phase | **34, part 1 — The loop, in the binary** — status `not started`. Brief in §4. |
+| Previous phase | **33 — The production agent and the permission model: complete** (three parts), part 3 signed off 2026-11-10 by the architecture session. Part 3 merged via PR #31 (`e125b4b`), every pull-request check green, no open alert. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`; Q19 ruled there. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-33-operator`, fast-forwarded to `origin/main` = `fdc6f84` (the licence merge) before the work began. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** Q19 is open and does not block (§3). |
+| Branch | `phase-34-verify`, cut from `origin/main` = `e125b4b`; its first commit is the Phase 33 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Blocking questions | **None.** §3 is empty. |
 
 ---
 
@@ -70,7 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q19 | Accept `api-reader` SELECT on `agent_nonces` (migration `e5b8a2d4c6f1`)? The agents screen shows each agent's last signed request. That moment is already written, as the `seen_at` of the nonce each signed request spends, and the gateway's cleanup now keeps every agent's newest nonce. Reading it needs `api-reader`, which serves the agents listing and already reads `agents`, `agent_allowances`, `agent_tasks` and `agent_audit_log`. Argued in the migration under standing invariant 3's three conditions for a read grant, revoked by its downgrade; no write is widened. It reverses one sentence of `d7a3e5f1b9c2` ("never the codes or the nonces"). The phase-auditor asked for a human ruling rather than the phase naming itself as a precedent in `.claude/rules/database.md`, so that edit was withdrawn. If rejected: a new read-only role for that one listing, or drop "last signed request" from the screen. | 2026-11-10, Phase 33 part 3 | Nothing: part 3 is built on it, and a rejection is a small follow-up. |
+| — | None open. Q19 was ruled 2026-11-10: accepted, narrowed to a column grant on `agent_nonces (agent_id, seen_at)`, as Phase 34 part 2's first item (`DIAGNOSTIC_PLAN.md`, end of Phase 33). | | |
 
 ---
 
@@ -98,8 +98,9 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
-| 33, part 3 | The operator's surface | in progress — PR #31, CI green; awaiting review | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 33 — "How Phase 33 is run", then "Part 3" at the end of the section: work order, nine criteria, what not to build. **Preconditions:** the licence pull request has merged, and Malcolm has regenerated the local `infra/.env.prod` and quickstart volume. Carried-in items first (signature before body; plain `http` refused). Screenshots of the new screens at four widths in the run report, for Malcolm. Branch `phase-33-operator`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 34 | Verification loop and calibration | not started | — |
+| 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
+| 34, part 1 | The loop, in the binary | not started | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — all 17 fields, read with "How Phase 34 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The `Verification` model and its conformance fixture come first. No API, migration or interface. Branch `phase-34-verify`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 34, part 2 | Outcomes in the control plane | not started | Criteria written at part 1's review. First item: Q19's column grant. |
 | 35 | Agent surface and the narrator | not started | — |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
