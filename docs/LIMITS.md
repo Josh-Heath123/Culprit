@@ -248,6 +248,11 @@ Postgres superuser password is fixed when the volume is first created, so
 a regenerated file no longer matches it. Removing the volume and the file
 together starts clean, at the cost of the local data.
 
+**`infra/.env.prod` holds every secret in plain text, on purpose** — Docker
+Compose reads nothing else — so `just bootstrap-env` creates it readable by
+your user alone (`0600`) from the first byte, and anyone who can read it
+anyway (root, a backup, a copy) has every credential.
+
 ## A config value cannot be stored without naming an explicit grant
 
 `configured_facts` — the table that holds what an environment is actually

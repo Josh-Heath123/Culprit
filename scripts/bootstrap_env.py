@@ -27,8 +27,10 @@ must never again be a human's job to remember.
 
 import argparse
 import getpass
+import os
 import secrets
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -327,6 +329,31 @@ def render_env_file(env: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def write_private(path: Path, text: str) -> None:
+    """Write `text` to `path` so that the file never exists readable by
+    anyone but its owner (Q18, DIAGNOSTIC_PLAN.md end of Phase 33).
+
+    The file holds every secret in clear text by design; Compose's
+    env_file reads nothing else. Writing it and then chmod-ing it left a
+    window in which a fresh file had the umask's mode (0644), and --force
+    wrote new secrets into whatever mode the old file had. Instead:
+    mkstemp creates a 0600 file in the same directory (same filesystem,
+    so the rename is atomic), it is filled and fsynced, and os.replace
+    moves it over the path in one step.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local", action="store_true", help="generate a local-quickstart env")
@@ -346,9 +373,7 @@ def main() -> int:
 
     env, admin_password = build_env(local=args.local, domain=args.domain)
 
-    ENV_PROD_PATH.parent.mkdir(parents=True, exist_ok=True)
-    ENV_PROD_PATH.write_text(render_env_file(env))
-    ENV_PROD_PATH.chmod(0o600)
+    write_private(ENV_PROD_PATH, render_env_file(env))
 
     print(f"wrote {ENV_PROD_PATH} (mode 0600)")
     print(f"generated {len(GENERATED_SECRETS)} secrets; no secret value is printed above.")
