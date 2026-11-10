@@ -2639,6 +2639,114 @@ The new CVE in the frontend image (`golang.org/x/net` v0.60.0, fixed in
 v0.62.0) is ambient — published after the last green run — and is fixed by
 bumping the pin in its own commit (pattern 3: fix it, never weaken the gate).
 
+**Architecture review of part 2, 2026-11-10 — signed off.** Merged via PR #28
+(`58e7593`), with every pull-request check green, the code-scanning check
+included, after Q18's ruling. Criteria 8 to 10 ran only in CI, so they were
+checked there: the `e2e` job runs `just agent-e2e` with no condition and no
+`continue-on-error`; the recipe sets `CULPRIT_AGENT_E2E=1`; the `-run`
+pattern names a test that exists, so it cannot pass with "no tests to run";
+a missing setting fails the test rather than skipping it; and the test
+asserts the reachability, schema and audience outcomes and the audit rows.
+Both audits found real defects, fixed before merge: a replay window at the
+edge of nonce cleanup, and `agent-admin` holding a read it never used.
+Decisions:
+
+- **`/ci` now gates on every pull-request check and on open code-scanning
+  alerts** (`c43a508`). Accepted. Its first report had called a red pull
+  request green from the workflow runs alone.
+- **Plain `http` for `control_plane.url`** is in LIMITS, and CI needs it to
+  reach the control plane at `host.docker.internal`. The decision of record
+  says "still over TLS". **Part 3:** the agent refuses a plain-`http` URL
+  unless the host is a loopback address or the configuration sets an explicit
+  `allow_plain_http`, which the agent reports at every start and which no
+  shipped recipe sets.
+- **A malformed body gets 422 before 401** on the agent routes, so an
+  unauthenticated caller can probe the schema, and the body is parsed before
+  anyone is authenticated. **Part 3, first:** the signature is checked over
+  the raw body before the body is parsed.
+- **The local `infra/.env.prod` and quickstart volume were not regenerated**:
+  the permission system refused both to Claude Code. They are Malcolm's to
+  run before part 3, which needs a working local stack.
+- **The schema investigation's database** lives in the agent's own copy of the
+  model, not in `demo-services/culprit.yaml`. Accepted: adding it there would
+  have turned the fault library's audience walk partial.
+- **`api-reader`'s SELECT on the four new tables** is argued in the migration,
+  as `c4e8a1f2b3d5`'s was. Accepted under standing invariant 3.
+
+**Licence — decided by Malcolm, 2026-11-06.** Culprit is AGPL-3.0-only.
+`extractors/python`, `extractors/node` and `shared/` are Apache-2.0: they run
+inside other people's projects or define the protocol, and the Python
+extractor depends on `culprit-shared`, so `shared/` cannot be copyleft without
+making the extractor copyleft too. The copyright line stays as LICENSE has it.
+Everything published before the change remains available under MIT. It lands
+as its own pull request, before part 3 — not inside a phase.
+
+**Part 3 — the operator's surface. Brief and criteria, 2026-11-10.**
+
+**Work order.**
+0. **Preconditions, not part of the run:** the licence pull request has merged,
+   and Malcolm has regenerated the local `infra/.env.prod` and recreated the
+   quickstart volume.
+1. **Carried in, first:** the signature checked before the body is parsed;
+   plain `http` refused as above; and the quickstart's admin step, which
+   prompts for a password when a person runs it from a terminal (found by
+   Malcolm, 2026-11-10). `docker compose run` gives the bootstrap container a
+   terminal whenever the caller has one, and `create_user`'s `getpass` then
+   reads that terminal instead of the piped password. Every automated run had
+   no terminal, so none saw it. Reproduce it first under a pseudo-terminal
+   (`script`), then fix it (`run -T`).
+2. **The agents screen** (admin only): every agent with its status, when it
+   last made a request, the grants it reports and its allowance; create a
+   pairing code, shown once; edit an allowance, with the change shown as a
+   diff before it is saved; revoke, after confirmation.
+3. **Opening an investigation through an agent**: choose an agent and a
+   symptom; the task's progress shows; the investigation opens when it lands.
+   When no agent reports the grants a symptom needs, the control says so
+   rather than failing.
+4. **The minimum grant set for each investigation class** — reachability,
+   schema, auth and audience, configuration — in `docs/PERMISSIONS.md`.
+5. **Deployment recipes** in `deploy/agent/`: Docker, Compose, Kubernetes and
+   systemd. Non-root, read-only root filesystem, the key mounted as a secret
+   with mode `0600`, an `https` control plane.
+6. **`docs/SECURITY.md`**: the threat model for a compromised control plane, a
+   compromised agent, a leaked pairing code, a leaked agent key, a leaked
+   project token and a replayed request — what each can and cannot do.
+7. **A link to the source in the dashboard**, which AGPL-3.0 §13 makes easy
+   to honour for anyone who runs a modified copy.
+8. README, LIMITS, PERMISSIONS and UPGRADING brought in line.
+
+**Acceptance criteria (part 3).**
+- On every agent route, a request that is unsigned or badly signed is refused
+  401 before its body is parsed — a malformed body included.
+- `just quickstart`, run under a pseudo-terminal, completes with no prompt
+  and creates the admin from `infra/.env.prod` — shown failing before the fix.
+- The agent refuses a plain-`http` control plane except to a loopback address
+  or with `allow_plain_http`, which it reports at every start; no recipe sets
+  it.
+- Every action on the agents screen is a browser journey in CI: create a
+  pairing code and see a real agent appear; change an allowance, see the
+  diff, save it; revoke, and see the agent's next request refused. A member
+  sees "This page is for admins".
+- Opening an investigation from the dashboard runs end to end in CI with a real
+  agent, and the investigation opens. With no agent holding the needed
+  grants, the control explains why and starts nothing.
+- For each investigation class, a test runs it with exactly its documented
+  grant set (complete), then with each grant removed in turn (partial, naming
+  that grant).
+- The Compose recipe is the one CI runs. The Kubernetes manifest becomes
+  Ready in CI's kind cluster, as a non-root user with a read-only root
+  filesystem. The systemd unit passes `systemd-analyze verify`. No recipe
+  allows plain `http`.
+- Every "cannot" in `docs/SECURITY.md` names the test that enforces it, and a
+  check fails if a named test does not exist.
+- The new screens style themselves through tokens only (the gate covers
+  them), work at the four widths with keyboard alone, and their screenshots
+  are in the run report for Malcolm.
+- `LLM_PROVIDER=none` changes nothing.
+
+**Do NOT implement in part 3.** No write capability, no new probe, no hosted
+deployment, no multi-tenancy, no mutual TLS, no change to how the walk runs.
+
 ---
 
 ### Phase 34 — The verification loop and calibration
