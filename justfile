@@ -83,6 +83,11 @@ check-invariants:
     uv run --project api python scripts/check_coupled_files.py
     uv run --project api python scripts/check_migration_symmetry.py
 
+# Phase 33 part 3: every "cannot" in docs/SECURITY.md names a test that
+# exists. Offline and instant.
+check-security-doc:
+    uv run --project api python scripts/check_security_doc.py
+
 # Fail if a repo-wide check's declared roots don't actually cover the
 # repository (Phase 27, standing invariant 9). Cheap and offline -- the
 # roots are read from the checks themselves, nothing is executed.

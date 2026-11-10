@@ -102,6 +102,12 @@ jobs:
       # measures. All of frontend/src since Phase 32.1 part 2.
       - name: Check frontend tokens
         run: uv run --project api python scripts/check_frontend_tokens.py
+      # Phase 33 part 3: every "cannot" in docs/SECURITY.md — what a
+      # compromised control plane, a compromised agent, a leaked pairing
+      # code, key or project token, or a replayed request cannot do — names
+      # the test that enforces it, and that test exists.
+      - name: Check the threat model's tests
+        run: uv run --project api python scripts/check_security_doc.py
       # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
       # together" pair (scripts/coupled_files.yaml) that changed on only
       # one side. Checked against the PR's committed diff, not a working

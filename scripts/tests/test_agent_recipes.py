@@ -36,7 +36,9 @@ def test_no_recipe_allows_plain_http(path: Path) -> None:
         f"{path.name} sets allow_plain_http"
     )
     for match in re.finditer(r"^\s*url\s*:\s*(\S+)", text, re.MULTILINE):
-        assert match.group(1).startswith("https://"), f"{path.name}: control_plane url {match.group(1)}"
+        assert match.group(1).startswith("https://"), (
+            f"{path.name}: control_plane url {match.group(1)}"
+        )
 
 
 def test_the_example_configuration_is_https_and_names_the_mounted_key() -> None:
@@ -62,18 +64,24 @@ def test_the_compose_recipe() -> None:
     assert "deploy" not in agent or agent["deploy"].get("replicas", 1) == 1
     assert agent["secrets"] == [{"source": "agent-key", "target": "agent.key"}]
     assert "file" in recipe["secrets"]["agent-key"]
-    assert any(str(v).endswith(":/etc/culprit:ro") for v in agent["volumes"]), "the config is read-only"
+    assert any(str(v).endswith(":/etc/culprit:ro") for v in agent["volumes"]), (
+        "the config is read-only"
+    )
 
 
 def test_the_kubernetes_recipe() -> None:
     documents = [
-        d for d in yaml.safe_load_all((RECIPES / "kubernetes.yaml").read_text(encoding="utf-8")) if d
+        d
+        for d in yaml.safe_load_all((RECIPES / "kubernetes.yaml").read_text(encoding="utf-8"))
+        if d
     ]
     kinds = [d["kind"] for d in documents]
     assert "Service" not in kinds and "DaemonSet" not in kinds, kinds
     (deployment,) = [d for d in documents if d["kind"] == "Deployment"]
     spec = deployment["spec"]
-    assert spec["replicas"] == 1 and spec["strategy"]["type"] == "Recreate", "one agent, never two at once"
+    assert spec["replicas"] == 1 and spec["strategy"]["type"] == "Recreate", (
+        "one agent, never two at once"
+    )
     pod = spec["template"]["spec"]
     assert pod["automountServiceAccountToken"] is False
     assert pod["securityContext"]["runAsNonRoot"] is True
