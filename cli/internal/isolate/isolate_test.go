@@ -542,3 +542,42 @@ func TestNothingFailingIsNotADiagnosis(t *testing.T) {
 		t.Errorf("the statement does not say what it might be missing: %q", inv.Diagnosis.Statement)
 	}
 }
+
+// TestEveryReadingKeepsTheRequestBehindIt: `culprit verify` re-runs an
+// investigation's readings exactly (Phase 34), so the walk keeps the
+// request behind each one — the reproduction and the counterfactual
+// included, the latter under the reference environment's name.
+func TestEveryReadingKeepsTheRequestBehindIt(t *testing.T) {
+	components, connections, names := chain(4)
+	fault := componentFault(names, 2)
+	reference := newRunner(func(string, string) model.Verdict { return model.VerdictPass })
+	walk := New(components, connections, nil, manifests(), newRunner(fault), openPlacement{},
+		Options{Environment: "simulated", Reference: reference, ReferenceName: "staging",
+			ReferencePlacement: openPlacement{}})
+	inv := diagnose(t, walk, names[0])
+
+	requests := walk.Requests()
+	if len(requests) != len(inv.Readings) {
+		t.Fatalf("%d requests kept for %d readings", len(requests), len(inv.Readings))
+	}
+	environments := map[string]int{}
+	for _, item := range inv.Readings {
+		recorded, ok := requests[item.ID]
+		if !ok {
+			t.Fatalf("reading %s has no request", item.ID)
+		}
+		if recorded.Request.ProbeID != item.Reading.ProbeID || recorded.Request.Target != item.Reading.Target {
+			t.Errorf("reading %s is %s on %s; its request is %s on %s", item.ID, item.Reading.ProbeID,
+				item.Reading.Target, recorded.Request.ProbeID, recorded.Request.Target)
+		}
+		environments[recorded.Environment]++
+		// Taken again, the same request measures the same thing.
+		again := newRunner(fault).Run(context.Background(), recorded.Request)
+		if recorded.Environment == "simulated" && again.Verdict != item.Reading.Verdict {
+			t.Errorf("reading %s was %s; its request, run again, is %s", item.ID, item.Reading.Verdict, again.Verdict)
+		}
+	}
+	if environments["staging"] != 1 || environments["simulated"] != len(inv.Readings)-1 {
+		t.Errorf("requests by environment: %v", environments)
+	}
+}

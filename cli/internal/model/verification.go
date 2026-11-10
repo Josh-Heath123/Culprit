@@ -150,7 +150,9 @@ func (c Change) Touches(subject string) bool {
 	return false
 }
 
-// Rerun is one of the investigation's readings, measured again twice.
+// Rerun is one of the investigation's readings, measured again twice, in
+// the environment it was first taken in — a counterfactual reading in a
+// reference environment is re-run there.
 type Rerun struct {
 	ReadingID string `json:"reading_id"`
 	// Was is the verdict the investigation recorded.
@@ -389,9 +391,6 @@ func (v Verification) Validate() error {
 			return fmt.Errorf("verification %s re-runs reading %s twice over", v.ID, rerun.ReadingID)
 		}
 		seen[rerun.ReadingID] = true
-		if rerun.Environment != v.Environment {
-			return fmt.Errorf("reading %s was re-run in %s, not %s", rerun.ReadingID, rerun.Environment, v.Environment)
-		}
 	}
 	if len(v.Differences) > 0 && (v.BeforeCapture == nil || v.AfterCapture == nil) {
 		return fmt.Errorf("a difference is recorded with no capture before and after it")

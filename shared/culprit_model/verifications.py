@@ -129,7 +129,9 @@ class Change(BaseModel):
 
 
 class Rerun(BaseModel):
-    """One of the investigation's readings, measured again twice."""
+    """One of the investigation's readings, measured again twice, in the
+    environment it was first taken in — a counterfactual reading in a
+    reference environment is re-run there."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -259,12 +261,6 @@ class Verification(BaseModel):
         ids = [r.reading_id for r in self.reran]
         if len(ids) != len(set(ids)):
             raise ValueError(f"verification {self.id} re-runs one reading twice over")
-        for rerun in self.reran:
-            if rerun.environment != self.environment:
-                raise ValueError(
-                    f"reading {rerun.reading_id} was re-run in {rerun.environment}, "
-                    f"not {self.environment}"
-                )
         if self.differences and (self.before_capture is None or self.after_capture is None):
             raise ValueError("a difference is recorded with no capture before and after it")
         for difference in self.differences:

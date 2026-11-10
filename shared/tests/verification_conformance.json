@@ -1756,6 +1756,136 @@
       }
     },
     {
+      "why": "verified: a counterfactual reading taken in the reference environment is re-run there and still passes",
+      "verification": {
+        "id": "ver-0123456789abcdef",
+        "investigation_id": "inv-0123456789abcdef",
+        "environment": "faults-order",
+        "applied_change": [
+          {
+            "kind": "config",
+            "subject": "config:inventory-service/CONTRACT_FAULT"
+          }
+        ],
+        "reran": [
+          {
+            "reading_id": "r2",
+            "was": "pass",
+            "probe_id": "probe.http.reachable",
+            "target": "component:payments-service",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r6",
+            "was": "fail",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r8",
+            "was": "pass",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-reference",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-reference",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-reference",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          }
+        ],
+        "before_capture": "cap-before",
+        "after_capture": "cap-after",
+        "differences": [],
+        "failing_now_passes": true,
+        "no_regressions": true,
+        "changes_explained": true,
+        "verdict": "verified",
+        "reason": "every reading that failed passes on two runs, every reading that passed still passes, and the environment did not change",
+        "verified_at": "2026-11-10T12:00:02Z"
+      }
+    },
+    {
       "why": "verified: a reading refused at diagnosis now passes on both runs",
       "verification": {
         "id": "ver-0123456789abcdef",
@@ -4384,7 +4514,7 @@
       }
     },
     {
-      "why": "a run in another environment than the verification's",
+      "why": "a run in another environment than the reading it repeats",
       "verification": {
         "id": "ver-0123456789abcdef",
         "investigation_id": "inv-0123456789abcdef",
