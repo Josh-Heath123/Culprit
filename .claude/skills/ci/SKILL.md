@@ -1,6 +1,6 @@
 ---
 name: ci
-description: Verify CI is green on the merge result, for this exact commit. Push, watch the run pinned to its SHA, assert its conclusion, and triage any failure. Use before reporting any phase complete and before merging.
+description: Verify CI is green on the merge result, for this exact commit. Push, watch the run pinned to its SHA, assert its conclusion, then gate on every check on the pull request (including Code scanning results) and on no open code-scanning alert, and triage any failure. Use before reporting any phase complete and before merging.
 argument-hint: "[branch]"
 ---
 
@@ -61,9 +61,53 @@ gh run view "$RUN" --json jobs \
 ```
 
 A job can log `Error:` annotations and still conclude `success`, and a run can
-conclude `failure` on a job you were not looking at. Only `conclusion=success`
-on the run, with no job concluding anything other than `success` or `skipped`,
-is green.
+conclude `failure` on a job you were not looking at. A run with
+`conclusion=success` and every job `success` or `skipped` is necessary — and
+still not green. Step 4b is the gate.
+
+**4b. Gate on the pull request, not on workflow runs.** Workflow runs are not
+the only checks on a PR. GitHub posts others — "Code scanning results / CodeQL"
+above all — that no `gh run` command lists. The CodeQL *workflow* concluding
+`success` only means the analyses ran; the alerts they found fail a separate
+check (PR #28: every run green, PR blocked by one high alert). Wait for every
+check, then read them all:
+
+```bash
+PR=$(gh pr view --json number -q .number)   # no PR yet -> open it first
+gh pr checks "$PR" --watch --interval 15 >/dev/null   # wait; exit code ignored
+gh pr checks "$PR" --json name,bucket,link \
+  -q '.[] | "\(.bucket)\t\(.name)\t\(.link)"'
+```
+
+Every check's `bucket` must be `pass` or `skipping`. `fail`, `pending` or
+`cancel` on any one of them is red.
+
+Then no code-scanning alert may be open on the pull request. Query by PR
+**and** by both refs: CodeQL default setup analyses `refs/pull/<n>/head`, so a
+query on the merge ref alone returns `[]` while the PR is blocked (PR #28,
+2026-11-10). An alert that already exists on `main` still counts when the PR's
+check fails on it.
+
+```bash
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+for q in "pr=$PR" "ref=refs/pull/$PR/merge" "ref=refs/pull/$PR/head"; do
+  gh api "repos/$REPO/code-scanning/alerts?$q&state=open&per_page=100" \
+    -q ".[] | \"open alert #\(.number)  \(.rule.id)  \(.rule.security_severity_level // .rule.severity)  \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)  ($q)\""
+done
+```
+
+Any line printed is red. If the API call itself fails (no code scanning, no
+permission), the result is `NOT RUN`, not pass.
+
+**Green** = step 4 holds, every PR check is `pass`/`skipping`, and the three
+alert queries print nothing. Anything less is not green, however the runs
+concluded.
+
+An open alert is never cleared from here: no dismissal, no `# lgtm`/`codeql`
+suppression comment, no query-suite or severity change. Either fix the defect
+with a test that reproduces it, or write the false-positive argument into the
+handoff (§5 and a blocking §3 question) and stop. Dismissing is the
+architecture session's decision.
 
 **5. If red, triage before touching anything.**
 
@@ -100,8 +144,11 @@ commit   <sha>
 run      <id>  <url>
 ```
 
-Then one line per job: conclusion and name. Then the verdict. Then whether what
-you tested was the **merge result** or the branch alone, stated explicitly.
+Then one line per job: conclusion and name. Then one line per PR check from
+`gh pr checks`: bucket and name. Then the open code-scanning alerts, or
+`none` with the three queries that returned empty. Then the verdict. Then
+whether what you tested was the **merge result** or the branch alone, stated
+explicitly.
 
 **An unattributed "green" is not a result.** If the report does not name the
 commit and the run it came from, it cannot be checked, and a check that cannot

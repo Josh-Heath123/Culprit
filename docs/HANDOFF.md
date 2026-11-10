@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **33, part 2 — The agent meets the control plane** — status `in progress`: implemented, every locally runnable criterion passes, both audits run and their findings fixed; **staged, awaiting the human's commit, a pull request and `/ci`** — the end-to-end agent scenario runs only in CI and has not run yet (§5). |
+| Current phase | **33, part 2 — The agent meets the control plane** — status `in progress`: committed, PR #28 open. Every CI/CD job passed on `2e89f47` (the end-to-end agent scenario included), but the PR is **red**: its "Code scanning results / CodeQL" check fails on alert #1 (high, `scripts/bootstrap_env.py:350`), argued a false positive in §5 and waiting on Q18. |
 | Previous phase | **33, part 1 — The agent, standing alone: complete**, signed off 2026-11-06 by the architecture session. Merged via PR #27 (`57541e3`); CI green on the merge result, as reported by Malcolm — part 2's first step records the run id. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-33-control-plane`, cut from `origin/main` = `57541e3`; its first commit is the part 1 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** §3 is empty. |
+| Blocking questions | **Q18** — CodeQL alert #1 on PR #28: dismiss or rule otherwise (§3, §5). |
 
 ---
 
@@ -70,7 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q17 was ruled at 32.2's review (`DIAGNOSTIC_PLAN.md`, end of Phase 32.2). | | |
+| Q18 | CodeQL alert #1, `py/clear-text-storage-sensitive-data` (high), `scripts/bootstrap_env.py:350` — `ENV_PROD_PATH.write_text(render_env_file(env))`. Claude Code's view: a false positive by design (argument in §5, "/ci, 2026-11-10"). Dismiss it as "won't fix / used in tests"-style with that reason, or rule that `.env.prod` must change shape? Not dismissed and not suppressed: that is this session's decision. | 2026-11-10, /ci on PR #28 | **Blocking**: PR #28's "Code scanning results / CodeQL" check fails on it; Phase 33 part 2 cannot complete. |
 
 ---
 
@@ -291,6 +291,88 @@ LEFT OPEN
     Also removable: volumes culprit-qs-322_*, culprit-qs-322b_*,
     culprit-qs-332_*.
   - The README partial screenshot and README.md:63, from CI's artifact.
+```
+
+### /ci, 2026-11-10 — PR #28 is red: one open code-scanning alert
+
+```
+Commit:       2e89f47 (the PR head; origin/main 57541e3 is already an ancestor,
+              so the merge result is this tree).
+Earlier /ci:  reported GREEN from the two workflow runs (CI/CD 42191685218 and
+              CodeQL 42191677882, every job success). That was wrong. PR #28's
+              check "CodeQL" (check run 127805239017, the "Code scanning
+              results" check) concluded failure: "1 new alert including 1 high
+              severity security vulnerability". /ci never read PR checks; it
+              does now (step 4b, same commit as this report).
+
+THE ALERT (verbatim from the code-scanning API)
+  Query given:  alerts?ref=refs/pull/28/merge&state=open  -> []   (empty)
+                CodeQL default setup analyses refs/pull/28/head, not the merge
+                ref. alerts?ref=refs/pull/28/head and alerts?pr=28 both return:
+  number        1   https://github.com/Josh-Heath123/Culprit/security/code-scanning/1
+  rule          py/clear-text-storage-sensitive-data
+                "Clear-text storage of sensitive information"
+  severity      security_severity_level=high, severity=error
+  tool          CodeQL 2.27.4, dynamic/github-code-scanning/codeql:analyze
+                /language:python
+  location      scripts/bootstrap_env.py:350, columns 30-50
+                (`render_env_file(env)` in
+                `ENV_PROD_PATH.write_text(render_env_file(env))`)
+  message       "This expression stores sensitive data (password) as clear
+                text." -- 36 source links: 35 "(password)", 1 "(secret)".
+  data flow     Not exposed by the REST API; the message's 36 source links are
+                the path's sources (the GENERATED_SECRETS passwords and the
+                *_DATABASE_URLs built from them, through build_env() ->
+                render_env_file() -> write_text()).
+  instances     refs/heads/main     open  57541e3  scripts/bootstrap_env.py:325
+                refs/pull/28/head   open  2e89f47  scripts/bootstrap_env.py:350
+  created       2026-11-04T15:50:03Z -- open on main before this branch.
+
+WHY IT IS "NEW" ON THIS PR
+  Phase 33 part 2 adds three role passwords (AGENT_ADMIN/REGISTRAR/GATEWAY)
+  and their URLs to build_env(). New sources flow into the same sink, and
+  the sink moved 25 lines, so the check counts it as code this PR changed.
+  The defect class, the statement and the alert number are all main's.
+
+VERDICT: FALSE POSITIVE BY DESIGN. Not dismissed, not suppressed. Q18.
+  1. infra/.env.prod *is* the secret store. Its only consumers are Docker
+     Compose's `env_file: .env.prod` (docker-compose.prod.yml:31,63,83,91
+     and the quickstart file) and `--env-file`, which read plain KEY=VALUE
+     and nothing else. No encrypted or hashed form exists that Compose can
+     consume.
+  2. Every value is a credential the services *present* (Postgres role
+     passwords, DSNs, JWT signing key, project token), not a verifier. A
+     hash would be useless; each must be recoverable in clear by its user.
+  3. The storage is already the protected kind: mode 0600 (chmod right
+     after the write), gitignored (`.gitignore:15 .env.*`), never committed,
+     no value printed except the quickstart admin password, which Phase 17
+     Known Trap 4 permits on the local path only.
+  4. Moving to Docker secrets / files under /run/secrets would change the
+     deploy shape of every service: an architecture decision, out of
+     Phase 33's scope (CLAUDE.md "Scope ceilings").
+  So the rule fires on exactly what the file exists to do. Fixing it would
+  mean not writing the file.
+
+A SEPARATE, REAL, SMALLER WEAKNESS (not what CodeQL flags; not fixed)
+  main() calls write_text() and only then chmod(0o600). On first creation
+  the file exists for a moment with the umask's mode (typically 0644,
+  readable by other local users) holding every secret. Creating it with
+  os.open(..., O_CREAT|O_WRONLY|O_TRUNC, 0o600) closes that. It does not
+  clear alert #1 (still clear-text storage), it predates this branch, and
+  it is outside 33.2's scope -- proposed as its own small commit if the
+  architecture session wants it.
+
+/ci CHANGED (.claude/skills/ci/SKILL.md, step 4b)
+  Green now also requires: every check `gh pr checks <n>` lists is pass or
+  skipping (Code scanning results included), and no open alert from
+  alerts?pr=<n>, ?ref=refs/pull/<n>/merge or ?ref=refs/pull/<n>/head.
+  An alert is never cleared from /ci: fix it with a test, or argue it here
+  and stop.
+
+LEFT OPEN
+  - Q18: dismiss alert #1 (with the reason above) or rule otherwise. Until
+    then PR #28 is red and Phase 33 part 2 is not complete.
+  - Everything in the part 2 LEFT OPEN above still stands.
 ```
 
 
