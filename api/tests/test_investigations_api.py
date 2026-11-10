@@ -148,7 +148,7 @@ def test_untested_and_unexplored_are_kept_apart(client: TestClient) -> None:
     assert _post(client, payload).status_code == 201
     groups = client.get(f"/investigations/{payload['id']}/tree").json()["hypotheses"]
     assert {h["kind"] for h in groups["unexplored"]} == {"auth_audience_mismatch"}
-    assert "config.read.values" in groups["unexplored"][0]["reason"]
+    assert "config.inspect.values" in groups["unexplored"][0]["reason"]
     assert all(h["status"] == "open" for h in groups["untested"])
 
 

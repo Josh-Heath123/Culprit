@@ -37,7 +37,8 @@ Never make a gate green by weakening it. Widening a `lint-imports` contract,
 adding a `# type: ignore`, skipping a test or widening a Postgres role to make a
 check pass is an escalation (§6), not a fix.
 
-**4b. Prove it on the merge result, in CI.** Run `/ci`. This merges
+**4b. Prove it on the merge result, in CI.** Run `/ci` once step 8 has
+committed, pushed and opened the pull request. This merges
 `origin/main` into the branch, re-runs the local gates on the merged tree, pushes,
 and watches the pipeline.
 
@@ -64,8 +65,12 @@ Report honestly. `NOT RUN` and `NOT TESTABLE AS WRITTEN` are real outcomes and
 belong in the report. A criterion you did not execute is not a criterion that
 passed.
 
-**8. Commit, then stop.** Commit the work on its branch. Use
-`git commit -F <message-file>`.
+**8. Commit, push, open the pull request, run `/ci`, then stop.** Commit the
+work on its branch with `git commit -F <message-file>` (never `shared/uv.lock`),
+push the branch, open the pull request with `gh pr create`, and run `/ci` on it
+(step 4b); record the run in §5. Never push to `main`, never force-push, and
+never merge or approve the pull request — merging is the human's, after the
+architecture review.
 
 **A phase is complete only when CI is green on the merge result.** If the
 pipeline is red, the status in §1 is `gates red`, not `complete`, however green

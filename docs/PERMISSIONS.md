@@ -277,6 +277,54 @@ one. A task that needs a grant the agent does not hold is refused before
 anything is dialled; the refusal is a reading and an entry in the agent's
 audit log.
 
+## The agent and the control plane — keys, pairing, allowances
+
+A paired agent proves who it is with an **Ed25519 key** it generates itself
+(`culprit agent init`, written `0600`, never overwritten). Every request it
+sends is signed over its method, its path, a digest of its body, a
+timestamp and a single-use nonce; the control plane refuses a request it
+cannot verify, one more than **300 seconds** from its clock, or one whose
+nonce it has seen, and does not say which. The private key never leaves
+the agent's file: pairing sends only the public half.
+
+**Pairing.** An admin makes a code (`POST /agents/pairing-codes`); it works
+once and expires after **15 minutes**, and only its SHA-256 is stored.
+`culprit agent pair --code` spends it, registering the agent's id, public
+key and the grants its configuration gives in each environment.
+
+**Allowances.** A newly paired agent is allowed nothing. An admin sets,
+per environment, which of the grants the agent reported it may use
+(`PATCH /agents/{id}/grants`); naming a grant it did not report, a
+wildcard or `all` is refused. The allowance is stamped on each task when
+the agent claims it, and the agent intersects it with its configuration
+again — so either side can withhold a grant on the next task, and neither
+can add one. Revoking an agent (`POST /agents/{id}/revoke`) refuses its
+very next request.
+
+### Which credential writes what
+
+| Route | Accepts |
+|---|---|
+| `POST /facts/captures`, `POST /divergences/captures`, `POST /captures` | the project token |
+| `POST /investigations` | the project token, or an agent's signature — recorded as `submitted_by` |
+| `POST /readings` | an agent's signature only; every reading must name that agent |
+| `POST /agents/register` | a pairing code, spent once |
+| `/agents/me/...` (claim, result, audit) | the agent's signature |
+| every other `/agents` route | an admin's session |
+
+`api/tests/test_route_credentials.py` reads the application's routes and
+fails if the project token is accepted anywhere else.
+
+### The agent roles
+
+Three database roles, one per write surface (migration `d7a3e5f1b9c2`):
+**`agent-admin`** makes pairing codes, sets allowances, revokes and
+addresses tasks; **`agent-registrar`** spends a code and inserts the agent,
+nothing more; **`agent-gateway`** looks up keys, records nonces, reads
+allowances, claims and completes tasks and appends audit entries. No role
+holds UPDATE or DELETE on `agent_audit_log`, and triggers refuse both, and
+TRUNCATE, to every role including the owner.
+
 ## How Culprit reaches an environment
 
 | Adapter | Reads through | Needs on the machine running Culprit |

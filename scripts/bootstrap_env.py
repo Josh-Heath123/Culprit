@@ -27,8 +27,10 @@ must never again be a human's job to remember.
 
 import argparse
 import getpass
+import os
 import secrets
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -56,6 +58,9 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("CAPTURE_WRITER_DB_PASSWORD", "capture-writer role (Phase 30)"),
     ("PROBE_WRITER_DB_PASSWORD", "probe-writer role (Phase 31)"),
     ("INVESTIGATION_WRITER_DB_PASSWORD", "investigation-writer role (Phase 32)"),
+    ("AGENT_ADMIN_DB_PASSWORD", "agent-admin role (Phase 33)"),
+    ("AGENT_REGISTRAR_DB_PASSWORD", "agent-registrar role (Phase 33)"),
+    ("AGENT_GATEWAY_DB_PASSWORD", "agent-gateway role (Phase 33)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
@@ -241,6 +246,21 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["INVESTIGATION_WRITER_DATABASE_URL"] = _db_url(
         "investigation-writer", passwords["INVESTIGATION_WRITER_DB_PASSWORD"], "postgres"
     )
+    # Phase 33 part 2: one role per agent write surface -- agent-admin (what
+    # an admin does), agent-registrar (pairing), agent-gateway (an agent's
+    # own signed requests).
+    env["AGENT_ADMIN_DB_PASSWORD"] = passwords["AGENT_ADMIN_DB_PASSWORD"]
+    env["AGENT_ADMIN_DATABASE_URL"] = _db_url(
+        "agent-admin", passwords["AGENT_ADMIN_DB_PASSWORD"], "postgres"
+    )
+    env["AGENT_REGISTRAR_DB_PASSWORD"] = passwords["AGENT_REGISTRAR_DB_PASSWORD"]
+    env["AGENT_REGISTRAR_DATABASE_URL"] = _db_url(
+        "agent-registrar", passwords["AGENT_REGISTRAR_DB_PASSWORD"], "postgres"
+    )
+    env["AGENT_GATEWAY_DB_PASSWORD"] = passwords["AGENT_GATEWAY_DB_PASSWORD"]
+    env["AGENT_GATEWAY_DATABASE_URL"] = _db_url(
+        "agent-gateway", passwords["AGENT_GATEWAY_DB_PASSWORD"], "postgres"
+    )
 
     # Phase 28: the project token `culprit` presents to POST
     # /facts/captures. Not a DB role password (like JWT_SECRET_KEY and
@@ -264,6 +284,13 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     # Let's Encrypt still kicks in. CORS_ALLOW_ORIGINS above intentionally
     # uses the bare `resolved_domain`, not this value.
     env["DOMAIN"] = f"http://{resolved_domain}" if local else resolved_domain
+    if local:
+        # Phase 33 part 2: an agent in a container on this machine reaches
+        # the quickstart through the host's published port, as
+        # host.docker.internal -- a host name Caddy must also answer, or
+        # its requests match no site. Two site addresses, both plain HTTP,
+        # both on this machine only.
+        env["DOMAIN"] += ", http://host.docker.internal"
     if local:
         env["IMAGE_REGISTRY"] = ""
         env["IMAGE_TAG"] = ""
@@ -302,6 +329,31 @@ def render_env_file(env: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def write_private(path: Path, text: str) -> None:
+    """Write `text` to `path` so that the file never exists readable by
+    anyone but its owner (Q18, DIAGNOSTIC_PLAN.md end of Phase 33).
+
+    The file holds every secret in clear text by design; Compose's
+    env_file reads nothing else. Writing it and then chmod-ing it left a
+    window in which a fresh file had the umask's mode (0644), and --force
+    wrote new secrets into whatever mode the old file had. Instead:
+    mkstemp creates a 0600 file in the same directory (same filesystem,
+    so the rename is atomic), it is filled and fsynced, and os.replace
+    moves it over the path in one step.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local", action="store_true", help="generate a local-quickstart env")
@@ -321,9 +373,7 @@ def main() -> int:
 
     env, admin_password = build_env(local=args.local, domain=args.domain)
 
-    ENV_PROD_PATH.parent.mkdir(parents=True, exist_ok=True)
-    ENV_PROD_PATH.write_text(render_env_file(env))
-    ENV_PROD_PATH.chmod(0o600)
+    write_private(ENV_PROD_PATH, render_env_file(env))
 
     print(f"wrote {ENV_PROD_PATH} (mode 0600)")
     print(f"generated {len(GENERATED_SECRETS)} secrets; no secret value is printed above.")

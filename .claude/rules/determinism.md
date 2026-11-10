@@ -41,11 +41,15 @@ model" is always the shortest path and always looks fine in a demo.
   service a question under `net.http.outbound`. The blanket "the binary
   links no `net/http`" assertion was therefore replaced, and since Phase
   31.1 (D8, amended) it is an **allowlist** (`cli/cmd/culprit/check_test.go`,
-  `TestTheNetworkBoundaryIsAnAllowlist`): only `internal/probe` may link
-  `net/http`; only `internal/probe` and `internal/capture` may link `net`
-  or `crypto/tls`; every other package `go list ./internal/...` finds may
-  link none of them, so a package created tomorrow is covered the day it
-  exists. Probes are deterministic: a verdict is
+  `TestTheNetworkBoundaryIsAnAllowlist`): only `internal/probe` and, since
+  Phase 33, `internal/transport` may link `net/http`; only those two and
+  `internal/capture` may link `net` or `crypto/tls`; every other package
+  `go list ./internal/...` finds may link none of them, so a package
+  created tomorrow is covered the day it exists. `internal/transport` is
+  the agent's connection to its control plane: it dials only the
+  configured address, follows no redirect, takes no proxy and decides
+  nothing; and no code in the binary may open a listener
+  (`TestNothingInTheBinaryListens`). Probes are deterministic: a verdict is
   computed from what came back on the wire against an expectation that
   came from a Fact. Nothing is judged, and the HTTP client has no method
   that can send a body.

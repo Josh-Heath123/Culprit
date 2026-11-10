@@ -23,6 +23,8 @@ investigations = sa.Table(
     sa.Column("complete", sa.Boolean),
     sa.Column("diagnosis", postgresql.JSONB),
     sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False),
+    # Phase 33 part 2: "project-token", or "agent:<id>".
+    sa.Column("submitted_by", sa.Text, nullable=False),
 )
 
 investigation_readings = sa.Table(

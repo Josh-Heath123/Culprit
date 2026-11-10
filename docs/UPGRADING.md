@@ -116,6 +116,51 @@ already did. A file that says `kind: queue` (or any other kind) for a
 connection made `culprit check` and `culprit diagnose` load it and then skip
 that edge; it now exits 2 naming the edge. Change `queue` to `message`.
 
+**Phase 33** renames the grant `culprit diagnose` needs to inspect a bearer
+token. `probe.auth.token_shape` used to read the token under
+`config.read.values`; it now needs `config.inspect.values` for that exact
+key, and `config.read.values` no longer counts — storing a value and
+inspecting one are different permissions (`docs/PERMISSIONS.md`). An
+environment written for the older binary, such as
+
+```yaml
+grants:
+  config.read.values: [order-service/INVENTORY_TOKEN]
+```
+
+still loads, but the audience hypothesis is now refused and the diagnosis
+is partial, naming `config.inspect.values`. Rename the grant:
+
+```yaml
+grants:
+  config.inspect.values: [order-service/INVENTORY_TOKEN]
+```
+
+Keep `config.read.values` for that key only if you also want
+`culprit env capture` to store the token's value, which you almost
+certainly do not.
+
+**Phase 33 part 2 adds six more**, for the three agent roles:
+
+```
+AGENT_ADMIN_DB_PASSWORD=<generate one>
+AGENT_ADMIN_DATABASE_URL=postgresql+asyncpg://agent-admin:<same password>@postgres:5432/culprit
+AGENT_REGISTRAR_DB_PASSWORD=<generate one>
+AGENT_REGISTRAR_DATABASE_URL=postgresql+asyncpg://agent-registrar:<same password>@postgres:5432/culprit
+AGENT_GATEWAY_DB_PASSWORD=<generate one>
+AGENT_GATEWAY_DATABASE_URL=postgresql+asyncpg://agent-gateway:<same password>@postgres:5432/culprit
+```
+
+All required: the migration creating the roles will not run without the
+passwords, and the api will not start without the URLs.
+
+**`POST /readings` no longer accepts the project token.** It takes an
+agent's signed request and nothing else (`docs/PERMISSIONS.md`). A CI job
+or script that posted readings with `CULPRIT_PROJECT_TOKEN` now gets `401`;
+run those probes through a paired agent instead. The project token keeps
+the three capture endpoints and `POST /investigations`, where it is now
+recorded as the submitter.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

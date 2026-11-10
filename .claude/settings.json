@@ -32,11 +32,11 @@
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr diff:*)",
-      "Bash(gh workflow view:*)"
+      "Bash(gh workflow view:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
     ],
     "ask": [
-      "Bash(git push:*)",
-      "Bash(gh pr create:*)",
       "Bash(gh pr merge:*)",
       "Bash(gh release:*)",
       "Bash(docker compose -f infra/docker-compose.prod.yml:*)",
@@ -64,7 +64,11 @@
       "Bash(docker system prune:*)",
       "Bash(docker volume rm:*)",
       "Bash(curl * | sh)",
-      "Bash(curl * | bash)"
+      "Bash(curl * | bash)",
+      "Bash(git push origin main:*)",
+      "Bash(git push -u origin main:*)",
+      "Bash(git push origin HEAD:main:*)",
+      "Bash(gh pr merge --admin:*)"
     ]
   },
   "hooks": {

@@ -78,6 +78,9 @@ _MIGRATION_ROLE_PASSWORDS = {
     "CAPTURE_WRITER_DB_PASSWORD": "round-trip-capture-writer",
     "PROBE_WRITER_DB_PASSWORD": "round-trip-probe-writer",
     "INVESTIGATION_WRITER_DB_PASSWORD": "round-trip-investigation-writer",
+    "AGENT_ADMIN_DB_PASSWORD": "round-trip-agent-admin",
+    "AGENT_REGISTRAR_DB_PASSWORD": "round-trip-agent-registrar",
+    "AGENT_GATEWAY_DB_PASSWORD": "round-trip-agent-gateway",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:
@@ -220,6 +223,39 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             ") "
             "INSERT INTO fault_edge_readings (investigation_id, edge_id, reading_id) "
             "SELECT e.investigation_id, 0, 'r1' FROM e",
+        ),
+        (
+            # Phase 33 part 2: a paired agent with an allowance, a claimed
+            # and completed task, a nonce and the first entry of its audit
+            # chain (seq 1, prev the genesis hash — the chain trigger
+            # refuses anything else). The d7a3e5f1b9c2 downgrade drops the
+            # append-only log over a row it can never delete.
+            "agent, task and audit row",
+            "WITH c AS ("
+            "  INSERT INTO agent_pairing_codes "
+            "  (code_hash, created_by, expires_at, used_at, used_by) "
+            f"  VALUES ('{'a' * 64}', 'rt-admin', "
+            "          now() + interval '15 minutes', now(), 'rt-agent') "
+            "  RETURNING id"
+            "), a AS ("
+            "  INSERT INTO agents (id, public_key, reported_grants, pairing_code_id) "
+            "  SELECT 'rt-agent', decode(repeat('ab', 32), 'hex'), "
+            "         '{\"rt-env\": [\"net.tcp.connect\"]}'::jsonb, c.id FROM c RETURNING id"
+            "), w AS ("
+            "  INSERT INTO agent_allowances (agent_id, environment, grants, updated_by) "
+            "  SELECT a.id, 'rt-env', ARRAY['net.tcp.connect'], 'rt-admin' "
+            "  FROM a RETURNING agent_id"
+            "), t AS ("
+            "  INSERT INTO agent_tasks (id, agent_id, environment, kind, spec, created_by, "
+            "                           claimed_at, allowance, completed_at, outcome) "
+            "  SELECT 'task-rt', w.agent_id, 'rt-env', 'probe', '{}'::jsonb, 'rt-admin', "
+            "         now(), ARRAY['net.tcp.connect'], now(), 'completed' FROM w RETURNING agent_id"
+            "), n AS ("
+            "  INSERT INTO agent_nonces (agent_id, nonce) "
+            f"  SELECT t.agent_id, '{'0' * 32}' FROM t RETURNING agent_id"
+            ") "
+            "INSERT INTO agent_audit_log (agent_id, seq, prev, hash, kind, task_id, entry) "
+            f"SELECT n.agent_id, 1, '{'0' * 64}', '{'b' * 64}', 'task', 'task-rt', '{{}}' FROM n",
         ),
     )
 

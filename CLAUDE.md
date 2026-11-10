@@ -11,18 +11,20 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 33, part 1 — the agent, standing alone, on branch
-  `phase-33-agent`. Phases 26–32.2 are merged. Parts 2 (the control plane)
-  and 3 (the operator's surface) follow, each after a review.
+- **Current phase:** 33, part 2 — the agent meets the control plane, on
+  branch `phase-33-control-plane`. Phases 26–33 part 1 are merged. Part 3 (the
+  operator's surface) follows after a review.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Read §1 (D1–D8),
   §2 (the core model) and the phase you are working on — not the whole file.
 - **Deploy is paused** (2026-11-05): the hosted VM is offline, and the `deploy`
   job runs only when started by hand. Phase 33 builds against a local control
   plane.
-- **The human commits.** Stage the work, write the message to a file, stop,
-  and print the one `git commit -F <file>` command. A phase is complete only
-  when CI is green on the merge result (`/ci`), and the next phase never starts
-  without a human keystroke.
+- **Claude Code commits, pushes and opens the pull request; only the human
+  merges.** Commit on the phase branch (`git commit -F <file>`, never
+  `shared/uv.lock`), push it, open the PR with `gh pr create`, run `/ci`. Never
+  push to `main`, force-push, merge or approve. A phase is complete only when
+  CI is green on the merge result, and the next phase never starts without a
+  human keystroke.
 
 ## What Culprit is
 

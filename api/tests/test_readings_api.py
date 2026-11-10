@@ -1,6 +1,10 @@
 """`POST /readings` (Phase 31), against a real database, under the real
 roles: `probe-writer` for the write, `api-reader` for the read-back.
 
+Since Phase 33 part 2 the endpoint takes an agent's signature and nothing
+else, so every post here is signed by a test agent registered in the
+fixture, and every reading names it (app/agents/dependencies.py).
+
 `readings` had no grant on it at all until this phase — it was created in
 Phase 26 and deliberately left unreachable. These tests are therefore as
 much about what the new role *cannot* do as about the endpoint working:
@@ -9,13 +13,19 @@ of it back, which is the property that makes a leaked probe credential a
 small problem rather than a disclosure of every measurement ever taken.
 """
 
+import base64
 import importlib
+import json
 import os
+import secrets
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from culprit_model.subjects import build
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,6 +33,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 PROJECT_TOKEN = "test-project-token-not-a-real-secret"
+AGENT_ID = "readings-test-agent"
+AGENT_KEY = Ed25519PrivateKey.generate()
 # Built, never hand-formatted — scripts/tests/test_subject_construction.py
 # holds tests to the same rule as application code.
 EDGE = build("connection", from_component="orders-api", to_component="payments-api")
@@ -37,7 +49,7 @@ def _reading(**overrides) -> dict:
         "verdict": "pass",
         "measured": {"metric": "http.server.duration", "deviation": 0.4, "samples": 120},
         "taken_at": datetime(2026, 9, 12, 10, 0, tzinfo=UTC).isoformat(),
-        "agent_id": "culprit-worker",
+        "agent_id": AGENT_ID,
         "grants_used": ["telemetry.metrics.read"],
     }
     reading.update(overrides)
@@ -50,8 +62,19 @@ async def client(
     role_database_url,
     db_engine: AsyncEngine,
 ) -> AsyncIterator[TestClient]:
+    public = AGENT_KEY.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     async with db_engine.begin() as conn:
         await conn.execute(text("TRUNCATE readings"))
+        # The test agent, registered as pairing would register it.
+        await conn.execute(
+            text(
+                "WITH c AS (INSERT INTO agent_pairing_codes (code_hash, created_by, expires_at, "
+                "used_at, used_by) VALUES (:h, 'test', now(), now(), :a) RETURNING id) "
+                "INSERT INTO agents (id, public_key, reported_grants, pairing_code_id) "
+                "SELECT :a, :k, '{}'::jsonb, c.id FROM c ON CONFLICT (id) DO NOTHING"
+            ),
+            {"h": secrets.token_hex(32), "a": AGENT_ID, "k": public},
+        )
 
     os.environ["PROBE_WRITER_DATABASE_URL"] = role_database_url(
         "probe-writer", "PROBE_WRITER_DB_PASSWORD"
@@ -72,8 +95,10 @@ async def client(
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     writer = create_async_engine(readings_config.PROBE_WRITER_DATABASE_URL)
+    gateway = create_async_engine(role_database_url("agent-gateway", "AGENT_GATEWAY_DB_PASSWORD"))
     app = FastAPI()
     app.state.probe_writer_session_factory = async_sessionmaker(writer, expire_on_commit=False)
+    app.state.agent_gateway_session_factory = async_sessionmaker(gateway, expire_on_commit=False)
     install_error_handlers(app)
     app.include_router(readings_router_module.router)
     # A user session is require_auth's own concern and has its own tests;
@@ -83,13 +108,37 @@ async def client(
     with TestClient(app) as test_client:
         yield test_client
     await writer.dispose()
+    await gateway.dispose()
 
 
-def _post(client: TestClient, payload: dict, token: str | None = PROJECT_TOKEN):
-    headers = {}
+def _signed(body: bytes) -> dict[str, str]:
+    from app.agents import signing
+
+    request = signing.SignedRequest(
+        method="POST",
+        path="/readings",
+        body=body,
+        timestamp=int(time.time()),
+        nonce=secrets.token_hex(16),
+        agent_id=AGENT_ID,
+    )
+    return {
+        signing.HEADER_AGENT: AGENT_ID,
+        signing.HEADER_TIMESTAMP: str(request.timestamp),
+        signing.HEADER_NONCE: request.nonce,
+        signing.HEADER_SIGNATURE: base64.b64encode(
+            AGENT_KEY.sign(signing.canonical(request))
+        ).decode(),
+        "Content-Type": "application/json",
+    }
+
+
+def _post(client: TestClient, payload: dict, signed: bool = True, token: str | None = None):
+    body = json.dumps(payload).encode()
+    headers = _signed(body) if signed else {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    return client.post("/readings", json=payload, headers=headers)
+    return client.post("/readings", content=body, headers=headers)
 
 
 async def _count(db_engine: AsyncEngine) -> int:
@@ -132,9 +181,13 @@ async def test_an_exact_duplicate_within_one_batch_is_collapsed(
     assert await _count(db_engine) == 2
 
 
-def test_a_reading_without_the_project_token_is_refused(client: TestClient) -> None:
-    assert _post(client, {"readings": [_reading()]}, token=None).status_code == 401
-    assert _post(client, {"readings": [_reading()]}, token="wrong").status_code == 401
+def test_a_reading_without_an_agents_signature_is_refused(client: TestClient) -> None:
+    """Phase 33 part 2: the project token, which this endpoint took until
+    then, is refused like any other credential that is not an agent's."""
+    payload = {"readings": [_reading()]}
+    assert _post(client, payload, signed=False).status_code == 401
+    assert _post(client, payload, signed=False, token=PROJECT_TOKEN).status_code == 401
+    assert _post(client, payload, signed=False, token="wrong").status_code == 401
 
 
 @pytest.mark.asyncio

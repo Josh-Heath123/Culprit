@@ -53,6 +53,9 @@ _IMPORT_TIME_DEFAULTS = {
     ),
     "PROBE_WRITER_DATABASE_URL": "postgresql+asyncpg://probe-writer:test@localhost:5432/test",
     "INVESTIGATION_WRITER_DATABASE_URL": "postgresql+asyncpg://investigation-writer:test@localhost:5432/test",
+    "AGENT_ADMIN_DATABASE_URL": "postgresql+asyncpg://agent-admin:test@localhost:5432/test",
+    "AGENT_REGISTRAR_DATABASE_URL": "postgresql+asyncpg://agent-registrar:test@localhost:5432/test",
+    "AGENT_GATEWAY_DATABASE_URL": "postgresql+asyncpg://agent-gateway:test@localhost:5432/test",
     "CULPRIT_PROJECT_TOKEN": "test-project-token",
 }
 for _name, _value in _IMPORT_TIME_DEFAULTS.items():
@@ -80,6 +83,9 @@ _MIGRATION_ROLE_PASSWORDS = {
     "CAPTURE_WRITER_DB_PASSWORD": "test-capture-writer-password",
     "PROBE_WRITER_DB_PASSWORD": "test-probe-writer-password",
     "INVESTIGATION_WRITER_DB_PASSWORD": "test-investigation-writer-password",
+    "AGENT_ADMIN_DB_PASSWORD": "test-agent-admin-password",
+    "AGENT_REGISTRAR_DB_PASSWORD": "test-agent-registrar-password",
+    "AGENT_GATEWAY_DB_PASSWORD": "test-agent-gateway-password",
 }
 
 

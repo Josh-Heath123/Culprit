@@ -1,7 +1,7 @@
 {
-  "id": "inv-3544993decfd3a43",
-  "opened_at": "2026-11-05T17:18:27.033896309Z",
-  "closed_at": "2026-11-05T17:18:27.040393887Z",
+  "id": "inv-402a1002c0f5d50c",
+  "opened_at": "2026-11-06T07:04:55.960302084Z",
+  "closed_at": "2026-11-06T07:04:55.965225817Z",
   "environment": "faults-payments",
   "symptom": {
     "kind": "endpoint",
@@ -86,7 +86,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-05T17:18:27.037022068Z",
+        "taken_at": "2026-11-06T07:04:55.962769846Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -107,7 +107,7 @@
           "url": "http://payments-service:8003/ready"
         },
         "reason": "http://payments-service:8003/ready answered 503; the service is reachable but failing",
-        "taken_at": "2026-11-05T17:18:27.040127198Z",
+        "taken_at": "2026-11-06T07:04:55.96501111Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -137,7 +137,7 @@
           "confidence_rank": 100
         },
         "reason": "payments-service reads PAYMENTS_PROVIDER_KEY with no default, and it is not set in this environment",
-        "taken_at": "2026-11-05T17:18:27.040273359Z",
+        "taken_at": "2026-11-06T07:04:55.965121657Z",
         "agent_id": "fault-library",
         "grants_used": [
           "config.read.names"
@@ -167,7 +167,7 @@
           "confidence_rank": 100
         },
         "reason": "payments-service reads PAYMENTS_PROVIDER_KEY with no default, and it is not set in this environment",
-        "taken_at": "2026-11-05T17:18:27.040349066Z",
+        "taken_at": "2026-11-06T07:04:55.965185891Z",
         "agent_id": "fault-library",
         "grants_used": [
           "config.read.names"

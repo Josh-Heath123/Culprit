@@ -1,7 +1,7 @@
 {
-  "id": "inv-e208574995a26b93",
-  "opened_at": "2026-11-05T17:18:42.553226231Z",
-  "closed_at": "2026-11-05T17:18:44.164197891Z",
+  "id": "inv-3c9c9fc2b02ac57b",
+  "opened_at": "2026-11-06T07:05:10.213540467Z",
+  "closed_at": "2026-11-06T07:05:11.82470428Z",
   "environment": "faults-order",
   "symptom": {
     "kind": "endpoint",
@@ -98,7 +98,7 @@
           "status": 200,
           "url": "http://inventory-service:8002/ready"
         },
-        "taken_at": "2026-11-05T17:18:43.356469247Z",
+        "taken_at": "2026-11-06T07:05:11.017411452Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -118,7 +118,7 @@
           "status": 200,
           "url": "http://payments-service:8003/ready"
         },
-        "taken_at": "2026-11-05T17:18:43.358764939Z",
+        "taken_at": "2026-11-06T07:05:11.020232874Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
@@ -137,7 +137,7 @@
           "host": "inventory-service",
           "port": 8002
         },
-        "taken_at": "2026-11-05T17:18:43.359388065Z",
+        "taken_at": "2026-11-06T07:05:11.020948816Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -156,7 +156,7 @@
           "host": "payments-service",
           "port": 8003
         },
-        "taken_at": "2026-11-05T17:18:43.359913299Z",
+        "taken_at": "2026-11-06T07:05:11.021514723Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.tcp.connect"
@@ -167,7 +167,7 @@
       "id": "r5",
       "reading": {
         "probe_id": "probe.auth.token_shape",
-        "probe_version": 2,
+        "probe_version": 3,
         "target": "auth:order-service-\u003einventory-service/audience",
         "environment": "faults-order",
         "verdict": "pass",
@@ -176,14 +176,17 @@
             "inventory-service"
           ],
           "expired": false,
-          "expires_in_seconds": 3508,
+          "expires_in_seconds": 3518,
           "issuer": "order-service"
         },
         "expected": {
           "audience": "inventory-service"
         },
-        "taken_at": "2026-11-05T17:18:43.360019443Z",
-        "agent_id": "fault-library"
+        "taken_at": "2026-11-06T07:05:11.021613116Z",
+        "agent_id": "fault-library",
+        "grants_used": [
+          "config.inspect.values"
+        ]
       }
     },
     {
@@ -209,7 +212,7 @@
           "locator": "invariants[1]",
           "confidence_rank": 100
         },
-        "taken_at": "2026-11-05T17:18:44.164070775Z",
+        "taken_at": "2026-11-06T07:05:11.824643868Z",
         "agent_id": "fault-library",
         "grants_used": [
           "net.http.outbound"
