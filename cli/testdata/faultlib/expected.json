@@ -3,7 +3,7 @@
     "Phase 32's fault library: every fault the demo services can be given, with the diagnosis `culprit diagnose` must reach. cli/cmd/culprit/faultlib_test.go injects each one into demo-services/faults/docker-compose.yml, runs the walk inside the named vantage container, and compares.",
     "This is the regression suite for the product's core claim — the walk finds the root, not the symptom — and it runs in CI on every push (DIAGNOSTIC_PLAN.md Phase 32 field 15).",
     "relations is the set of relations the fault tree must contain, exactly. rubric is §2.9; verified is false on every diagnosis: a diagnosis is never edited, and whether it is verified is a verification's to say (Phase 34).",
-    "fix is the known fix for each fault, applied by the test once the diagnosis is checked, and the verdict `culprit verify` must then give, run in the same vantage with the changes named. Three fixes are runtime actions — a firewall rule removed, an injected fault cleared — which are none of an image, a config key or a commit; they are named as a commit with a ref derived from the fix's name (sha1 of 'culprit fault library fix: <name>', first 12 hex characters), because no real commit applied them. A commit explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed. Raised for review as Q20.",
+    "fix is the known fix for each fault, applied by the test once the diagnosis is checked, and the verdict `culprit verify` must then give, run in the same vantage with the changes named. Three fixes are runtime actions — a firewall rule removed, an injected fault cleared — which are none of an image, a config key or a commit: they are named as actions, in words (Q20, ruled 2026-11-10). No record here names a commit, because no commit applied any of these fixes. An action, like a commit, explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed.",
     "scenarios are the verdicts a fix should not get: a wrong fix, a fix that breaks what passed, and a change underneath that nothing named explains."
   ],
   "symptom": "POST http://order-service:8001/orders",
@@ -91,7 +91,7 @@
       "fix": {
         "how": "the REJECT rule removed",
         "change": [
-          "commit:a1a58bcf42aa"
+          "action:removed the REJECT rule for inventory-service from order-service's network namespace"
         ],
         "verdict": "verified"
       }
@@ -183,7 +183,7 @@
       "fix": {
         "how": "the injected error rate cleared",
         "change": [
-          "commit:3f5db2dd4bdc"
+          "action:cleared the error rate injected into inventory-service"
         ],
         "verdict": "verified"
       }
@@ -208,7 +208,7 @@
       "fix": {
         "how": "the injected latency cleared; the walk found no failing reading, so there is nothing a fix can be seen to fix",
         "change": [
-          "commit:a36e132a4699"
+          "action:cleared the latency injected into inventory-service"
         ],
         "verdict": "inconclusive",
         "reason_contains": "no failing reading"

@@ -81,6 +81,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AGENT_ADMIN_DB_PASSWORD": "round-trip-agent-admin",
     "AGENT_REGISTRAR_DB_PASSWORD": "round-trip-agent-registrar",
     "AGENT_GATEWAY_DB_PASSWORD": "round-trip-agent-gateway",
+    "VERIFICATION_WRITER_DB_PASSWORD": "round-trip-verification-writer",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:

@@ -1997,18 +1997,19 @@ not captured at all — only an endpoint declared on a component is.
 
 ### What a named change explains
 
-`--change` takes three kinds. `config:<component>/<key>` explains a
+`--change` takes four kinds. `config:<component>/<key>` explains a
 difference on that key alone. `image:<component>` explains that
 component's image and its installed packages, which ship in it — not its
 config keys, even ones the image's `ENV` sets: name those too.
 `commit:<sha>` explains **nothing** a capture records, because a capture
 holds no commits: it identifies the fix, and the verdict then rests on the
-readings and on the environment not having changed. A fix that is none of
-the three — a firewall rule removed, a process restarted, an injected
-fault cleared — can only be named as a commit. The fault library does
-exactly that for three of its faults, with a ref derived from the fix's
-name, because no real commit applied them (Q20 in the handoff asks whether
-part 2 should add a kind for it).
+readings and on the environment not having changed. A ref is checked for
+its form (7 to 40 hex characters), never for whether that commit exists.
+`action:<what was done>` is a fix that is none of the others — a firewall
+rule removed, a process restarted, an injected fault cleared — in words, at
+most 500 characters. It too explains nothing a capture records, and its
+words are the operator's: Culprit records them and checks nothing in them.
+The fault library names its three runtime fixes this way.
 
 ### Two runs is a floor, not a proof
 

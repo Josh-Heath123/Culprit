@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from culprit_model.capabilities import Capability
+from culprit_model.verifications import Change
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agents.signing import AGENT_ID
@@ -118,11 +119,25 @@ class DiagnoseSpec(_Strict):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+class VerifySpec(_Strict):
+    """`culprit verify` as a task (Phase 34 part 2): measure again what an
+    investigation this agent diagnosed found, after a change was applied."""
+
+    investigation_id: str = Field(pattern=r"^inv-[0-9a-f]{16}$")
+    #: What was applied, as `--change` names it. None named is allowed and
+    #: verifies as inconclusive, saying so.
+    changes: list[Change] = Field(default_factory=list, max_length=32)
+    #: Whether the fault was planted (a drill) or happened on a real
+    #: system: said by whoever asks, never guessed.
+    source: Literal["planted", "real"]
+
+
 class TaskCreate(_Strict):
     environment: str = Field(min_length=1, max_length=128)
-    kind: Literal["probe", "diagnose"]
+    kind: Literal["probe", "diagnose", "verify"]
     probe: ProbeSpec | None = None
     diagnose: DiagnoseSpec | None = None
+    verify: VerifySpec | None = None
 
 
 class TaskCreated(BaseModel):
@@ -137,6 +152,7 @@ class ClaimedTask(BaseModel):
     kind: str
     probe: dict[str, Any] | None = None
     diagnose: dict[str, Any] | None = None
+    verify: dict[str, Any] | None = None
     #: The operator's allowance for this environment, as it stood when the
     #: task was claimed. The agent intersects it with its own grants.
     allowance: list[str]
@@ -149,6 +165,13 @@ class TaskResult(_Strict):
     allowance_ignored: list[str] = []
     readings: int = 0
     investigation_id: str | None = Field(default=None, max_length=128)
+    #: A verify task's verification, once stored, and its verdict — or the
+    #: verdict alone, `inconclusive`, when nothing could be measured.
+    verification_id: str | None = Field(default=None, max_length=128)
+    verdict: (
+        Literal["verified", "not_resolved", "regressed", "changed_underneath", "inconclusive"]
+        | None
+    ) = None
 
 
 class TaskView(BaseModel):

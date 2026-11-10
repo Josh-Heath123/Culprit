@@ -207,6 +207,21 @@ func TestTheLoopEndToEnd(t *testing.T) {
 		}
 	})
 
+	t.Run("a fix that is an action, in words, is verified and recorded as one", func(t *testing.T) {
+		loop, server := newLoop(t)
+		inv := loop.diagnose("local")
+		server.ordersServed.Store(true)
+		verification, _ := loop.verify(inv.ID, "action: restarted the orders route's handler")
+		if verification.Verdict != model.VerificationVerified {
+			t.Fatalf("verdict %s: %s", verification.Verdict, verification.Reason)
+		}
+		named := verification.AppliedChange
+		if len(named) != 1 || named[0].Kind != model.ChangeAction ||
+			named[0].Description != "restarted the orders route's handler" || named[0].Ref != "" {
+			t.Errorf("the change is recorded as %+v, want the action in its own words", named)
+		}
+	})
+
 	t.Run("a wrong fix is not_resolved", func(t *testing.T) {
 		loop, _ := newLoop(t)
 		inv := loop.diagnose("local")
@@ -309,10 +324,11 @@ func TestVerifyRefusesWhatItCannotUse(t *testing.T) {
 			"--state-dir", loop.state, "-f", loop.manifest, "--no-plugins"},
 		"no vantage, where the diagnosis had one": {"verify", diagnosed, "--change", "commit:9f2c4e1",
 			"--state-dir", loop.state, "-f", loop.manifest, "--no-plugins"},
-		"an id that is not one":     {"verify", "../../etc", "--state-dir", loop.state, "-f", loop.manifest},
-		"an investigation not kept": {"verify", "inv-0000000000000000", "--state-dir", loop.state, "-f", loop.manifest},
-		"a change of no known kind": {"verify", "inv-0000000000000000", "--change", "restart:web", "--state-dir", loop.state},
-		"a commit that is not one":  {"verify", "inv-0000000000000000", "--change", "commit:main", "--state-dir", loop.state},
+		"an id that is not one":       {"verify", "../../etc", "--state-dir", loop.state, "-f", loop.manifest},
+		"an investigation not kept":   {"verify", "inv-0000000000000000", "--state-dir", loop.state, "-f", loop.manifest},
+		"a change of no known kind":   {"verify", "inv-0000000000000000", "--change", "restart:web", "--state-dir", loop.state},
+		"a commit that is not one":    {"verify", "inv-0000000000000000", "--change", "commit:main", "--state-dir", loop.state},
+		"an action that says nothing": {"verify", "inv-0000000000000000", "--change", "action:   ", "--state-dir", loop.state},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := run(t, arguments...)

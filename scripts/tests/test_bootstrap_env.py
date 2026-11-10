@@ -93,6 +93,7 @@ def test_the_generated_registry_matches_the_compose_default() -> None:
         "AGENT_ADMIN_DB_PASSWORD",
         "AGENT_REGISTRAR_DB_PASSWORD",
         "AGENT_GATEWAY_DB_PASSWORD",
+        "VERIFICATION_WRITER_DB_PASSWORD",
         "MCP_READER_DB_PASSWORD",
     ],
 )

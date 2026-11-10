@@ -63,9 +63,15 @@ class ChangeKind(StrEnum):
     IMAGE = "image"
     CONFIG = "config"
     COMMIT = "commit"
+    #: a fix that is none of the others — a firewall rule removed, a flag
+    #: cleared, a service restarted — described in words (Q20).
+    ACTION = "action"
 
 
 _COMMIT_REF = re.compile(r"^[0-9a-f]{7,40}$")
+
+#: The longest an action's description may be, in characters.
+MAX_ACTION_DESCRIPTION = 500
 
 #: A name that is not blank: Go trims before it checks, and so does this.
 Named = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -79,12 +85,14 @@ def _parsed(subject: str) -> tuple[SubjectKind, dict[str, str]] | None:
 
 
 def _article(kind: ChangeKind) -> str:
-    return "an image" if kind is ChangeKind.IMAGE else f"a {kind.value}"
+    if kind in (ChangeKind.IMAGE, ChangeKind.ACTION):
+        return f"an {kind.value}"
+    return f"a {kind.value}"
 
 
 class Change(BaseModel):
     """What was applied: an image for a component, a config key for a
-    component, or a commit."""
+    component, a commit, or an action described in words."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -93,8 +101,10 @@ class Change(BaseModel):
     subject: str | None = None
     #: a commit id, 7 to 40 lowercase hex characters.
     ref: str | None = None
+    #: what an action did, in words.
+    description: str | None = None
 
-    @field_validator("subject", "ref", mode="before")
+    @field_validator("subject", "ref", "description", mode="before")
     @classmethod
     def _empty_is_absent(cls, value: object) -> object:
         # Go writes an absent subject or ref as nothing, and reads "" as
@@ -103,6 +113,23 @@ class Change(BaseModel):
 
     @model_validator(mode="after")
     def _names_one_thing_of_its_kind(self) -> "Change":
+        if self.kind is ChangeKind.ACTION:
+            if self.subject is not None or self.ref is not None:
+                raise ValueError("an action change is described in words, with no subject or ref")
+            described = (self.description or "").strip()
+            if not described:
+                raise ValueError("an action change says what was done")
+            if len(described) > MAX_ACTION_DESCRIPTION:
+                raise ValueError(
+                    f"an action's description is {len(described)} characters; "
+                    f"at most {MAX_ACTION_DESCRIPTION}"
+                )
+            return self
+        if self.description is not None:
+            raise ValueError(
+                f"{_article(self.kind)} change names what was applied; "
+                "only an action is described in words"
+            )
         if self.kind is ChangeKind.COMMIT:
             if self.subject is not None:
                 raise ValueError("a commit change names a ref, not a subject")
@@ -124,16 +151,20 @@ class Change(BaseModel):
     @property
     def label(self) -> str:
         """How a difference cites the change that explains it."""
-        return f"commit:{self.ref}" if self.kind is ChangeKind.COMMIT else str(self.subject)
+        if self.kind is ChangeKind.COMMIT:
+            return f"commit:{self.ref}"
+        if self.kind is ChangeKind.ACTION:
+            return f"action: {(self.description or '').strip()}"
+        return str(self.subject)
 
     def touches(self, subject: str) -> bool:
         """Whether a difference on `subject` is one this change explains.
 
         A config key explains that key. An image explains that component's
-        image and its packages, which ship in it. A commit explains nothing
-        a capture records: captures hold no commits.
+        image and its packages, which ship in it. A commit or an action
+        explains nothing a capture records: captures hold neither.
         """
-        if self.kind is ChangeKind.COMMIT:
+        if self.kind in (ChangeKind.COMMIT, ChangeKind.ACTION):
             return False
         if self.kind is ChangeKind.CONFIG:
             return subject == self.subject

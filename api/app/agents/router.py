@@ -49,6 +49,7 @@ from app.agents.schemas import (
 )
 from app.auth.dependencies import require_admin
 from app.auth.security import AuthenticatedUser
+from app.investigations import service as investigations
 from app.investigations.dependencies import get_read_session
 
 logger = structlog.get_logger("agents")
@@ -198,7 +199,22 @@ async def create_task(
     body: TaskCreate,
     user: AuthenticatedUser = Depends(require_admin),
     session: AsyncSession = Depends(get_admin_session),
+    reader: AsyncSession = Depends(get_read_session),
 ) -> TaskCreated:
+    if body.verify is not None:
+        # A verify task names an investigation that exists, in the
+        # environment the task runs in. Whether the agent diagnosed it is
+        # the agent's to say: one that did not holds no record of before,
+        # and answers inconclusive, saying so.
+        investigation = await investigations.load(reader, body.verify.investigation_id)
+        if investigation is None:
+            raise HTTPException(status_code=404, detail="no such investigation")
+        if investigation.environment != body.environment:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{investigation.id} is an investigation of {investigation.environment}, "
+                f"not {body.environment}",
+            )
     try:
         task_id = await service.create_task(session, agent_id, body, user.username)
     except service.NotFound as exc:

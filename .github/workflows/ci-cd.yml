@@ -309,6 +309,7 @@ jobs:
           AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
@@ -332,6 +333,7 @@ jobs:
           AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true

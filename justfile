@@ -195,7 +195,7 @@ _self-check-env *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY VERIFICATION_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit check -f ../culprit.yaml {{ARGS}}
@@ -278,7 +278,7 @@ intent *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY VERIFICATION_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit intent -f ../culprit.yaml {{ARGS}}
@@ -360,7 +360,7 @@ create-user *ARGS:
 # frontend-build` and the frontend's Docker build) only worked on a
 # machine that already had a hand-written api/.env.
 generate-types:
-    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       INVESTIGATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_REGISTRAR_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       INVESTIGATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_REGISTRAR_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       VERIFICATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
     cd frontend && npm run generate-types
 
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`
@@ -437,6 +437,7 @@ quickstart:
         CAPTURE_WRITER_DATABASE_URL=$unused PROBE_WRITER_DATABASE_URL=$unused \
         INVESTIGATION_WRITER_DATABASE_URL=$unused \
         AGENT_ADMIN_DATABASE_URL=$unused AGENT_REGISTRAR_DATABASE_URL=$unused AGENT_GATEWAY_DATABASE_URL=$unused \
+        VERIFICATION_WRITER_DATABASE_URL=$unused \
         /app/.venv/bin/python -m scripts.dump_openapi_schema > frontend/openapi.schema.json
     MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
         -v "$(pwd)/frontend:/frontend" -w /tmp node:22-alpine sh -euc '

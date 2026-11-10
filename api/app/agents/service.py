@@ -206,17 +206,25 @@ async def create_task(
         raise NotFound
     if agent.revoked_at is not None:
         raise Refused("the agent is revoked")
-    if body.kind == "probe" and (body.probe is None or body.diagnose is not None):
-        raise Refused("a probe task needs probe, and nothing else")
-    if body.kind == "diagnose" and (body.diagnose is None or body.probe is not None):
-        raise Refused("a diagnose task needs diagnose, and nothing else")
+    given = {
+        name
+        for name, value in (
+            ("probe", body.probe),
+            ("diagnose", body.diagnose),
+            ("verify", body.verify),
+        )
+        if value is not None
+    }
+    if given != {body.kind}:
+        raise Refused(f"a {body.kind} task needs {body.kind}, and nothing else")
     spec: dict[str, Any]
     if body.probe is not None:
         spec = {"probe": body.probe.model_dump(exclude_none=True)}
     elif body.diagnose is not None:
         spec = {"diagnose": body.diagnose.model_dump(by_alias=True, exclude_none=True)}
     else:
-        raise Refused("a task needs probe or diagnose")
+        assert body.verify is not None
+        spec = {"verify": body.verify.model_dump(mode="json", exclude_none=True)}
     task_id = "task-" + secrets.token_hex(8)
     await session.execute(
         insert(tables.agent_tasks).values(

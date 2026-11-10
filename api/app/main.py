@@ -50,11 +50,14 @@ from app.model.capture_config import CAPTURE_WRITER_DATABASE_URL  # noqa: E402
 from app.model.captures_router import router as captures_router  # noqa: E402
 from app.model.router import router as model_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
+from app.outcomes.router import router as outcomes_router  # noqa: E402
 from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
 from app.postmortems.router import router as postmortems_router  # noqa: E402
 from app.readings.config import PROBE_WRITER_DATABASE_URL  # noqa: E402
 from app.readings.router import router as readings_router  # noqa: E402
 from app.registry.config import REGISTRY_ADMIN_DATABASE_URL  # noqa: E402
+from app.verifications.config import VERIFICATION_WRITER_DATABASE_URL  # noqa: E402
+from app.verifications.router import router as verifications_router  # noqa: E402
 
 configure_observability("culprit-api")
 
@@ -156,6 +159,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.investigation_writer_session_factory = async_sessionmaker(
         investigation_engine, expire_on_commit=False
     )
+    # Phase 34 part 2: POST /investigations/{id}/verifications, as
+    # verification-writer. hide_parameters: a verification carries readings.
+    verification_engine = create_async_engine(
+        VERIFICATION_WRITER_DATABASE_URL, pool_size=2, max_overflow=3, hide_parameters=True
+    )
+    app.state.verification_writer_session_factory = async_sessionmaker(
+        verification_engine, expire_on_commit=False
+    )
     # Phase 33 part 2: the agent routes, one engine per role
     # (migrations/versions/d7a3e5f1b9c2_agents.py). hide_parameters: a
     # registration carries a public key and a pairing code, an audit entry
@@ -189,6 +200,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await capture_engine.dispose()
     await probe_engine.dispose()
     await investigation_engine.dispose()
+    await verification_engine.dispose()
     for agent_engine in agent_engines.values():
         await agent_engine.dispose()
 
@@ -311,3 +323,8 @@ app.include_router(investigations_router)
 # Phase 33 part 2: pairing, allowances, tasks and the audit log. Per route
 # again: an admin's session, a pairing code, or an agent's signature.
 app.include_router(agents_router)
+# Phase 34 part 2: verifications (the write takes the project token or an
+# agent's signature, the read a user session — per route) and the outcomes
+# they make (a user session).
+app.include_router(verifications_router)
+app.include_router(outcomes_router)

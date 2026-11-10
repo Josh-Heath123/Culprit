@@ -42,6 +42,11 @@ type fakePlane struct {
 	results  map[string]map[string]any
 	readings []map[string]any
 	audit    []string
+	// Phase 34 part 2: what a walk and a verification post, and the order
+	// every accepted request arrived in.
+	investigations []map[string]any
+	verifications  []map[string]any
+	order          []string
 }
 
 func newFakePlane(t *testing.T) *fakePlane {
@@ -91,7 +96,18 @@ func (p *fakePlane) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"detail":"request refused"}`, http.StatusUnauthorized)
 		return
 	}
+	p.order = append(p.order, r.URL.Path)
 	switch {
+	case r.URL.Path == "/investigations":
+		var investigation map[string]any
+		_ = json.Unmarshal(body, &investigation)
+		p.investigations = append(p.investigations, investigation)
+		w.WriteHeader(http.StatusCreated)
+	case strings.HasPrefix(r.URL.Path, "/investigations/") && strings.HasSuffix(r.URL.Path, "/verifications"):
+		var posted map[string]any
+		_ = json.Unmarshal(body, &posted)
+		p.verifications = append(p.verifications, posted)
+		w.WriteHeader(http.StatusCreated)
 	case r.URL.Path == "/agents/me/tasks/claim":
 		if len(p.tasks) == 0 {
 			w.WriteHeader(http.StatusNoContent)

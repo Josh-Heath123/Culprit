@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -17,12 +19,14 @@ import (
 
 	"github.com/josh-heath123/culprit/cli/internal/agent"
 	"github.com/josh-heath123/culprit/cli/internal/capability"
+	"github.com/josh-heath123/culprit/cli/internal/capture"
 	"github.com/josh-heath123/culprit/cli/internal/check"
 	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/isolate"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 	"github.com/josh-heath123/culprit/cli/internal/probe"
 	"github.com/josh-heath123/culprit/cli/internal/transport"
+	"github.com/josh-heath123/culprit/cli/internal/verify"
 )
 
 // `culprit agent` — Phase 33, part 1: the agent, standing alone.
@@ -37,6 +41,7 @@ func newAgentCommand() *cobra.Command {
 		configPath string
 		tasksDir   string
 		auditPath  string
+		stateDir   string
 		once       bool
 		poll       time.Duration
 		timeout    time.Duration
@@ -62,6 +67,13 @@ a grant the agent does not hold is refused before anything is dialled, and
 the refusal is a reading and an audit entry.
 
 The audit log is append-only and hash-chained; ` + "`culprit agent verify`" + ` checks it.
+
+For every walk it runs, the agent keeps what a verification needs — the
+request behind each reading, and a capture of the environment as the walk
+found it, taken under the agent's own grants — in its state directory
+(--state-dir; beside the audit log by default). A verify task measures an
+investigation it diagnosed again against that record. Asked to verify one
+it did not diagnose, it answers inconclusive: it holds no record of before.
 
 Nothing here writes to the system under test. Readings, investigations and
 the audit log go to the control plane, and only to it.`,
@@ -105,7 +117,7 @@ the audit log go to the control plane, and only to it.`,
 				ConfigPath: configPath,
 				Source:     source,
 				Audit:      audit,
-				Executor:   &agentExecutor{timeout: timeout, wire: realWire},
+				Executor:   &agentExecutor{timeout: timeout, wire: realWire, stateDir: agentStateDir(stateDir, auditPath)},
 				Poll:       poll,
 				Logf:       func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) },
 			}
@@ -123,6 +135,7 @@ the audit log go to the control plane, and only to it.`,
 	command.Flags().StringVar(&configPath, "config", "", "the agent's configuration file (its grants)")
 	command.Flags().StringVar(&tasksDir, "tasks", "", "a local task directory (inbox/, outbox/, done/) instead of a control plane")
 	command.Flags().StringVar(&auditPath, "audit", "", "the audit log, appended to and never rewritten")
+	command.Flags().StringVar(&stateDir, "state-dir", "", "where the agent keeps what verifying its walks needs (default: state/ beside --audit)")
 	command.Flags().BoolVar(&once, "once", false, "handle the tasks waiting now, then exit")
 	command.Flags().DurationVar(&poll, "poll", 2*time.Second, "how often to look for new tasks")
 	command.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "per-operation network timeout")
@@ -156,10 +169,23 @@ Exit 0 intact, 1 broken, 2 unreadable.`,
 	}
 }
 
+// agentStateDir is --state-dir, else state/ beside the audit log: the one
+// place an agent is already sure to be able to write, and keep (the
+// recipes' audit volume).
+func agentStateDir(flag, auditPath string) string {
+	if flag != "" {
+		return flag
+	}
+	return filepath.Join(filepath.Dir(auditPath), "state")
+}
+
 // agentExecutor runs a task's probes through the same runner and walk the
 // commands use, under the grants the agent decided.
 type agentExecutor struct {
-	timeout time.Duration
+	// stateDir is where each walk's record is kept for verify tasks; ""
+	// keeps nothing, and every verification is then inconclusive.
+	stateDir string
+	timeout  time.Duration
 	// wire builds the network a probe reaches through; a test passes one
 	// that counts dials.
 	wire func(time.Duration) wire
@@ -233,6 +259,9 @@ func (e *agentExecutor) Execute(ctx context.Context, task agent.Task, config age
 		walk := isolate.New(components, connections, facts, catalogue.Manifests(), recorded,
 			newPlacement(manifest, spec, from, facts), options)
 		opened := captureTime()
+		// The record of before, ahead of the walk, as `culprit diagnose`
+		// takes it — under the grants this task holds, not culprit.yaml's.
+		before, absent := captureBefore(ctx, manifest, config.Manifest, task.Environment, &grants)
 		investigation, err := walk.Diagnose(walkCtx, symptom, entry)
 		if recorded.err != nil {
 			return agent.Result{}, recorded.err
@@ -245,9 +274,137 @@ func (e *agentExecutor) Execute(ctx context.Context, task agent.Task, config age
 		if err := investigation.Validate(); err != nil {
 			return agent.Result{}, fmt.Errorf("the walk produced an investigation the model rejects: %w", err)
 		}
+		how := "a verify task for " + investigation.ID + ", sent to agent " + config.AgentID + ","
+		if err := keepForVerification(e.stateDir, &investigation, walk.Requests(), from, before, absent, how); err != nil {
+			// The diagnosis stands; its `verified` reason says it cannot be
+			// verified, and why goes to the agent's log, never the record.
+			fmt.Fprintf(os.Stderr, "culprit agent: %s was not kept for verification: %v\n", investigation.ID, err)
+		}
+		if err := investigation.Validate(); err != nil {
+			return agent.Result{}, fmt.Errorf("the investigation does not validate once kept: %w", err)
+		}
 		return agent.Result{Investigation: &investigation}, nil
+
+	case agent.TaskVerify:
+		return e.verify(ctx, task, config, manifest, catalogue, facts, grants, through, record)
 	}
 	return agent.Result{}, fmt.Errorf("task kind %q is not one this agent runs", task.Kind)
+}
+
+// verify runs a verify task: the record this agent kept when it diagnosed
+// the investigation, measured again under the grants this task holds, and
+// judged by verify.Run — `culprit verify`, as a task.
+func (e *agentExecutor) verify(ctx context.Context, task agent.Task, config agent.Config,
+	manifest *extract.Manifest, catalogue *probe.Catalogue, facts []model.Fact,
+	grants capability.Grants, through wire, record func(model.Reading) error,
+) (agent.Result, error) {
+	id := task.Verify.InvestigationID
+	noRecord := func(why string) (agent.Result, error) {
+		return agent.Result{
+			Verdict: model.VerificationInconclusive,
+			Reason: "inconclusive: this agent holds no record of before for " + id + " — " + why +
+				". Only the agent that diagnosed an investigation can verify it; nothing was measured",
+		}, nil
+	}
+	dir, err := investigationDir(e.stateDir, id)
+	if err != nil {
+		return noRecord("it keeps no state directory")
+	}
+	var investigation model.Investigation
+	if err := readJSON(filepath.Join(dir, "investigation.json"), &investigation); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return noRecord("it did not diagnose it")
+		}
+		return agent.Result{}, fmt.Errorf("the investigation this agent kept for %s cannot be read: %w", id, err)
+	}
+	if err := investigation.Validate(); err != nil {
+		return agent.Result{}, fmt.Errorf("the investigation this agent kept for %s does not validate: %w", id, err)
+	}
+	if investigation.Environment != task.Environment {
+		return agent.Result{}, fmt.Errorf("%s is an investigation of %s; the task is for %s",
+			id, investigation.Environment, task.Environment)
+	}
+	var kept verify.Record
+	if err := readJSON(filepath.Join(dir, "record.json"), &kept); err != nil {
+		return agent.Result{}, fmt.Errorf("the record of %s cannot be read: %w", id, err)
+	}
+	if err := kept.Check(investigation); err != nil {
+		return agent.Result{}, err
+	}
+
+	var before, after *model.CaptureBundle
+	if kept.BeforeCapture != "" {
+		envelope, err := capture.ReadEnvelope(filepath.Join(dir, "before.json"))
+		if err != nil {
+			return agent.Result{}, fmt.Errorf("the capture before cannot be read: %w", err)
+		}
+		before = &envelope.Bundle
+		taken, absent := captureBefore(ctx, manifest, config.Manifest, kept.Environment, &grants)
+		if taken == nil {
+			return agent.Result{}, fmt.Errorf("the environment cannot be captured again to compare with: %s", absent)
+		}
+		after = taken
+	}
+	runner := &agentVerifyRunner{
+		environment: task.Environment, grants: grants, record: record, runners: map[string]*probe.Runner{},
+		build: func(environment string, under capability.Grants) *probe.Runner {
+			return probeRunnerUnder(manifest, config.Manifest, environment, config.AgentID, e.timeout,
+				catalogue, facts, under, through)
+		},
+	}
+	verification, err := verify.Run(ctx, verify.Options{
+		ID: newVerificationID(), Investigation: investigation, Record: kept, Changes: task.Verify.Changes,
+		Before: before, After: after, Runner: runner,
+	})
+	if runner.err != nil {
+		return agent.Result{}, runner.err
+	}
+	if err != nil {
+		return agent.Result{}, err
+	}
+	if err := writePrivate(filepath.Join(dir, "verifications", verification.ID+".json"), verification); err != nil {
+		fmt.Fprintf(os.Stderr, "culprit agent: verification %s was not kept locally: %v\n", verification.ID, err)
+	}
+	return agent.Result{
+		Verification: &verification, Verdict: verification.Verdict,
+		Reason: string(verification.Verdict) + ": " + verification.Reason,
+	}, nil
+}
+
+// agentVerifyRunner runs a verify task's re-runs: in the task's
+// environment, under the grants the task holds; in any other (a
+// counterfactual's reference environment), under none — an allowance is
+// per environment, and nothing widens one — so such a re-run is refused
+// and the verdict cannot be verified. Every reading is recorded in the
+// audit log before it is used.
+type agentVerifyRunner struct {
+	environment string
+	grants      capability.Grants
+	record      func(model.Reading) error
+	build       func(environment string, under capability.Grants) *probe.Runner
+	runners     map[string]*probe.Runner
+	err         error
+}
+
+func (r *agentVerifyRunner) Run(ctx context.Context, request verify.Request) model.Reading {
+	runner, ok := r.runners[request.Environment]
+	if !ok {
+		under := capability.Grants{}
+		if request.Environment == r.environment {
+			under = r.grants
+		}
+		runner = r.build(request.Environment, under)
+		r.runners[request.Environment] = runner
+	}
+	reading := runner.Run(ctx, []probe.Request{{
+		ProbeID: request.ProbeID, Target: request.Target, Environment: request.Environment, Inputs: request.Inputs,
+	}})[0]
+	if r.err == nil {
+		if err := r.record(reading); err != nil {
+			r.err = err
+		}
+	}
+	return reading
 }
 
 // recordingRunner is the walk's runner with the audit in front of it:

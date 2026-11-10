@@ -56,6 +56,9 @@ _IMPORT_TIME_DEFAULTS = {
     "AGENT_ADMIN_DATABASE_URL": "postgresql+asyncpg://agent-admin:test@localhost:5432/test",
     "AGENT_REGISTRAR_DATABASE_URL": "postgresql+asyncpg://agent-registrar:test@localhost:5432/test",
     "AGENT_GATEWAY_DATABASE_URL": "postgresql+asyncpg://agent-gateway:test@localhost:5432/test",
+    "VERIFICATION_WRITER_DATABASE_URL": (
+        "postgresql+asyncpg://verification-writer:test@localhost:5432/test"
+    ),
     "CULPRIT_PROJECT_TOKEN": "test-project-token",
 }
 for _name, _value in _IMPORT_TIME_DEFAULTS.items():
@@ -86,6 +89,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AGENT_ADMIN_DB_PASSWORD": "test-agent-admin-password",
     "AGENT_REGISTRAR_DB_PASSWORD": "test-agent-registrar-password",
     "AGENT_GATEWAY_DB_PASSWORD": "test-agent-gateway-password",
+    "VERIFICATION_WRITER_DB_PASSWORD": "test-verification-writer-password",
 }
 
 
