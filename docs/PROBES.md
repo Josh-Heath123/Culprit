@@ -273,6 +273,31 @@ The same contract every other command keeps:
 | `1` | At least one probe returned `fail`. |
 | `2` | Culprit could not run: a bad target, an unreadable manifest, an undeclared environment. |
 
+## Measured again, never reused — `culprit verify`
+
+`culprit verify <investigation-id>` checks a fix by running **every** probe
+the investigation ran again — not only the one that failed — each **twice**,
+from the request the walk recorded: the same probe, target, inputs and
+environment, under the grants that environment has now. A counterfactual
+reading taken in a reference environment is taken there again. No stored
+reading is reused; every reading in a verification was measured by it.
+
+Re-running only the failing probe, once, is how a fix gets "confirmed" by a
+cache, a fault that comes and goes, or a change nobody made on purpose. So
+the verdict is `verified` only when every reading that failed passes on
+both runs, every reading that passed still passes, and every difference
+between the environment at diagnosis and now is explained by the change
+named with `--change`. A reading that is `refused` or `inconclusive` now,
+or that gives a different verdict on its two runs, keeps it from
+`verified`: the verdict is `inconclusive`, unless a reading that failed
+still fails (`not_resolved`) or one that passed now fails (`regressed`),
+which settle it whatever else is unsettled. The other verdicts are `not_resolved`
+(a reading that failed still fails), `regressed` (the fault is gone and
+something that passed now fails) and `changed_underneath` (the fault is
+gone, and the environment changed in a way the named change does not
+explain). Exit codes: `0` verified, `1` any other verdict, `2` could not
+run. Its limits are in `docs/LIMITS.md`, "Verification".
+
 ## Where readings go
 
 `culprit probe` prints them. `POST /readings` stores them, under the

@@ -48,11 +48,36 @@ type faultExpectation struct {
 	// Attestation is how the symptom's occurrence is known: every symptom
 	// here is a POST, which no probe replays, so "reported".
 	Attestation string `json:"attestation"`
+	// Fix is the known fix, and the verdict `culprit verify` must give
+	// once it is applied (Phase 34).
+	Fix faultFix `json:"fix"`
+}
+
+type faultFix struct {
+	How     string   `json:"how"`
+	Change  []string `json:"change"`
+	Verdict string   `json:"verdict"`
+	// ReasonContains, when set, must appear in the verification's reason.
+	ReasonContains string `json:"reason_contains"`
+}
+
+// faultScenario is a fault, a change that is not simply its fix, and the
+// verdict verification must give for it.
+type faultScenario struct {
+	Name    string   `json:"name"`
+	Fault   string   `json:"fault"`
+	Apply   string   `json:"apply"`
+	How     string   `json:"how"`
+	Change  []string `json:"change"`
+	Verdict string   `json:"verdict"`
+	// ReasonContains, when set, must appear in the verification's reason.
+	ReasonContains string `json:"reason_contains"`
 }
 
 type faultLibrary struct {
-	Symptom string             `json:"symptom"`
-	Faults  []faultExpectation `json:"faults"`
+	Symptom   string             `json:"symptom"`
+	Faults    []faultExpectation `json:"faults"`
+	Scenarios []faultScenario    `json:"scenarios"`
 }
 
 var (
@@ -88,39 +113,83 @@ func TestTheFaultLibrary(t *testing.T) {
 	}
 
 	stack := startFaultStack(t)
+	byName := map[string]faultExpectation{}
 	for _, fault := range library.Faults {
+		byName[fault.Name] = fault
 		t.Run(fault.Name, func(t *testing.T) {
 			stack.t = t
-			stack.healthy()
-			// The symptom is real before the walk is asked about it: the
-			// order succeeds on the healthy stack and fails under the fault
-			// (latency slows it down without failing it). Harness, not a
-			// probe — a probe never writes.
-			if status := stack.placeOrder(); status != 201 {
-				t.Fatalf("POST /orders on the healthy stack answered %d, want 201", status)
-			}
-			restore := stack.inject(fault.Name)
+			inv, restore := stack.injectAndDiagnose(library.Symptom, fault)
 			defer restore()
-			status := stack.placeOrder()
-			if fault.Name == "latency" {
-				if status != 201 {
-					t.Fatalf("POST /orders under added latency answered %d, want 201", status)
-				}
-			} else if status < 500 {
-				t.Fatalf("POST /orders under the fault answered %d; the fault is not real", status)
-			}
-
-			inv := stack.diagnose(library.Symptom, fault)
-			// CULPRIT_FAULT_LIBRARY_RECORD=<dir> keeps each real
-			// investigation — the API's round-trip test posts the audience
-			// one (api/tests/data/), so it is tested on what the walk wrote,
-			// not on something written by hand to look like it.
-			if dir := os.Getenv("CULPRIT_FAULT_LIBRARY_RECORD"); dir != "" {
-				encoded, _ := json.MarshalIndent(inv, "", "  ")
-				_ = os.WriteFile(filepath.Join(dir, fault.Name+".json"), append(encoded, '\n'), 0o644)
-			}
-			checkDiagnosis(t, fault, inv)
+			// Phase 34: the loop closed. Apply the known fix, then verify
+			// from the same vantage with the change named.
+			state := stack.keepState(fault.Vantage)
+			stack.applyFix(fault.Name, restore)
+			stack.checkVerification(stack.verify(fault, inv, state, fault.Fix.Change), inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
 		})
+	}
+	for _, scenario := range library.Scenarios {
+		t.Run("verify/"+scenario.Name, func(t *testing.T) {
+			stack.t = t
+			fault, ok := byName[scenario.Fault]
+			if !ok {
+				t.Fatalf("scenario %s names fault %s, which the library does not have", scenario.Name, scenario.Fault)
+			}
+			inv, restore := stack.injectAndDiagnose(library.Symptom, fault)
+			defer restore()
+			state := stack.keepState(fault.Vantage)
+			stack.applyScenario(scenario.Apply)
+			stack.checkVerification(stack.verify(fault, inv, state, scenario.Change), inv, scenario.Verdict, scenario.ReasonContains)
+		})
+	}
+}
+
+// injectAndDiagnose puts the stack in its healthy state, shows the symptom
+// is real, injects the fault, walks it and checks the diagnosis. It
+// returns the investigation and what undoes the fault, which may be
+// called more than once.
+func (stack *faultStack) injectAndDiagnose(symptom string, fault faultExpectation) (model.Investigation, func()) {
+	t := stack.t
+	t.Helper()
+	stack.healthy()
+	// The symptom is real before the walk is asked about it: the
+	// order succeeds on the healthy stack and fails under the fault
+	// (latency slows it down without failing it). Harness, not a
+	// probe — a probe never writes.
+	if status := stack.placeOrder(); status != 201 {
+		t.Fatalf("POST /orders on the healthy stack answered %d, want 201", status)
+	}
+	restore := once(stack.inject(fault.Name))
+	status := stack.placeOrder()
+	if fault.Name == "latency" {
+		if status != 201 {
+			t.Fatalf("POST /orders under added latency answered %d, want 201", status)
+		}
+	} else if status < 500 {
+		t.Fatalf("POST /orders under the fault answered %d; the fault is not real", status)
+	}
+
+	inv := stack.diagnose(symptom, fault)
+	// CULPRIT_FAULT_LIBRARY_RECORD=<dir> keeps each real
+	// investigation — the API's round-trip test posts the audience
+	// one (api/tests/data/), so it is tested on what the walk wrote,
+	// not on something written by hand to look like it.
+	if dir := os.Getenv("CULPRIT_FAULT_LIBRARY_RECORD"); dir != "" {
+		encoded, _ := json.MarshalIndent(inv, "", "  ")
+		_ = os.WriteFile(filepath.Join(dir, fault.Name+".json"), append(encoded, '\n'), 0o644)
+	}
+	checkDiagnosis(t, fault, inv)
+	return inv, restore
+}
+
+// once makes an undo safe to call twice: a fix that is the undo runs it,
+// and the deferred cleanup runs it again.
+func once(undo func()) func() {
+	done := false
+	return func() {
+		if !done {
+			done = true
+			undo()
+		}
 	}
 }
 
@@ -365,7 +434,7 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
 	command := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
 		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment, "--from", fault.Vantage,
-		"--no-plugins", "--format", "json", "--agent-id", "fault-library")
+		"--no-plugins", "--format", "json", "--agent-id", "fault-library", "--state-dir", containerState)
 	output, err := command.Output()
 	if err != nil {
 		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != exitFindings {
@@ -382,7 +451,7 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	// format, on any fault.
 	text, _ := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
 		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment, "--from", fault.Vantage,
-		"--no-plugins", "--format", "text").Output()
+		"--no-plugins", "--format", "text", "--state-dir", containerState).Output()
 	for _, secret := range s.secrets {
 		for format, printed := range map[string][]byte{"json": output, "text": text} {
 			if strings.Contains(string(printed), secret) {
@@ -440,4 +509,155 @@ func randomHex(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return hex.EncodeToString(buffer)
+}
+
+// ---- the loop closed: fix, then verify (Phase 34) ------------------------------
+
+// containerState is where `culprit diagnose` keeps what `culprit verify`
+// reads, inside the vantage container.
+const containerState = "/tmp/culprit-state"
+
+// keepState copies the state directory out of the vantage container: a
+// fix may recreate that container, and its /tmp with it.
+func (s *faultStack) keepState(vantage string) string {
+	s.t.Helper()
+	dir := filepath.Join(s.t.TempDir(), "state")
+	s.docker(nil, "cp", s.container(vantage)+":"+containerState, dir)
+	return dir
+}
+
+// applyFix applies a fault's known fix. Harness, like the faults: Culprit
+// never applies one.
+func (s *faultStack) applyFix(name string, restore func()) {
+	s.t.Helper()
+	switch name {
+	case "auth-audience", "auth-audience-ungranted":
+		s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "order-service")
+		s.waitFor("order-service", "http://inventory-service:8002/ready", "http://localhost:8001/health")
+	case "contract":
+		s.fixContract()
+	case "config":
+		s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "payments-service")
+		s.waitFor("order-service", "http://payments-service:8003/ready")
+	case "network-partition", "error-rate", "latency":
+		restore()
+	default:
+		s.t.Fatalf("the fault library has no fix for %q", name)
+	}
+}
+
+func (s *faultStack) fixContract() {
+	s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "inventory-service")
+	s.waitFor("order-service", "http://inventory-service:8002/ready")
+}
+
+// applyScenario applies a change that is not simply the fault's fix.
+func (s *faultStack) applyScenario(apply string) {
+	s.t.Helper()
+	switch apply {
+	case "remint-wrong-audience":
+		wrong := mintToken(strings.TrimPrefix(s.env[0], "DEMO_TOKEN_SECRET="), "inventory-svc")
+		s.secrets = append(s.secrets, wrong)
+		s.compose(s.withToken(wrong), "up", "-d", "--force-recreate", "order-service")
+		s.waitFor("order-service", "http://inventory-service:8002/ready", "http://localhost:8001/health")
+	case "fix-contract":
+		s.fixContract()
+	case "fix-contract-break-payments":
+		s.fixContract()
+		s.post("order-service", "http://payments-service:8003/admin/fault/error-rate", `{"rate": 1.0, "duration_s": 300}`)
+	case "fix-contract-change-order-config":
+		s.fixContract()
+		// A config key order-service did not have: a change on another
+		// component than the one the contract fix touches.
+		override := filepath.Join(s.t.TempDir(), "unrelated.yml")
+		if err := os.WriteFile(override, []byte("services:\n  order-service:\n    environment:\n      CULPRIT_UNRELATED_FLAG: \"on\"\n"), 0o644); err != nil {
+			s.t.Fatal(err)
+		}
+		s.composeFiles(s.withToken(s.good), []string{faultCompose, healthyLayer, override}, "up", "-d", "--force-recreate", "order-service")
+		s.waitFor("order-service", "http://inventory-service:8002/ready", "http://localhost:8001/health")
+	default:
+		s.t.Fatalf("the fault library has no scenario action %q", apply)
+	}
+}
+
+// verify puts the binary and the kept state back in the vantage container
+// — owned by the container's own user, as diagnose left them — and runs
+// `culprit verify` there with the changes named.
+func (s *faultStack) verify(fault faultExpectation, inv model.Investigation, state string, changes []string) model.Verification {
+	s.t.Helper()
+	container := s.container(fault.Vantage)
+	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
+	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
+	s.docker(nil, "cp", state, container+":"+containerState)
+	owner := strings.TrimSpace(s.docker(nil, "exec", container, "sh", "-c", "echo $(id -u):$(id -g)"))
+	s.docker(nil, "exec", "-u", "0", container, "chown", "-R", owner, containerState)
+	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
+
+	arguments := []string{"exec", container, "/tmp/walk/culprit", "verify", inv.ID,
+		"-f", "/tmp/walk/culprit.yaml", "--no-plugins", "--format", "json", "--agent-id", "fault-library",
+		"--state-dir", containerState, "--from", fault.Vantage}
+	for _, change := range changes {
+		arguments = append(arguments, "--change", change)
+	}
+	output, err := exec.Command("docker", arguments...).Output()
+	if err != nil {
+		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != exitFindings {
+			stderr := ""
+			if ok {
+				stderr = string(exit.Stderr)
+			}
+			s.t.Fatalf("culprit verify in %s: %v\n%s%s", container, err, output, stderr)
+		}
+	}
+	var verification model.Verification
+	if err := json.Unmarshal(output, &verification); err != nil {
+		s.t.Fatalf("culprit verify did not print a verification: %v\n%s", err, output)
+	}
+	for _, secret := range s.secrets {
+		if strings.Contains(string(output), secret) {
+			s.t.Errorf("a token or its secret appears in the verification")
+		}
+	}
+	return verification
+}
+
+// checkVerification: the verdict wanted, and the full reading set measured
+// again — exactly the investigation's readings, each twice, none reused.
+func (s *faultStack) checkVerification(verification model.Verification, inv model.Investigation, want, says string) {
+	t := s.t
+	t.Helper()
+	t.Logf("verify: %s, %d readings re-run twice: %s", verification.Verdict, len(verification.Reran), verification.Reason)
+	if says != "" && !strings.Contains(verification.Reason, says) {
+		t.Errorf("the reason does not say %q: %s", says, verification.Reason)
+	}
+	// Read by a person: subjects in words, no arrow pair, no plan phase.
+	if strings.Contains(verification.Reason, "->") || phaseNumber.MatchString(verification.Reason) {
+		t.Errorf("the reason is not written for a person: %s", verification.Reason)
+	}
+	if err := verification.Validate(); err != nil {
+		t.Fatalf("the verification does not validate: %v", err)
+	}
+	if verification.InvestigationID != inv.ID {
+		t.Errorf("verification of %s, want %s", verification.InvestigationID, inv.ID)
+	}
+	if len(verification.Reran) != len(inv.Readings) {
+		t.Errorf("%d readings re-run for an investigation of %d", len(verification.Reran), len(inv.Readings))
+	}
+	for index, rerun := range verification.Reran {
+		if index < len(inv.Readings) && rerun.ReadingID != inv.Readings[index].ID {
+			t.Errorf("re-run %d is of %s, want %s", index, rerun.ReadingID, inv.Readings[index].ID)
+		}
+		for _, run := range rerun.Runs {
+			if inv.ClosedAt != nil && !run.TakenAt.After(*inv.ClosedAt) {
+				t.Errorf("re-run of %s holds a reading taken before the investigation closed", rerun.ReadingID)
+			}
+		}
+	}
+	if string(verification.Verdict) != want {
+		t.Errorf("verdict %s, want %s\nreason: %s", verification.Verdict, want, verification.Reason)
+	}
+	if t.Failed() {
+		encoded, _ := json.MarshalIndent(verification, "", "  ")
+		t.Logf("verification:\n%s", encoded)
+	}
 }

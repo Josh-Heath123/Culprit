@@ -141,9 +141,12 @@ type Walk struct {
 	// fault library's first run).
 	children map[string][]Connection
 
-	started    time.Time
-	probesRun  int
-	readings   []model.InvestigationReading
+	started   time.Time
+	probesRun int
+	readings  []model.InvestigationReading
+	// requests are what each reading was taken with, by reading id, so a
+	// verification can take it again exactly (Phase 34).
+	requests   map[string]Recorded
 	hypotheses []model.Hypothesis
 	index      map[string]int // hypothesis key -> position
 }
@@ -166,7 +169,7 @@ func New(components []Component, connections []Connection, facts []model.Fact,
 	walk := &Walk{
 		options: options, manifests: manifests, runner: runner, placement: placement,
 		facts: facts, components: map[string]Component{}, declared: map[string][]Connection{},
-		children: map[string][]Connection{}, index: map[string]int{},
+		children: map[string][]Connection{}, index: map[string]int{}, requests: map[string]Recorded{},
 	}
 	for _, component := range components {
 		walk.components[component.Name] = component
@@ -182,6 +185,25 @@ func New(components []Component, connections []Connection, facts []model.Fact,
 		})
 	}
 	return walk
+}
+
+// Recorded is the request behind one reading, and the environment it ran
+// in — the walk's own, or the reference environment's for the
+// counterfactual.
+type Recorded struct {
+	Environment string
+	Request     Request
+}
+
+// Requests is the request behind every reading the walk took, by reading
+// id. `culprit verify` re-runs exactly these: the same probe, target and
+// inputs, never a stored reading.
+func (w *Walk) Requests() map[string]Recorded {
+	requests := make(map[string]Recorded, len(w.requests))
+	for id, recorded := range w.requests {
+		requests[id] = recorded
+	}
+	return requests
 }
 
 // ProbesRun is how many probes the walk executed — what the O(log n)
@@ -435,6 +457,7 @@ func (w *Walk) run(ctx context.Context, request Request) string {
 	reading := w.runner.Run(ctx, request)
 	id := fmt.Sprintf("r%d", len(w.readings)+1)
 	w.readings = append(w.readings, model.InvestigationReading{ID: id, Reading: reading})
+	w.requests[id] = Recorded{Environment: w.options.Environment, Request: request}
 	return id
 }
 
@@ -805,7 +828,7 @@ func treeReaches(tree []model.FaultEdge, subject string) bool {
 // rubric is §2.9, computed from readings, never estimated.
 func (w *Walk) rubric(ctx context.Context, found *located) model.ConfidenceRubric {
 	rubric := model.ConfidenceRubric{
-		Verified: model.Criterion{Reason: "no fix has been applied and checked: Culprit cannot yet re-run an investigation after a change"},
+		Verified: model.Criterion{Reason: "no change has been verified against this investigation"},
 	}
 
 	// The reading the diagnosis rests on, and the request behind it.
@@ -878,9 +901,11 @@ func (w *Walk) counterfactual(ctx context.Context, request Request) model.Criter
 		return model.Criterion{Reason: "not run: " + budget}
 	}
 	w.probesRun++
-	reading := w.options.Reference.Run(ctx, Request{ProbeID: request.ProbeID, Target: request.Target, Inputs: inputs})
+	referenceRequest := Request{ProbeID: request.ProbeID, Target: request.Target, Inputs: inputs}
+	reading := w.options.Reference.Run(ctx, referenceRequest)
 	id := fmt.Sprintf("r%d", len(w.readings)+1)
 	w.readings = append(w.readings, model.InvestigationReading{ID: id, Reading: reading})
+	w.requests[id] = Recorded{Environment: w.options.ReferenceName, Request: referenceRequest}
 	if reading.Verdict == model.VerdictPass {
 		return model.Criterion{Holds: true, Reason: fmt.Sprintf(
 			"%s passes in %s (%s) where it fails here", request.ProbeID, w.options.ReferenceName, id)}

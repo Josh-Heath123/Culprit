@@ -19,8 +19,10 @@ you not to grant it.
   value (a "shape": a URL, a number, empty or not, which kind of database
   a connection string points at). The value itself is kept only for keys
   you list by name, and even then it never appears in a report.
-- **It runs once and exits.** `culprit env capture` and `culprit diff` are
-  one-shot commands. There is no background agent in this release.
+- **It runs once and exits.** `culprit env capture`, `culprit diff`,
+  `culprit diagnose` and `culprit verify` are one-shot commands. The one
+  long-running process is `culprit agent`, which you start and grant
+  separately (below).
 - **It sends no request into your application.** It reads configuration
   and metadata. The network checks stop at a DNS lookup, a TCP handshake,
   or a TLS handshake: no HTTP request, no SQL query against your data.
@@ -303,6 +305,35 @@ that hop out before it can blame the database. `net.dns.resolve` and
 `net.tls.inspect` are in no minimum set: a name that resolves rules
 nothing out, and a TLS check applies only to an endpoint declared
 `tls: true` — grant `net.tls.inspect` for those.
+
+## Verifying a fix — `culprit diagnose` and `culprit verify`
+
+Verification asks for no permission of its own. It uses the grants the
+environment already has, in two places:
+
+- **`culprit diagnose` now captures the environment before it walks** —
+  the same capture `culprit env capture` takes, under the same grants
+  (`config.read.names`, `deploy.metadata.read`, `db.metadata.read`, the
+  `net.*` checks), with the same refusals. It is the record of the
+  environment as diagnosis found it, kept for `culprit verify` to compare
+  with. An environment that grants none of them gets no record, and the
+  investigation says so: its verification can then be `inconclusive` at
+  best.
+- **`culprit verify` runs every probe the investigation ran again,** under
+  the grants `culprit.yaml` gives that environment *now*. A grant removed
+  since the diagnosis makes its probe `refused`, and the verdict
+  `inconclusive`. A grant *added* since lets a probe that was refused at
+  diagnosis really run now — and it changes what the capture can see, so
+  the comparison may report a difference that is the grant, not the
+  environment (`changed_underneath`: cautious, never a false `verified`).
+  No probe is run that the walk did not run: the same probe, target and
+  environment, with the inputs it recorded.
+
+What diagnose keeps — the investigation, the request behind each reading,
+and the capture — is written to the state directory (`--state-dir`,
+`$CULPRIT_STATE_DIR`, else your user's state directory), readable by you
+alone. The capture is the same envelope `culprit env capture` writes, so
+it carries the literal value of any key `config.read.values` allowlists.
 
 ## The agent and the control plane — keys, pairing, allowances
 

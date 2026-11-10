@@ -46,6 +46,7 @@ func newDiagnoseCommand() *cobra.Command {
 		noPlugins     bool
 		pluginTimeout time.Duration
 		timeout       time.Duration
+		stateDir      string
 	)
 	command := &cobra.Command{
 		Use:   "diagnose <symptom>",
@@ -64,6 +65,11 @@ branch it could not reach as unexplored rather than guessing.
 
 Nothing is changed and nothing is uploaded. --format json writes the
 investigation for POST /investigations.
+
+Before the walk, the environment is captured under its own grants, and the
+investigation, the request behind each reading and that capture are kept
+in --state-dir, so ` + "`culprit verify <id>`" + ` can check a fix later. When the
+grants allow no capture, the investigation says so.
 
 Exit codes: 0 a complete diagnosis, 1 a partial one (it says why), 2 the
 command could not run.`,
@@ -128,6 +134,10 @@ command could not run.`,
 			walk := isolate.New(components, connections, facts, catalogue.Manifests(), runner,
 				newPlacement(manifest, spec, from, facts), options)
 
+			// The environment before anything is fixed: what a verification
+			// compares with, so a change underneath is not taken for the fix.
+			before, absent := captureBefore(command.Context(), manifest, resolved, environment)
+
 			opened := captureTime()
 			investigation, err := walk.Diagnose(command.Context(), symptom, entry)
 			if err != nil {
@@ -137,6 +147,14 @@ command could not run.`,
 			investigation.ID, investigation.OpenedAt, investigation.ClosedAt = newInvestigationID(), opened, &closed
 			if err := investigation.Validate(); err != nil {
 				return fmt.Errorf("the walk produced an investigation the model rejects: %w", err)
+			}
+			// Kept only once it validates; the verified reason it then
+			// carries is one more sentence, checked again below.
+			if err := keepForVerification(stateDir, &investigation, walk.Requests(), from, before, absent); err != nil {
+				fmt.Fprintf(command.ErrOrStderr(), "culprit: the investigation was not kept for verification: %v\n", err)
+			}
+			if err := investigation.Validate(); err != nil {
+				return fmt.Errorf("the investigation does not validate once kept: %w", err)
 			}
 
 			if err := writeInvestigation(command, format, outputPath, investigation); err != nil {
@@ -159,6 +177,7 @@ command could not run.`,
 	command.Flags().BoolVar(&noPlugins, "no-plugins", false, "extract INTENT with the built-in artefact readers only")
 	command.Flags().DurationVar(&pluginTimeout, "plugin-timeout", 90*time.Second, "how long any one extractor plugin may run")
 	command.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "per-operation network timeout")
+	command.Flags().StringVar(&stateDir, "state-dir", defaultStateDir(), "where to keep the investigation for `culprit verify` ($CULPRIT_STATE_DIR)")
 	return command
 }
 

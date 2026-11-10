@@ -76,6 +76,7 @@ check — never as a root or a cause:
 | **Annotate pull requests** | `--format sarif` gives GitHub pull-request annotations; JSON and JUnit are there too. Exit codes are a contract: `0` clean, `1` findings at or above `--fail-on`, `2` could not run. |
 | **Compare environments safely** | `culprit env capture` reads Compose, Kubernetes or a process environment and writes a sealed, optionally signed envelope. Config values are recorded as a shape — type, length class, format — unless you grant that one key. |
 | **Ask a running system** | Thirteen read-only probes — DNS, TCP, TLS, HTTP reachability, route and schema conformance, token shape, database connectivity and schema, config presence, installed versions, edge impedance. Each asks permission before it dials anything. Two need more than a running service to reach a verdict: config presence compares against a declaration of the key, and installed versions needs the environment to declare a `packages:` command — without one it is `refused` or `inconclusive`, and says why ([`docs/PROBES.md`](docs/PROBES.md)). |
+| **Check that a fix fixed it** | `culprit verify <investigation>` runs every probe the diagnosis ran again, twice, and compares the environment with the record of it taken at diagnosis. `verified` only when what failed now passes, what passed still passes, and nothing changed that the fix you name does not explain; otherwise `not_resolved`, `regressed`, `changed_underneath` or `inconclusive`, with the reason. |
 | **See what was not checked** | Every gap is listed with its reason. A route table that could not be read never produces "that route does not exist" — it produces a line saying nobody looked. |
 
 ## How it works
@@ -182,6 +183,17 @@ instead of a confidence score. `POST /investigations` stores one, and the
 dashboard's **Investigations** page shows it: the tree with its root marked,
 each edge expanding to its readings, and the hypotheses the walk did not
 need kept apart from the ones it needed and could not test.
+
+`culprit verify <investigation-id> --change config:api/DATABASE_URL` closes
+the loop after someone applies a fix — Culprit verifies a change, it never
+applies one. `culprit diagnose` keeps the investigation, the request behind
+each reading and a capture of the environment in a local state directory;
+verify measures every reading again, twice, captures the environment again
+and compares the two with the engine `culprit diff` uses. A difference the
+named change does not explain makes the verdict `changed_underneath`, not
+`verified`. Verifications stay on the machine that ran them for now: the
+control plane does not store or show them yet ([`docs/LIMITS.md`](docs/LIMITS.md),
+"Verification").
 
 The dashboard also pairs and manages agents (Settings → Agents), starts an
 investigation through one, keeps postmortems, settings for components,
@@ -462,7 +474,7 @@ dogfooding, and it is why the "Not checked" list is never optional.
 
 | Path | What it is |
 |---|---|
-| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose`, `agent` |
+| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose`, `verify`, `agent` |
 | [`extractors/`](extractors) | the Python and Node extractor plugins ([protocol](docs/EXTRACTOR_PROTOCOL.md)) |
 | [`shared/`](shared) | the core model — planes, facts, subjects, readings — shared by the Python services |
 | [`api/`](api) | FastAPI: the dashboard's API, the ingest gateway, capture and reading endpoints, migrations |
@@ -490,8 +502,10 @@ What comes next, as plans:
 
 - **The demonstration video,** recorded from the script, storyboard and
   checklist in [`docs/video/`](docs/video); linked here once it exists.
-- **Phase 34 — A verification loop:** after a fix, check the fault is really
-  gone, and record the outcome so accuracy becomes measurable.
+- **Phase 34, part 2 — Outcomes in the control plane:** verifications stored
+  and shown, verification run through an agent, and an accuracy number
+  computed only from recorded outcomes, with its sample size. (`culprit
+  verify` itself exists: part 1.)
 - **Phase 35 — An agent surface,** so a coding agent can ask Culprit before
   it changes something, with the narrator constrained to settled facts.
 

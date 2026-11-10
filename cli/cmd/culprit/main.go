@@ -63,6 +63,10 @@ func main() {
 		if errors.As(err, &partial) {
 			os.Exit(exitFindings)
 		}
+		var unverified *verificationError
+		if errors.As(err, &unverified) {
+			os.Exit(exitFindings)
+		}
 		fmt.Fprintln(os.Stderr, "culprit:", err)
 		os.Exit(exitError)
 	}
@@ -106,6 +110,7 @@ docs/PERMISSIONS.md before granting it access to an environment.`,
 	root.AddCommand(newDiffCommand())
 	root.AddCommand(newProbeCommand())
 	root.AddCommand(newDiagnoseCommand())
+	root.AddCommand(newVerifyCommand())
 	root.AddCommand(newAgentCommand())
 	return root
 }

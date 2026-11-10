@@ -270,7 +270,9 @@ type ConfidenceRubric struct {
 	// Counterfactual: the same probe passes in a reference environment.
 	Counterfactual Criterion `json:"counterfactual"`
 	// Verified: after a change, the failing probe passes and nothing else
-	// regressed. Always false until Phase 34 builds the verification loop.
+	// regressed. Always false on a diagnosis: an investigation is never
+	// edited, and whether it is verified is its latest Verification's to
+	// say (Phase 34, "Investigations stay final").
 	Verified Criterion `json:"verified"`
 }
 
@@ -418,8 +420,8 @@ func validateDiagnosis(d Diagnosis, tree []FaultEdge) error {
 	}
 	if d.Confidence.Verified.Holds {
 		return fmt.Errorf(
-			"a diagnosis claims verified, and nothing can verify one before the " +
-				"verification loop exists (Phase 34)")
+			"a diagnosis claims verified. A diagnosis never does: whether it is " +
+				"verified is a verification's to say, recorded on its own")
 	}
 	if d.Complete {
 		found := false

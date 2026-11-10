@@ -2747,6 +2747,35 @@ as its own pull request, before part 3 — not inside a phase.
 **Do NOT implement in part 3.** No write capability, no new probe, no hosted
 deployment, no multi-tenancy, no mutual TLS, no change to how the walk runs.
 
+**Architecture review of part 3, 2026-11-10 — signed off; Phase 33 is
+complete.** Merged via PR #31 (`e125b4b`), every pull-request check green with
+no open code-scanning alert; the licence change (PR #30) landed before it.
+Checked on `main`: the CI workflow runs `check_security_doc.py`, the agent
+recipes in the kind cluster, and the quickstart under `script`. The Kubernetes
+recipe ran for the first time in CI, went red twice and was fixed with
+diagnostics rather than weakened. Decisions:
+
+- **Q19 — accepted, narrowed.** `api-reader` may read when each agent last made
+  a signed request, but not the nonce values: the grant becomes a column grant
+  on `agent_nonces (agent_id, seen_at)`, and a test shows `api-reader` cannot
+  select `nonce`. **First item of Phase 34 part 2** (part 1 has no migration).
+- **Kubernetes is a one-replica Deployment, not a DaemonSet.** Accepted: one
+  key is one identity and one audit chain, and two agents must not share a log.
+  An agent per node needs a key per node — later, if ever.
+- **The key Secret is `0640 root:65532` under `fsGroup`.** Accepted; it is the
+  closest Kubernetes allows a non-root reader, and LIMITS says so.
+- **The dashboard gates on the reachability set only**, and a walk needing more
+  ends partial naming the grant. Accepted.
+- **The agent exits when its control plane is unreachable**, and the recipes'
+  restart policies bring it back. Accepted for now; a crash loop during a long
+  outage is noisy, and LIMITS says so.
+- **The Compose journey's agent joins the demo services' network** to probe
+  them, and reaches the API only through its published address; part 2's
+  separate-network scenario still runs. Accepted.
+- **The new screens' screenshots** are in run 42805541738's `e2e-screenshots`
+  artifact, not committed. Malcolm's notes on them, if any, go into Phase 34
+  part 2.
+
 ---
 
 ### Phase 34 — The verification loop and calibration
@@ -2831,6 +2860,98 @@ agent surface consume.
 
 **17. Do NOT implement yet.** No automatic remediation. Culprit still recommends;
 the human or the coding agent applies.
+
+**How Phase 34 is run — decided 2026-11-10.** Where this block and the fields
+above differ, this block wins.
+
+**Two parts, two `/next` runs, an architecture review after each.**
+- **Part 1 — the loop, in the binary.** `culprit verify`, the `Verification`
+  model, the verdict rules, and the fault library carried through
+  inject → diagnose → fix → verify for every fault class. No API, no
+  migration, no interface.
+- **Part 2 — outcomes in the control plane.** Verifications stored and shown,
+  verification as an agent task, outcomes and `GET /outcomes/accuracy`, the
+  README's number with its methodology. Its criteria are written at part 1's
+  review.
+
+**Decisions.**
+- **Investigations stay final.** A verification is its own append-only record
+  that points at an investigation. Whether an investigation is verified is
+  derived from its latest verification and never written back into it, so
+  field 5's `verification_status` column and any edit to the stored rubric are
+  dropped; the view shows the rubric's `verified` from the verification.
+- **The full reading set, measured again.** Verification re-runs every probe
+  the investigation ran — same targets, same grants, same vantage — and never
+  reuses a stored reading. A probe that cannot run now makes the verdict
+  `inconclusive`, never `verified`.
+- **Five verdicts, a closed set.**
+  - `verified` — every reading that failed now passes on two consecutive runs,
+    every reading that passed still passes, and every difference between the
+    environment before and after is explained by the change named.
+  - `not_resolved` — a reading that failed still fails.
+  - `regressed` — the failing readings pass, but one that passed now fails. Not
+    in field 7's list; added because "the fix broke something else" is the
+    most actionable thing verification can say.
+  - `changed_underneath` — the failing readings pass, but the environment
+    changed in a way the named change does not explain.
+  - `inconclusive` — anything else: a probe refused or inconclusive now, a
+    result that flips between the two runs, no change named, or no record of
+    the environment before.
+  A `verified` verification cannot be constructed unless all three of its
+  clauses hold — enforced on the type, in Go and Python.
+- **"Before" is recorded at diagnosis.** From part 1, `culprit diagnose`
+  records an environment capture with every new investigation whose grants
+  allow one, and the investigation says when they do not. Investigations
+  stored before this phase have no before, so their verifications can reach
+  `inconclusive` at best on that clause.
+- **What the change explains.** `--change` names what was applied: an image
+  for a component, a config key for a component (repeatable), or a commit.
+  Before and after are compared with the engine `culprit diff` already uses; a
+  difference is explained when it falls on a subject the named change touches.
+  Anything else is `changed_underneath`.
+- **The accuracy number is honest about its sample** (part 2). It is computed
+  only from recorded outcomes, per fault class, with its count. Outcomes from
+  the fault library are planted faults, and the README says exactly that; it
+  never presents them as accuracy on real systems until real outcomes exist.
+- **Field 6 is dropped.** Phase 32 dropped the incident-to-investigation
+  migration as unsound, so removing `incident_candidates` and
+  `incident_anomalies` would delete history, not migrate it; they stay,
+  read-only. The change-link job serves only that history; it is left alone,
+  and the named change is verification's link from a change to a fault.
+
+**Part 1 — the loop, in the binary. Brief and criteria, 2026-11-10.**
+
+**Work order.**
+1. The `Verification` model in `culprit_model`, Go and Python, with a
+   conformance fixture both read, written first — `verified` unconstructible
+   without its three clauses.
+2. `culprit diagnose` records the before capture, or says why it could not.
+3. `cli/internal/verify/` and `culprit verify`: re-run, compare, judge. It
+   takes a probe runner through an interface, as `isolate` does, so the D8
+   allowlist does not change.
+4. The fault library: a known fix for each fault class, and the loop asserted
+   end to end in its CI job.
+5. LIMITS, PROBES and README for what `culprit verify` does and does not do.
+
+**Acceptance criteria (part 1).**
+- The conformance fixture's cases hold in Go and in Python, including a
+  `verified` with one clause false, which neither can construct.
+- `culprit verify` re-runs exactly the probes the investigation ran — the
+  count is asserted — and reuses no stored reading.
+- For every fault class in the library: inject, diagnose, apply the known fix,
+  verify — `verified`, in CI.
+- A wrong fix gives `not_resolved`.
+- A fix that resolves the fault but breaks a previously passing probe gives
+  `regressed`.
+- An unrelated change between diagnosis and verification — a config key
+  changed on another component — gives `changed_underneath`.
+- A result that flips between the two runs gives `inconclusive`; so does no
+  change named, and so does an investigation with no before capture.
+- The D8 allowlist is unchanged, and `LLM_PROVIDER=none` changes nothing.
+
+**Do NOT implement in part 1.** No API, no migration, no interface, no agent
+task kind, no accuracy aggregation, no README number. No automatic
+remediation: Culprit verifies a change someone else applied.
 
 ---
 
