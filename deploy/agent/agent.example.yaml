@@ -1,0 +1,23 @@
+# The agent's configuration: its identity, where its control plane is, and
+# the grants it holds in each environment — its whole authority. The
+# control plane can only narrow these, never widen them
+# (docs/PERMISSIONS.md, "The agent's grants").
+#
+# Copy it to the recipe's config directory as agent.yaml and edit it. The
+# parser refuses a wildcard, `all`, any *.write and any unknown grant, each
+# with its line.
+version: 1
+agent_id: prod-eu-1              # unique per agent; an agent's key is its identity
+manifest: ./culprit.yaml         # your system model, beside this file
+key: /run/secrets/agent.key      # where every recipe mounts the key; `culprit agent init` writes it
+control_plane:
+  # Always https. Plain http is refused except to a loopback address.
+  url: https://culprit.example.com/api
+environments:
+  production:
+    grants:
+      # The reachability set (docs/PERMISSIONS.md, "The minimum grants for
+      # each kind of investigation"). Add what the classes you need require.
+      net.tcp.connect: true
+      net.http.outbound: true
+      config.read.names: true

@@ -27,7 +27,13 @@ COPY . .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VERSION}" \
     -o /out/culprit ./cmd/culprit
+RUN mkdir -p /out/state
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/culprit /culprit
+# The agent's state directory — its audit log — owned by nonroot (65532),
+# so a volume mounted here (deploy/agent/compose.yaml) starts out writable
+# by the agent and by nobody else. Docker copies an image directory's
+# ownership into an empty named volume; without this one it would be root's.
+COPY --from=build --chown=65532:65532 /out/state /var/lib/culprit
 ENTRYPOINT ["/culprit"]
