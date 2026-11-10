@@ -2,6 +2,7 @@ import { ChevronLeftIcon } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { AppHeader } from "@/components/layout/AppHeader";
+import { SourceLink } from "@/components/layout/SourceLink";
 import { DiagnosisCard } from "@/components/investigation/Diagnosis";
 import { FaultTree } from "@/components/investigation/FaultTree";
 import { Hypotheses } from "@/components/investigation/Hypotheses";
@@ -52,6 +53,7 @@ export function InvestigationView() {
         ) : null}
         {data ? <InvestigationBody investigation={data} /> : null}
       </main>
+      <SourceLink />
     </div>
   );
 }

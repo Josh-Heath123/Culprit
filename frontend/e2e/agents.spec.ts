@@ -93,6 +93,7 @@ test("agents: pair a real agent, allow it, investigate through it, revoke it", a
       await expect(why).toContainText("net.http.outbound");
       await expect(why).toContainText("Allow it under Settings → Agents");
       await expect(why).toContainText("Nothing has been started.");
+      await atEveryWidth(page, "investigate-unavailable", () => expect(why).toBeVisible());
       const start = control.getByRole("button", { name: "Start the investigation" });
       await expect(start).toBeDisabled();
       await control.getByLabel("Symptom").press("Enter");

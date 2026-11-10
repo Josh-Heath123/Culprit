@@ -106,6 +106,9 @@ export async function atEveryWidth(
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await keyboardReaches(page, name, region);
+  // AGPL-3.0 section 13 (Phase 33 part 3): every page links to its source.
+  const source = page.getByTestId("source-link").getByRole("link", { name: "Source code" });
+  await expect.soft(source, `${name}: no link to the source`).toHaveAttribute("href", /^https?:\/\//);
 }
 
 /** Keyboard operation, on every route: Tab reaches the page's own content

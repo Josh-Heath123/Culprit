@@ -1,5 +1,6 @@
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Brand } from "@/components/layout/Brand";
+import { SourceLink } from "@/components/layout/SourceLink";
 
 /** Every signed-in page: the shared header, then one main column, with a
  * page title and an optional description and actions. Pages put their
@@ -41,6 +42,7 @@ export function Page({
         </div>
         {children}
       </main>
+      <SourceLink />
     </div>
   );
 }
@@ -49,9 +51,12 @@ export function Page({
  * the brand, then one centred panel. */
 export function Standalone({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-10">
-      <Brand />
-      {children}
-    </main>
+    <div className="flex min-h-screen flex-col">
+      <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-10">
+        <Brand />
+        {children}
+      </main>
+      <SourceLink />
+    </div>
   );
 }

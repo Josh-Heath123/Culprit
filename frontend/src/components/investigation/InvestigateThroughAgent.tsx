@@ -55,7 +55,7 @@ export function InvestigateThroughAgent() {
       <CardBody className="flex flex-col gap-4">
         {active.length === 0 ? (
           <p className="text-sm text-fg-muted" data-testid="investigate-unavailable">
-            No agent is paired, so there is nothing to run an investigation.{" "}
+            No agent is paired, so nothing can run an investigation yet.{" "}
             <Link to="/settings/agents" className="text-brand underline-offset-4 hover:underline">
               Pair one under Settings → Agents
             </Link>
