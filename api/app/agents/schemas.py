@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import Any, Literal
 
 from culprit_model.capabilities import Capability
-from culprit_model.verifications import Change
+from culprit_model.subjects import SubjectError, build
+from culprit_model.verifications import Change, ChangeKind
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agents.signing import AGENT_ID
@@ -124,12 +125,53 @@ class VerifySpec(_Strict):
     investigation this agent diagnosed found, after a change was applied."""
 
     investigation_id: str = Field(pattern=r"^inv-[0-9a-f]{16}$")
-    #: What was applied, as `--change` names it. None named is allowed and
-    #: verifies as inconclusive, saying so.
-    changes: list[Change] = Field(default_factory=list, max_length=32)
+    #: What was applied. Each is a change, or the words `culprit verify
+    #: --change` takes — `config:<component>/<key>`, `image:<component>`,
+    #: `commit:<sha>`, `action:<what was done>` — read into one here, with
+    #: its subject built by `subjects.build()` (the dashboard formats no
+    #: subject). None named is allowed and verifies as inconclusive.
+    #: (Typed `Change | str` so the schema says both are accepted; every
+    #: string is read into a Change before the field is validated.)
+    changes: list[Change | str] = Field(default_factory=list, max_length=32)
+
+    @field_validator("changes", mode="before")
+    @classmethod
+    def _read_change_words(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        return [parse_change(item) if isinstance(item, str) else item for item in value]
     #: Whether the fault was planted (a drill) or happened on a real
     #: system: said by whoever asks, never guessed.
     source: Literal["planted", "real"]
+
+
+def parse_change(words: str) -> Change:
+    """`--change` words into a change: the Python half of the binary's
+    parseChanges (cli/cmd/culprit/verify.go), subjects built, never
+    formatted."""
+    kind, found, rest = words.partition(":")
+    if not found:
+        raise ValueError(
+            f"{words!r}: want config:<component>/<key>, image:<component>, commit:<sha> "
+            "or action:<what was done>"
+        )
+    try:
+        if kind == "config":
+            component, slash, key = rest.partition("/")
+            if not slash:
+                raise ValueError(f"{words!r}: want config:<component>/<key>")
+            return Change(
+                kind=ChangeKind.CONFIG, subject=build("config", component=component, key=key)
+            )
+        if kind == "image":
+            return Change(kind=ChangeKind.IMAGE, subject=build("image", component=rest))
+        if kind == "commit":
+            return Change(kind=ChangeKind.COMMIT, ref=rest.strip().lower())
+        if kind == "action":
+            return Change(kind=ChangeKind.ACTION, description=rest.strip())
+    except SubjectError as exc:
+        raise ValueError(f"{words!r}: {exc}") from None
+    raise ValueError(f"{words!r}: {kind!r} is not config, image, commit or action")
 
 
 class TaskCreate(_Strict):

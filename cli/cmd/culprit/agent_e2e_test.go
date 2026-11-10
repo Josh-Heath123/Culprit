@@ -29,7 +29,12 @@ import (
 //   - the audience fault, run by an agent holding config.inspect.values,
 //     still roots at the audience;
 //   - every probe a walk ran has exactly one row in agent_audit_log, and
-//     every investigation records that an agent submitted it.
+//     every investigation records that an agent submitted it;
+//   - Phase 34 part 2: the audience fault diagnosed, a wrong fix applied and
+//     a verify task sent — not_resolved; the right fix and another verify
+//     task — verified, both stored against the investigation, newest first;
+//     and an agent that did not diagnose it answers inconclusive, holding
+//     no record of before.
 //
 // Needs Docker and a running quickstart, so it runs only when
 // CULPRIT_AGENT_E2E=1, with:
@@ -85,12 +90,57 @@ func TestTheAgentEndToEnd(t *testing.T) {
 		network+"      config.inspect.values: [order-service/INVENTORY_TOKEN]\n", "")
 	audience.allow(t, append([]string{"config.inspect.values"}, networkGrants...))
 	rooted := audience.diagnose(t, "POST http://order-service:8001/orders")
-	restore()
 	if rooted["root_subject"] != "auth:order-service->inventory-service/audience" {
 		t.Errorf("the audience investigation roots at %v", rooted["root_subject"])
 	}
 
-	for _, agent := range []*inContainerAgent{reach, audience} {
+	// The loop, through the agent. A fix recreates order-service, and the
+	// agent installed in it with it: its directory — key, audit log and
+	// state — is kept across the recreation, as a volume would keep it.
+	investigation := fmt.Sprint(rooted["id"])
+	token := []map[string]any{{"kind": "config", "subject": "config:order-service/INVENTORY_TOKEN"}}
+	audience.across(t, func() { stack.applyScenario("remint-wrong-audience") })
+	wrong := audience.verify(t, investigation, token)
+	if wrong["verdict"] != "not_resolved" {
+		t.Errorf("a wrong fix: verdict %v (%v)", wrong["verdict"], wrong["reason"])
+	}
+	audience.across(t, func() { stack.applyFix("auth-audience", nil) })
+	right := audience.verify(t, investigation, token)
+	if right["verdict"] != "verified" {
+		t.Errorf("the fix: verdict %v (%v)", right["verdict"], right["reason"])
+	}
+	listed := adminCall(t, http.MethodGet, base+"/investigations/"+investigation+"/verifications", admin, nil, http.StatusOK)
+	items, _ := listed["items"].([]any)
+	var verdicts []string
+	for _, item := range items {
+		stored := item.(map[string]any)
+		verification := stored["verification"].(map[string]any)
+		verdicts = append(verdicts, fmt.Sprint(verification["verdict"]))
+		if stored["submitted_by"] != "agent:"+audience.id || stored["source"] != "planted" {
+			t.Errorf("verification %v stored by %v as %v", verification["id"], stored["submitted_by"], stored["source"])
+		}
+	}
+	if strings.Join(verdicts, ",") != "verified,not_resolved" {
+		t.Errorf("the investigation's verifications, newest first: %v", verdicts)
+	}
+	// An agent that did not diagnose it holds no record of before. (The
+	// first agent went with the container the audience fault recreated;
+	// this one is paired in the container as it is now.)
+	stranger := newInContainerAgent(t, stack, base, admin, plane, "e2e-stranger", network, "")
+	stranger.allow(t, networkGrants)
+	answer := stranger.verifyTask(t, investigation, token)
+	if answer["verdict"] != "inconclusive" || !strings.Contains(fmt.Sprint(answer["reason"]), "holds no record of before") {
+		t.Errorf("another agent's answer: %v (%v)", answer["verdict"], answer["reason"])
+	}
+	if path := os.Getenv("CULPRIT_E2E_VERIFIED_OUT"); path != "" {
+		// For the browser journey that reads this investigation's page next.
+		if err := os.WriteFile(path, []byte(investigation), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	restore()
+
+	for _, agent := range []*inContainerAgent{reach, audience, stranger} {
 		agent.assertAuditMatchesReadings(t)
 	}
 }
@@ -105,7 +155,7 @@ type inContainerAgent struct {
 	dir       string
 	container string
 	tasks     []string
-	readings  map[string]int // task id -> readings its investigation holds
+	readings  map[string]int // task id -> probe rows it must have in the audit log
 }
 
 func newInContainerAgent(t *testing.T, stack *faultStack, base, admin, plane, id, grants, manifest string) *inContainerAgent {
@@ -177,6 +227,9 @@ func (a *inContainerAgent) diagnose(t *testing.T, symptom string) map[string]any
 	stored := adminCall(t, http.MethodGet, a.base+"/investigations/"+investigation, a.admin, nil, http.StatusOK)
 	readings, _ := stored["readings"].([]any)
 	a.readings[task] = len(readings)
+	if len(readings) == 0 {
+		t.Errorf("task %s: the walk took no readings", task)
+	}
 
 	listed := adminCall(t, http.MethodGet, a.base+"/investigations?limit=200", a.admin, nil, http.StatusOK)
 	items, _ := listed["items"].([]any)
@@ -188,9 +241,58 @@ func (a *inContainerAgent) diagnose(t *testing.T, symptom string) map[string]any
 	}
 	diagnosis, _ := stored["diagnosis"].(map[string]any)
 	return map[string]any{
-		"complete": diagnosis["complete"], "root_subject": diagnosis["root_subject"],
+		"id": investigation, "complete": diagnosis["complete"], "root_subject": diagnosis["root_subject"],
 		"statement": diagnosis["statement"],
 	}
+}
+
+// across keeps the agent's directory through something that recreates
+// its container — a fix — and puts it back, owned as before.
+func (a *inContainerAgent) across(t *testing.T, recreate func()) {
+	t.Helper()
+	kept := filepath.Join(t.TempDir(), "agent")
+	a.stack.docker(nil, "cp", a.container+":"+a.dir, kept)
+	recreate()
+	a.container = a.stack.container("order-service")
+	a.stack.docker(nil, "cp", kept, a.container+":"+a.dir)
+	a.stack.docker(nil, "exec", "-u", "0", a.container, "chmod", "-R", "a+rwX", a.dir)
+}
+
+// verifyTask addresses a verify task to the agent, lets it run, and
+// returns the task's result.
+func (a *inContainerAgent) verifyTask(t *testing.T, investigation string, changes []map[string]any) map[string]any {
+	t.Helper()
+	created := adminCall(t, http.MethodPost, a.base+"/agents/"+a.id+"/tasks", a.admin, map[string]any{
+		"environment": "faults-order", "kind": "verify",
+		"verify": map[string]any{"investigation_id": investigation, "changes": changes, "source": "planted"},
+	}, http.StatusCreated)
+	task := fmt.Sprint(created["id"])
+	a.tasks = append(a.tasks, task)
+	a.readings[task] = 0
+	a.run(t, "agent", "--config", a.dir+"/agent.yaml", "--audit", a.dir+"/audit.log", "--once")
+	view := adminCall(t, http.MethodGet, a.base+"/agents/"+a.id+"/tasks/"+task, a.admin, nil, http.StatusOK)
+	if view["completed_at"] == nil {
+		t.Fatalf("verify task %s did not complete: %v", task, view)
+	}
+	result, _ := view["result"].(map[string]any)
+	if result == nil {
+		t.Fatalf("verify task %s has no result: %v", task, view)
+	}
+	// Every reading measured again twice, each run a probe row.
+	if count, ok := result["readings"].(float64); ok && result["verification_id"] != nil {
+		a.readings[task] = 2 * int(count)
+	}
+	return map[string]any{"verdict": result["verdict"], "reason": view["reason"], "verification_id": result["verification_id"]}
+}
+
+// verify is verifyTask, and the stored verification it names.
+func (a *inContainerAgent) verify(t *testing.T, investigation string, changes []map[string]any) map[string]any {
+	t.Helper()
+	answer := a.verifyTask(t, investigation, changes)
+	if answer["verification_id"] == nil {
+		t.Fatalf("no verification was stored: %v (%v)", answer["verdict"], answer["reason"])
+	}
+	return answer
 }
 
 // Every probe a walk ran has exactly one agent_audit_log row.
@@ -212,11 +314,12 @@ func (a *inContainerAgent) assertAuditMatchesReadings(t *testing.T) {
 	if tasks != len(a.tasks) {
 		t.Errorf("agent %s: %d task entries, want %d", a.id, tasks, len(a.tasks))
 	}
-	// Task by task: one probe row for every reading that task's
-	// investigation holds, and none for a task that ran nothing.
+	// Task by task: one probe row for every reading a walk took, two for
+	// every reading a verification measured again, and none for a task
+	// that ran nothing.
 	for _, task := range a.tasks {
-		if probes[task] != a.readings[task] || a.readings[task] == 0 {
-			t.Errorf("agent %s, task %s: %d probe rows in agent_audit_log for %d readings",
+		if probes[task] != a.readings[task] {
+			t.Errorf("agent %s, task %s: %d probe rows in agent_audit_log, want %d",
 				a.id, task, probes[task], a.readings[task])
 		}
 	}

@@ -6,10 +6,13 @@ import { SourceLink } from "@/components/layout/SourceLink";
 import { DiagnosisCard } from "@/components/investigation/Diagnosis";
 import { FaultTree } from "@/components/investigation/FaultTree";
 import { Hypotheses } from "@/components/investigation/Hypotheses";
+import { Verifications } from "@/components/investigation/Verifications";
 import { ErrorPanel, LoadingInvestigation } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useInvestigationTree } from "@/hooks/useInvestigations";
+import { useVerifications } from "@/hooks/useVerifications";
 import { ApiError } from "@/lib/api";
 import type { InvestigationTree, Symptom } from "@/lib/types";
 import { formatDateTime } from "@/lib/datetime";
@@ -60,6 +63,18 @@ export function InvestigationView() {
 
 function InvestigationBody({ investigation }: { investigation: InvestigationTree }) {
   const { diagnosis, symptom } = investigation;
+  const { data: me } = useCurrentUser();
+  const { data: verificationList } = useVerifications(investigation.id);
+  const verifications = verificationList?.items ?? [];
+  const latest = verifications[0]?.verification;
+  // The rubric's `verified` is the newest verification's: the stored
+  // investigation never says it, because it is never edited.
+  const verified = latest
+    ? {
+        holds: latest.verdict === "verified",
+        reason: `${latest.verdict === "verified" ? "Verified" : `Not verified (${latest.verdict.replaceAll("_", " ")})`} by the newest verification, ${latest.id}: ${latest.reason}`,
+      }
+    : null;
   return (
     <>
       <div className="flex flex-col gap-2">
@@ -69,7 +84,8 @@ function InvestigationBody({ investigation }: { investigation: InvestigationTree
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-5 lg:col-span-2">
-          <DiagnosisCard diagnosis={diagnosis} unexplored={investigation.hypotheses.unexplored} />
+          <DiagnosisCard diagnosis={diagnosis} unexplored={investigation.hypotheses.unexplored} verified={verified} />
+          <Verifications investigation={investigation} verifications={verifications} isAdmin={me?.role === "admin"} />
           <FaultTree
             edges={investigation.fault_tree}
             symptom={symptom.subject}

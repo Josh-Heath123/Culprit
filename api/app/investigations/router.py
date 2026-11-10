@@ -118,4 +118,5 @@ async def get_investigation_tree(
     investigation = await service.load(session, investigation_id)
     if investigation is None:
         raise HTTPException(status_code=404, detail="investigation not found")
-    return InvestigationTree.model_validate(service.tree(investigation))
+    submitter = await service.submitted_by(session, investigation_id) or "project-token"
+    return InvestigationTree.model_validate(service.tree(investigation, submitter))

@@ -208,6 +208,33 @@ to it (AGPL-3.0 section 13; `LICENSING.md`).
   diagnosis. Anything that matched the old sentence should match on
   `holds`, not the text.
 
+**Phase 34 part 2 adds one role, two migrations and one secret.**
+
+```
+VERIFICATION_WRITER_DB_PASSWORD=<generate one>
+VERIFICATION_WRITER_DATABASE_URL=postgresql+asyncpg://verification-writer:<same password>@postgres:5432/culprit
+```
+
+Both are required: migration `f2b7d4e9a1c6` will not create the role
+without the password, and the api will not start without the URL.
+
+- **`f1a9c3d7e2b4` narrows `api-reader` on `agent_nonces`** to the columns
+  `agent_id` and `seen_at`. Anything of yours that read the `nonce` column
+  as `api-reader` will be refused; the agents screen reads only those two.
+- **`f2b7d4e9a1c6` adds `verifications`**, append-only: no role, the owner
+  included, can update, delete or truncate it. A test fixture or a cleanup
+  script that ran `TRUNCATE investigations CASCADE` now fails on it, because
+  the cascade reaches `verifications`; such a script must lift the trigger
+  as the owner (`ALTER TABLE verifications DISABLE TRIGGER USER`) and
+  restore it. It also allows `verify` as an agent task kind.
+- **An agent keeps a state directory** — `state/` beside its audit log,
+  or `--state-dir` — with what verifying its walks needs, including a
+  capture. The shipped recipes keep the audit log on a volume, so the state
+  directory is on it too. Investigations an agent walked before this
+  upgrade have no record there: verifying one answers `inconclusive`.
+- **`GET /investigations/{id}/tree` gains `submitted_by`**, and **`TaskResult`
+  gains `verification_id` and `verdict`**; nothing was removed.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

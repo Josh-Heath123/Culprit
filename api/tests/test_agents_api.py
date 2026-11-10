@@ -804,7 +804,8 @@ async def test_an_agent_posts_the_verification_it_measured_and_is_recorded(
     assert [item["submitted_by"] for item in listed] == [f"agent:{agent.id}"]
 
     # Runs that name another agent are not this agent's to post.
-    other = _verification_by(agent, investigation) | {"id": "ver-00000000000000aa"}
+    other = _verification_by(agent, investigation)
+    other["id"] = "ver-00000000000000aa"
     other["reran"][0]["runs"][0]["agent_id"] = "someone-else"
     refused = agent.send("POST", path, {"source": "planted", "verification": other})
     assert refused.status_code == 403, refused.text
@@ -816,6 +817,9 @@ async def test_a_verify_task_names_an_investigation_in_its_environment(
 ) -> None:
     await _fresh(db_engine)
     investigation = json.loads((RECORDED / "auth-audience.json").read_text("utf-8"))
+    from culprit_model.subjects import build
+
+    token_key = build("config", component="order-service", key="INVENTORY_TOKEN")
     stored = client.post(
         "/investigations", json=investigation, headers={"Authorization": f"Bearer {PROJECT_TOKEN}"}
     )
@@ -823,7 +827,7 @@ async def test_a_verify_task_names_an_investigation_in_its_environment(
     agent = paired(client, {investigation["environment"]: ["net.tcp.connect"]})
     verify = {
         "investigation_id": investigation["id"],
-        "changes": [{"kind": "config", "subject": "config:order-service/INVENTORY_TOKEN"}],
+        "changes": [{"kind": "config", "subject": token_key}],
         "source": "planted",
     }
 
@@ -849,3 +853,15 @@ async def test_a_verify_task_names_an_investigation_in_its_environment(
     assert task(verify=verify | {"source": "guess"}).status_code == 422  # source is said
     bad_change = verify | {"changes": [{"kind": "commit", "ref": "main"}]}
     assert task(verify=bad_change).status_code == 422
+
+    # The words `culprit verify --change` takes, read here with subjects
+    # built by subjects.build(): the dashboard formats no subject. (A
+    # config key's words are its subject's text.)
+    words = verify | {"changes": [token_key, "action: restarted it"]}
+    assert task(verify=words).status_code == 201
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["verify"]["changes"] == [
+        {"kind": "config", "subject": token_key},
+        {"kind": "action", "description": "restarted it"},
+    ]
+    for wrong in ("restart:order-service", "commit:main", "action:   "):
+        assert task(verify=verify | {"changes": [wrong]}).status_code == 422, wrong

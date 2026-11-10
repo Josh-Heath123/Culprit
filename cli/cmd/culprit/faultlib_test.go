@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -114,6 +115,11 @@ func TestTheFaultLibrary(t *testing.T) {
 
 	stack := startFaultStack(t)
 	byName := map[string]faultExpectation{}
+	results := faultResults{
+		Why: "Written by TestTheFaultLibrary (CULPRIT_FAULT_LIBRARY_RESULTS): each planted fault, " +
+			"diagnosed, its known fix applied and verified; and each scenario, a deliberate wrong or " +
+			"partial fix. scripts/accuracy_readme.py renders the README's number from this file.",
+	}
 	for _, fault := range library.Faults {
 		byName[fault.Name] = fault
 		t.Run(fault.Name, func(t *testing.T) {
@@ -124,7 +130,9 @@ func TestTheFaultLibrary(t *testing.T) {
 			// from the same vantage with the change named.
 			state := stack.keepState(fault.Vantage)
 			stack.applyFix(fault.Name, restore)
-			stack.checkVerification(stack.verify(fault, inv, state, fault.Fix.Change), inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
+			verification := stack.verify(fault, inv, state, fault.Fix.Change)
+			stack.checkVerification(verification, inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
+			results.Faults = append(results.Faults, resultOf(fault.Name, inv, verification))
 		})
 	}
 	for _, scenario := range library.Scenarios {
@@ -138,9 +146,51 @@ func TestTheFaultLibrary(t *testing.T) {
 			defer restore()
 			state := stack.keepState(fault.Vantage)
 			stack.applyScenario(scenario.Apply)
-			stack.checkVerification(stack.verify(fault, inv, state, scenario.Change), inv, scenario.Verdict, scenario.ReasonContains)
+			verification := stack.verify(fault, inv, state, scenario.Change)
+			stack.checkVerification(verification, inv, scenario.Verdict, scenario.ReasonContains)
+			results.Scenarios = append(results.Scenarios, resultOf(scenario.Name, inv, verification))
 		})
 	}
+	// Phase 34 part 2: the results the README's number is rendered from —
+	// only when every case passed, so a failed run never writes them.
+	if path := os.Getenv("CULPRIT_FAULT_LIBRARY_RESULTS"); path != "" && !t.Failed() {
+		// Not HTML-escaped: a subject's arrow is written as itself, so a
+		// person reading the committed file sees what the README cites.
+		var encoded bytes.Buffer
+		encoder := json.NewEncoder(&encoded)
+		encoder.SetEscapeHTML(false)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(results); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, encoded.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// faultResults is what one run of the library found, case by case, in
+// the library's own order. Nothing in it varies between two runs that
+// reach the same verdicts: no time, no id.
+type faultResults struct {
+	Why       string        `json:"why"`
+	Faults    []faultResult `json:"faults"`
+	Scenarios []faultResult `json:"scenarios"`
+}
+
+type faultResult struct {
+	Name        string `json:"name"`
+	RootSubject string `json:"root_subject"`
+	Complete    bool   `json:"complete"`
+	Verdict     string `json:"verdict"`
+}
+
+func resultOf(name string, inv model.Investigation, verification model.Verification) faultResult {
+	result := faultResult{Name: name, Verdict: string(verification.Verdict)}
+	if inv.Diagnosis != nil {
+		result.RootSubject, result.Complete = inv.Diagnosis.RootSubject, inv.Diagnosis.Complete
+	}
+	return result
 }
 
 // injectAndDiagnose puts the stack in its healthy state, shows the symptom

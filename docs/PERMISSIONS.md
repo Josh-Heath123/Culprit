@@ -306,10 +306,12 @@ that hop out before it can blame the database. `net.dns.resolve` and
 nothing out, and a TLS check applies only to an endpoint declared
 `tls: true` — grant `net.tls.inspect` for those.
 
-## Verifying a fix — `culprit diagnose` and `culprit verify`
+## Verifying a fix — `culprit diagnose`, `culprit verify` and an agent
 
 Verification asks for no permission of its own. It uses the grants the
-environment already has, in two places:
+environment already has — or, through an agent, the grants that agent holds
+there, narrowed by the task's allowance, exactly as its probes do — in two
+places:
 
 - **`culprit diagnose` now captures the environment before it walks** —
   the same capture `culprit env capture` takes, under the same grants
@@ -334,6 +336,16 @@ and the capture — is written to the state directory (`--state-dir`,
 `$CULPRIT_STATE_DIR`, else your user's state directory), readable by you
 alone. The capture is the same envelope `culprit env capture` writes, so
 it carries the literal value of any key `config.read.values` allowlists.
+
+**Through an agent** (Phase 34 part 2), the same happens inside the agent:
+every walk it runs captures before, under its own grants, and keeps the
+record in its state directory (`state/` beside its audit log). An admin
+asks it to verify with a `verify` task, naming the change and saying
+whether the fault was planted; the task is addressed like any other and
+runs under the same narrow-only allowance. Every probe it re-runs is an
+audit entry. It posts the verification to `POST
+/investigations/{id}/verifications`, signed; asked about an investigation it
+did not diagnose, it measures nothing and answers `inconclusive`.
 
 ## The agent and the control plane — keys, pairing, allowances
 
@@ -372,6 +384,7 @@ very next request.
 |---|---|
 | `POST /facts/captures`, `POST /divergences/captures`, `POST /captures` | the project token |
 | `POST /investigations` | the project token, or an agent's signature — recorded as `submitted_by` |
+| `POST /investigations/{id}/verifications` | the project token, or an agent's signature — recorded as `submitted_by`; an agent's runs must all name it |
 | `POST /readings` | an agent's signature only; every reading must name that agent |
 | `POST /agents/register` | a pairing code, spent once |
 | `/agents/me/...` (claim, result, audit) | the agent's signature |
@@ -390,8 +403,20 @@ allowances, claims and completes tasks and appends audit entries. No role
 holds UPDATE or DELETE on `agent_audit_log`, and triggers refuse both, and
 TRUNCATE, to every role including the owner. **`api-reader`** serves the
 agents screen: it reads the agents, their allowances, tasks and audit log,
-and (since `e5b8a2d4c6f1`) `agent_nonces`, whose newest row per agent is
-that agent's last signed request; it writes none of them.
+and two columns of `agent_nonces` — `agent_id` and `seen_at`, never the
+nonce itself (`f1a9c3d7e2b4`, narrowing `e5b8a2d4c6f1`'s table grant) —
+whose newest row per agent is that agent's last signed request; it writes
+none of them.
+
+### The verification role
+
+**`verification-writer`** (migration `f2b7d4e9a1c6`) holds INSERT on
+`verifications` and nothing else — not even SELECT. The API checks a
+verification against the stored investigation under `api-reader` first,
+then inserts it under this role; it never writes to the investigation. No
+role holds UPDATE or DELETE on `verifications`, and triggers refuse both,
+and TRUNCATE, to every role including the owner. `api-reader` reads it for
+the investigation page and `GET /outcomes/accuracy`.
 
 ## How Culprit reaches an environment
 

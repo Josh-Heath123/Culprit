@@ -2032,15 +2032,19 @@ does not move the re-run either: the recorded inputs are used, not the
 manifest's current ones. The manifest's current *grants* are used: a grant
 removed since makes its probe `refused` and the verdict `inconclusive`.
 
-### Only an investigation diagnosed on this machine can be verified
+### Only whatever diagnosed an investigation can verify it
 
 `culprit diagnose` keeps what verification needs — the investigation, the
 request behind each reading, the capture before — in its state directory
-on the machine that ran it. An investigation stored before Phase 34, one
-an agent ran, or one only in the control plane has no record there, and
-`culprit verify` refuses it. An investigation diagnosed where the grants
-allow no capture *is* kept, says so in its `verified` criterion, and can
-be verified `inconclusive` at best.
+on the machine that ran it; an agent keeps the same for every walk it
+runs, in its own. Only that machine's `culprit verify`, or that agent's
+`verify` task, can verify the investigation. An investigation stored before
+Phase 34, or one only in the control plane, has no record anywhere:
+`culprit verify` refuses it, and an agent asked to verify it — or one it
+did not diagnose — answers `inconclusive`, saying it holds no record of
+before, and measures nothing. An investigation diagnosed where the grants
+allow no capture *is* kept, says so in its `verified` criterion, and can be
+verified `inconclusive` at best.
 
 ### A reference environment is re-measured, not compared
 
@@ -2049,12 +2053,31 @@ is re-run there, and judged with the rest, but only the investigation's own
 environment is captured before and after. A change in the reference
 environment is seen only if it changes that reading.
 
-### An agent's investigation does not say it has no record of before
+### An agent keeps its record beside its audit log, and a lost one is lost
 
-`culprit agent` runs the walk without a capture and keeps nothing for
-`culprit verify`; its investigations' `verified` criterion says only that
-no change has been verified, not that verification is impossible. Part 2
-makes verification an agent task.
+An agent's state directory is `state/` beside its audit log (`--state-dir`
+moves it): the recipes' named volume, which already has to survive a
+restart. An agent whose volume is lost, or which is re-paired as a new
+agent, can no longer verify anything it diagnosed before: it answers
+`inconclusive`. Nothing copies the record to the control plane — it holds a
+capture, which can carry values `config.read.values` allowlists.
+
+### An agent's capture before is not an audit entry
+
+Every probe an agent runs is an entry in its hash-chained audit log; the
+capture it takes before a walk, and again for a verification, is not. The
+capture runs under the same grants as the task's probes (the agent's
+configuration, narrowed by the allowance), and a capture refused for a
+missing grant is recorded inside the capture, not in the log.
+
+### An agent re-runs a reference environment's reading under no grant
+
+An allowance is per environment, and nothing widens one. A counterfactual
+reading the walk took in a reference environment is re-run by a `verify`
+task under no grant at all, so it is `refused`, and the verdict cannot be
+`verified`. `culprit verify` re-runs it under that environment's grants in
+`culprit.yaml`. Agents' walks take no counterfactual readings today, so no
+agent investigation has one.
 
 ### A diagnosis with no failing reading cannot be verified
 
@@ -2063,14 +2086,68 @@ found nothing failing — the demo's added latency slows every request
 without failing any — there is nothing to see fixed, and the verdict is
 `inconclusive`, whatever was changed.
 
-### Verifications stay on the machine, and the dashboard still says "not verified"
+### `culprit verify` uploads nothing; an agent's verification is stored
 
-Part 1 has no API: a verification is printed, and kept beside its
-investigation in the state directory (`verifications/<id>.json`), and
-nowhere else. A stored investigation's rubric always says `verified:
-false` — a diagnosis is never edited — and the dashboard shows that until
-part 2 shows the verification next to it. Nothing in the state directory
-is ever deleted by Culprit; it grows by one directory per diagnosis.
+A verification `culprit verify` makes is printed and kept beside its
+investigation in the state directory (`verifications/<id>.json`); posting
+it is a separate step, `POST /investigations/{id}/verifications` with the
+project token, as CI posts an investigation. An agent's `verify` task posts
+its verification itself, before it reports the task done. The stored
+investigation's rubric always says `verified: false` — a diagnosis is never
+edited — and the dashboard shows `verified` from the newest verification
+instead. Nothing in a state directory is ever deleted by Culprit; it grows
+by one directory per diagnosis.
+
+### What the API checks of a verification, and what it cannot
+
+The control plane re-judges every verification it is given with the same
+rule `culprit verify` used, and refuses one whose verdict that rule does not
+reach, whose re-runs were taken before the investigation closed, whose
+`was` disagrees with the stored reading, or that skips a reading. It cannot
+tell whether the runs were really measured: a verification is as honest as
+the credential that posted it. An agent may post only runs that name it;
+the project token, like the one that posts investigations, can post any
+verification that is internally consistent.
+
+### Verifications are append-only, and never replaced
+
+No role, the owner included, can change or delete a stored verification: a
+trigger refuses it. A wrong one — the source mislabelled, say — stays, and
+a later verification is recorded beside it; the newest is what the page and
+the accuracy count use. The table grows by one row per verification.
+
+### Whether a fault was planted is whoever asked saying so
+
+`GET /outcomes/accuracy` counts planted faults (a drill, the fault library)
+apart from faults on a real system, and that label is the one the person,
+the task or CI gave when asking for the verification — required, never
+defaulted, and never checked. A drill posted as `real` is counted as real.
+
+### Accuracy is counted per investigation, from its newest verification
+
+An outcome is the newest verification of an investigation whose diagnosis
+is complete. A wrong fix verified `not_resolved`, then the right one
+`verified`, counts once, as `verified`: it measures whether the diagnosis
+led to a fix, not how many tries the fix took. Partial diagnoses are never
+outcomes; their count is reported beside the others.
+
+### A fault class is the kind of thing the root is
+
+The class is the subject kind of the diagnosis's root — `auth`,
+`connection`, `http`, `config`, `component`, and the rest. It is coarse:
+every config fault is one class, whatever key; an error rate and a crash
+inside the same service are both `component`. Nothing finer is inferred.
+
+### The README's number is five planted faults
+
+The README's accuracy section is rendered by `just accuracy-readme` from
+the fault library's committed results (`cli/testdata/faultlib/
+results.json`), which CI's fault-library job must reproduce exactly. It is
+one fault per class, planted in Culprit's own three demo services, and a
+sample that size says the loop works on the faults it was built against —
+nothing about faults on anyone's real system. The two partial diagnoses
+(`latency`, and the audience fault under narrower grants) are listed and
+not counted; the library's deliberate wrong fixes are not outcomes.
 
 ### The state directory holds what a capture holds
 

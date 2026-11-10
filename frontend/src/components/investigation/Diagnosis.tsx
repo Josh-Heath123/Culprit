@@ -11,7 +11,19 @@ import type { ConfidenceRubric, Diagnosis, Hypothesis } from "@/lib/types";
  * it could not check — never under the word "root" or "cause", and with
  * no fix, because nothing has been shown to be the fault (DIAGNOSTIC_PLAN
  * Phase 32.1, field 14). */
-export function DiagnosisCard({ diagnosis, unexplored }: { diagnosis: Diagnosis | null; unexplored: Hypothesis[] }) {
+/** `verified`, when given, is the rubric's fourth criterion as the newest
+ * verification states it (Phase 34 part 2). The stored investigation is
+ * final and never says verified; whether it is comes from its own
+ * append-only verifications. */
+export function DiagnosisCard({
+  diagnosis,
+  unexplored,
+  verified,
+}: {
+  diagnosis: Diagnosis | null;
+  unexplored: Hypothesis[];
+  verified?: { holds: boolean; reason: string } | null;
+}) {
   return (
     <Card aria-labelledby="diagnosis-heading" data-testid="diagnosis">
       <CardHeader
@@ -29,7 +41,7 @@ export function DiagnosisCard({ diagnosis, unexplored }: { diagnosis: Diagnosis 
         )}
         {diagnosis ? (
           <>
-            <Rubric rubric={diagnosis.confidence} />
+            <Rubric rubric={verified ? { ...diagnosis.confidence, verified } : diagnosis.confidence} />
             <p className="text-2xs text-fg-subtle">
               The statement is the walk's own, built from its readings; no model wrote it. Culprit does not
               generate prose summaries.

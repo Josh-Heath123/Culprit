@@ -216,8 +216,17 @@ cli-test-docker:
 # vantage container, against cli/testdata/faultlib/expected.json. The
 # regression suite for "the walk finds the root, not the symptom". Needs
 # Docker; also a CI job.
+# Writes cli/testdata/faultlib/results.json when every case passes: the
+# results the README's number is rendered from (just accuracy-readme).
 fault-library:
-    cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+    cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+
+# Phase 34 part 2: the README's accuracy section, rendered from the fault
+# library's committed results (scripts/accuracy_readme.py). CI fails if
+# either is stale: the library's run must reproduce results.json, and the
+# README must be what this renders from it.
+accuracy-readme:
+    uv run --project api python scripts/accuracy_readme.py
 
 cli-test-kind:
     #!/usr/bin/env bash
@@ -601,7 +610,18 @@ agent-e2e:
     CULPRIT_E2E_USERNAME=$(read_env QUICKSTART_ADMIN_USERNAME)
     CULPRIT_E2E_PASSWORD=$(read_env QUICKSTART_ADMIN_PASSWORD)
     export CULPRIT_E2E_USERNAME CULPRIT_E2E_PASSWORD
-    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 20m
+    # Phase 34 part 2: the investigation it verified, for `just e2e-verified`.
+    export CULPRIT_E2E_VERIFIED_OUT="$(pwd)/cli/bin/agent-e2e-verified.txt"
+    mkdir -p cli/bin && rm -f "$CULPRIT_E2E_VERIFIED_OUT"
+    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 30m
+
+# Phase 34 part 2: the investigation `just agent-e2e` verified through an
+# agent — a wrong fix, then the right one — on its page in the browser.
+e2e-verified:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    id=$(cat cli/bin/agent-e2e-verified.txt)
+    CULPRIT_E2E_VERIFIED_INVESTIGATION="$id" just e2e verifications.spec.ts
 
 # Phase 33 part 3: the agent's Kubernetes and systemd recipes, for real,
 # against a running quickstart — systemd-analyze verify on the unit, and the

@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from culprit_model.subjects import build
 from culprit_model.verifications import Change, Rerun, judge
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -29,7 +30,17 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 
 PROJECT_TOKEN = "test-project-token-not-a-real-secret"
 RECORDED = Path(__file__).parent / "data" / "investigations"
-TOKEN_FIX = {"kind": "config", "subject": "config:order-service/INVENTORY_TOKEN"}
+TOKEN_FIX = {
+    "kind": "config",
+    "subject": build("config", component="order-service", key="INVENTORY_TOKEN"),
+}
+AUDIENCE = build(
+    "auth", from_component="order-service", to_component="inventory-service", aspect="audience"
+)
+EDGE = build("connection", from_component="order-service", to_component="inventory-service")
+PROVIDER_KEY = build("config", component="payments-service", key="PAYMENTS_PROVIDER_KEY")
+ORDER_SERVICE = build("component", name="order-service")
+STOCK_ROUTE = build("http", component="inventory-service", method="GET", path="/stock")
 
 
 def recorded(name: str) -> dict[str, Any]:
@@ -447,19 +458,19 @@ async def test_accuracy_gives_exactly_the_numbers_seeded(
     diagnosis is complete."""
     rows = [
         # (investigation, complete, root, [(verdict, source, minutes)])
-        ("inv-a000000000000001", True, "auth:order-service->inventory-service/audience",
+        ("inv-a000000000000001", True, AUDIENCE,
          [("not_resolved", "planted", 1), ("verified", "planted", 2)]),
-        ("inv-a000000000000002", True, "auth:order-service->inventory-service/audience",
+        ("inv-a000000000000002", True, AUDIENCE,
          [("verified", "planted", 1)]),
-        ("inv-a000000000000003", True, "auth:order-service->inventory-service/audience",
+        ("inv-a000000000000003", True, AUDIENCE,
          [("inconclusive", "planted", 1)]),
-        ("inv-a000000000000004", True, "connection:order-service->inventory-service",
+        ("inv-a000000000000004", True, EDGE,
          [("regressed", "planted", 1)]),
-        ("inv-a000000000000005", True, "connection:order-service->inventory-service",
+        ("inv-a000000000000005", True, EDGE,
          [("verified", "real", 1)]),
-        ("inv-a000000000000006", True, "config:payments-service/PAYMENTS_PROVIDER_KEY",
+        ("inv-a000000000000006", True, PROVIDER_KEY,
          [("changed_underneath", "real", 1), ("not_resolved", "real", 3)]),
-        ("inv-a000000000000007", False, "component:order-service",
+        ("inv-a000000000000007", False, ORDER_SERVICE,
          [("inconclusive", "planted", 1)]),
     ]  # fmt: skip
     number = 0
@@ -550,7 +561,7 @@ def test_a_class_with_only_inconclusive_outcomes_has_no_share() -> None:
         [
             {
                 "complete": True,
-                "root_subject": "http:inventory-service/GET /stock",
+                "root_subject": STOCK_ROUTE,
                 "verdict": "inconclusive",
                 "source": "planted",
             }
