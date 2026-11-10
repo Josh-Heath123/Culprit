@@ -480,6 +480,19 @@ func (w *Walk) fails(ctx context.Context, component string) (string, string) {
 	return "unknown", id
 }
 
+// unknownAt is the partial diagnosis's sentence for a component whose own
+// request could not be tested, with the reason its probe gave — so a refusal
+// names the grant it lacked, as every other unexplored branch does (Phase 33
+// part 3: each class's documented grant set, removed one grant at a time).
+func (w *Walk) unknownAt(component string) string {
+	text := fmt.Sprintf("whether a request at %s fails could not be established", component)
+	subject := model.MustBuildSubject(model.KindComponent, model.Parts{"name": component})
+	if h := w.hypothesis(KindComponentFails, subject); h != nil && h.Reason != "" {
+		text += ": " + h.Reason
+	}
+	return text
+}
+
 func (w *Walk) ruleOutBelow(component, readingID string) {
 	below := map[string]bool{}
 	var collect func(name string)
@@ -567,8 +580,7 @@ func (w *Walk) locate(ctx context.Context, component, failReading string, found 
 		case "pass":
 			high = middle
 		default:
-			found.partial = append(found.partial, fmt.Sprintf(
-				"whether a request at %s fails could not be established", chain[middle]))
+			found.partial = append(found.partial, w.unknownAt(chain[middle]))
 			w.boundary(ctx, chain[low], chain[low+1:], found)
 			return
 		}
@@ -600,8 +612,7 @@ func (w *Walk) locate(ctx context.Context, component, failReading string, found 
 			return
 		}
 		if verdict == "unknown" {
-			found.partial = append(found.partial, fmt.Sprintf(
-				"whether a request at %s fails could not be established", child))
+			found.partial = append(found.partial, w.unknownAt(child))
 		}
 	}
 	w.boundary(ctx, deepest, append(services, databases...), found)

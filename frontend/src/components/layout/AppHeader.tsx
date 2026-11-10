@@ -29,6 +29,7 @@ const ITEMS: Item[] = [
   { to: "/postmortems", label: "Postmortems" },
   { to: "/settings/services", label: "Services", admin: true },
   { to: "/settings/users", label: "Users", admin: true },
+  { to: "/settings/agents", label: "Agents", admin: true },
 ];
 
 export function AppHeader() {

@@ -79,6 +79,10 @@ class AgentSummary(BaseModel):
     revoked_at: datetime | None
     reported_grants: dict[str, list[str]]
     allowances: dict[str, list[str]]
+    #: When the agent last made a request its signature authenticated. None
+    #: until it makes one. A refused request is never stored, so it never
+    #: moves this.
+    last_request_at: datetime | None = None
 
 
 class AgentList(BaseModel):

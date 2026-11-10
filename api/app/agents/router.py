@@ -22,10 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents import service
 from app.agents.dependencies import (
     AgentPrincipal,
+    body_documented_as,
     get_admin_session,
     get_gateway_session,
     get_registrar_session,
     require_agent,
+    signed_body,
 )
 from app.agents.schemas import (
     AgentList,
@@ -52,6 +54,10 @@ from app.investigations.dependencies import get_read_session
 logger = structlog.get_logger("agents")
 router = APIRouter(prefix="/agents", tags=["agents"])
 
+#: The bodies of an agent's own requests, parsed once its signature holds.
+_task_result = signed_body(TaskResult)
+_audit_entries = signed_body(AuditEntries)
+
 #: Ids a route under /agents/me would shadow.
 _RESERVED_IDS = {"me", "register", "pairing-codes"}
 
@@ -71,10 +77,12 @@ async def claim_task(
     return ClaimedTask(**task)
 
 
-@router.post("/me/tasks/{task_id}/result", status_code=204)
+@router.post(
+    "/me/tasks/{task_id}/result", status_code=204, openapi_extra=body_documented_as(TaskResult)
+)
 async def report_result(
     task_id: str,
-    result: TaskResult,
+    result: TaskResult = Depends(_task_result),
     agent: AgentPrincipal = Depends(require_agent),
     session: AsyncSession = Depends(get_gateway_session),
 ) -> Response:
@@ -95,9 +103,9 @@ async def audit_head(
     return AuditHead(seq=seq, hash=digest)
 
 
-@router.post("/me/audit", response_model=AuditHead)
+@router.post("/me/audit", response_model=AuditHead, openapi_extra=body_documented_as(AuditEntries))
 async def append_audit(
-    body: AuditEntries,
+    body: AuditEntries = Depends(_audit_entries),
     agent: AgentPrincipal = Depends(require_agent),
     session: AsyncSession = Depends(get_gateway_session),
 ) -> AuditHead:

@@ -83,6 +83,11 @@ check-invariants:
     uv run --project api python scripts/check_coupled_files.py
     uv run --project api python scripts/check_migration_symmetry.py
 
+# Phase 33 part 3: every "cannot" in docs/SECURITY.md names a test that
+# exists. Offline and instant.
+check-security-doc:
+    uv run --project api python scripts/check_security_doc.py
+
 # Fail if a repo-wide check's declared roots don't actually cover the
 # repository (Phase 27, standing invariant 9). Cheap and offline -- the
 # roots are read from the checks themselves, nothing is executed.
@@ -468,7 +473,12 @@ quickstart:
     # cannot create files in a directory the host user owns. Docker
     # Desktop does not enforce that, so it first failed on a Linux runner
     # (the e2e job's first run, Phase 32.1 part 2).
-    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm --build --user "$(id -u):$(id -g)" -e HOME=/tmp bootstrap
+    # -T (Phase 33 part 3): without it, `run` gives bootstrap a terminal
+    # whenever the caller has one, and create_user's getpass then reads that
+    # terminal instead of the password piped from infra/.env.prod — so a
+    # person running this stopped at "Password:", while every automated
+    # run (no terminal) passed. Reproduced under `script`, a pseudo-terminal.
+    MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" run --rm -T --build --user "$(id -u):$(id -g)" -e HOME=/tmp bootstrap
     echo "==> Building and starting the demo services"
     # Phase 32 part 2: order-service presents a bearer token to
     # inventory-service, which checks its audience — the check the fault
@@ -591,6 +601,14 @@ agent-e2e:
     CULPRIT_E2E_PASSWORD=$(read_env QUICKSTART_ADMIN_PASSWORD)
     export CULPRIT_E2E_USERNAME CULPRIT_E2E_PASSWORD
     cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 20m
+
+# Phase 33 part 3: the agent's Kubernetes and systemd recipes, for real,
+# against a running quickstart — systemd-analyze verify on the unit, and the
+# Kubernetes recipe in the kind cluster KIND_CLUSTER, paired and Ready. (The
+# Compose recipe runs in `just e2e`, paired from the browser.) Needs kind,
+# kubectl, sudo and `just quickstart` first.
+agent-recipes:
+    bash scripts/check_agent_recipes.sh
 
 e2e *ARGS:
     #!/usr/bin/env bash

@@ -1,8 +1,6 @@
-import path from "node:path";
-
 import type { Page } from "@playwright/test";
 
-import { expect, go, open, state, test as base } from "./fixtures.ts";
+import { atEveryWidth, expect, go, open, state, test as base } from "./fixtures.ts";
 
 /** Every surviving route, one test each: each loads with no console error
  * and no failed request (the fixtures' guard), is checked for horizontal
@@ -22,9 +20,6 @@ import { expect, go, open, state, test as base } from "./fixtures.ts";
  *
  * Screenshots go to $CULPRIT_E2E_SCREENSHOTS, default
  * frontend/e2e/.screenshots (ignored). */
-
-const WIDTHS = [375, 768, 1280, 1920] as const;
-const OUT = process.env.CULPRIT_E2E_SCREENSHOTS ?? path.resolve(import.meta.dirname, ".screenshots");
 
 const test = base.extend<object, { adminPage: Page }>({
   adminPage: [
@@ -53,49 +48,6 @@ test.afterEach(async ({ page }, testInfo) => {
     await page.screenshot({ path: testInfo.outputPath("failure.png"), fullPage: true }).catch(() => undefined);
   }
 });
-
-async function atEveryWidth(
-  page: Page,
-  name: string,
-  ready: () => Promise<void>,
-  /** Where keyboard focus must land: the page, or an open dialog, which
-   * traps focus inside itself. */
-  region: "main" | "[role=dialog]" = "main",
-): Promise<void> {
-  for (const width of WIDTHS) {
-    await page.setViewportSize({ width, height: 900 });
-    await ready();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect.soft(overflow, `${name}: horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`), fullPage: true, animations: "disabled" });
-  }
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await keyboardReaches(page, name, region);
-}
-
-/** Keyboard operation, on every route: Tab reaches the page's own content
- * (past the header), or inside an open dialog, within 25 presses, and what
- * has focus draws a visible outline. */
-async function keyboardReaches(page: Page, name: string, region: string): Promise<void> {
-  if (region === "main") await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  for (let press = 0; press < 25; press += 1) {
-    await page.keyboard.press("Tab");
-    const inRegion = await page.evaluate((selector) => {
-      const active = document.activeElement;
-      return active !== null && active !== document.body && active.closest(selector) !== null;
-    }, region);
-    if (inRegion) {
-      const outline = await page.evaluate(() => {
-        const style = getComputedStyle(document.activeElement as Element);
-        return style.outlineStyle !== "none" && style.outlineWidth !== "0px";
-      });
-      expect.soft(outline, `${name}: the focused element shows no focus outline`).toBe(true);
-      return;
-    }
-  }
-  expect.soft(false, `${name}: Tab never reached the page content`).toBe(true);
-}
 
 const DATE = /^\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}, \d{2}:\d{2}$/;
 const stamp = () => Date.now().toString(36);

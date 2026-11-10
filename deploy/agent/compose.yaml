@@ -1,0 +1,51 @@
+# Culprit agent — Docker Compose recipe (Phase 33 part 3).
+#
+# The agent joins the network your services are on and reaches its control
+# plane only outbound, over https. It opens no port. It runs as a non-root
+# user (65532), with a read-only root filesystem and no capabilities. Its
+# key is a Compose secret: a file owned by 65532 with mode 0600, mounted
+# read-only. Its audit log lives in a named volume, because the control
+# plane holds the same hash chain and an agent that loses its log cannot
+# extend it. One agent, one key: never scale this service past one.
+#
+# deploy/agent/README.md has every step. In short, beside this file:
+#   config/agent.yaml    from agent.example.yaml (key: /run/secrets/agent.key)
+#   config/culprit.yaml  your system model
+#   secrets/agent.key    written once by `culprit agent init` (README, step 2)
+# then
+#   docker compose run --rm -T agent agent pair --config /etc/culprit/agent.yaml --code - < code.txt
+#   docker compose up -d
+#
+# CI runs this file unchanged, against the quickstart (`just agent-recipes`),
+# with one addition of its own: a host alias, because a CI runner's control
+# plane is on the host.
+name: culprit-agent
+
+services:
+  agent:
+    image: ${CULPRIT_AGENT_IMAGE:-ghcr.io/josh-heath123/culprit/cli:latest}
+    command: ["agent", "--config", "/etc/culprit/agent.yaml", "--audit", "/var/lib/culprit/audit.log"]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    volumes:
+      - ${CULPRIT_AGENT_CONFIG:-./config}:/etc/culprit:ro
+      - state:/var/lib/culprit
+    secrets:
+      - source: agent-key
+        target: agent.key
+    networks: [target]
+
+secrets:
+  agent-key:
+    file: ${CULPRIT_AGENT_KEY:-./secrets/agent.key}
+
+volumes:
+  state:
+
+networks:
+  target:
+    external: true
+    name: ${CULPRIT_TARGET_NETWORK:?name the Docker network your services are on}

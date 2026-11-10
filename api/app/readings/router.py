@@ -22,7 +22,12 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.dependencies import AgentPrincipal, require_agent
+from app.agents.dependencies import (
+    AgentPrincipal,
+    body_documented_as,
+    require_agent,
+    signed_body,
+)
 from app.auth.dependencies import require_auth
 from app.readings import catalogue
 from app.readings.dependencies import get_probe_writer_session
@@ -38,15 +43,23 @@ logger = structlog.get_logger("readings")
 
 router = APIRouter(tags=["readings"])
 
+#: The batch, parsed once the agent's signature over it holds.
+_reading_batch = signed_body(ReadingBatch)
+
 #: The phase that gives this API a way to reach a probe agent. Named in
 #: the 503 body so a caller can tell "not yet built" from "temporarily
 #: down" without reading the plan.
 _AGENT_TRANSPORT_PHASE = "Phase 33"
 
 
-@router.post("/readings", response_model=ReadingsAccepted, status_code=201)
+@router.post(
+    "/readings",
+    response_model=ReadingsAccepted,
+    status_code=201,
+    openapi_extra=body_documented_as(ReadingBatch),
+)
 async def create_readings(
-    payload: ReadingBatch,
+    payload: ReadingBatch = Depends(_reading_batch),
     agent: AgentPrincipal = Depends(require_agent),
     session: AsyncSession = Depends(get_probe_writer_session),
 ) -> ReadingsAccepted:

@@ -15,6 +15,11 @@ COPY . .
 # never needs to change per-deployment.
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
+# Where this build's source is, linked from every page (AGPL-3.0 section 13:
+# a modified copy run as a service offers its users its own source). Set it
+# to your fork when you change Culprit (LICENSING.md).
+ARG VITE_SOURCE_URL=https://github.com/Josh-Heath123/Culprit
+ENV VITE_SOURCE_URL=${VITE_SOURCE_URL}
 RUN npm run build
 
 # Caddy, rebuilt from source. The binary in the published caddy:2-alpine

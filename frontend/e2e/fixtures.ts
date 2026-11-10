@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { test as base, expect, type ConsoleMessage, type Page, type Request, type Response } from "@playwright/test";
 
@@ -81,3 +82,58 @@ export async function go(page: Page, path: string): Promise<void> {
   }, path);
   await page.waitForURL((url) => url.pathname === path);
 }
+
+// ---- every width, and the keyboard (Phase 32.1; shared since Phase 33 part 3) ----
+
+export const WIDTHS = [375, 768, 1280, 1920] as const;
+const OUT = process.env.CULPRIT_E2E_SCREENSHOTS ?? path.resolve(import.meta.dirname, ".screenshots");
+
+export async function atEveryWidth(
+  page: Page,
+  name: string,
+  ready: () => Promise<void>,
+  /** Where keyboard focus must land: the page, or an open dialog, which
+   * traps focus inside itself. */
+  region: "main" | "[role=dialog]" = "main",
+): Promise<void> {
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await ready();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect.soft(overflow, `${name}: horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`), fullPage: true, animations: "disabled" });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await keyboardReaches(page, name, region);
+  // AGPL-3.0 section 13 (Phase 33 part 3): every page links to its source.
+  // Checked on the page itself; an open dialog hides the page behind it.
+  if (region === "main") {
+    const source = page.getByTestId("source-link").getByRole("link", { name: "Source code" });
+    await expect.soft(source, `${name}: no link to the source`).toHaveAttribute("href", /^https?:\/\//);
+  }
+}
+
+/** Keyboard operation, on every route: Tab reaches the page's own content
+ * (past the header), or inside an open dialog, within 25 presses, and what
+ * has focus draws a visible outline. */
+async function keyboardReaches(page: Page, name: string, region: string): Promise<void> {
+  if (region === "main") await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  for (let press = 0; press < 25; press += 1) {
+    await page.keyboard.press("Tab");
+    const inRegion = await page.evaluate((selector) => {
+      const active = document.activeElement;
+      return active !== null && active !== document.body && active.closest(selector) !== null;
+    }, region);
+    if (inRegion) {
+      const outline = await page.evaluate(() => {
+        const style = getComputedStyle(document.activeElement as Element);
+        return style.outlineStyle !== "none" && style.outlineWidth !== "0px";
+      });
+      expect.soft(outline, `${name}: the focused element shows no focus outline`).toBe(true);
+      return;
+    }
+  }
+  expect.soft(false, `${name}: Tab never reached the page content`).toBe(true);
+}
+

@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -68,6 +69,10 @@ type Config struct {
 	// internal/transport will dial. Empty for an agent that reads a local
 	// task directory.
 	ControlPlane string
+	// AllowPlainHTTP is control_plane.allow_plain_http: the operator's
+	// explicit consent to reach a non-loopback control plane over plain
+	// http. The agent reports it at every start; no shipped recipe sets it.
+	AllowPlainHTTP bool
 	// Key is the agent's Ed25519 private key file, resolved against the
 	// configuration's directory. `culprit agent init` writes it.
 	Key string
@@ -172,11 +177,11 @@ func ParseConfig(path string, data []byte) (Config, error) {
 			}
 			config.Manifest = manifest
 		case "control_plane":
-			address, err := controlPlane(value)
+			address, allowPlain, err := controlPlane(value)
 			if err != nil {
 				return fail(value.Line, "%s", err.Error())
 			}
-			config.ControlPlane = address
+			config.ControlPlane, config.AllowPlainHTTP = address, allowPlain
 		case "key":
 			if value.Kind != yaml.ScalarNode || strings.TrimSpace(value.Value) == "" {
 				return fail(value.Line, "key must be the path to the agent's key file")
@@ -331,34 +336,62 @@ func rawGrant(value *yaml.Node) (capability.Raw, error) {
 	return capability.Raw{}, fmt.Errorf("expected true, false or a list of items")
 }
 
-// controlPlane reads `control_plane: {url: ...}`: an http or https URL
-// with a host, no credentials in it, no query and no fragment. The URL's
-// path is the API root every request is relative to (".../api" behind
-// the dashboard's proxy).
-func controlPlane(node *yaml.Node) (string, error) {
+// controlPlane reads `control_plane: {url: ..., allow_plain_http: ...}`:
+// an https URL with a host, no credentials in it, no query and no
+// fragment. The URL's path is the API root every request is relative to
+// (".../api" behind the dashboard's proxy).
+//
+// Plain http is refused (Phase 33 part 3): the signature stops a forged or
+// replayed request, but not someone on the path reading the tasks and the
+// readings. It is allowed to a loopback address, which never leaves the
+// machine, or when the operator writes allow_plain_http: true — which the
+// agent reports at every start, and which no shipped recipe sets.
+func controlPlane(node *yaml.Node) (string, bool, error) {
 	if node.Kind != yaml.MappingNode {
-		return "", fmt.Errorf("control_plane must be a mapping with url:")
+		return "", false, fmt.Errorf("control_plane must be a mapping with url:")
 	}
-	address := ""
+	address, allowPlain := "", false
 	for index := 0; index+1 < len(node.Content); index += 2 {
 		key, value := node.Content[index], node.Content[index+1]
-		if key.Value != "url" {
-			return "", fmt.Errorf("control_plane.%s is not a key (url)", key.Value)
+		switch key.Value {
+		case "url":
+			address = strings.TrimSpace(value.Value)
+		case "allow_plain_http":
+			if value.Kind != yaml.ScalarNode || (value.Value != "true" && value.Value != "false") {
+				return "", false, fmt.Errorf("control_plane.allow_plain_http must be true or false")
+			}
+			allowPlain = value.Value == "true"
+		default:
+			return "", false, fmt.Errorf("control_plane.%s is not a key (url, allow_plain_http)", key.Value)
 		}
-		address = strings.TrimSpace(value.Value)
 	}
 	parsed, err := url.Parse(address)
 	switch {
 	case address == "" || err != nil:
-		return "", fmt.Errorf("control_plane.url must be the control plane's API root, e.g. https://culprit.example.com/api")
+		return "", false, fmt.Errorf("control_plane.url must be the control plane's API root, e.g. https://culprit.example.com/api")
 	case parsed.Scheme != "https" && parsed.Scheme != "http":
-		return "", fmt.Errorf("control_plane.url must be http or https")
+		return "", false, fmt.Errorf("control_plane.url must be https")
 	case parsed.Host == "" || parsed.Hostname() == "":
-		return "", fmt.Errorf("control_plane.url names no host")
+		return "", false, fmt.Errorf("control_plane.url names no host")
 	case parsed.User != nil:
-		return "", fmt.Errorf("control_plane.url must not carry credentials: the agent signs with its key")
+		return "", false, fmt.Errorf("control_plane.url must not carry credentials: the agent signs with its key")
 	case parsed.RawQuery != "" || parsed.Fragment != "":
-		return "", fmt.Errorf("control_plane.url must not have a query or fragment")
+		return "", false, fmt.Errorf("control_plane.url must not have a query or fragment")
+	case parsed.Scheme == "http" && !allowPlain && !IsLoopback(parsed.Hostname()):
+		return "", false, fmt.Errorf("control_plane.url is plain http to %s: use https, "+
+			"or set control_plane.allow_plain_http: true to send tasks and readings unencrypted", parsed.Hostname())
 	}
-	return strings.TrimRight(parsed.String(), "/"), nil
+	return strings.TrimRight(parsed.String(), "/"), allowPlain, nil
+}
+
+// IsLoopback reports whether host names this machine only: `localhost`, or
+// a loopback IP literal (127.0.0.0/8, ::1). A name that merely starts like
+// one, such as 127.0.0.1.example.com, is not.
+func IsLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	// net/netip, not net: this package may not link the network (D8).
+	addr, err := netip.ParseAddr(host)
+	return err == nil && addr.IsLoopback()
 }

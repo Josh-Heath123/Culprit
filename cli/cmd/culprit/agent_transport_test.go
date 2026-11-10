@@ -308,3 +308,33 @@ func TestARevokedAgentStopsOnItsNextRequest(t *testing.T) {
 		t.Fatalf("a revoked agent: %v %s", err, output)
 	}
 }
+
+// Phase 33 part 3: allow_plain_http is reported at every start — by
+// `culprit agent` and by `culprit agent pair`, the two commands that reach the control plane —
+// and a configuration without it says nothing of the kind.
+func TestAllowPlainHTTPIsReportedAtEveryStart(t *testing.T) {
+	plane := newFakePlane(t)
+	_, config := pairedAgent(t, plane, "      net.dns.resolve: true\n")
+	quiet, err := runCulprit(t, "agent", "--config", config, "--audit", filepath.Join(t.TempDir(), "audit.log"), "--once")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, quiet)
+	}
+	if strings.Contains(quiet, "allow_plain_http") {
+		t.Errorf("reported allow_plain_http though the configuration does not set it:\n%s", quiet)
+	}
+
+	text, _ := os.ReadFile(config)
+	allowed := strings.Replace(string(text), "control_plane:\n", "control_plane:\n  allow_plain_http: true\n", 1)
+	if err := os.WriteFile(config, []byte(allowed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"agent", "--config", config, "--audit", filepath.Join(t.TempDir(), "audit.log"), "--once"},
+		{"agent", "pair", "--config", config, "--code", "ABCDEF-GHJKMN"},
+	} {
+		output, _ := runCulprit(t, args...)
+		if !strings.Contains(output, "allow_plain_http") || !strings.Contains(output, "unencrypted") {
+			t.Errorf("`culprit %s` did not report allow_plain_http at start:\n%s", strings.Join(args[:2], " "), output)
+		}
+	}
+}

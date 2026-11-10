@@ -76,6 +76,7 @@ the audit log go to the control plane, and only to it.`,
 			if err != nil {
 				return err
 			}
+			reportPlainHTTP(command.ErrOrStderr(), config)
 			audit, err := agent.OpenAudit(auditPath)
 			if err != nil {
 				return err
@@ -332,6 +333,18 @@ only its public half.`,
 	return command
 }
 
+// reportPlainHTTP says, at every start of a command that reaches the
+// control plane, that the operator has allowed plain http (Phase 33 part 3).
+// The parser has already refused plain http to anything but loopback
+// without it; this makes the consent visible in every log that follows.
+func reportPlainHTTP(w io.Writer, config agent.Config) {
+	if !config.AllowPlainHTTP {
+		return
+	}
+	fmt.Fprintf(w, "warning: control_plane.allow_plain_http is set in %s: tasks, readings "+
+		"and investigations to %s may travel unencrypted\n", config.Path, config.ControlPlane)
+}
+
 func newAgentPairCommand() *cobra.Command {
 	var configPath, code string
 	var timeout time.Duration
@@ -352,6 +365,7 @@ later allow it, and never more. A newly paired agent's allowance is empty.`,
 			if config.ControlPlane == "" {
 				return fmt.Errorf("%s names no control_plane to pair with", configPath)
 			}
+			reportPlainHTTP(command.ErrOrStderr(), config)
 			client, err := controlPlaneClient(config, timeout)
 			if err != nil {
 				return err

@@ -19,7 +19,7 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import pytest_asyncio
@@ -567,3 +567,176 @@ async def test_a_nonce_outlives_every_moment_its_request_could_still_be_fresh(
     assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
     replay = client.post("/agents/me/tasks/claim", content=b"", headers=headers)
     assert replay.status_code == 401
+
+
+# ---- the signature comes before the body (Phase 33 part 3, carried in) ---------------
+
+
+_SIGNED = {
+    "app.agents.dependencies.require_agent",
+    "app.agents.dependencies.require_project_token_or_agent",
+}
+
+
+def _signs(dependant) -> bool:
+    """Whether a route's dependency tree asks for an agent's signature. By
+    qualified name, not identity: the `client` fixture reloads
+    app.agents.dependencies, after which the function objects differ."""
+    call = dependant.call
+    if f"{getattr(call, '__module__', '')}.{getattr(call, '__qualname__', '')}" in _SIGNED:
+        return True
+    return any(_signs(child) for child in dependant.dependencies)
+
+
+def _signed_routes() -> list[str]:
+    """Every route the real application serves under an agent's signature,
+    read from its dependency tree rather than listed here, so a signed route
+    added later is covered without anyone remembering this test."""
+    from app.main import app
+    from tests.test_route_credentials import _routes
+
+    routes = sorted(
+        f"{method} {route.path}"
+        for route in _routes(app.routes)
+        if _signs(route.dependant)
+        for method in sorted((route.methods or set()) - {"HEAD"})
+    )
+    assert len(routes) >= 6, f"only {routes} found: the walk is missing signed routes"
+    return routes
+
+
+#: Bodies a caller might send that cannot be parsed into anything: not JSON
+#: at all, JSON of the wrong shape, and a body far from any schema.
+_UNPARSEABLE = [b"{not json", b'{"readings": 7, "entries": 7, "id": 7}', b"[1, 2, 3]"]
+
+
+def test_every_signed_route_is_covered() -> None:
+    routes = _signed_routes()
+    assert {
+        "POST /readings",
+        "POST /investigations",
+        "POST /agents/me/audit",
+        "POST /agents/me/tasks/{task_id}/result",
+    } <= set(routes), routes
+
+
+@pytest.mark.parametrize("body", _UNPARSEABLE, ids=["not-json", "wrong-shape", "array"])
+def test_an_unsigned_or_badly_signed_request_is_refused_before_its_body_is_parsed(
+    client: TestClient, body: bytes
+) -> None:
+    """On every signed route: no signature, a signature over other bytes,
+    and a well-formed signature from an agent nobody paired are each a 401 —
+    the same one — whatever the body holds. A 422 here would mean the body
+    was parsed for a caller nobody had authenticated, and would tell that
+    caller about the schema."""
+    agent = paired(client)
+    stranger = Agent(client)  # a key, but never registered
+    from tests.test_route_credentials import _routes
+
+    served = {
+        f"{m} {r.path}" for r in _routes(cast(FastAPI, client.app).routes) for m in r.methods or ()
+    }
+    for route in _signed_routes():
+        method, template = route.split(" ", 1)
+        assert route in served, f"{route} is not mounted in this test's app"
+        path = template.replace("{task_id}", "task-unknown")
+        attempts = {
+            "unsigned": {"Content-Type": "application/json"},
+            "signed over other bytes": agent.headers(method, path, b'{"other": "body"}'),
+            "unregistered agent": stranger.headers(method, path, body),
+        }
+        for why, headers in attempts.items():
+            response = client.request(method, path, content=body, headers=headers)
+            assert response.status_code == 401, (
+                f"{route}, {why}: {response.status_code} {response.text}"
+            )
+            # The unsigned POST /investigations is a project-token request
+            # without the token; everything else is one agent refusal.
+            assert response.json()["detail"] in ("request refused", "missing bearer token"), (
+                f"{route}, {why}: the refusal says more than that it was refused: {response.text}"
+            )
+
+
+@pytest.mark.parametrize("body", _UNPARSEABLE, ids=["not-json", "wrong-shape", "array"])
+def test_a_correctly_signed_request_with_a_bad_body_is_still_a_422(
+    client: TestClient, body: bytes
+) -> None:
+    """The other half: once the caller is known, a body that does not parse
+    is still told so — the fix moves the parse, it does not drop it."""
+    agent = paired(client)
+    for route in ("POST /readings", "POST /agents/me/audit", "POST /investigations"):
+        method, path = route.split(" ", 1)
+        response = client.request(
+            method, path, content=body, headers=agent.headers(method, path, body)
+        )
+        assert response.status_code == 422, f"{route}: {response.status_code} {response.text}"
+
+
+# ---- when an agent last made a signed request (Phase 33 part 3) ----------------------
+
+
+def _listed(client: TestClient, agent: Agent) -> dict[str, Any]:
+    return {item["id"]: item for item in client.get("/agents").json()["items"]}[agent.id]
+
+
+@pytest.mark.asyncio
+async def test_the_last_signed_request_is_listed_and_survives_nonce_cleanup(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    agent = paired(client)
+    assert _listed(client, agent)["last_request_at"] is None, "pairing is not a signed request"
+
+    assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
+    first = _listed(client, agent)["last_request_at"]
+    assert first is not None
+
+    # A refused request — signed over other bytes — moves nothing.
+    bad = agent.headers("POST", "/agents/me/tasks/claim", b"other")
+    assert client.post("/agents/me/tasks/claim", content=b"", headers=bad).status_code == 401
+    assert _listed(client, agent)["last_request_at"] == first
+
+    # Age every nonce this agent has spent far past retention, then let a
+    # second agent's request run the cleanup: this agent's newest nonce is
+    # kept, so its last request is still known; older ones of its are gone.
+    assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE agent_nonces SET seen_at = seen_at - interval '1 day' WHERE agent_id = :a"
+            ),
+            {"a": agent.id},
+        )
+    other = paired(client)
+    assert other.send("POST", "/agents/me/tasks/claim").status_code == 204
+    async with db_engine.connect() as conn:
+        kept = (
+            await conn.execute(
+                text("SELECT count(*) FROM agent_nonces WHERE agent_id = :a"), {"a": agent.id}
+            )
+        ).scalar_one()
+    assert kept == 1, f"{kept} nonces kept for an agent idle a day: want exactly its newest"
+    listed = _listed(client, agent)["last_request_at"]
+    assert listed is not None
+    age = datetime.now(UTC) - datetime.fromisoformat(listed)
+    assert age.total_seconds() > 23 * 3600, f"last request {listed} is not the aged one"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT INTO agent_nonces (agent_id, nonce, seen_at) VALUES ('x', 'y', now())",
+        "DELETE FROM agent_nonces",
+        "UPDATE agent_nonces SET nonce = 'z'",
+    ],
+)
+async def test_api_reader_reads_nonces_and_writes_none(role_database_url, statement: str) -> None:
+    reader = create_async_engine(role_database_url("api-reader", "API_READER_PASSWORD"))
+    try:
+        async with reader.connect() as conn:
+            await conn.execute(text("SELECT agent_id, seen_at FROM agent_nonces LIMIT 1"))
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with reader.begin() as conn:
+                await conn.execute(text(statement))
+    finally:
+        await reader.dispose()

@@ -277,6 +277,33 @@ one. A task that needs a grant the agent does not hold is refused before
 anything is dialled; the refusal is a reading and an entry in the agent's
 audit log.
 
+## The minimum grants for each kind of investigation
+
+What an agent needs to *complete* a diagnosis of each class of fault — to
+find the root and rule out every other explanation the walk can test.
+With less, the investigation still runs, and ends **partial**: it says
+where it stopped, and names the grant it lacked.
+
+<!-- cli/cmd/culprit/grantsets_test.go reads the second column of this table
+and runs each class with exactly those grants, then with each one removed.
+Change a set here and the test runs the new one. -->
+
+| Investigation class | Minimum grants | Why each is needed |
+|---|---|---|
+| reachability | `net.tcp.connect`, `net.http.outbound` | `probe.net.tcp_connect` tests the connection itself; `probe.http.reachable` asks the service at the other end whether it fails on its own. |
+| schema | `db.metadata.read` | `probe.db.connect` tests the connection to the database, under a read-only session. No row is read. The walk's database hypothesis is that connection; `probe.db.schema_conformance`, which compares live columns with the migrations, needs the same grant and runs as a probe of its own. |
+| auth and audience | `config.inspect.values`, `net.tcp.connect`, `net.http.outbound` | `probe.auth.token_shape` reads the caller's token in memory — `config.inspect.values` for that one variable (`<caller>/<VARIABLE>`), never stored — to check its audience; the other two rule out the connection and the callee. |
+| configuration | `config.read.names` | `probe.config.present` checks that a required key is set where the service runs. Names only; no value is read. |
+
+Each set is for that class on its own: one service and the one thing it
+depends on. **A real request path adds the grants of every other edge on
+it** — a path with an HTTP hop before the database needs the
+reachability set as well as `db.metadata.read`, because the walk must rule
+that hop out before it can blame the database. `net.dns.resolve` and
+`net.tls.inspect` are in no minimum set: a name that resolves rules
+nothing out, and a TLS check applies only to an endpoint declared
+`tls: true` — grant `net.tls.inspect` for those.
+
 ## The agent and the control plane — keys, pairing, allowances
 
 A paired agent proves who it is with an **Ed25519 key** it generates itself
@@ -284,10 +311,16 @@ A paired agent proves who it is with an **Ed25519 key** it generates itself
 sends is signed over its method, its path, a digest of its body, a
 timestamp and a single-use nonce; the control plane refuses a request it
 cannot verify, one more than **300 seconds** from its clock, or one whose
-nonce it has seen, and does not say which. The private key never leaves
-the agent's file: pairing sends only the public half.
+nonce it has seen, and does not say which — and it checks the signature
+over the raw body before it parses a byte of it. The private key never
+leaves the agent's file: pairing sends only the public half. The control
+plane is reached over **https**: the agent refuses a plain-`http`
+`control_plane.url` unless it is a loopback address or the configuration
+sets `allow_plain_http: true`, which it reports at every start.
+`deploy/agent/` has a recipe for Docker, Compose, Kubernetes and systemd;
+`docs/SECURITY.md` says what each compromise can and cannot do.
 
-**Pairing.** An admin makes a code (`POST /agents/pairing-codes`); it works
+**Pairing.** An admin makes a code (Settings → Agents, or `POST /agents/pairing-codes`); it works
 once and expires after **15 minutes**, and only its SHA-256 is stored.
 `culprit agent pair --code` spends it, registering the agent's id, public
 key and the grants its configuration gives in each environment.
@@ -295,7 +328,8 @@ key and the grants its configuration gives in each environment.
 **Allowances.** A newly paired agent is allowed nothing. An admin sets,
 per environment, which of the grants the agent reported it may use
 (`PATCH /agents/{id}/grants`); naming a grant it did not report, a
-wildcard or `all` is refused. The allowance is stamped on each task when
+wildcard or `all` is refused. On Settings → Agents each grant is shown in
+plain words, and a change is shown as a diff before it is saved. The allowance is stamped on each task when
 the agent claims it, and the agent intersects it with its configuration
 again — so either side can withhold a grant on the next task, and neither
 can add one. Revoking an agent (`POST /agents/{id}/revoke`) refuses its
@@ -323,7 +357,10 @@ addresses tasks; **`agent-registrar`** spends a code and inserts the agent,
 nothing more; **`agent-gateway`** looks up keys, records nonces, reads
 allowances, claims and completes tasks and appends audit entries. No role
 holds UPDATE or DELETE on `agent_audit_log`, and triggers refuse both, and
-TRUNCATE, to every role including the owner.
+TRUNCATE, to every role including the owner. **`api-reader`** serves the
+agents screen: it reads the agents, their allowances, tasks and audit log,
+and (since `e5b8a2d4c6f1`) `agent_nonces`, whose newest row per agent is
+that agent's last signed request; it writes none of them.
 
 ## How Culprit reaches an environment
 

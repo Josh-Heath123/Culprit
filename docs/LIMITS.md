@@ -1850,9 +1850,12 @@ When an agent pairs it reports the grants its configuration gives, per
 environment, and an admin can allow only from that list. If the operator
 later adds a grant to the agent's configuration, the control plane does
 not learn of it: the agent can use it only once an allowance names it,
-and an allowance cannot name it until the agent pairs again with a new
-code. Removing a grant from the configuration needs nothing — the agent
-re-reads it before every task and runs without it.
+and an allowance cannot name it until the agent pairs again — as a new
+agent, with a new id and a new key, because the control plane refuses a
+second pairing of either. The dashboard says so when an investigation
+needs a grant the agent does not hold. Removing a grant from the
+configuration needs nothing — the agent re-reads it before every task and
+runs without it.
 
 ## A revoked agent's task in flight is lost
 
@@ -1869,16 +1872,75 @@ when it has none (`--poll`), one task at a time. Nothing is pushed to it —
 the agent only ever connects out — so a task waits up to that interval
 before it starts.
 
-## An agent's control plane should be reached over https
+## An agent reaches its control plane over https
 
-`control_plane.url` accepts `http` as well as `https`, because a control
-plane on the same host or a private network (the CI scenario) has no
-certificate. Every request is signed, so a request cannot be forged or
-altered on the way, but over plain `http` its body — task specs, readings,
-the pairing code while pairing — can be read by anything on the path. Use
-`https` anywhere the path is not yours. Give the pairing code as
-`culprit agent pair --code -`, on stdin, to keep it out of shell history
-and the process list.
+`control_plane.url` must be `https`. Plain `http` is refused, naming the
+line, except to a loopback address (`localhost`, `127.0.0.0/8`, `::1`) or
+when the configuration sets `control_plane.allow_plain_http: true` — which
+`culprit agent` and `culprit agent pair` then report on stderr at every
+start, and which no recipe in `deploy/agent/` sets. Every request is
+signed, so over plain `http` a request still cannot be forged or altered,
+but its body — task specs, readings, the pairing code while pairing — can
+be read by anything on the path. CI uses `allow_plain_http`, because its
+quickstart has no certificate. Give the pairing code as `culprit agent pair
+--code -`, on stdin, to keep it out of shell history and the process list.
+
+## An agent that cannot reach its control plane exits
+
+`culprit agent` stops on any error from its task source — the control
+plane unreachable, a refusal, a result it could not deliver — rather than
+retry inside the process. Every recipe in `deploy/agent/` restarts it
+(`restart: unless-stopped`, `Restart=on-failure` after 10 s, a Kubernetes
+Deployment), so an outage costs the time to restart. A **revoked** agent
+is restarted too, and refused again on its first request each time: its
+log fills with `the control plane answered 401` until you remove it. A
+Kubernetes pod in that state shows as CrashLoopBackOff, not Ready.
+
+## One agent, one key: the recipes never run two
+
+An agent's key is its identity, and its audit log is one hash chain the
+control plane also holds. Two processes with one key would write two
+chains under one name, and the control plane refuses the second. So the
+Kubernetes recipe is a Deployment of one replica with the Recreate
+strategy, not a DaemonSet, and the Compose recipe must not be scaled. An
+agent per node, or per host, is one pairing per node: its own id, key and
+audit log.
+
+On Kubernetes the key Secret is mounted with `defaultMode: 0600`, but the
+kubelet adds group read for the pod's `fsGroup` (65532) so the agent's
+non-root user can read it: on disk it is `0640`, owned by root and the
+agent's group, which nothing else in the pod shares.
+
+## "Last signed request" is the last one the control plane accepted
+
+The agents screen shows when each agent last made a request its signature
+authenticated: the newest nonce it spent, which the control plane keeps for
+each agent however old it is. A refused request — a bad signature, a
+revoked agent — is logged, never stored, so it never moves that time: a
+revoked agent that is still trying shows the moment of its last accepted
+request. The screen refreshes every 5 seconds. One nonce per agent ever
+paired is kept for good to know this — revoked agents included — so
+`agent_nonces` grows by one row per agent, not per request.
+
+## The dashboard starts an investigation only with the reachability grants allowed
+
+"Investigate through an agent" starts nothing unless the chosen agent is
+allowed `net.tcp.connect` and `net.http.outbound` in that environment — the
+reachability set in `docs/PERMISSIONS.md`, without which the walk cannot
+tell whether a connection or a service fails. It checks those two only: a
+walk that also needs `config.inspect.values`, `config.read.names` or
+`db.metadata.read` still starts, and ends partial, naming the grant it
+lacked. Only an admin sees the control; addressing a task is an admin's
+action.
+
+## The minimum grant sets are for one hop
+
+`docs/PERMISSIONS.md` lists the smallest grant set that completes each
+class of investigation — reachability, schema, auth and audience,
+configuration — measured on a service and the one thing it depends on
+(`cli/cmd/culprit/grantsets_test.go`). A longer request path needs, in
+addition, the grants for every other edge on it: a database behind an HTTP
+hop needs the reachability set as well as `db.metadata.read`.
 
 ## What a leaked agent database credential could do
 
@@ -1892,9 +1954,18 @@ allowance with its own configuration. None of them can touch
 `agent_audit_log` beyond appending to a chain. Treat the role passwords in
 `infra/.env.prod` as you would the control plane's own.
 
-## A malformed request body is refused before its signature is checked
+## A modified copy must link to its own source
 
-The agent routes refuse an unsigned or wrongly signed request with one
-`401` that does not say why. A request whose body is not valid JSON is
-refused first, with a `422`, before the signature is read: it reveals that
-the route exists, and nothing else.
+Every page links to its source code, as AGPL-3.0 section 13 asks of anyone
+who runs a modified copy as a network service. The link is set when the
+frontend image is built, from `VITE_SOURCE_URL`, and defaults to this
+repository. If you change Culprit and serve it, build with your own source
+URL; the dashboard cannot know what you changed.
+
+## The quickstart still prints "Password:"
+
+`just quickstart` pipes the generated admin password into `create_user`,
+whose `getpass` prints its prompt ("Warning: Password input may be echoed.
+Password:") even when it reads a pipe. Nothing waits on it: the bootstrap
+step runs without a terminal (`docker compose run -T`), so the password
+comes from `infra/.env.prod`, run by a person or by CI.

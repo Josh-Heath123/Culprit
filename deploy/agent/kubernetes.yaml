@@ -1,0 +1,100 @@
+# Culprit agent — Kubernetes recipe (Phase 33 part 3).
+#
+# One agent: a Deployment of exactly one replica, replaced rather than rolled
+# (Recreate), never a DaemonSet. An agent's key is its identity and its
+# audit log one hash chain the control plane also holds; two pods with one
+# key would write two chains under one name, and the control plane refuses
+# the second. For an agent per node, pair one per node, each with its own
+# key, id and copy of this file.
+#
+# It opens no port and has no Service. It reaches its control plane only
+# outbound, over https. Non-root (65532), read-only root filesystem, no
+# capabilities, no privilege escalation, no service-account token. Its key
+# is a Secret mounted read-only with mode 0600; its audit log is on a
+# PersistentVolumeClaim, because an agent that loses its log cannot extend
+# the chain the control plane holds.
+#
+# Before applying (deploy/agent/README.md has every step):
+#   kubectl create namespace culprit-agent
+#   kubectl -n culprit-agent create secret generic culprit-agent-key --from-file=agent.key
+#   kubectl -n culprit-agent create configmap culprit-agent-config \
+#       --from-file=agent.yaml --from-file=culprit.yaml
+# where agent.yaml says key: /run/secrets/agent.key, then:
+#   kubectl apply -f kubernetes.yaml
+#
+# CI applies this file in a kind cluster, paired with the quickstart, and
+# waits for it to be Ready (`just agent-recipes`).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: culprit-agent-state
+  namespace: culprit-agent
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: culprit-agent
+  namespace: culprit-agent
+  labels:
+    app.kubernetes.io/name: culprit-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: culprit-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: culprit-agent
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/josh-heath123/culprit/cli:latest
+          args: ["agent", "--config", "/etc/culprit/agent.yaml", "--audit", "/var/lib/culprit/audit.log"]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/culprit
+              readOnly: true
+            - name: key
+              mountPath: /run/secrets/agent.key
+              subPath: agent.key
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/culprit
+      volumes:
+        - name: config
+          configMap:
+            name: culprit-agent-config
+        - name: key
+          secret:
+            secretName: culprit-agent-key
+            defaultMode: 0600
+        - name: state
+          persistentVolumeClaim:
+            claimName: culprit-agent-state

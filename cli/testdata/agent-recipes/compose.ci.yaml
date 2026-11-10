@@ -1,0 +1,8 @@
+# CI's one addition to deploy/agent/compose.yaml (scripts/agent_recipe.sh):
+# on a CI runner the control plane is the quickstart on the host, reached as
+# host.docker.internal — the name its Caddy answers (Phase 33 part 2). A real
+# deployment's control plane has a real https address and needs nothing here.
+services:
+  agent:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

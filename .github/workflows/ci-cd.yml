@@ -102,6 +102,12 @@ jobs:
       # measures. All of frontend/src since Phase 32.1 part 2.
       - name: Check frontend tokens
         run: uv run --project api python scripts/check_frontend_tokens.py
+      # Phase 33 part 3: every "cannot" in docs/SECURITY.md — what a
+      # compromised control plane, a compromised agent, a leaked pairing
+      # code, key or project token, or a replayed request cannot do — names
+      # the test that enforces it, and that test exists.
+      - name: Check the threat model's tests
+        run: uv run --project api python scripts/check_security_doc.py
       # Phase 22 (docs/AI_NATIVE_PLAN.md): a declared "must change
       # together" pair (scripts/coupled_files.yaml) that changed on only
       # one side. Checked against the PR's committed diff, not a working
@@ -507,10 +513,18 @@ jobs:
           npm test
       - name: Install Chromium for Playwright
         run: cd frontend && npx playwright install --with-deps chromium
-      - name: Quickstart (builds every image from this commit)
+      # Under a pseudo-terminal (Phase 33 part 3). A person runs this from a
+      # terminal, and `docker compose run` hands one to the bootstrap
+      # container whenever the caller has one — which once made
+      # create_user's getpass read that terminal instead of the password
+      # piped from infra/.env.prod, so a person's run stopped at
+      # "Password:" while every run here, with no terminal, passed. `script`
+      # gives this run a terminal too; the sign-in below fails if the admin
+      # was not created from infra/.env.prod.
+      - name: Quickstart, under a pseudo-terminal (builds every image from this commit)
         env:
           QUICKSTART_HTTP_PORT: "8088"
-        run: just quickstart
+        run: script -qefc "just quickstart" /dev/null
       - name: End-to-end journeys
         env:
           QUICKSTART_HTTP_PORT: "8088"
@@ -528,6 +542,19 @@ jobs:
         env:
           QUICKSTART_HTTP_PORT: "8088"
         run: just agent-e2e
+      # Phase 33 part 3: the agent's Kubernetes recipe in a kind cluster,
+      # paired with this quickstart and Ready as a non-root user with a
+      # read-only root filesystem; its systemd unit through
+      # `systemd-analyze verify`. (The Compose recipe ran in the journeys
+      # above, paired from the browser.)
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: culprit-agent
+      - name: The agent's Kubernetes and systemd recipes
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+          KIND_CLUSTER: culprit-agent
+        run: just agent-recipes
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4

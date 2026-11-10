@@ -67,3 +67,12 @@ export type Hypothesis = components["schemas"]["Hypothesis"];
 export type ConfidenceRubric = components["schemas"]["ConfidenceRubric"];
 export type Symptom = components["schemas"]["Symptom"];
 export type Diagnosis = components["schemas"]["Diagnosis"];
+
+// Phase 33 part 3: agents, their pairing, allowances and tasks.
+export type AgentSummary = components["schemas"]["AgentSummary"];
+export type AgentList = components["schemas"]["AgentList"];
+export type Allowance = components["schemas"]["Allowance"];
+export type PairingCodeCreated = components["schemas"]["PairingCodeCreated"];
+export type TaskCreate = components["schemas"]["TaskCreate"];
+export type TaskCreated = components["schemas"]["TaskCreated"];
+export type TaskView = components["schemas"]["TaskView"];

@@ -11,6 +11,7 @@ import { PostmortemEditor } from "./PostmortemEditor";
 import { PostmortemList } from "./PostmortemList";
 import { RequireAdmin } from "./RequireAdmin";
 import { RequireAuth } from "./RequireAuth";
+import { SettingsAgents } from "./SettingsAgents";
 import { SettingsServices } from "./SettingsServices";
 import { SettingsUsers } from "./SettingsUsers";
 
@@ -65,6 +66,7 @@ export function AppRoutes() {
         <Route element={<RequireAdmin />}>
           <Route path="/settings/services" element={<SettingsServices />} />
           <Route path="/settings/users" element={<SettingsUsers />} />
+          <Route path="/settings/agents" element={<SettingsAgents />} />
         </Route>
       </Route>
 
