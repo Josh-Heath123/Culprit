@@ -597,6 +597,14 @@ agent-e2e:
     export CULPRIT_E2E_USERNAME CULPRIT_E2E_PASSWORD
     cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 20m
 
+# Phase 33 part 3: the agent's Kubernetes and systemd recipes, for real,
+# against a running quickstart — systemd-analyze verify on the unit, and the
+# Kubernetes recipe in the kind cluster KIND_CLUSTER, paired and Ready. (The
+# Compose recipe runs in `just e2e`, paired from the browser.) Needs kind,
+# kubectl, sudo and `just quickstart` first.
+agent-recipes:
+    bash scripts/check_agent_recipes.sh
+
 e2e *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail

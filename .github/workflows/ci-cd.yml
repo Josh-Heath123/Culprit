@@ -536,6 +536,19 @@ jobs:
         env:
           QUICKSTART_HTTP_PORT: "8088"
         run: just agent-e2e
+      # Phase 33 part 3: the agent's Kubernetes recipe in a kind cluster,
+      # paired with this quickstart and Ready as a non-root user with a
+      # read-only root filesystem; its systemd unit through
+      # `systemd-analyze verify`. (The Compose recipe ran in the journeys
+      # above, paired from the browser.)
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: culprit-agent
+      - name: The agent's Kubernetes and systemd recipes
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+          KIND_CLUSTER: culprit-agent
+        run: just agent-recipes
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4
