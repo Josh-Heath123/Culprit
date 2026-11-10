@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **33, part 3 — The operator's surface** — status `not started`. Starts once the licence pull request has merged and Malcolm has regenerated the local `infra/.env.prod` and quickstart volume. Brief in §4. |
+| Current phase | **33, part 3 — The operator's surface** — status `in progress`: implemented, every locally runnable criterion passes, both audits run and their findings addressed; committed and pushed, pull request open, `/ci` recorded in §5. The Kubernetes recipe's check runs only in CI (kind could not be fetched locally). Q19 asks the architecture session to accept one read grant. |
 | Previous phase | **33, part 2 — The agent meets the control plane: complete**, signed off 2026-11-10 by the architecture session. Merged via PR #28 (`58e7593`), every pull-request check green including code scanning (Q18). Criteria 8–10 verified as CI-run: the `e2e` job runs `just agent-e2e` unconditionally and the test cannot skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-33-operator`, cut from `origin/main` = `58e7593`; its first commit is the part 2 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **Q18** — CodeQL alert #1 on PR #28: dismiss or rule otherwise (§3, §5). |
+| Branch | `phase-33-operator`, fast-forwarded to `origin/main` = `fdc6f84` (the licence merge) before the work began. Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Blocking questions | **None.** Q19 is open and does not block (§3). |
 
 ---
 
@@ -70,7 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q18 was ruled 2026-11-10: `.env.prod` stays plaintext by design, is created `0600` atomically, and the alert is dismissed as "Won't fix" after that fix lands (`DIAGNOSTIC_PLAN.md`, end of Phase 33). | | |
+| Q19 | Accept `api-reader` SELECT on `agent_nonces` (migration `e5b8a2d4c6f1`)? The agents screen shows each agent's last signed request. That moment is already written, as the `seen_at` of the nonce each signed request spends, and the gateway's cleanup now keeps every agent's newest nonce. Reading it needs `api-reader`, which serves the agents listing and already reads `agents`, `agent_allowances`, `agent_tasks` and `agent_audit_log`. Argued in the migration under standing invariant 3's three conditions for a read grant, revoked by its downgrade; no write is widened. It reverses one sentence of `d7a3e5f1b9c2` ("never the codes or the nonces"). The phase-auditor asked for a human ruling rather than the phase naming itself as a precedent in `.claude/rules/database.md`, so that edit was withdrawn. If rejected: a new read-only role for that one listing, or drop "last signed request" from the screen. | 2026-11-10, Phase 33 part 3 | Nothing: part 3 is built on it, and a rejection is a small follow-up. |
 
 ---
 
@@ -98,7 +98,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 32.2 | Close-out | **complete**, **signed off 2026-11-05** (architecture session) — `2e05980`, `2e187fc` on `main`; run 42083753833 green, `deploy` skipped; Images run 42084489435 green (§5) | **Brief (2026-11-05):** `DIAGNOSTIC_PLAN.md` Phase 32.2 — its work order, criteria and what not to do. Two commits: line endings alone first (message `..\phase-32.2-1-line-endings.txt`; stage it and stop for the human to commit), then everything else (`..\phase-32.2-2-close-out.txt`). Record PR #25's final run first. Branch `phase-32.2-close-out`. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
-| 33, part 3 | The operator's surface | not started | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 33 — "How Phase 33 is run", then "Part 3" at the end of the section: work order, nine criteria, what not to build. **Preconditions:** the licence pull request has merged, and Malcolm has regenerated the local `infra/.env.prod` and quickstart volume. Carried-in items first (signature before body; plain `http` refused). Screenshots of the new screens at four widths in the run report, for Malcolm. Branch `phase-33-operator`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 33, part 3 | The operator's surface | in progress — PR open, `/ci` in §5 | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 33 — "How Phase 33 is run", then "Part 3" at the end of the section: work order, nine criteria, what not to build. **Preconditions:** the licence pull request has merged, and Malcolm has regenerated the local `infra/.env.prod` and quickstart volume. Carried-in items first (signature before body; plain `http` refused). Screenshots of the new screens at four widths in the run report, for Malcolm. Branch `phase-33-operator`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 34 | Verification loop and calibration | not started | — |
 | 35 | Agent surface and the narrator | not started | — |
 
@@ -132,249 +132,154 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        33, part 2 — the agent meets the control plane
-Branch:       phase-33-control-plane, cut from origin/main = 57541e3; d403259
-              is the part 1 sign-off. The work is STAGED, not committed:
-              message ..\phase-33-2-control-plane.txt. shared/uv.lock not
-              staged. Lands through a pull request.
-Run:          2026-11-06, /next.
-Status:       IMPLEMENTED, NOT COMPLETE. Every criterion that can run
-              without the CI scenario passes locally, executed by the tests
-              and by phase-auditor. NOT RUN anywhere yet: the end-to-end
-              agent scenario (criteria 8's first clause, 9's topology, 10),
-              which runs only in CI's e2e job (`just agent-e2e`) — its one
-              local attempt was stopped by the system for low memory before
-              it began. Needs: the human's commit, push and pull request,
-              then /ci.
+Phase:        33, part 3 — the operator's surface
+Branch:       phase-33-operator, fast-forwarded to origin/main = fdc6f84 (the
+              licence merge, PR #30). Commits 01f974e..HEAD.
+Run:          2026-11-10, /next.
+Status:       IMPLEMENTED. Every criterion that runs locally passes, executed;
+              both audits run. NOT RUN locally: the Kubernetes recipe in kind
+              (fetching the kind binary was refused by the permission system),
+              so its check runs for the first time in CI. /ci: below.
 
-STEP 0 — THE RECORD, AND THE LOCAL ENV
-  Part 1's CI: PR #27's pull_request run 42176958562 on the merge ref,
-  success on every job — "Agent image checks" among the cli build's steps,
-  on Linux — deploy and publish skipped; the push run on main for 57541e3,
-  42177585117, success. Part 1's criterion 7 ("checked in CI") is met.
-  The local infra/.env.prod regeneration and quickstart volume recreation:
-  NOT DONE. Moving the file aside and removing the volume were both refused
-  by the permission system; they are Malcolm's to run (the commands are in
-  this report's LEFT OPEN). Nothing in this part needed them before CI.
+PRECONDITIONS (checked, not assumed)
+  Licence PR #30 merged (fdc6f84). infra/.env.prod written 10:37 and the
+  quickstart Postgres volume created 10:38 on 2026-11-10, after the part 2
+  sign-off: Malcolm's regeneration. Not read: the file's contents.
 
-STEP 1 — CARRIED IN
-  api/tests/data/investigations/ re-recorded by the fault library under
-  config.inspect.values (token_shape v3, grants_used named, no
-  config.read.values left); the browser assertion follows; UPGRADING has the
-  rename. NOT DONE: the README's partial screenshot and its alt text — no
-  stack could run here. CI's e2e job takes that screenshot from the
-  re-recorded data; copy docs/screenshots/investigation-partial-1280.png
-  from that run's e2e-screenshots artifact, and fix README.md:63.
-
-GATES (local, Windows, staged tree)
-  just lint / typecheck / lint-imports         PASS (4 contracts kept)
-  just check-schema-drift / no-llm-imports     PASS
-  just check-invariants / check-scan-coverage  PASS
-  just check-frontend-tokens                   PASS
-  just cli-lint / cli-build                    PASS
-  go test ./... (cli)                          PASS
-  just test                                    PASS  api+scripts+shared 1137 / 4 skipped,
-                                                     worker 65, mcp 21, extractors 31
-  frontend tsc -b, npm test                    PASS
-  just check-migration-round-trip              PASS  (agents, a task, a nonce and an
-                                                     audit row seeded)
-  culprit check / LLM_PROVIDER=none            exit 0 / 0
-  just agent-e2e                               NOT RUN (CI-only; see Status)
-  /ci                                          NOT RUN — needs the commit and a PR
-
-CRITERIA (part 2)
-  1  signing fixture, Go and Python                       PASS. 14 cases, each
-       as written in both; each language reproduces the fixture's signatures
-       byte for byte from the seeds.
-  2  pairing code once, not after expiry; no private key
-     in any byte sent while pairing                       PASS. API tests;
-       the fake control plane dumps every request (httputil.DumpRequest)
-       until the agent is paired — exactly one — and none holds the seed or
-       key in seven encodings.
-  3  revocation refuses the next request; allowance
-     removal on the next task; no restart                 PASS (API and binary).
-  4  allowance naming an unreported grant, a wildcard or
-     `all` → 422; the chaos test over the real transport  PASS. 422s in the
-       API; the chaos case runs the real internal/transport client over HTTP
-       against a control plane that verifies signatures with agentauth: the
-       task is refused, recorded, allowance_ignored names the grant, and the
-       shipped chain equals the local log byte for byte. Not repeated
-       against the real API (the API 422s such an allowance; the case arises
-       only when a configuration shrinks after pairing).
-  5  POST /readings: an agent's credential only           PASS. Project token
-       401, none 401, signed 201, another agent named 403.
-  6  every route and its credentials                      PASS. The test reads
-       the app's dependency tree; the project token is on exactly the three
-       capture routes and POST /investigations. Mutation-tested four ways
-       (phase-auditor), and a hidden wrapper calling require_project_token
-       is now caught by a source scan (mutation-tested).
-  7  investigations record who submitted them             PASS.
-  8  one agent_audit_log row per probe in the CI
-     scenario; chain extension refused; no role can
-     update or delete, shown red without the trigger      Chain and trigger
-       PASS (dropping the trigger turns UPDATE and DELETE red; TRUNCATE has
-       its own); the CI clause NOT RUN — now one-to-one per task.
-  9  no shared Compose network in CI; no listen call;
-     transport dials only its address, no redirect, the
-     allowlist's third package, mutation-tested           Local PASS (each
-       mutation caught: allowlist, Listen, dialer, redirect, proxy). CI
-       topology NOT RUN. Defect found by the phase audit and fixed: the
-       quickstart's Caddy answered only `localhost`, so the agent's requests
-       as host.docker.internal matched no site (shown live) — the local
-       DOMAIN now names both (Caddy adapt checked; test added).
-  10 reachability completes; schema partial naming
-     db.metadata.read; audience roots at the audience     NOT RUN (CI-only).
-       Reasoned through the walk by the auditor: each would assert as
-       written. The "schema" walk is the latency fault over the demo model
-       plus an orders-db, whose edge only db.metadata.read can test.
-  11 migration round-trips with agents, tasks, audit rows PASS.
-  12 LLM_PROVIDER=none changes nothing                    PASS.
+CARRIED IN
+  1 Signature before body (01f974e). The four signed routes that take a body
+    declare none; signed_body()/submitted_body() authenticate over the raw
+    bytes, then parse them. Test first, red before ("POST /agents/me/audit,
+    unsigned: 422 ... JSON decode error"), green after.
+  2 Plain http refused (f76c731). https only; http to localhost, 127/8 or ::1,
+    or with control_plane.allow_plain_http: true, which `culprit agent` and
+    `agent pair` report at every start. Red first (12 cases + the report
+    test). CI's agent end-to-end config sets allow_plain_http (a test's, not a
+    recipe's). internal/agent uses net/netip: the D8 allowlist caught `net`.
+  3 Quickstart under a terminal (ba36bed). `docker compose run -T` on the
+    bootstrap step. Reproduced in a separate worktree (own .env.prod,
+    culprit-qs-333, port 8333) under `script` in WSL, each from a fresh
+    volume: before, the transcript ends at "Password:" and nothing follows for
+    60 s; after, it runs to the end, "created admin user 'admin'", sign-in as
+    that admin 200. CI now runs the quickstart under `script` too. getpass
+    still prints its prompt text as it reads the pipe (LIMITS).
 
 WHAT WAS BUILT
-  - Signing: cli/internal/agentauth, api/app/agents/signing.py,
-    shared/tests/agent_signing_conformance.json.
-  - Storage: d7a3e5f1b9c2 — six tables; agent-admin, agent-registrar,
-    agent-gateway; append-only and chain-extension triggers;
-    investigations.submitted_by; role secrets threaded everywhere.
-  - API: api/app/agents (pairing codes, register, list, allowances,
-    revoke, tasks, a task, the audit log; claim, result, audit head and
-    append for the agent); require_agent and require_project_token_or_agent;
-    POST /readings agent-only; POST /investigations records its submitter.
-  - Binary: cli/internal/transport; agent config control_plane and key;
-    `culprit agent init`, `pair` (`--code -` reads stdin); the transport
-    as the agent's task source, shipping its audit chain before results.
-  - CI: `just agent-e2e`, a step in the e2e job; the fault stack's
-    order-service gets host.docker.internal; the quickstart answers it.
-  - Docs: PERMISSIONS, UPGRADING, LIMITS, PROBES, ARCHITECTURE, the
-    database and determinism rules, CLAUDE.md.
+  - Settings -> Agents (089270d): every agent, paired or revoked, its last
+    signed request, its reported grants in plain words marked allowed or not;
+    a pairing code shown once; an allowance edited with a diff before Save;
+    revoke after confirmation. GET /agents gains last_request_at (818cfdd):
+    the newest nonce's seen_at; the cleanup keeps each agent's newest nonce;
+    migration e5b8a2d4c6f1 gives api-reader SELECT on agent_nonces (Q19).
+  - The investigations page, for an admin: "Investigate through an agent":
+    agent, environment, symptom, optional vantage; the task's progress; the
+    investigation opens when it lands. Without net.tcp.connect and
+    net.http.outbound allowed it names the missing grant, says where to give
+    it, and starts nothing.
+  - The minimum grant set per class (65494ab), in PERMISSIONS: reachability
+    {net.tcp.connect, net.http.outbound}; schema {db.metadata.read}; auth and
+    audience {config.inspect.values, net.tcp.connect, net.http.outbound};
+    configuration {config.read.names}. Found by running every class with all
+    seven candidate grants and removing each in turn.
+  - deploy/agent/ (bcb3e39): Docker, Compose, Kubernetes, systemd, a README,
+    agent.example.yaml. cli/Dockerfile ships /var/lib/culprit owned by 65532.
+  - docs/SECURITY.md (a76756f): six threats, 55 test references, held by
+    scripts/check_security_doc.py in CI.
+  - A link to the source on every page, VITE_SOURCE_URL (c2f38de).
+  - README, LIMITS, PERMISSIONS, UPGRADING (e5b73f0, 8d440e5).
 
-DELIBERATELY NOT BUILT (part 2's Do-NOT)
-  No frontend change beyond the one re-recorded assertion; no deployment
-  recipe beyond the CI topology; no docs/SECURITY.md; no mutual TLS; no
-  write capability; no multi-tenancy; no hosted deployment; no
-  POST /investigations/{id}/probe.
+CRITERIA (part 3)
+  1  401 before the body is parsed, on every agent route    PASS. The test
+       finds signed routes from the real app's dependency tree; the auditor
+       also curl'd all six against a running stack: 401 for not-JSON and
+       wrong-shape bodies, unsigned and forged.
+  2  quickstart under a pty: no prompt, admin from .env.prod;
+     shown failing first                                     PASS locally
+       (above); the auditor reproduced the mechanism independently. In CI:
+       the e2e job now runs it under `script` (see /ci).
+  3  plain http refused but for loopback / allow_plain_http;
+     reported at every start; no recipe sets it              PASS.
+  4  every agents-screen action a browser journey in CI      PASS locally,
+       18/18 against a quickstart of this branch (culprit-qs-334, port 8334):
+       a real agent from the Compose recipe, paired with a code made in the
+       browser, appears; the allowance diff shows exactly the two additions
+       before Save; revoke, then the agent's own log shows its next claim
+       answered 401; a member sees "This page is for admins". Every action is
+       taken from the keyboard. In CI: /ci.
+  5  dashboard -> investigation end to end with a real agent;
+     with no agent holding the grants it explains and starts
+     nothing                                                 PASS locally.
+       The test counts task requests: none while not allowed, one after.
+  6  each class with exactly its documented grants complete;
+     each grant removed partial, and named                   PASS. Reads the
+       table from PERMISSIONS; mutation-checked (an extra grant, and a missing
+       one, each turn it red). Real probes, gate, walk and agent; a fake
+       network, HTTP and database holding the fault.
+  7  Compose is the one CI runs; Kubernetes Ready in kind;
+     systemd verify; no recipe allows plain http            Compose PASS
+       locally (deploy/agent/compose.yaml unchanged, plus a CI overlay adding
+       one host alias). systemd PASS (systemd-analyze verify, systemd 249,
+       WSL). No recipe sets allow_plain_http (test_agent_recipes.py).
+       Kubernetes NOT RUN locally: its first run is CI's.
+  8  every "cannot" names a test that exists                  PASS (55).
+  9  tokens only; four widths; keyboard; screenshots here     PASS locally:
+       check_frontend_tokens over 69 files; atEveryWidth at 375/768/1280/1920
+       with an overflow check, Tab reach and a focus ring; the journeys
+       operated by keyboard. Screenshots: the e2e-screenshots artifact of the
+       /ci run below: settings-agents-*, agents-pairing-code-*,
+       agents-allowance-*, investigate-unavailable-*, investigations-*. Not
+       committed (6.3 MB).
+  10 LLM_PROVIDER=none changes nothing                        PASS.
+
+GATES (local, Windows, Docker up)
+  lint, typecheck, lint-imports, check-schema-drift, check-no-llm-imports,
+  check-invariants, check-scan-coverage, check-frontend-tokens,
+  check-security-doc, cli-lint                                PASS
+  just test   api+scripts+shared 1169 / 6 skipped, worker 65, mcp 21,
+              extractors 31 + 22, go test ./...                PASS
+  frontend npm test (19), tsc -b                               PASS
+  check-migration-round-trip                                   PASS
+  culprit check / LLM_PROVIDER=none                            exit 0 / 0
+  just e2e (18/18) and just agent-e2e, against culprit-qs-334  PASS
+  just agent-recipes                                           NOT RUN (kind)
 
 AUDITS
-  invariant-auditor: one violation, fixed — agent-admin held SELECT on
-    the pairing codes it never reads (now INSERT only, with no RETURNING;
-    the sequence USAGE it named as unneeded IS needed — Postgres checks it
-    for an identity default, shown by the tests — and is argued in the
-    migration). One security defect, fixed — a nonce could be deleted while
-    its request was still fresh (a replay window of up to a second at the
-    edge of future skew); now kept 2 x 300 + 60 s, with a test that replays
-    such a request after cleanup (mutation-tested). Risks fixed: a transient
-    DB error on an audit insert reported as a broken chain; the determinism
-    rule and ARCHITECTURE naming two network packages, not three; the
-    pairing code in shell history (`--code -`). Risks documented in LIMITS:
-    http allowed for control_plane.url; what a leaked agent DB credential
-    could do; a malformed body's 422 before the 401. api-reader's SELECT on
-    the four new tables argued in the migration, as c4e8a1f2b3d5's was.
-  phase-auditor: every local criterion PASS; defects fixed — the Caddy
-    host (above), the scan gap in criterion 6, and three checks weaker than
-    the wording (aggregate audit counts, networks compared only with "api"
-    containers, pairing capture limited to one path).
+  invariant-auditor: CLEAN, no violation. Risks taken up: the migration now
+    says it reverses d7a3e5f1b9c2, and counts itself correctly; one nonce per
+    agent kept for good is in LIMITS; a failure screenshot can no longer hold
+    a live pairing code. Left as a risk: a partial diagnosis now repeats the
+    refusing probe's reason, already in the hypothesis, so nothing new is
+    exposed.
+  phase-auditor: every local criterion PASS. Fixed: the pairing-code
+    screenshot (now taken after the code is spent); SECURITY.md's one blanket
+    claim split into three tested ones; keyboard operation; the schema class
+    explained. Raised to you: Q19, and the rule-file edit withdrawn.
 
-PLAN NOTES
-  - Criterion 10's "schema investigation": the demo model has no database,
-    so the scenario adds one (orders-db) to the agent's own copy of the
-    model; adding it to demo-services/culprit.yaml would have turned the
-    fault library's audience walk partial.
-  - The project token's narrower scope breaks any CI that posts readings
-    with it (UPGRADING says so).
-
-LEFT OPEN
-  - Commit, push, pull request, /ci — the scenario's first run.
-  - Malcolm's local env, as 32.2's review required:
-      mv infra/.env.prod infra/.env.prod.pre-33-2
-      docker volume rm culprit-quickstart_quickstart-postgres-data culprit-quickstart_quickstart-redis-data
-      just quickstart
-    Also removable: volumes culprit-qs-322_*, culprit-qs-322b_*,
-    culprit-qs-332_*.
-  - The README partial screenshot and README.md:63, from CI's artifact.
-```
-
-### /ci, 2026-11-10 — PR #28 is red: one open code-scanning alert
-
-```
-Commit:       2e89f47 (the PR head; origin/main 57541e3 is already an ancestor,
-              so the merge result is this tree).
-Earlier /ci:  reported GREEN from the two workflow runs (CI/CD 42191685218 and
-              CodeQL 42191677882, every job success). That was wrong. PR #28's
-              check "CodeQL" (check run 127805239017, the "Code scanning
-              results" check) concluded failure: "1 new alert including 1 high
-              severity security vulnerability". /ci never read PR checks; it
-              does now (step 4b, same commit as this report).
-
-THE ALERT (verbatim from the code-scanning API)
-  Query given:  alerts?ref=refs/pull/28/merge&state=open  -> []   (empty)
-                CodeQL default setup analyses refs/pull/28/head, not the merge
-                ref. alerts?ref=refs/pull/28/head and alerts?pr=28 both return:
-  number        1   https://github.com/Josh-Heath123/Culprit/security/code-scanning/1
-  rule          py/clear-text-storage-sensitive-data
-                "Clear-text storage of sensitive information"
-  severity      security_severity_level=high, severity=error
-  tool          CodeQL 2.27.4, dynamic/github-code-scanning/codeql:analyze
-                /language:python
-  location      scripts/bootstrap_env.py:350, columns 30-50
-                (`render_env_file(env)` in
-                `ENV_PROD_PATH.write_text(render_env_file(env))`)
-  message       "This expression stores sensitive data (password) as clear
-                text." -- 36 source links: 35 "(password)", 1 "(secret)".
-  data flow     Not exposed by the REST API; the message's 36 source links are
-                the path's sources (the GENERATED_SECRETS passwords and the
-                *_DATABASE_URLs built from them, through build_env() ->
-                render_env_file() -> write_text()).
-  instances     refs/heads/main     open  57541e3  scripts/bootstrap_env.py:325
-                refs/pull/28/head   open  2e89f47  scripts/bootstrap_env.py:350
-  created       2026-11-04T15:50:03Z -- open on main before this branch.
-
-WHY IT IS "NEW" ON THIS PR
-  Phase 33 part 2 adds three role passwords (AGENT_ADMIN/REGISTRAR/GATEWAY)
-  and their URLs to build_env(). New sources flow into the same sink, and
-  the sink moved 25 lines, so the check counts it as code this PR changed.
-  The defect class, the statement and the alert number are all main's.
-
-VERDICT: FALSE POSITIVE BY DESIGN. Not dismissed, not suppressed. Q18.
-  1. infra/.env.prod *is* the secret store. Its only consumers are Docker
-     Compose's `env_file: .env.prod` (docker-compose.prod.yml:31,63,83,91
-     and the quickstart file) and `--env-file`, which read plain KEY=VALUE
-     and nothing else. No encrypted or hashed form exists that Compose can
-     consume.
-  2. Every value is a credential the services *present* (Postgres role
-     passwords, DSNs, JWT signing key, project token), not a verifier. A
-     hash would be useless; each must be recoverable in clear by its user.
-  3. The storage is already the protected kind: mode 0600 (chmod right
-     after the write), gitignored (`.gitignore:15 .env.*`), never committed,
-     no value printed except the quickstart admin password, which Phase 17
-     Known Trap 4 permits on the local path only.
-  4. Moving to Docker secrets / files under /run/secrets would change the
-     deploy shape of every service: an architecture decision, out of
-     Phase 33's scope (CLAUDE.md "Scope ceilings").
-  So the rule fires on exactly what the file exists to do. Fixing it would
-  mean not writing the file.
-
-A SEPARATE, REAL, SMALLER WEAKNESS (not what CodeQL flags; not fixed)
-  main() calls write_text() and only then chmod(0o600). On first creation
-  the file exists for a moment with the umask's mode (typically 0644,
-  readable by other local users) holding every secret. Creating it with
-  os.open(..., O_CREAT|O_WRONLY|O_TRUNC, 0o600) closes that. It does not
-  clear alert #1 (still clear-text storage), it predates this branch, and
-  it is outside 33.2's scope -- proposed as its own small commit if the
-  architecture session wants it.
-
-/ci CHANGED (.claude/skills/ci/SKILL.md, step 4b)
-  Green now also requires: every check `gh pr checks <n>` lists is pass or
-  skipping (Code scanning results included), and no open alert from
-  alerts?pr=<n>, ?ref=refs/pull/<n>/merge or ?ref=refs/pull/<n>/head.
-  An alert is never cleared from /ci: fix it with a test, or argue it here
-  and stop.
+DECISIONS TAKEN HERE (for review)
+  - Kubernetes is a Deployment of one replica, Recreate, not field 4's
+    DaemonSet: one key is one identity and one audit chain.
+  - The key Secret is defaultMode 0600; under fsGroup the kubelet makes it
+    0640 root:65532 (LIMITS), the closest Kubernetes allows for a non-root
+    reader. Unverified until kind runs in CI.
+  - The dashboard gates on the reachability set only, for any symptom; a walk
+    needing more starts, and ends partial naming the grant (LIMITS).
+  - Partial-diagnosis wording: "could not be established" now carries the
+    probe's reason, so a missing net.http.outbound is named (65494ab). What
+    the walk tests, and in what order, is unchanged.
+  - The agent exits when its control plane is unreachable; the recipes'
+    restart policies bring it back (LIMITS). No retry loop was added.
+  - The Compose journey's agent joins the quickstart's own network, where the
+    demo services are; it reaches the API only through the published
+    address. Part 2's separate-network scenario still runs in agent-e2e.
+  - LIMITS corrected: re-pairing to report a new grant means a new agent id
+    and key; the control plane refuses a second pairing of either.
 
 LEFT OPEN
-  - Q18: dismiss alert #1 (with the reason above) or rule otherwise. Until
-    then PR #28 is red and Phase 33 part 2 is not complete.
-  - Everything in the part 2 LEFT OPEN above still stands.
+  - Q19.
+  - The Kubernetes recipe's first run is CI's; it may need a fix there.
+  - A local throwaway stack, culprit-qs-334 (port 8334), and its worktree in
+    the session scratchpad: `docker compose -p culprit-qs-334 ... down -v`.
 ```
-
 
 ## §6. Escalate to the architecture session when
 
