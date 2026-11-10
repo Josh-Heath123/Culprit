@@ -29,11 +29,12 @@ FROM golang:1.27-alpine AS caddy
 #
 # v2.11.7 (2026-11-03) already requires x/crypto v0.57.0 and grpc v1.83.2,
 # so those two pins were dropped. It still asks for x/net v0.59.0 and
-# go-jose/v4 v4.1.5, both behind their CVE fixes.
+# go-jose/v4 v4.1.5, both behind their CVE fixes. x/net v0.62.0 fixes
+# CVE-2026-78661 (x/net/html, HIGH).
 ARG CADDY_VERSION=v2.11.7
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
 RUN CGO_ENABLED=0 xcaddy build ${CADDY_VERSION} --output /usr/bin/caddy \
-      --replace golang.org/x/net=golang.org/x/net@v0.60.0 \
+      --replace golang.org/x/net=golang.org/x/net@v0.62.0 \
       --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6
 
 FROM caddy:2-alpine
