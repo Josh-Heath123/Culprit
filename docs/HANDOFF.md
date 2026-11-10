@@ -138,10 +138,10 @@ Phase:        34, part 1 — the loop, in the binary
 Branch:       phase-34-verify, from origin/main = e125b4b; its first commit is
               the Phase 33 sign-off (5c56ff5). Commits f35e37f..HEAD.
 Run:          2026-11-10, /next.
-Status:       IMPLEMENTED. Every criterion executed and passing locally, the
-              fault library included (Docker, 11/11); both audits run and
-              their findings fixed. /CI: below. Two questions for review
-              (Q20, Q21), neither blocking.
+Status:       IMPLEMENTED; CI GREEN on PR #32 (/ci below), the fault library
+              11/11 on Linux as well as locally. Every criterion executed;
+              both audits run and their findings fixed. Two questions for
+              review (Q20, Q21), neither blocking.
 
 WHAT WAS BUILT (work order 1-5)
   1 The Verification model (f35e37f), Go (cli/internal/model/verification.go)
@@ -195,7 +195,7 @@ CRITERIA (part 1)
        can be seen fixed -> inconclusive, with that reason (Q21).
        auth-audience-ungranted (the audience class under narrower grants)
        -> inconclusive: "...was refused: ... config.inspect.values is not
-       granted". In CI: /ci below.
+       granted". In CI: PASS, run 42826962752, fault-library job 11/11.
   4  a wrong fix -> not_resolved                             PASS. Library
        verify/wrong-fix: a token re-minted for 'inventory-svc': "still
        failing on both runs: probe.auth.token_shape on the token audience
@@ -282,6 +282,19 @@ DECISIONS TAKEN HERE (for review)
   - Field 10's `verify:` (reference environment, regression tolerance) not
     built: a regression tolerance contradicts "every reading that passed
     still passes", and the reference is the diagnosis's own.
+
+/CI — PR #32
+  commit   f278dfe6ae6765d37583ea4f33419255d1ad349f (merge result: origin/main
+           e125b4b is an ancestor; merging it changes nothing)
+  run      42826962752  CI/CD, pull_request, success
+  jobs     lint, typecheck, test, cli, migration-round-trip, self-check,
+           kind-capture, fault-library, e2e, build x5: success; publish and
+           deploy skipped
+  fault    TestTheFaultLibrary PASS (115 s): the seven faults and the four
+           verify scenarios, each PASS
+  checks   gh pr checks 32: 20 pass, 2 skipping, 0 fail (CodeQL included)
+  alerts   none open (pr=32, refs/pull/32/merge, refs/pull/32/head)
+  This report's own commit is checked the same way before the run stops.
 
 LEFT OPEN
   - Q20 (change kinds for runtime fixes), Q21 (criterion 3 and latency).
