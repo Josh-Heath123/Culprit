@@ -68,7 +68,12 @@ echo "systemd unit: verified"
 # ---- 2. Kubernetes, in kind ------------------------------------------------------
 echo "==> deploy/agent/kubernetes.yaml in kind cluster $cluster"
 docker tag culprit-quickstart-cli culprit-agent:ci
-kind load docker-image culprit-agent:ci --name "$cluster"
+# Through an archive: `kind load docker-image` reports success and leaves
+# nothing on the node when Docker keeps images in its containerd store
+# (CI run 42804120023: ImagePullBackOff on docker.io/library/culprit-agent:ci).
+docker save culprit-agent:ci -o "$work/agent-image.tar"
+kind load image-archive "$work/agent-image.tar" --name "$cluster"
+docker exec "$cluster-control-plane" crictl images | grep -F culprit-agent     || { echo "FAIL: the agent image is not on the kind node" >&2; exit 1; }
 
 token="$(curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
     --data-binary @- <<JSON | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])'
@@ -113,8 +118,11 @@ kubectl -n culprit-agent create configmap culprit-agent-config \
 kubectl apply -f "$repo/deploy/agent/kubernetes.yaml"
 
 gateway="$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' | tr ' ' '\n' | grep -E '^[0-9.]+$' | head -1)"
+[ -n "$gateway" ] || { echo "FAIL: no IPv4 gateway on the kind network to reach the host" >&2; exit 1; }
+echo "host.docker.internal -> $gateway (the kind network's gateway)"
 kubectl -n culprit-agent set image deployment/culprit-agent agent=culprit-agent:ci
 kubectl -n culprit-agent patch deployment culprit-agent --type=json -p "[
+  {\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/imagePullPolicy\", \"value\": \"Never\"},
   {\"op\": \"add\", \"path\": \"/spec/template/spec/hostAliases\",
    \"value\": [{\"ip\": \"$gateway\", \"hostnames\": [\"host.docker.internal\"]}]}
 ]"
