@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **34, part 1 — The loop, in the binary** — status `in progress`: implemented, every criterion executed and passing locally (the fault library 11/11 under Docker), both audits run and their findings fixed; committed and pushed, pull request open, `/ci` recorded in §5. Q20 and Q21 for review, neither blocking. |
-| Previous phase | **33 — The production agent and the permission model: complete** (three parts), part 3 signed off 2026-11-10 by the architecture session. Part 3 merged via PR #31 (`e125b4b`), every pull-request check green, no open alert. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`; Q19 ruled there. |
+| Current phase | **34, part 2 — Outcomes in the control plane** — status `not started`. Brief in §4. |
+| Previous phase | **34, part 1 — The loop, in the binary: complete**, signed off 2026-11-10 by the architecture session. Merged via PR #32 (`2ef3da6`), every pull-request check green, the fault library 11/11 on Linux. Q20 and Q21 ruled at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-34-verify`, cut from `origin/main` = `e125b4b`; its first commit is the Phase 33 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** Q20 and Q21 are open and do not block (§3). |
+| Branch | `phase-34-outcomes`, cut from `origin/main` = `2ef3da6`; its first commit is the part 1 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Blocking questions | **None.** §3 is empty. |
 
 ---
 
@@ -70,8 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q20 | **A fix that is none of image, config key or commit.** The decided change kinds are an image, a config key, or a commit. Three of the fault library's fixes are runtime actions — the partition's firewall rule removed, the injected error rate and latency cleared — so part 1 names them as `commit:<ref>` with a ref derived from the fix's name (`cli/testdata/faultlib/expected.json` says so), because no real commit applied them. A commit explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed: nothing is called verified that the readings do not show. But the record says "commit" for something that was not one. Should part 2 add a fourth kind (an operator's action, described, explaining nothing), or should the library apply those fixes as config changes instead? | 2026-11-10, Phase 34 part 1 | Nothing in part 1. Part 2's change vocabulary, and how the README describes the library's outcomes. |
-| Q21 | **Criterion 3 and a fault the walk cannot see failing.** "For every fault class in the library: inject, diagnose, apply the known fix, verify — `verified`." The latency fault slows every request without failing any, so its diagnosis is partial with no failing reading, and no fix can be *seen* to fix it: its verification is `inconclusive`, with that reason, and the library asserts exactly that. Five classes reach `verified`; the audience fault under narrower grants is `inconclusive` because its probe is still refused. Proposed wording: "for every fault class the walk diagnoses with a failing reading: ... `verified`; a diagnosis with no failing reading: `inconclusive`, saying so." Accept, or should latency be made detectable (a latency budget the walk can fail against) first? | 2026-11-10, Phase 34 part 1 | Nothing in part 1. Whether part 1's criterion 3 is met as written. |
+| — | None open. Q20 and Q21 were ruled 2026-11-10 (`DIAGNOSTIC_PLAN.md`, end of Phase 34): an `action` change kind in part 2; criterion 3 refined for a diagnosis with no failing reading, and latency detection left to Phase 36. | | |
 
 ---
 
@@ -100,8 +99,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
-| 34, part 1 | The loop, in the binary | in progress — PR open, `/ci` in §5 | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — all 17 fields, read with "How Phase 34 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The `Verification` model and its conformance fixture come first. No API, migration or interface. Branch `phase-34-verify`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 34, part 2 | Outcomes in the control plane | not started | Criteria written at part 1's review. First item: Q19's column grant. |
+| 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
+| 34, part 2 | Outcomes in the control plane | not started | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — "How Phase 34 is run", then "Part 2" at the end of the section: work order, how outcomes and accuracy are counted, nine criteria, what not to build. Carried-in items first (Q19's column grant; Q20's `action` kind). Branch `phase-34-outcomes`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 35 | Agent surface and the narrator | not started | — |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
