@@ -17,7 +17,12 @@ from culprit_model.investigations import Investigation
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.dependencies import Submitter, require_project_token_or_agent
+from app.agents.dependencies import (
+    Submitter,
+    body_documented_as,
+    require_project_token_or_agent,
+    submitted_body,
+)
 from app.auth.dependencies import require_auth
 from app.investigations import service
 from app.investigations.dependencies import (
@@ -34,10 +39,18 @@ from app.investigations.schemas import (
 logger = structlog.get_logger("investigations")
 router = APIRouter(prefix="/investigations", tags=["investigations"])
 
+#: The investigation, parsed once its submitter is authenticated.
+_investigation = submitted_body(Investigation)
 
-@router.post("", response_model=InvestigationStored, status_code=201)
+
+@router.post(
+    "",
+    response_model=InvestigationStored,
+    status_code=201,
+    openapi_extra=body_documented_as(Investigation),
+)
 async def create_investigation(
-    payload: Investigation,
+    payload: Investigation = Depends(_investigation),
     submitter: Submitter = Depends(require_project_token_or_agent),
     session: AsyncSession = Depends(get_investigation_writer_session),
 ) -> InvestigationStored:
