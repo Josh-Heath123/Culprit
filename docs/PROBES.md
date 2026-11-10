@@ -288,8 +288,10 @@ the verdict is `verified` only when every reading that failed passes on
 both runs, every reading that passed still passes, and every difference
 between the environment at diagnosis and now is explained by the change
 named with `--change`. A reading that is `refused` or `inconclusive` now,
-or that gives a different verdict on its two runs, makes the verdict
-`inconclusive` — never `verified`. The other verdicts are `not_resolved`
+or that gives a different verdict on its two runs, keeps it from
+`verified`: the verdict is `inconclusive`, unless a reading that failed
+still fails (`not_resolved`) or one that passed now fails (`regressed`),
+which settle it whatever else is unsettled. The other verdicts are `not_resolved`
 (a reading that failed still fails), `regressed` (the fault is gone and
 something that passed now fails) and `changed_underneath` (the fault is
 gone, and the environment changed in a way the named change does not

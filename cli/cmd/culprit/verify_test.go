@@ -141,7 +141,8 @@ func (l *loop) diagnose(environment string) model.Investigation {
 
 func (l *loop) verify(id string, changes ...string) (model.Verification, error) {
 	l.t.Helper()
-	arguments := []string{"verify", id, "-f", l.manifest, "--no-plugins", "--format", "json", "--state-dir", l.state}
+	arguments := []string{"verify", id, "-f", l.manifest, "--no-plugins", "--format", "json", "--state-dir", l.state,
+		"--from", "web"}
 	for _, change := range changes {
 		arguments = append(arguments, "--change", change)
 	}
@@ -302,7 +303,12 @@ func TestWhatDiagnoseKeepsIsPrivateAndComplete(t *testing.T) {
 
 func TestVerifyRefusesWhatItCannotUse(t *testing.T) {
 	loop, _ := newLoop(t)
+	diagnosed := loop.diagnose("local").ID
 	for name, arguments := range map[string][]string{
+		"another vantage than the diagnosis's": {"verify", diagnosed, "--from", "api", "--change", "commit:9f2c4e1",
+			"--state-dir", loop.state, "-f", loop.manifest, "--no-plugins"},
+		"no vantage, where the diagnosis had one": {"verify", diagnosed, "--change", "commit:9f2c4e1",
+			"--state-dir", loop.state, "-f", loop.manifest, "--no-plugins"},
 		"an id that is not one":     {"verify", "../../etc", "--state-dir", loop.state, "-f", loop.manifest},
 		"an investigation not kept": {"verify", "inv-0000000000000000", "--state-dir", loop.state, "-f", loop.manifest},
 		"a change of no known kind": {"verify", "inv-0000000000000000", "--change", "restart:web", "--state-dir", loop.state},

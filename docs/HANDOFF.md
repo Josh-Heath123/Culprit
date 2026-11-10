@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **34, part 1 — The loop, in the binary** — status `not started`. Brief in §4. |
+| Current phase | **34, part 1 — The loop, in the binary** — status `in progress`: implemented, every criterion executed and passing locally (the fault library 11/11 under Docker), both audits run and their findings fixed; committed and pushed, pull request open, `/ci` recorded in §5. Q20 and Q21 for review, neither blocking. |
 | Previous phase | **33 — The production agent and the permission model: complete** (three parts), part 3 signed off 2026-11-10 by the architecture session. Part 3 merged via PR #31 (`e125b4b`), every pull-request check green, no open alert. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`; Q19 ruled there. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-34-verify`, cut from `origin/main` = `e125b4b`; its first commit is the Phase 33 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** §3 is empty. |
+| Blocking questions | **None.** Q20 and Q21 are open and do not block (§3). |
 
 ---
 
@@ -70,7 +70,8 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q19 was ruled 2026-11-10: accepted, narrowed to a column grant on `agent_nonces (agent_id, seen_at)`, as Phase 34 part 2's first item (`DIAGNOSTIC_PLAN.md`, end of Phase 33). | | |
+| Q20 | **A fix that is none of image, config key or commit.** The decided change kinds are an image, a config key, or a commit. Three of the fault library's fixes are runtime actions — the partition's firewall rule removed, the injected error rate and latency cleared — so part 1 names them as `commit:<ref>` with a ref derived from the fix's name (`cli/testdata/faultlib/expected.json` says so), because no real commit applied them. A commit explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed: nothing is called verified that the readings do not show. But the record says "commit" for something that was not one. Should part 2 add a fourth kind (an operator's action, described, explaining nothing), or should the library apply those fixes as config changes instead? | 2026-11-10, Phase 34 part 1 | Nothing in part 1. Part 2's change vocabulary, and how the README describes the library's outcomes. |
+| Q21 | **Criterion 3 and a fault the walk cannot see failing.** "For every fault class in the library: inject, diagnose, apply the known fix, verify — `verified`." The latency fault slows every request without failing any, so its diagnosis is partial with no failing reading, and no fix can be *seen* to fix it: its verification is `inconclusive`, with that reason, and the library asserts exactly that. Five classes reach `verified`; the audience fault under narrower grants is `inconclusive` because its probe is still refused. Proposed wording: "for every fault class the walk diagnoses with a failing reading: ... `verified`; a diagnosis with no failing reading: `inconclusive`, saying so." Accept, or should latency be made detectable (a latency budget the walk can fail against) first? | 2026-11-10, Phase 34 part 1 | Nothing in part 1. Whether part 1's criterion 3 is met as written. |
 
 ---
 
@@ -99,7 +100,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
-| 34, part 1 | The loop, in the binary | not started | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — all 17 fields, read with "How Phase 34 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The `Verification` model and its conformance fixture come first. No API, migration or interface. Branch `phase-34-verify`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 34, part 1 | The loop, in the binary | in progress — PR open, `/ci` in §5 | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — all 17 fields, read with "How Phase 34 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The `Verification` model and its conformance fixture come first. No API, migration or interface. Branch `phase-34-verify`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 34, part 2 | Outcomes in the control plane | not started | Criteria written at part 1's review. First item: Q19's column grant. |
 | 35 | Agent surface and the narrator | not started | — |
 
@@ -133,173 +134,157 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        33, part 3 — the operator's surface
-Branch:       phase-33-operator, fast-forwarded to origin/main = fdc6f84 (the
-              licence merge, PR #30). Commits 01f974e..HEAD.
+Phase:        34, part 1 — the loop, in the binary
+Branch:       phase-34-verify, from origin/main = e125b4b; its first commit is
+              the Phase 33 sign-off (5c56ff5). Commits f35e37f..HEAD.
 Run:          2026-11-10, /next.
-Status:       IMPLEMENTED; CI GREEN on PR #31 (/ci below). Every criterion
-              passes, executed — locally, and the CI-only ones in CI. The
-              Kubernetes recipe could not run locally (fetching kind was
-              refused) and ran for the first time in CI: red twice, then green.
+Status:       IMPLEMENTED. Every criterion executed and passing locally, the
+              fault library included (Docker, 11/11); both audits run and
+              their findings fixed. /CI: below. Two questions for review
+              (Q20, Q21), neither blocking.
 
-PRECONDITIONS (checked, not assumed)
-  Licence PR #30 merged (fdc6f84). infra/.env.prod written 10:37 and the
-  quickstart Postgres volume created 10:38 on 2026-11-10, after the part 2
-  sign-off: Malcolm's regeneration. Not read: the file's contents.
+WHAT WAS BUILT (work order 1-5)
+  1 The Verification model (f35e37f), Go (cli/internal/model/verification.go)
+    and Python (shared/culprit_model/verifications.py), with
+    shared/tests/verification_conformance.json written first: 20 accepted
+    cases (every verdict), 33 rejected, 10 "what a change touches". The
+    verdict is a pure function of the record — model.Judge / judge(): the
+    re-runs (two each), the changes named, the captures before and after,
+    the differences. Both refuse a record whose verdict or clause flags the
+    record does not support, so `verified` cannot be built with a clause
+    false — in code, from a file, or (Go) by encoding one.
+  2 `culprit diagnose` captures the environment under its own grants before
+    the walk, and keeps the investigation, the request behind every reading
+    (isolate.Walk.Requests; the counterfactual's under the reference
+    environment) and the capture as a sealed envelope, in the state
+    directory ($CULPRIT_STATE_DIR, else the user's state directory; 0600).
+    With no capture allowed, the rubric's `verified` reason says why
+    ("...because the capture of X recorded nothing (refused: ...)").
+  3 cli/internal/verify and `culprit verify <id> --change ... --from ...`
+    (b0bde12): checks the record covers every reading; refuses a vantage
+    other than the diagnosis's; re-runs every request twice through a
+    Runner (probes under the environment's current grants); captures again;
+    compares before and after with diverge.CompareAll (the engine
+    `culprit diff` uses, the two captures as two scopes); judges. Exit 0
+    verified, 1 any other verdict, 2 could not run. Links no network
+    package: the D8 allowlist is unchanged.
+  4 The fault library (d3ab1af): every fault injected, diagnosed, fixed with
+    its known fix and verified, in its vantage, with the change named; plus
+    four scenarios — wrong fix, regression, change underneath, no change.
+  5 LIMITS ("Verification", eleven entries), PROBES, PERMISSIONS, README,
+    UPGRADING, ARCHITECTURE, CLAUDE.md.
 
-CARRIED IN
-  1 Signature before body (01f974e). The four signed routes that take a body
-    declare none; signed_body()/submitted_body() authenticate over the raw
-    bytes, then parse them. Test first, red before ("POST /agents/me/audit,
-    unsigned: 422 ... JSON decode error"), green after.
-  2 Plain http refused (f76c731). https only; http to localhost, 127/8 or ::1,
-    or with control_plane.allow_plain_http: true, which `culprit agent` and
-    `agent pair` report at every start. Red first (12 cases + the report
-    test). CI's agent end-to-end config sets allow_plain_http (a test's, not a
-    recipe's). internal/agent uses net/netip: the D8 allowlist caught `net`.
-  3 Quickstart under a terminal (ba36bed). `docker compose run -T` on the
-    bootstrap step. Reproduced in a separate worktree (own .env.prod,
-    culprit-qs-333, port 8333) under `script` in WSL, each from a fresh
-    volume: before, the transcript ends at "Password:" and nothing follows for
-    60 s; after, it runs to the end, "created admin user 'admin'", sign-in as
-    that admin 200. CI now runs the quickstart under `script` too. getpass
-    still prints its prompt text as it reads the pipe (LIMITS).
+CRITERIA (part 1)
+  1  conformance fixture holds in Go and Python, incl. a verified
+     with one clause false neither can construct          PASS. Go
+       TestVerification* / TestAVerifiedVerificationCannotBeConstructed...;
+       Python 369 shared tests. Six "verified with its first/second/third
+       clause false" cases; the phase-auditor corrected only verdict and
+       flags on each and each then validates — rejected for the clause.
+  2  re-runs exactly the investigation's probes, count asserted,
+     no stored reading reused                              PASS.
+       TestEveryReadingIsMeasuredAgainTwiceAndNoneIsReused (runs ==
+       2 x readings; fresh runner stamps); TestTheLoopEndToEnd (real
+       command, real server: same ids and order, every run after closed_at);
+       the fault library ("7 readings re-run twice").
+  3  every fault class: inject, diagnose, fix, verify -> verified,
+     in CI                                                  PASS for the
+       five whose diagnosis has a failing reading: auth-audience,
+       network-partition, contract, config, error-rate -> verified. NOT AS
+       WRITTEN for latency: the walk finds no failing reading, so nothing
+       can be seen fixed -> inconclusive, with that reason (Q21).
+       auth-audience-ungranted (the audience class under narrower grants)
+       -> inconclusive: "...was refused: ... config.inspect.values is not
+       granted". In CI: /ci below.
+  4  a wrong fix -> not_resolved                             PASS. Library
+       verify/wrong-fix: a token re-minted for 'inventory-svc': "still
+       failing on both runs: probe.auth.token_shape on the token audience
+       order-service presents to inventory-service (r5, r7)".
+  5  a fix that breaks a passing probe -> regressed           PASS.
+       verify/regressed: contract fixed, payments-service erroring: "these
+       passed before and fail now: probe.http.reachable on payments-service
+       (r2)".
+  6  a config key changed on another component ->
+     changed_underneath                                     PASS.
+       verify/changed-underneath: contract fixed (inventory-service), a key
+       added to order-service: "...where the change to CONTRACT_FAULT in
+       inventory-service's configuration does not explain it:
+       CULPRIT_UNRELATED_FLAG in order-service's configuration (exists)".
+       Also in-process (TestTheLoopEndToEnd). Caveat: under the process
+       adapter only the vantage's own config is captured (LIMITS).
+  7  a flip, no change named, no before -> inconclusive     PASS. Flip:
+       TestTheVerdicts/a_result_that_flips and the fixture (unit level).
+       No change: library verify/no-change-named and in-process. No
+       before: in-process, environment `blind` — the investigation says
+       why, the verification is inconclusive.
+  8  D8 allowlist unchanged; LLM_PROVIDER=none changes nothing PASS.
+       check_test.go untouched; TestTheNetworkBoundaryIsAnAllowlist PASS;
+       `go list -deps ./internal/verify` has no net, net/http, crypto/tls.
+       Nothing in cli/ reads LLM_PROVIDER; the loop test runs with it none.
 
-WHAT WAS BUILT
-  - Settings -> Agents (089270d): every agent, paired or revoked, its last
-    signed request, its reported grants in plain words marked allowed or not;
-    a pairing code shown once; an allowance edited with a diff before Save;
-    revoke after confirmation. GET /agents gains last_request_at (818cfdd):
-    the newest nonce's seen_at; the cleanup keeps each agent's newest nonce;
-    migration e5b8a2d4c6f1 gives api-reader SELECT on agent_nonces (Q19).
-  - The investigations page, for an admin: "Investigate through an agent":
-    agent, environment, symptom, optional vantage; the task's progress; the
-    investigation opens when it lands. Without net.tcp.connect and
-    net.http.outbound allowed it names the missing grant, says where to give
-    it, and starts nothing.
-  - The minimum grant set per class (65494ab), in PERMISSIONS: reachability
-    {net.tcp.connect, net.http.outbound}; schema {db.metadata.read}; auth and
-    audience {config.inspect.values, net.tcp.connect, net.http.outbound};
-    configuration {config.read.names}. Found by running every class with all
-    seven candidate grants and removing each in turn.
-  - deploy/agent/ (bcb3e39): Docker, Compose, Kubernetes, systemd, a README,
-    agent.example.yaml. cli/Dockerfile ships /var/lib/culprit owned by 65532.
-  - docs/SECURITY.md (a76756f): six threats, 55 test references, held by
-    scripts/check_security_doc.py in CI.
-  - A link to the source on every page, VITE_SOURCE_URL (c2f38de).
-  - README, LIMITS, PERMISSIONS, UPGRADING (e5b73f0, 8d440e5).
-
-CRITERIA (part 3)
-  1  401 before the body is parsed, on every agent route    PASS. The test
-       finds signed routes from the real app's dependency tree; the auditor
-       also curl'd all six against a running stack: 401 for not-JSON and
-       wrong-shape bodies, unsigned and forged.
-  2  quickstart under a pty: no prompt, admin from .env.prod;
-     shown failing first                                     PASS locally
-       (above); the auditor reproduced the mechanism independently. In CI:
-       the e2e job now runs it under `script` (see /ci).
-  3  plain http refused but for loopback / allow_plain_http;
-     reported at every start; no recipe sets it              PASS.
-  4  every agents-screen action a browser journey in CI      PASS locally,
-       18/18 against a quickstart of this branch (culprit-qs-334, port 8334):
-       a real agent from the Compose recipe, paired with a code made in the
-       browser, appears; the allowance diff shows exactly the two additions
-       before Save; revoke, then the agent's own log shows its next claim
-       answered 401; a member sees "This page is for admins". Every action is
-       taken from the keyboard. In CI: /ci.
-  5  dashboard -> investigation end to end with a real agent;
-     with no agent holding the grants it explains and starts
-     nothing                                                 PASS locally.
-       The test counts task requests: none while not allowed, one after.
-  6  each class with exactly its documented grants complete;
-     each grant removed partial, and named                   PASS. Reads the
-       table from PERMISSIONS; mutation-checked (an extra grant, and a missing
-       one, each turn it red). Real probes, gate, walk and agent; a fake
-       network, HTTP and database holding the fault.
-  7  Compose is the one CI runs; Kubernetes Ready in kind;
-     systemd verify; no recipe allows plain http            Compose PASS
-       locally (deploy/agent/compose.yaml unchanged, plus a CI overlay adding
-       one host alias). systemd PASS (systemd-analyze verify, systemd 249,
-       WSL). No recipe sets allow_plain_http (test_agent_recipes.py).
-       Kubernetes PASS in CI (run 42805541738): "pod culprit-agent-...:
-       ready=true restarts=0 runAsUser=65532 readOnlyRootFilesystem=true";
-       "kind-agent-78058da0 Ready, non-root, read-only root, last signed
-       request 2026-11-10T11:19:31Z" — so the key Secret, 0600 under fsGroup,
-       was readable by the agent. systemd-analyze verify PASS in CI too.
-  8  every "cannot" names a test that exists                  PASS (55).
-  9  tokens only; four widths; keyboard; screenshots here     PASS locally:
-       check_frontend_tokens over 69 files; atEveryWidth at 375/768/1280/1920
-       with an overflow check, Tab reach and a focus ring; the journeys
-       operated by keyboard. Screenshots: the e2e-screenshots artifact of the
-       /ci run below: settings-agents-*, agents-pairing-code-*,
-       agents-allowance-*, investigate-unavailable-*, investigations-*. Not
-       committed (6.3 MB).
-  10 LLM_PROVIDER=none changes nothing                        PASS.
+  Real comparison seen working in the library: the config fix's
+  verification found one difference (PAYMENTS_PROVIDER_KEY appearing) and
+  explained it by the change named.
 
 GATES (local, Windows, Docker up)
   lint, typecheck, lint-imports, check-schema-drift, check-no-llm-imports,
   check-invariants, check-scan-coverage, check-frontend-tokens,
-  check-security-doc, cli-lint                                PASS
-  just test   api+scripts+shared 1169 / 6 skipped, worker 65, mcp 21,
-              extractors 31 + 22, go test ./...                PASS
-  frontend npm test (19), tsc -b                               PASS
-  check-migration-round-trip                                   PASS
-  culprit check / LLM_PROVIDER=none                            exit 0 / 0
-  just e2e (18/18) and just agent-e2e, against culprit-qs-334  PASS
-  just agent-recipes                                           NOT RUN locally
-                                                               (kind); CI PASS
+  check-security-doc, cli-lint, check_coupled_files --base origin/main PASS
+  go test ./... (16 packages)                                   PASS
+  api+scripts+shared 1233 / 6 skipped, worker 65, mcp 21        PASS
+  culprit check --fail-on=breaks_request_path / LLM_PROVIDER=none exit 0 / 0
+  just fault-library (Docker): 11/11                             PASS
+  Not run locally: e2e, migration round trip (no migration, no api or
+  frontend change) — CI runs both.
 
 AUDITS
-  invariant-auditor: CLEAN, no violation. Risks taken up: the migration now
-    says it reverses d7a3e5f1b9c2, and counts itself correctly; one nonce per
-    agent kept for good is in LIMITS; a failure screenshot can no longer hold
-    a live pairing code. Left as a risk: a partial diagnosis now repeats the
-    refusing probe's reason, already in the hypothesis, so nothing new is
-    exposed.
-  phase-auditor: every local criterion PASS. Fixed: the pairing-code
-    screenshot (now taken after the code is spent); SECURITY.md's one blanket
-    claim split into three tested ones; keyboard operation; the schema class
-    explained. Raised to you: Q19, and the rule-file edit withdrawn.
+  invariant-auditor: ONE VIOLATION, fixed. The Python model accepted a
+    difference whose subject is not a subject URI, and blank ids, where Go
+    refused them; and the two disagreed on an empty subject or ref. Now
+    Python parses the subject and refuses blanks, both read "" as absent,
+    and the fixture has a case for each (the drift would have been caught).
+    Risks taken up: verify now takes --from and refuses another vantage;
+    diagnose keeps files only after the investigation validates; a failure
+    to keep no longer puts a local path into the investigation; PERMISSIONS
+    says what a grant added since diagnosis does. Left as risks, in LIMITS:
+    recorded inputs are re-used as written (same probe, target and
+    environment, checked); Windows ACLs, not 0600, protect the state
+    directory.
+  phase-auditor: every executable criterion PASS locally; NOT YET COMPLETE
+    on the handoff (this report), CI, and criterion 3 for latency (Q21).
+    Fixed: the vantage (its finding 2, the same as the invariant risk);
+    PROBES' wording on refusals (not_resolved and regressed take
+    precedence). Noted for part 2: the agent's walk takes no before and
+    says only "no change has been verified" (LIMITS); the type cannot
+    check that runs post-date the investigation or that `was` matches it —
+    the API must, once it stores verifications; a commit ref is checked
+    for form, not existence (Q20).
 
 DECISIONS TAKEN HERE (for review)
-  - Kubernetes is a Deployment of one replica, Recreate, not field 4's
-    DaemonSet: one key is one identity and one audit chain.
-  - The key Secret is defaultMode 0600; under fsGroup the kubelet makes it
-    0640 root:65532 (LIMITS), the closest Kubernetes allows for a non-root
-    reader. Shown readable in CI: the pod made signed requests.
-  - The dashboard gates on the reachability set only, for any symptom; a walk
-    needing more starts, and ends partial naming the grant (LIMITS).
-  - Partial-diagnosis wording: "could not be established" now carries the
-    probe's reason, so a missing net.http.outbound is named (65494ab). What
-    the walk tests, and in what order, is unchanged.
-  - The agent exits when its control plane is unreachable; the recipes'
-    restart policies bring it back (LIMITS). No retry loop was added.
-  - The Compose journey's agent joins the quickstart's own network, where the
-    demo services are; it reaches the API only through the published
-    address. Part 2's separate-network scenario still runs in agent-e2e.
-  - LIMITS corrected: re-pairing to report a new grant means a new agent id
-    and key; the control plane refuses a second pairing of either.
-
-/CI — PR #31
-  commit   17b5b36aada1c78064d8c913a431cf79f8ffde0f (merge result: origin/main
-           fdc6f84 is an ancestor; `git merge origin/main` changed nothing)
-  run      42805541738  CI/CD, pull_request, success; CodeQL 42805534032 success
-  jobs     lint, typecheck, test, cli, migration-round-trip, self-check,
-           kind-capture, fault-library, e2e, build x5: success; publish and
-           deploy skipped
-  checks   gh pr checks 31: 20 pass, 2 skipping, 0 fail (CodeQL included)
-  alerts   none open (pr=31, refs/pull/31/merge, refs/pull/31/head)
-  shots    artifact e2e-screenshots (id 13757823643) of run 42805541738
-  Earlier runs on this PR, red in the new recipe step only:
-    42802523521 (69f192f) rollout timeout, no diagnostics -> 8323e54 adds them;
-    42804120023 (8323e54) ImagePullBackOff: `kind load docker-image` left the
-    image off the node -> 17b5b36 loads it through an archive, checks it with
-    crictl, and sets imagePullPolicy: Never in CI's patch.
+  - The verdict lives in the model: Judge is the rules, and both languages
+    refuse any other verdict. verify computes nothing it could disagree on.
+  - Re-runs carry their own environment: a counterfactual reading is re-run
+    in its reference environment and judged with the rest; only the
+    investigation's environment is captured before and after (LIMITS).
+  - Field 7's `reran [reading_id]` is a list of re-runs (id, was, probe,
+    target, environment, both readings), so a verification can be checked
+    from itself; `changes_explained` is the third clause's flag beside
+    failing_now_passes and no_regressions.
+  - What a change explains: a config key, that key; an image, that
+    component's image and packages (not config keys its ENV sets); a
+    commit, nothing a capture records.
+  - The record of each reading's request (inputs included) and the capture
+    live in a local state directory, not in the investigation: adding a
+    field to the investigation would be refused by POST /investigations'
+    model, and part 1 has no API change.
+  - A capture with no facts is no record of before: comparing two empty
+    captures would call every change "nothing changed".
+  - Field 10's `verify:` (reference environment, regression tolerance) not
+    built: a regression tolerance contradicts "every reading that passed
+    still passes", and the reference is the diagnosis's own.
 
 LEFT OPEN
-  - Q19.
-  - A local throwaway stack, culprit-qs-334 (port 8334), and its worktree in
-    the session scratchpad: `docker compose -p culprit-qs-334 ... down -v`.
+  - Q20 (change kinds for runtime fixes), Q21 (criterion 3 and latency).
 ```
 
 ## §6. Escalate to the architecture session when

@@ -202,7 +202,9 @@ func keepForVerification(stateDir string, investigation *model.Investigation, re
 		err = writePrivate(filepath.Join(dir, "investigation.json"), investigation)
 	}
 	if err != nil {
-		setVerified("not verifiable: the investigation could not be kept for `culprit verify` (" + err.Error() + ")")
+		// The cause goes to stderr, not into the investigation: it can name
+		// local paths, and the investigation is printed and uploaded.
+		setVerified("not verifiable: the investigation could not be kept in the state directory for `culprit verify`")
 		return err
 	}
 	return nil
@@ -214,6 +216,7 @@ func newVerifyCommand() *cobra.Command {
 	var (
 		manifestPath  string
 		stateDir      string
+		from          string
 		changes       []string
 		format        string
 		outputPath    string
@@ -239,8 +242,10 @@ Verdicts: verified (what failed passes on both runs, what passed still
 passes, and every change in the environment is explained by the change
 named), not_resolved, regressed, changed_underneath, inconclusive.
 
-Run it from where the diagnosis ran: probes see what their vantage sees.
-Nothing is changed and nothing is uploaded.
+Run it from where the diagnosis ran, and say so with --from as diagnose
+did: probes see what their vantage sees, and a verification run anywhere
+else is refused rather than judged. Nothing is changed and nothing is
+uploaded.
 
 Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 		Args: cobra.ExactArgs(1),
@@ -269,6 +274,13 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 			}
 			if err := record.Check(investigation); err != nil {
 				return err
+			}
+			// The vantage is the diagnosis's: an edge, a token or a process
+			// environment measured from anywhere else is a different
+			// measurement, and could pass where nothing was fixed.
+			if from != record.Vantage {
+				return fmt.Errorf("%s was diagnosed from %s; verify it from there (--from %s), not from %s",
+					investigation.ID, vantageWords(record.Vantage), record.Vantage, vantageWords(from))
 			}
 
 			resolved, err := resolveManifestPath(manifestPath)
@@ -335,6 +347,7 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 	command.SilenceUsage = true
 	command.Flags().StringVarP(&manifestPath, "file", "f", "", "path to culprit.yaml (default: search upward from the working directory)")
 	command.Flags().StringVar(&stateDir, "state-dir", defaultStateDir(), "where `culprit diagnose` kept the investigation ($CULPRIT_STATE_DIR)")
+	command.Flags().StringVar(&from, "from", "", "the component this binary runs inside — the same as the diagnosis's --from")
 	command.Flags().StringArrayVar(&changes, "change", nil, "what was applied: image:<component>, config:<component>/<key> or commit:<sha> (repeatable)")
 	command.Flags().StringVar(&format, "format", "text", "text|json")
 	command.Flags().StringVarP(&outputPath, "output", "o", "", "write to this file instead of stdout")
@@ -343,6 +356,13 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 	command.Flags().DurationVar(&pluginTimeout, "plugin-timeout", 90*time.Second, "how long any one extractor plugin may run")
 	command.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "per-operation network timeout")
 	return command
+}
+
+func vantageWords(component string) string {
+	if component == "" {
+		return "outside every component"
+	}
+	return "inside " + component
 }
 
 // parseChanges reads --change values into changes, with subjects built,

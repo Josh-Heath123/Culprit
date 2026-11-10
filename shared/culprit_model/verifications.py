@@ -28,8 +28,16 @@ theatre: caching, intermittency and an unrelated change all produce a pass.
 import re
 from datetime import datetime
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from culprit_model.readings import Reading, Verdict
 from culprit_model.subjects import SubjectError, SubjectKind
@@ -59,6 +67,9 @@ class ChangeKind(StrEnum):
 
 _COMMIT_REF = re.compile(r"^[0-9a-f]{7,40}$")
 
+#: A name that is not blank: Go trims before it checks, and so does this.
+Named = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
 
 def _parsed(subject: str) -> tuple[SubjectKind, dict[str, str]] | None:
     try:
@@ -82,6 +93,13 @@ class Change(BaseModel):
     subject: str | None = None
     #: a commit id, 7 to 40 lowercase hex characters.
     ref: str | None = None
+
+    @field_validator("subject", "ref", mode="before")
+    @classmethod
+    def _empty_is_absent(cls, value: object) -> object:
+        # Go writes an absent subject or ref as nothing, and reads "" as
+        # absent: the two models must accept the same records.
+        return None if value == "" else value
 
     @model_validator(mode="after")
     def _names_one_thing_of_its_kind(self) -> "Change":
@@ -135,12 +153,12 @@ class Rerun(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    reading_id: str = Field(min_length=1)
+    reading_id: Named
     #: the verdict the investigation recorded.
     was: Verdict
-    probe_id: str = Field(min_length=1)
+    probe_id: Named
     target: str
-    environment: str = Field(min_length=1)
+    environment: Named
     runs: tuple[Reading, Reading]
 
     @model_validator(mode="after")
@@ -174,10 +192,19 @@ class Difference(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     subject: str
-    predicate: str = Field(min_length=1)
+    predicate: Named
     #: the label of the first named change that touches the subject, or
     #: None when none does.
     explained_by: str | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def _subject_is_a_subject(cls, value: str) -> str:
+        try:
+            parse_subject(value)
+        except SubjectError as exc:
+            raise ValueError(f"difference subject {value!r} is not a subject URI: {exc}") from exc
+        return value
 
 
 class Judgement(BaseModel):
@@ -237,9 +264,9 @@ class Verification(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    id: str = Field(min_length=1)
-    investigation_id: str = Field(min_length=1)
-    environment: str = Field(min_length=1)
+    id: Named
+    investigation_id: Named
+    environment: Named
     applied_change: tuple[Change, ...] = ()
     reran: tuple[Rerun, ...] = Field(min_length=1)
     #: the capture id of the environment as `culprit diagnose` found it,

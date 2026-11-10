@@ -322,7 +322,12 @@ environment already has, in two places:
 - **`culprit verify` runs every probe the investigation ran again,** under
   the grants `culprit.yaml` gives that environment *now*. A grant removed
   since the diagnosis makes its probe `refused`, and the verdict
-  `inconclusive`; nothing is run that the walk did not run.
+  `inconclusive`. A grant *added* since lets a probe that was refused at
+  diagnosis really run now — and it changes what the capture can see, so
+  the comparison may report a difference that is the grant, not the
+  environment (`changed_underneath`: cautious, never a false `verified`).
+  No probe is run that the walk did not run: the same probe, target and
+  environment, with the inputs it recorded.
 
 What diagnose keeps — the investigation, the request behind each reading,
 and the capture — is written to the state directory (`--state-dir`,

@@ -1886,6 +1886,107 @@
       }
     },
     {
+      "why": "verified: an empty subject on a commit, and an empty ref on a config change, are absent",
+      "verification": {
+        "id": "ver-0123456789abcdef",
+        "investigation_id": "inv-0123456789abcdef",
+        "environment": "faults-order",
+        "applied_change": [
+          {
+            "kind": "commit",
+            "ref": "9f2c4e1",
+            "subject": ""
+          },
+          {
+            "kind": "config",
+            "subject": "config:inventory-service/CONTRACT_FAULT",
+            "ref": ""
+          }
+        ],
+        "reran": [
+          {
+            "reading_id": "r2",
+            "was": "pass",
+            "probe_id": "probe.http.reachable",
+            "target": "component:payments-service",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r6",
+            "was": "fail",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          }
+        ],
+        "before_capture": "cap-before",
+        "after_capture": "cap-after",
+        "differences": [],
+        "failing_now_passes": true,
+        "no_regressions": true,
+        "changes_explained": true,
+        "verdict": "verified",
+        "reason": "every reading that failed passes on two runs, every reading that passed still passes, and the environment did not change",
+        "verified_at": "2026-11-10T12:00:02Z"
+      }
+    },
+    {
       "why": "verified: a reading refused at diagnosis now passes on both runs",
       "verification": {
         "id": "ver-0123456789abcdef",
@@ -4623,6 +4724,398 @@
         "reran": [
           {
             "reading_id": "r2",
+            "was": "pass",
+            "probe_id": "probe.http.reachable",
+            "target": "component:payments-service",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r6",
+            "was": "fail",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          }
+        ],
+        "before_capture": "cap-before",
+        "after_capture": "cap-after",
+        "differences": [],
+        "failing_now_passes": true,
+        "no_regressions": true,
+        "changes_explained": true,
+        "verdict": "verified",
+        "reason": "every reading that failed passes on two runs, every reading that passed still passes, and the environment did not change",
+        "verified_at": "2026-11-10T12:00:02Z"
+      }
+    },
+    {
+      "why": "an environment that is only blank",
+      "verification": {
+        "id": "ver-0123456789abcdef",
+        "investigation_id": "inv-0123456789abcdef",
+        "environment": "   ",
+        "applied_change": [
+          {
+            "kind": "config",
+            "subject": "config:inventory-service/CONTRACT_FAULT"
+          }
+        ],
+        "reran": [
+          {
+            "reading_id": "r2",
+            "was": "pass",
+            "probe_id": "probe.http.reachable",
+            "target": "component:payments-service",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r6",
+            "was": "fail",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          }
+        ],
+        "before_capture": "cap-before",
+        "after_capture": "cap-after",
+        "differences": [],
+        "failing_now_passes": true,
+        "no_regressions": true,
+        "changes_explained": true,
+        "verdict": "verified",
+        "reason": "every reading that failed passes on two runs, every reading that passed still passes, and the environment did not change",
+        "verified_at": "2026-11-10T12:00:02Z"
+      }
+    },
+    {
+      "why": "a difference whose subject is not a subject URI",
+      "verification": {
+        "id": "ver-0123456789abcdef",
+        "investigation_id": "inv-0123456789abcdef",
+        "environment": "faults-order",
+        "applied_change": [
+          {
+            "kind": "config",
+            "subject": "config:inventory-service/CONTRACT_FAULT"
+          }
+        ],
+        "reran": [
+          {
+            "reading_id": "r2",
+            "was": "pass",
+            "probe_id": "probe.http.reachable",
+            "target": "component:payments-service",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r6",
+            "was": "fail",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          }
+        ],
+        "before_capture": "cap-before",
+        "after_capture": "cap-after",
+        "differences": [
+          {
+            "subject": "not a subject",
+            "predicate": "exists",
+            "explained_by": null
+          }
+        ],
+        "failing_now_passes": true,
+        "no_regressions": true,
+        "changes_explained": false,
+        "verdict": "changed_underneath",
+        "reason": "every reading that failed passes on two runs, every reading that passed still passes, and the environment did not change",
+        "verified_at": "2026-11-10T12:00:02Z"
+      }
+    },
+    {
+      "why": "a difference that names no predicate",
+      "verification": {
+        "id": "ver-0123456789abcdef",
+        "investigation_id": "inv-0123456789abcdef",
+        "environment": "faults-order",
+        "applied_change": [
+          {
+            "kind": "config",
+            "subject": "config:inventory-service/CONTRACT_FAULT"
+          }
+        ],
+        "reran": [
+          {
+            "reading_id": "r2",
+            "was": "pass",
+            "probe_id": "probe.http.reachable",
+            "target": "component:payments-service",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.reachable",
+                "probe_version": 1,
+                "target": "component:payments-service",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          },
+          {
+            "reading_id": "r6",
+            "was": "fail",
+            "probe_id": "probe.http.route_conformance",
+            "target": "http:inventory-service/GET /stock",
+            "environment": "faults-order",
+            "runs": [
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:00Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              },
+              {
+                "probe_id": "probe.http.route_conformance",
+                "probe_version": 1,
+                "target": "http:inventory-service/GET /stock",
+                "environment": "faults-order",
+                "verdict": "pass",
+                "measured": {},
+                "taken_at": "2026-11-10T12:00:01Z",
+                "agent_id": "fault-library",
+                "grants_used": [
+                  "net.http.outbound"
+                ]
+              }
+            ]
+          }
+        ],
+        "before_capture": "cap-before",
+        "after_capture": "cap-after",
+        "differences": [
+          {
+            "subject": "config:order-service/FEATURE_FLAG",
+            "predicate": " ",
+            "explained_by": null
+          }
+        ],
+        "failing_now_passes": true,
+        "no_regressions": true,
+        "changes_explained": false,
+        "verdict": "changed_underneath",
+        "reason": "every reading that failed passes on two runs, every reading that passed still passes, and the environment did not change",
+        "verified_at": "2026-11-10T12:00:02Z"
+      }
+    },
+    {
+      "why": "a re-run whose reading id is blank",
+      "verification": {
+        "id": "ver-0123456789abcdef",
+        "investigation_id": "inv-0123456789abcdef",
+        "environment": "faults-order",
+        "applied_change": [
+          {
+            "kind": "config",
+            "subject": "config:inventory-service/CONTRACT_FAULT"
+          }
+        ],
+        "reran": [
+          {
+            "reading_id": " ",
             "was": "pass",
             "probe_id": "probe.http.reachable",
             "target": "component:payments-service",

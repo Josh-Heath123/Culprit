@@ -2021,10 +2021,12 @@ check: each verification is kept, and a later one can disagree.
 ### Verify must run where diagnose ran
 
 The record names the component the walk ran inside (`--from`), and every
-probe is re-run with the inputs the walk used. `culprit verify` cannot tell
-where it is running: run from somewhere else, an edge or a token probe
-measures what *that* place sees. Run it in the same place, as the fault
-library does. A change to `culprit.yaml`'s endpoints after the diagnosis
+probe is re-run with the inputs the walk used. `culprit verify` takes
+`--from` too and refuses to run unless it names the same component — but
+it cannot see where it is really running, only what it is told: run from
+somewhere else and told otherwise, an edge or a token probe measures what
+*that* place sees, which could pass where nothing was fixed. Run it in the
+same place, as the fault library does. A change to `culprit.yaml`'s endpoints after the diagnosis
 does not move the re-run either: the recorded inputs are used, not the
 manifest's current ones. The manifest's current *grants* are used: a grant
 removed since makes its probe `refused` and the verdict `inconclusive`.
@@ -2038,6 +2040,20 @@ an agent ran, or one only in the control plane has no record there, and
 `culprit verify` refuses it. An investigation diagnosed where the grants
 allow no capture *is* kept, says so in its `verified` criterion, and can
 be verified `inconclusive` at best.
+
+### A reference environment is re-measured, not compared
+
+A counterfactual reading taken in a reference environment (`--reference`)
+is re-run there, and judged with the rest, but only the investigation's own
+environment is captured before and after. A change in the reference
+environment is seen only if it changes that reading.
+
+### An agent's investigation does not say it has no record of before
+
+`culprit agent` runs the walk without a capture and keeps nothing for
+`culprit verify`; its investigations' `verified` criterion says only that
+no change has been verified, not that verification is impossible. Part 2
+makes verification an agent task.
 
 ### A diagnosis with no failing reading cannot be verified
 

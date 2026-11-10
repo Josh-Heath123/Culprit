@@ -145,11 +145,16 @@ command could not run.`,
 			}
 			closed := time.Now().UTC()
 			investigation.ID, investigation.OpenedAt, investigation.ClosedAt = newInvestigationID(), opened, &closed
+			if err := investigation.Validate(); err != nil {
+				return fmt.Errorf("the walk produced an investigation the model rejects: %w", err)
+			}
+			// Kept only once it validates; the verified reason it then
+			// carries is one more sentence, checked again below.
 			if err := keepForVerification(stateDir, &investigation, walk.Requests(), from, before, absent); err != nil {
 				fmt.Fprintf(command.ErrOrStderr(), "culprit: the investigation was not kept for verification: %v\n", err)
 			}
 			if err := investigation.Validate(); err != nil {
-				return fmt.Errorf("the walk produced an investigation the model rejects: %w", err)
+				return fmt.Errorf("the investigation does not validate once kept: %w", err)
 			}
 
 			if err := writeInvestigation(command, format, outputPath, investigation); err != nil {

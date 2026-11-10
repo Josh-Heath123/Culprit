@@ -595,7 +595,7 @@ func (s *faultStack) verify(fault faultExpectation, inv model.Investigation, sta
 
 	arguments := []string{"exec", container, "/tmp/walk/culprit", "verify", inv.ID,
 		"-f", "/tmp/walk/culprit.yaml", "--no-plugins", "--format", "json", "--agent-id", "fault-library",
-		"--state-dir", containerState}
+		"--state-dir", containerState, "--from", fault.Vantage}
 	for _, change := range changes {
 		arguments = append(arguments, "--change", change)
 	}
