@@ -2688,7 +2688,13 @@ as its own pull request, before part 3 — not inside a phase.
    and Malcolm has regenerated the local `infra/.env.prod` and recreated the
    quickstart volume.
 1. **Carried in, first:** the signature checked before the body is parsed;
-   plain `http` refused as above.
+   plain `http` refused as above; and the quickstart's admin step, which
+   prompts for a password when a person runs it from a terminal (found by
+   Malcolm, 2026-11-10). `docker compose run` gives the bootstrap container a
+   terminal whenever the caller has one, and `create_user`'s `getpass` then
+   reads that terminal instead of the piped password. Every automated run had
+   no terminal, so none saw it. Reproduce it first under a pseudo-terminal
+   (`script`), then fix it (`run -T`).
 2. **The agents screen** (admin only): every agent with its status, when it
    last made a request, the grants it reports and its allowance; create a
    pairing code, shown once; edit an allowance, with the change shown as a
@@ -2712,6 +2718,8 @@ as its own pull request, before part 3 — not inside a phase.
 **Acceptance criteria (part 3).**
 - On every agent route, a request that is unsigned or badly signed is refused
   401 before its body is parsed — a malformed body included.
+- `just quickstart`, run under a pseudo-terminal, completes with no prompt
+  and creates the admin from `infra/.env.prod` — shown failing before the fix.
 - The agent refuses a plain-`http` control plane except to a loopback address
   or with `allow_plain_http`, which it reports at every start; no recipe sets
   it.
