@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Culprit intent extractor for Python projects — introspects FastAPI/Flask/Django route tables, SQLAlchemy metadata, Alembic revisions and config-key reads, and emits Facts on stdout (docs/EXTRACTOR_PROTOCOL.md)."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "Apache-2.0"
 # culprit-shared, and deliberately nothing else.
 #
 # docs/DIAGNOSTIC_PLAN.md Phase 28 field 11 says "stdlib plus optional

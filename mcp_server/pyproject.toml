@@ -3,6 +3,7 @@ name = "culprit-mcp-server"
 version = "0.1.0"
 description = "Local stdio MCP server exposing Culprit's engineering memory (Phase 21-23) as read-only tools for a coding agent (Phase 24, docs/AI_NATIVE_PLAN.md)"
 requires-python = ">=3.12"
+license = "AGPL-3.0-only"
 dependencies = [
     # Pinned below 2.0 deliberately: mcp 2.x renames FastMCP -> MCPServer
     # and restructures mcp.server.fastmcp entirely (verified directly

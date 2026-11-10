@@ -46,3 +46,9 @@ seen. When that happens you get fewer facts, never wrong ones.
 
 **It never fails your build.** Anything it cannot read becomes a
 `skipped` entry with a reason, and it exits zero.
+
+## Licence
+
+Apache License 2.0 (`Apache-2.0`) — see [`LICENSE`](LICENSE). The rest of
+Culprit is AGPL-3.0-only; this extractor is not, so it can run inside your
+project without the AGPL. [`LICENSING.md`](../../LICENSING.md) has the full map.

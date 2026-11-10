@@ -3,6 +3,7 @@ name = "signalstack-worker"
 version = "0.1.0"
 description = "SignalStack background worker (arq)"
 requires-python = ">=3.12"
+license = "AGPL-3.0-only"
 dependencies = [
     "arq>=0.26",
     "redis>=5.1",

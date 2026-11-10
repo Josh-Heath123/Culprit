@@ -55,3 +55,9 @@ echo '{"protocol":1,"root":"'"$PWD"'","want":["http_routes"],"environment":null,
 Extraction **imports your application**, which runs your code — the same
 trust level as running your own test suite. Pass `--no-import` to skip
 that and get static extraction only. See `docs/EXTRACTOR_PROTOCOL.md`.
+
+## Licence
+
+Apache License 2.0 (`Apache-2.0`) — see [`LICENSE`](LICENSE). The rest of
+Culprit is AGPL-3.0-only; this extractor is not, so it can run inside your
+project without the AGPL. [`LICENSING.md`](../../LICENSING.md) has the full map.

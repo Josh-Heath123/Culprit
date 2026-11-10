@@ -3,6 +3,7 @@ name = "culprit-shared"
 version = "0.1.0"
 description = "Pydantic contracts and the three-plane core model shared between api and worker — the single source of truth for wire formats both sides must agree on (e.g. the raw_events row shape written by api/app/ingest_gateway and read by worker/app/consumer.py), instead of each side hand-reimplementing the other's schema."
 requires-python = ">=3.12"
+license = "Apache-2.0"
 dependencies = [
     "pydantic>=2.9",
 ]
