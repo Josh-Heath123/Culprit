@@ -2,7 +2,7 @@
   "name": "culprit-extract-node",
   "version": "0.1.0",
   "description": "Culprit intent extractor for JavaScript/TypeScript projects — Express/Fastify/Koa route definitions and HTTP client call sites, emitted as Facts on stdout (docs/EXTRACTOR_PROTOCOL.md).",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "culprit-extract-node": "./src/cli.js"
