@@ -122,8 +122,13 @@ func newInContainerAgent(t *testing.T, stack *faultStack, base, admin, plane, id
 		stack.docker(nil, "cp", manifest, container+":"+dir+"/culprit.yaml")
 	}
 	config := filepath.Join(t.TempDir(), "agent.yaml")
+	// allow_plain_http: CI's quickstart serves plain http, and the agent
+	// reaches it as host.docker.internal, which is not loopback. This test's
+	// configuration is not a shipped recipe; no recipe sets it (Phase 33
+	// part 3, deploy/agent/).
 	text := fmt.Sprintf("version: 1\nagent_id: %s\nmanifest: ./culprit.yaml\nkey: ./agent.key\n"+
-		"control_plane:\n  url: %s\nenvironments:\n  faults-order:\n    grants:\n%s", agent.id, plane, grants)
+		"control_plane:\n  url: %s\n  allow_plain_http: true\nenvironments:\n  faults-order:\n    grants:\n%s",
+		agent.id, plane, grants)
 	if err := os.WriteFile(config, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}

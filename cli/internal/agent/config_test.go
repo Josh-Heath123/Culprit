@@ -128,3 +128,54 @@ func TestAYAMLSyntaxErrorNamesItsLineButNotItsText(t *testing.T) {
 		t.Errorf("the error quotes the file: %v", err)
 	}
 }
+
+// Phase 33 part 3, carried in: a control plane is reached over https. Plain
+// http is refused, naming the line, unless the host is a loopback address
+// or the configuration sets allow_plain_http — which the agent then
+// reports at every start (cmd/culprit).
+func TestPlainHTTPIsRefusedExceptToLoopbackOrWithAllowPlainHTTP(t *testing.T) {
+	const key = "key: ./agent.key\n"
+	cases := []struct {
+		name, controlPlane string
+		wantErr            string // "" means it parses
+		wantAllow          bool
+	}{
+		{"https", "control_plane:\n  url: https://culprit.example.com/api\n", "", false},
+		{"plain http to a remote host", "control_plane:\n  url: http://culprit.example.com/api\n", "allow_plain_http", false},
+		{"plain http to an address that only starts like loopback", "control_plane:\n  url: http://127.0.0.1.example.com/api\n", "allow_plain_http", false},
+		{"plain http to a name that only starts like localhost", "control_plane:\n  url: http://localhost.example.com/api\n", "allow_plain_http", false},
+		{"plain http to 127.0.0.1", "control_plane:\n  url: http://127.0.0.1:8080/api\n", "", false},
+		{"plain http to another 127/8 address", "control_plane:\n  url: http://127.0.0.2/api\n", "", false},
+		{"plain http to localhost", "control_plane:\n  url: http://localhost/api\n", "", false},
+		{"plain http to ::1", "control_plane:\n  url: http://[::1]:8080/api\n", "", false},
+		{"plain http, explicitly allowed", "control_plane:\n  url: http://host.docker.internal/api\n  allow_plain_http: true\n", "", true},
+		{"allow_plain_http false is still a refusal", "control_plane:\n  url: http://host.docker.internal/api\n  allow_plain_http: false\n", "allow_plain_http", false},
+		{"allow_plain_http must be a boolean", "control_plane:\n  url: http://host.docker.internal/api\n  allow_plain_http: yes please\n", "true or false", false},
+		{"allow_plain_http on https is recorded but changes nothing", "control_plane:\n  url: https://culprit.example.com/api\n  allow_plain_http: true\n", "", true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			text := validConfig + testCase.controlPlane + key
+			config, err := ParseConfig("/etc/culprit/agent.yaml", []byte(text))
+			if testCase.wantErr == "" {
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				if config.AllowPlainHTTP != testCase.wantAllow {
+					t.Errorf("AllowPlainHTTP = %v, want %v", config.AllowPlainHTTP, testCase.wantAllow)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("accepted %q", testCase.controlPlane)
+			}
+			var configErr *ConfigError
+			if !errors.As(err, &configErr) || configErr.Line != 12 {
+				t.Errorf("error does not name line 12, the control_plane block: %v", err)
+			}
+			if !strings.Contains(err.Error(), testCase.wantErr) {
+				t.Errorf("error %q does not mention %q", err, testCase.wantErr)
+			}
+		})
+	}
+}
