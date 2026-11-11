@@ -151,6 +151,31 @@ func TestTheFaultLibrary(t *testing.T) {
 			results.Scenarios = append(results.Scenarios, resultOf(scenario.Name, inv, verification))
 		})
 	}
+	// Phase 35 part 1: the audience fault's loop again, through `culprit
+	// mcp` — the real binary, in the vantage container, driven over its
+	// stdin and stdout by a scripted MCP client as a coding agent drives
+	// it: culprit_diagnose, the fix applied, culprit_verify. The right fix
+	// is verified; the wrong one is not_resolved. Not results the README
+	// counts: the faults above are.
+	for _, loop := range []struct{ name, apply, verdict, reason string }{
+		{name: "auth-audience", verdict: "verified"},
+		{name: "wrong-fix", apply: "remint-wrong-audience", verdict: "not_resolved", reason: "probe.auth.token_shape"},
+	} {
+		t.Run("mcp/"+loop.name, func(t *testing.T) {
+			stack.t = t
+			fault := byName["auth-audience"]
+			inv, restore := stack.injectAndWalk(library.Symptom, fault, stack.diagnoseThroughMCP, false)
+			defer restore()
+			state := stack.keepState(fault.Vantage)
+			if loop.apply == "" {
+				stack.applyFix(fault.Name, restore)
+			} else {
+				stack.applyScenario(loop.apply)
+			}
+			verification := stack.verifyThroughMCP(fault, inv, state, fault.Fix.Change)
+			stack.checkVerification(verification, inv, loop.verdict, loop.reason)
+		})
+	}
 	// Phase 34 part 2: the results the README's number is rendered from —
 	// only when every case passed, so a failed run never writes them.
 	if path := os.Getenv("CULPRIT_FAULT_LIBRARY_RESULTS"); path != "" && !t.Failed() {
@@ -198,6 +223,15 @@ func resultOf(name string, inv model.Investigation, verification model.Verificat
 // returns the investigation and what undoes the fault, which may be
 // called more than once.
 func (stack *faultStack) injectAndDiagnose(symptom string, fault faultExpectation) (model.Investigation, func()) {
+	stack.t.Helper()
+	return stack.injectAndWalk(symptom, fault, stack.diagnose, true)
+}
+
+// injectAndWalk is injectAndDiagnose with the walk named: `culprit
+// diagnose`, or culprit_diagnose through `culprit mcp` (Phase 35).
+func (stack *faultStack) injectAndWalk(symptom string, fault faultExpectation,
+	walk func(string, faultExpectation) model.Investigation, record bool,
+) (model.Investigation, func()) {
 	t := stack.t
 	t.Helper()
 	stack.healthy()
@@ -218,12 +252,12 @@ func (stack *faultStack) injectAndDiagnose(symptom string, fault faultExpectatio
 		t.Fatalf("POST /orders under the fault answered %d; the fault is not real", status)
 	}
 
-	inv := stack.diagnose(symptom, fault)
+	inv := walk(symptom, fault)
 	// CULPRIT_FAULT_LIBRARY_RECORD=<dir> keeps each real
 	// investigation — the API's round-trip test posts the audience
 	// one (api/tests/data/), so it is tested on what the walk wrote,
 	// not on something written by hand to look like it.
-	if dir := os.Getenv("CULPRIT_FAULT_LIBRARY_RECORD"); dir != "" {
+	if dir := os.Getenv("CULPRIT_FAULT_LIBRARY_RECORD"); dir != "" && record {
 		encoded, _ := json.MarshalIndent(inv, "", "  ")
 		_ = os.WriteFile(filepath.Join(dir, fault.Name+".json"), append(encoded, '\n'), 0o644)
 	}
@@ -635,13 +669,7 @@ func (s *faultStack) applyScenario(apply string) {
 // `culprit verify` there with the changes named.
 func (s *faultStack) verify(fault faultExpectation, inv model.Investigation, state string, changes []string) model.Verification {
 	s.t.Helper()
-	container := s.container(fault.Vantage)
-	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
-	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
-	s.docker(nil, "cp", state, container+":"+containerState)
-	owner := strings.TrimSpace(s.docker(nil, "exec", container, "sh", "-c", "echo $(id -u):$(id -g)"))
-	s.docker(nil, "exec", "-u", "0", container, "chown", "-R", owner, containerState)
-	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
+	container := s.restoreForVerify(fault, state)
 
 	arguments := []string{"exec", container, "/tmp/walk/culprit", "verify", inv.ID,
 		"-f", "/tmp/walk/culprit.yaml", "--no-plugins", "--format", "json", "--agent-id", "fault-library",
@@ -669,6 +697,97 @@ func (s *faultStack) verify(fault faultExpectation, inv model.Investigation, sta
 		}
 	}
 	return verification
+}
+
+// restoreForVerify puts the binary and the kept state back in the vantage
+// container — owned by the container's own user, as diagnose left them —
+// and returns the container.
+func (s *faultStack) restoreForVerify(fault faultExpectation, state string) string {
+	s.t.Helper()
+	container := s.container(fault.Vantage)
+	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
+	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
+	s.docker(nil, "cp", state, container+":"+containerState)
+	owner := strings.TrimSpace(s.docker(nil, "exec", container, "sh", "-c", "echo $(id -u):$(id -g)"))
+	s.docker(nil, "exec", "-u", "0", container, "chown", "-R", owner, containerState)
+	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
+	return container
+}
+
+// ---- the loop through `culprit mcp` (Phase 35) -----------------------------------
+
+// mcpInContainer starts `culprit mcp` in the container and returns a
+// scripted client on its stdin and stdout. The session ends with the test,
+// or when the container is recreated by a fix: each side of the fix is
+// its own session, and the state directory carries the investigation
+// across, as it does for the commands.
+func (s *faultStack) mcpInContainer(container, vantage string) *mcpClient {
+	s.t.Helper()
+	command := exec.Command("docker", "exec", "-i", container, "/tmp/walk/culprit", "mcp",
+		"-f", "/tmp/walk/culprit.yaml", "--from", vantage, "--no-plugins", "--agent-id", "fault-library",
+		"--state-dir", containerState)
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Start(); err != nil {
+		s.t.Fatal(err)
+	}
+	t := s.t
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		if err := command.Wait(); err != nil {
+			t.Logf("culprit mcp in %s: %v\n%s", container, err, stderr.String())
+		}
+	})
+	return newMCPClient(t, stdin, stdout)
+}
+
+// diagnoseThroughMCP is diagnose, as culprit_diagnose.
+func (s *faultStack) diagnoseThroughMCP(symptom string, fault faultExpectation) model.Investigation {
+	s.t.Helper()
+	container := s.container(fault.Vantage)
+	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
+	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
+	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
+	client := s.mcpInContainer(container, fault.Vantage)
+	result := client.call("culprit_diagnose", map[string]any{"symptom": symptom, "environment": fault.Environment})
+	s.noSecretIn("culprit_diagnose", result.Structured)
+	if result.IsError {
+		s.t.Fatalf("culprit_diagnose: %s", result.Structured)
+	}
+	got := structured[mcpDiagnosis](s.t, result)
+	if got.Verify.Tool != "culprit_verify" || got.Verify.Arguments["investigation_id"] != got.Investigation.ID {
+		s.t.Errorf("culprit_diagnose does not say how to verify: %+v", got.Verify)
+	}
+	return got.Investigation
+}
+
+// verifyThroughMCP is verify, as culprit_verify, in a new session.
+func (s *faultStack) verifyThroughMCP(fault faultExpectation, inv model.Investigation, state string, changes []string) model.Verification {
+	s.t.Helper()
+	container := s.restoreForVerify(fault, state)
+	client := s.mcpInContainer(container, fault.Vantage)
+	result := client.call("culprit_verify", map[string]any{"investigation_id": inv.ID, "changes": changes})
+	s.noSecretIn("culprit_verify", result.Structured)
+	if result.IsError {
+		s.t.Fatalf("culprit_verify: %s", result.Structured)
+	}
+	return structured[model.Verification](s.t, result)
+}
+
+func (s *faultStack) noSecretIn(tool string, answer []byte) {
+	for _, secret := range s.secrets {
+		if strings.Contains(string(answer), secret) {
+			s.t.Errorf("a token or its secret appears in what %s answered", tool)
+		}
+	}
 }
 
 // checkVerification: the verdict wanted, and the full reading set measured

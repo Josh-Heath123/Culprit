@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -91,109 +92,18 @@ Examples:
 					target, err)
 			}
 
-			resolved, err := resolveManifestPath(manifestPath)
-			if err != nil {
-				return err
-			}
-			manifest, err := extract.LoadManifest(resolved)
-			if err != nil {
-				return err
-			}
-
-			grants, err := grantsFor(manifest, environment)
-			if err != nil {
-				return err
-			}
-			ledger := capability.NewLedger(grants)
-
-			// What the readings are measured against (Phase 31.1). INTENT
-			// comes from the very pipeline `culprit check` runs — the same
-			// extractors and invariants, not a second extraction path — so
-			// a probe and a check cannot disagree about what the code
-			// declares. CONFIGURED comes from a Phase 30 capture, when one
-			// is given.
-			intent, err := check.Run(command.Context(), check.Options{
-				ManifestPath:  resolved,
-				Now:           captureTime(),
-				PluginTimeout: pluginTime,
-				SkipPlugins:   noPlugins,
-				Version:       Version,
-			})
-			if err != nil {
-				return err
-			}
-			factSets := [][]model.Fact{intent.Bundle.Facts}
-			if capturePath != "" {
-				verified, err := capture.ReadEnvelope(capturePath)
-				if err != nil {
-					return err
-				}
-				captured := ""
-				if verified.Bundle.Environment != nil {
-					captured = *verified.Bundle.Environment
-				}
-				if captured != environment {
-					return fmt.Errorf(
-						"%s is a capture of environment %q, and these readings are about %q",
-						capturePath, captured, environment)
-				}
-				factSets = append(factSets, verified.Bundle.Facts)
-			}
-
 			inputs, err := parseInputs(inputPairs)
 			if err != nil {
 				return err
 			}
-
-			selected := probeIDs
-			if len(selected) == 0 {
-				selected = catalogue.IDs()
-			}
-			requests := make([]probe.Request, 0, len(selected))
-			for _, id := range selected {
-				requests = append(requests, probe.Request{
-					ProbeID:     id,
-					Target:      target,
-					Environment: environment,
-					Inputs:      inputs,
-				})
-			}
-
-			deps := probe.Deps{
-				Network: probe.NewRealNetwork(timeout),
-				HTTP:    probe.NewRealHTTPClient(timeout),
-				Now:     time.Now,
-			}
-			// The database, config and dependency probes read the named
-			// environment through the Phase 30 capture machinery. Without
-			// --env there is no environment to read, and they say so.
-			// Impedance has no source here on purpose: it is produced by
-			// the worker (docs/PROBES.md), and field 17 of Phase 31.1 keeps
-			// it that way.
-			if environment != "" {
-				sources := &probe.Sources{
-					Environment: environment,
-					Spec:        manifest.Environments[environment],
-					ManifestDir: filepath.Dir(resolved),
-					Grants:      grants,
-					Ledger:      ledger,
-					Runner:      capture.ExecRunner{Timeout: timeout},
-					Reader:      capture.PostgresReader{Timeout: timeout},
-				}
-				deps.Database = sources.Database()
-				deps.Config = sources.Config()
-				deps.Packages = sources.Packages()
-			}
-
-			runner := probe.NewRunner(probe.Options{
-				Catalogue:    catalogue,
-				Ledger:       ledger,
-				AgentID:      agentID,
-				Overrides:    overridesFrom(manifest),
-				Deps:         deps,
-				Expectations: probe.NewExpectations(factSets...),
+			readings, ledger, err := runProbe(command.Context(), probeInput{
+				ManifestPath: manifestPath, Environment: environment, Target: target, ProbeIDs: probeIDs,
+				Inputs: inputs, AgentID: agentID, CapturePath: capturePath, NoPlugins: noPlugins,
+				PluginTimeout: pluginTime, Timeout: timeout,
 			})
-			readings := runner.Run(command.Context(), requests)
+			if err != nil {
+				return err
+			}
 
 			if err := writeReadings(command, format, outputPath, readings, ledger); err != nil {
 				return err
@@ -242,6 +152,125 @@ Examples:
 		"how long any one extractor plugin may run before it is skipped")
 
 	return command
+}
+
+// probeInput is one run of named probes, as `culprit probe` and the
+// culprit_probe tool both ask for it.
+type probeInput struct {
+	ManifestPath, Environment, Target, AgentID, CapturePath string
+	// ProbeIDs are the probes to run; none means every probe in the
+	// catalogue (the command's default).
+	ProbeIDs               []string
+	Inputs                 map[string]any
+	NoPlugins              bool
+	PluginTimeout, Timeout time.Duration
+	// Through, when set, is what probes reach the network through; nil is
+	// the real network. Only tests set it.
+	Through *wire
+}
+
+// runProbe runs the named probes against one target, under the
+// environment's grants, and returns the readings and the ledger that
+// decided them.
+func runProbe(ctx context.Context, in probeInput) ([]model.Reading, *capability.Ledger, error) {
+	catalogue := probe.BuiltIn()
+	resolved, err := resolveManifestPath(in.ManifestPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	manifest, err := extract.LoadManifest(resolved)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	grants, err := grantsFor(manifest, in.Environment)
+	if err != nil {
+		return nil, nil, err
+	}
+	ledger := capability.NewLedger(grants)
+
+	// What the readings are measured against (Phase 31.1). INTENT comes
+	// from the very pipeline `culprit check` runs — the same extractors
+	// and invariants, not a second extraction path — so a probe and a
+	// check cannot disagree about what the code declares. CONFIGURED
+	// comes from a Phase 30 capture, when one is given.
+	intent, err := check.Run(ctx, check.Options{
+		ManifestPath:  resolved,
+		Now:           captureTime(),
+		PluginTimeout: in.PluginTimeout,
+		SkipPlugins:   in.NoPlugins,
+		Version:       Version,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	factSets := [][]model.Fact{intent.Bundle.Facts}
+	if in.CapturePath != "" {
+		verified, err := capture.ReadEnvelope(in.CapturePath)
+		if err != nil {
+			return nil, nil, err
+		}
+		captured := ""
+		if verified.Bundle.Environment != nil {
+			captured = *verified.Bundle.Environment
+		}
+		if captured != in.Environment {
+			return nil, nil, fmt.Errorf(
+				"%s is a capture of environment %q, and these readings are about %q",
+				in.CapturePath, captured, in.Environment)
+		}
+		factSets = append(factSets, verified.Bundle.Facts)
+	}
+
+	selected := in.ProbeIDs
+	if len(selected) == 0 {
+		selected = catalogue.IDs()
+	}
+	requests := make([]probe.Request, 0, len(selected))
+	for _, id := range selected {
+		requests = append(requests, probe.Request{
+			ProbeID:     id,
+			Target:      in.Target,
+			Environment: in.Environment,
+			Inputs:      in.Inputs,
+		})
+	}
+
+	through := wire{Network: probe.NewRealNetwork(in.Timeout), HTTP: probe.NewRealHTTPClient(in.Timeout)}
+	if in.Through != nil {
+		through = *in.Through
+	}
+	deps := probe.Deps{Network: through.Network, HTTP: through.HTTP, Now: time.Now}
+	// The database, config and dependency probes read the named
+	// environment through the Phase 30 capture machinery. Without an
+	// environment there is no environment to read, and they say so.
+	// Impedance has no source here on purpose: it is produced by the
+	// worker (docs/PROBES.md), and field 17 of Phase 31.1 keeps it that
+	// way.
+	if in.Environment != "" {
+		sources := &probe.Sources{
+			Environment: in.Environment,
+			Spec:        manifest.Environments[in.Environment],
+			ManifestDir: filepath.Dir(resolved),
+			Grants:      grants,
+			Ledger:      ledger,
+			Runner:      capture.ExecRunner{Timeout: in.Timeout},
+			Reader:      capture.PostgresReader{Timeout: in.Timeout},
+		}
+		deps.Database = sources.Database()
+		deps.Config = sources.Config()
+		deps.Packages = sources.Packages()
+	}
+
+	runner := probe.NewRunner(probe.Options{
+		Catalogue:    catalogue,
+		Ledger:       ledger,
+		AgentID:      in.AgentID,
+		Overrides:    overridesFrom(manifest),
+		Deps:         deps,
+		Expectations: probe.NewExpectations(factSets...),
+	})
+	return runner.Run(ctx, requests), ledger, nil
 }
 
 // grantsFor pulls one environment's capability grants out of the manifest.

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -75,89 +76,14 @@ Exit codes: 0 a complete diagnosis, 1 a partial one (it says why), 2 the
 command could not run.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			if environment == "" {
-				return fmt.Errorf("--env is required: a diagnosis is always of one environment")
-			}
-			resolved, err := resolveManifestPath(manifestPath)
-			if err != nil {
-				return err
-			}
-			manifest, err := extract.LoadManifest(resolved)
-			if err != nil {
-				return err
-			}
-			spec, ok := manifest.Environments[environment]
-			if !ok {
-				return fmt.Errorf("environment %q is not declared under environments: in %s", environment, resolved)
-			}
-			if from != "" {
-				if _, declared := componentNamed(manifest, from); !declared {
-					return fmt.Errorf("--from %q is not a component in %s", from, resolved)
-				}
-			}
-
-			intent, err := check.Run(command.Context(), check.Options{
-				ManifestPath: resolved, Now: captureTime(), PluginTimeout: pluginTimeout,
-				SkipPlugins: noPlugins, Version: Version,
+			investigation, err := runDiagnose(command.Context(), diagnoseInput{
+				ManifestPath: manifestPath, Environment: environment, From: from, Reference: reference,
+				Symptom: args[0], AgentID: agentID, StateDir: stateDir, NoPlugins: noPlugins,
+				PluginTimeout: pluginTimeout, Timeout: timeout, Stderr: command.ErrOrStderr(),
 			})
 			if err != nil {
 				return err
 			}
-			facts := intent.Bundle.Facts
-
-			symptom, entry, err := parseSymptom(args[0], manifest, spec)
-			if err != nil {
-				return err
-			}
-
-			catalogue := probe.BuiltIn()
-			runner, err := newWalkRunner(manifest, resolved, environment, agentID, timeout, catalogue, facts)
-			if err != nil {
-				return err
-			}
-			options := isolate.Options{Environment: environment}
-			options.MaxProbes, options.MaxWallClock = manifest.IsolationBudget(environment)
-			if reference != "" {
-				referenceSpec, declared := manifest.Environments[reference]
-				if !declared {
-					return fmt.Errorf("--reference %q is not declared under environments:", reference)
-				}
-				referenceRunner, err := newWalkRunner(manifest, resolved, reference, agentID, timeout, catalogue, facts)
-				if err != nil {
-					return err
-				}
-				options.Reference, options.ReferenceName = referenceRunner, reference
-				options.ReferencePlacement = newPlacement(manifest, referenceSpec, from, facts)
-			}
-
-			components, connections := walkModel(manifest)
-			walk := isolate.New(components, connections, facts, catalogue.Manifests(), runner,
-				newPlacement(manifest, spec, from, facts), options)
-
-			// The environment before anything is fixed: what a verification
-			// compares with, so a change underneath is not taken for the fix.
-			before, absent := captureBefore(command.Context(), manifest, resolved, environment, nil)
-
-			opened := captureTime()
-			investigation, err := walk.Diagnose(command.Context(), symptom, entry)
-			if err != nil {
-				return err
-			}
-			closed := time.Now().UTC()
-			investigation.ID, investigation.OpenedAt, investigation.ClosedAt = newInvestigationID(), opened, &closed
-			if err := investigation.Validate(); err != nil {
-				return fmt.Errorf("the walk produced an investigation the model rejects: %w", err)
-			}
-			// Kept only once it validates; the verified reason it then
-			// carries is one more sentence, checked again below.
-			how := "`culprit verify " + investigation.ID + " --change ...`"
-			if err := keepForVerification(stateDir, &investigation, walk.Requests(), from, before, absent, how); err != nil {
-				fmt.Fprintf(command.ErrOrStderr(), "culprit: the investigation was not kept for verification: %v\n", err)
-			}
-			if err := investigation.Validate(); err != nil {
-				return fmt.Errorf("the investigation does not validate once kept: %w", err)
-			}
-
 			if err := writeInvestigation(command, format, outputPath, investigation); err != nil {
 				return err
 			}
@@ -181,6 +107,129 @@ command could not run.`,
 	command.Flags().StringVar(&stateDir, "state-dir", defaultStateDir(), "where to keep the investigation for `culprit verify` ($CULPRIT_STATE_DIR)")
 	return command
 }
+
+// diagnoseInput is one diagnosis, as `culprit diagnose` and the
+// culprit_diagnose tool both ask for it.
+type diagnoseInput struct {
+	ManifestPath, Environment, From, Reference, Symptom string
+	AgentID, StateDir                                   string
+	NoPlugins                                           bool
+	PluginTimeout, Timeout                              time.Duration
+	// Through, when set, is what probes reach the network through; nil is
+	// the real network. Only tests set it.
+	Through *wire
+	// Stderr takes warnings: never the investigation's output stream.
+	Stderr io.Writer
+	// How says, in the rubric's verified reason, how a verification is
+	// asked for; "" is the command's own.
+	How func(id string) string
+}
+
+// runDiagnose walks one symptom and returns the investigation, kept in the
+// state directory for verification. A partial diagnosis is a result, not
+// an error.
+func runDiagnose(ctx context.Context, in diagnoseInput) (model.Investigation, error) {
+	if in.Environment == "" {
+		return model.Investigation{}, fmt.Errorf("--env is required: a diagnosis is always of one environment")
+	}
+	resolved, err := resolveManifestPath(in.ManifestPath)
+	if err != nil {
+		return model.Investigation{}, err
+	}
+	manifest, err := extract.LoadManifest(resolved)
+	if err != nil {
+		return model.Investigation{}, err
+	}
+	spec, ok := manifest.Environments[in.Environment]
+	if !ok {
+		return model.Investigation{}, fmt.Errorf("environment %q is not declared under environments: in %s", in.Environment, resolved)
+	}
+	if in.From != "" {
+		if _, declared := componentNamed(manifest, in.From); !declared {
+			return model.Investigation{}, fmt.Errorf("--from %q is not a component in %s", in.From, resolved)
+		}
+	}
+
+	intent, err := check.Run(ctx, check.Options{
+		ManifestPath: resolved, Now: captureTime(), PluginTimeout: in.PluginTimeout,
+		SkipPlugins: in.NoPlugins, Version: Version,
+	})
+	if err != nil {
+		return model.Investigation{}, err
+	}
+	facts := intent.Bundle.Facts
+
+	symptom, entry, err := parseSymptom(in.Symptom, manifest, spec)
+	if err != nil {
+		return model.Investigation{}, err
+	}
+
+	through := realWire(in.Timeout)
+	if in.Through != nil {
+		through = *in.Through
+	}
+	runnerFor := func(environment string) (walkRunner, error) {
+		grants, err := grantsFor(manifest, environment)
+		if err != nil {
+			return walkRunner{}, err
+		}
+		return walkRunnerUnder(manifest, resolved, environment, in.AgentID, in.Timeout, catalogue(), facts,
+			grants, through), nil
+	}
+	runner, err := runnerFor(in.Environment)
+	if err != nil {
+		return model.Investigation{}, err
+	}
+	options := isolate.Options{Environment: in.Environment}
+	options.MaxProbes, options.MaxWallClock = manifest.IsolationBudget(in.Environment)
+	if in.Reference != "" {
+		referenceSpec, declared := manifest.Environments[in.Reference]
+		if !declared {
+			return model.Investigation{}, fmt.Errorf("--reference %q is not declared under environments:", in.Reference)
+		}
+		referenceRunner, err := runnerFor(in.Reference)
+		if err != nil {
+			return model.Investigation{}, err
+		}
+		options.Reference, options.ReferenceName = referenceRunner, in.Reference
+		options.ReferencePlacement = newPlacement(manifest, referenceSpec, in.From, facts)
+	}
+
+	components, connections := walkModel(manifest)
+	walk := isolate.New(components, connections, facts, catalogue().Manifests(), runner,
+		newPlacement(manifest, spec, in.From, facts), options)
+
+	// The environment before anything is fixed: what a verification
+	// compares with, so a change underneath is not taken for the fix.
+	before, absent := captureBefore(ctx, manifest, resolved, in.Environment, nil)
+
+	opened := captureTime()
+	investigation, err := walk.Diagnose(ctx, symptom, entry)
+	if err != nil {
+		return model.Investigation{}, err
+	}
+	closed := time.Now().UTC()
+	investigation.ID, investigation.OpenedAt, investigation.ClosedAt = newInvestigationID(), opened, &closed
+	if err := investigation.Validate(); err != nil {
+		return model.Investigation{}, fmt.Errorf("the walk produced an investigation the model rejects: %w", err)
+	}
+	// Kept only once it validates; the verified reason it then carries is
+	// one more sentence, checked again below.
+	how := "`culprit verify " + investigation.ID + " --change ...`"
+	if in.How != nil {
+		how = in.How(investigation.ID)
+	}
+	if err := keepForVerification(in.StateDir, &investigation, walk.Requests(), in.From, before, absent, how); err != nil {
+		fmt.Fprintf(in.Stderr, "culprit: the investigation was not kept for verification: %v\n", err)
+	}
+	if err := investigation.Validate(); err != nil {
+		return model.Investigation{}, fmt.Errorf("the investigation does not validate once kept: %w", err)
+	}
+	return investigation, nil
+}
+
+// catalogue is the built-in probe catalogue every command walks with.
+func catalogue() *probe.Catalogue { return probe.BuiltIn() }
 
 // ---- the model the walk walks ---------------------------------------------
 
@@ -326,17 +375,6 @@ func (r walkRunner) Run(ctx context.Context, request isolate.Request) model.Read
 		Environment: r.environment, Inputs: request.Inputs,
 	}})
 	return readings[0]
-}
-
-func newWalkRunner(manifest *extract.Manifest, manifestPath, environment, agentID string,
-	timeout time.Duration, catalogue *probe.Catalogue, facts []model.Fact,
-) (walkRunner, error) {
-	grants, err := grantsFor(manifest, environment)
-	if err != nil {
-		return walkRunner{}, err
-	}
-	return walkRunnerUnder(manifest, manifestPath, environment, agentID, timeout, catalogue, facts,
-		grants, realWire(timeout)), nil
 }
 
 // wire is what a probe reaches the network through: real for the

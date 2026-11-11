@@ -2166,3 +2166,97 @@ the repository. Its files are created readable by their owner alone
 (`0600`, in `0700` directories; Windows applies its own ACLs instead). The
 capture before is the same envelope `culprit env capture` writes, so it
 carries the literal value of any key `config.read.values` allowlists.
+
+## The agent surface
+
+`culprit mcp` (Phase 35 part 1) serves the binary's diagnostic tools to a
+coding agent over MCP. What it does not do, and where it is narrower than it
+may look:
+
+### stdio only, one client, one request at a time
+
+The only transport is the process's stdin and stdout: a coding agent starts
+the binary, and nothing can reach it any other way — no socket, no HTTP
+transport (Phase 35 field 17; the binary opens no listener). Requests are
+answered one at a time, in the order they arrive, so a `culprit_diagnose`
+that walks for its whole budget holds the next call until it finishes.
+`notifications/cancelled` is read and ignored: a call already running is
+answered when it ends. Tools only — no resources, prompts or sampling; the
+protocol revisions spoken are 2025-06-18, 2025-03-26 and 2024-11-05. One
+message is at most 1 MiB.
+
+### The vantage and the state directory are the server's
+
+`--from` and `--state-dir` are set when the server starts, never by a tool's
+arguments: probes see what their vantage sees, and a verification is refused
+from anywhere but where the diagnosis ran (see "Verify must run where
+diagnose ran"). So one server serves one vantage. A fix that recreates the
+container the server runs in ends the session with it; a new session
+verifies, reading the investigation from the state directory — which must
+outlive the container (a volume) for that to work. The fault library copies
+it out and back.
+
+### Any declared environment can be named
+
+A tool's `environment` is any environment `culprit.yaml` declares, and its
+grants are that environment's, exactly as for the CLI. An agent cannot add a
+grant, but it can name the most permissive environment in the file. To bound
+what an agent can reach, give its server a `culprit.yaml` that declares only
+the environments it may use.
+
+### Grants are fixed when the server starts
+
+A coding agent can usually edit the repository, `culprit.yaml` included. So
+the server records the file's digest when it starts, and once the file has
+changed it refuses every call until it is restarted: an agent cannot grant
+itself a capability by editing the file between two calls. Restarting it is
+a person's act — or the agent's, if the agent is the one that starts the
+binary. Where that matters, keep the server's `culprit.yaml` somewhere the
+agent cannot write.
+
+### A granted probe goes where its inputs say
+
+A probe's `url`, `host` and `port` inputs are not bound to the endpoints
+`culprit.yaml` declares, for `culprit_probe` as for `culprit probe`. Under
+`net.http.outbound`, a probe can send a GET to any address reachable from the
+vantage — a cloud metadata address included — and report its status and
+timing; under `net.tcp.connect`, open and close a connection to any port. No
+body is sent and nothing is written, but an agent that has been handed
+hostile instructions can use it to look around. `culprit_diagnose` places its
+probes from `culprit.yaml` alone. Grant the network capabilities to an
+agent's environment only where reaching anything the vantage can reach is
+acceptable.
+
+### An error says what the command would have said
+
+A call that could not run returns the error the command would have printed —
+to stderr there, into the agent's context here. That text can name local
+paths: the state directory, culprit.yaml's location. It never carries a
+config value or a reading's content.
+
+### Read-only means the system under test
+
+Every tool is offered with `readOnlyHint`. `culprit_diagnose` and
+`culprit_verify` still write to the server's own state directory — the
+investigation, its record, the capture before and each verification — as the
+commands do; nothing else.
+
+### Refused before anything is sent is per capability
+
+`culprit_probe` refuses the whole call when the environment does not grant a
+capability one of the named probes declares, before any probe runs. A
+capability granted per item (`config.inspect.values`, `config.read.values`,
+`process.exec.allowlist`) passes that check when any item is granted; whether the
+probe's own item is allowed is decided when it runs, and an item not on the
+list comes back as a `refused` reading — read from no network, as for the
+CLI.
+
+### Answers are JSON, never prose
+
+Each answer is the structured result its command's `--format json` prints;
+the text content is that same JSON, for a client that reads content only.
+Nothing in the binary calls a model, so there is no prose field to be
+missing when there is no model. A diagnosis or verification is kept in the
+state directory and uploaded nowhere: posting it to a control plane remains
+the CLI's and the agent's job.
+
