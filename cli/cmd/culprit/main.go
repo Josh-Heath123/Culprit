@@ -112,6 +112,7 @@ docs/PERMISSIONS.md before granting it access to an environment.`,
 	root.AddCommand(newDiagnoseCommand())
 	root.AddCommand(newVerifyCommand())
 	root.AddCommand(newAgentCommand())
+	root.AddCommand(newMCPCommand())
 	return root
 }
 

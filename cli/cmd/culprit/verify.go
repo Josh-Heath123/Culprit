@@ -260,87 +260,13 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 			if format != "text" && format != "json" {
 				return fmt.Errorf("unknown --format %q; expected text or json", format)
 			}
-			named, err := parseChanges(changes)
-			if err != nil {
-				return err
-			}
-			dir, err := investigationDir(stateDir, args[0])
-			if err != nil {
-				return err
-			}
-			var investigation model.Investigation
-			if err := readJSON(filepath.Join(dir, "investigation.json"), &investigation); err != nil {
-				return fmt.Errorf("investigation %s is not in %s (diagnose keeps it there): %w", args[0], stateDir, err)
-			}
-			if err := investigation.Validate(); err != nil {
-				return fmt.Errorf("investigation %s does not validate: %w", args[0], err)
-			}
-			var record verify.Record
-			if err := readJSON(filepath.Join(dir, "record.json"), &record); err != nil {
-				return fmt.Errorf("the record of %s cannot be read: %w", args[0], err)
-			}
-			if err := record.Check(investigation); err != nil {
-				return err
-			}
-			// The vantage is the diagnosis's: an edge, a token or a process
-			// environment measured from anywhere else is a different
-			// measurement, and could pass where nothing was fixed.
-			if from != record.Vantage {
-				return fmt.Errorf("%s was diagnosed from %s; verify it from there (--from %s), not from %s",
-					investigation.ID, vantageWords(record.Vantage), record.Vantage, vantageWords(from))
-			}
-
-			resolved, err := resolveManifestPath(manifestPath)
-			if err != nil {
-				return err
-			}
-			manifest, err := extract.LoadManifest(resolved)
-			if err != nil {
-				return err
-			}
-			for _, request := range record.Requests {
-				if _, declared := manifest.Environments[request.Environment]; !declared {
-					return fmt.Errorf("environment %q is not declared under environments: in %s", request.Environment, resolved)
-				}
-			}
-
-			var before, after *model.CaptureBundle
-			if record.BeforeCapture != "" {
-				envelope, err := capture.ReadEnvelope(filepath.Join(dir, "before.json"))
-				if err != nil {
-					return fmt.Errorf("the capture before cannot be read: %w", err)
-				}
-				before = &envelope.Bundle
-				taken, absent := captureBefore(command.Context(), manifest, resolved, record.Environment, nil)
-				if taken == nil {
-					return fmt.Errorf("the environment cannot be captured again to compare with: %s", absent)
-				}
-				after = taken
-			}
-
-			intent, err := check.Run(command.Context(), check.Options{
-				ManifestPath: resolved, Now: captureTime(), PluginTimeout: pluginTimeout,
-				SkipPlugins: noPlugins, Version: Version,
+			verification, err := runVerify(command.Context(), verifyInput{
+				ManifestPath: manifestPath, StateDir: stateDir, From: from, InvestigationID: args[0],
+				Changes: changes, AgentID: agentID, NoPlugins: noPlugins, PluginTimeout: pluginTimeout,
+				Timeout: timeout, Stderr: command.ErrOrStderr(),
 			})
 			if err != nil {
 				return err
-			}
-			runner := &verifyRunner{
-				manifest: manifest, manifestPath: resolved, agentID: agentID, timeout: timeout,
-				catalogue: probe.BuiltIn(), facts: intent.Bundle.Facts, runners: map[string]*probe.Runner{},
-			}
-			verification, err := verify.Run(command.Context(), verify.Options{
-				ID: newVerificationID(), Investigation: investigation, Record: record, Changes: named,
-				Before: before, After: after, Runner: runner,
-			})
-			if err != nil {
-				return err
-			}
-			if runner.err != nil {
-				return runner.err
-			}
-			if err := writePrivate(filepath.Join(dir, "verifications", verification.ID+".json"), verification); err != nil {
-				fmt.Fprintf(command.ErrOrStderr(), "culprit: the verification was not kept: %v\n", err)
 			}
 			if err := writeVerification(command.OutOrStdout(), format, outputPath, verification); err != nil {
 				return err
@@ -363,6 +289,110 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 	command.Flags().DurationVar(&pluginTimeout, "plugin-timeout", 90*time.Second, "how long any one extractor plugin may run")
 	command.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "per-operation network timeout")
 	return command
+}
+
+// verifyInput is one verification, as `culprit verify` and the
+// culprit_verify tool both ask for it.
+type verifyInput struct {
+	ManifestPath, StateDir, From, InvestigationID, AgentID string
+	// Changes are what was applied, in --change form.
+	Changes                []string
+	NoPlugins              bool
+	PluginTimeout, Timeout time.Duration
+	// Through, when set, is what probes reach the network through; nil is
+	// the real network. Only tests set it.
+	Through *wire
+	Stderr  io.Writer
+}
+
+// runVerify measures a kept investigation again and judges it. Any verdict
+// is a result; an error means the verification could not run.
+func runVerify(ctx context.Context, in verifyInput) (model.Verification, error) {
+	named, err := parseChanges(in.Changes)
+	if err != nil {
+		return model.Verification{}, err
+	}
+	id := in.InvestigationID
+	dir, err := investigationDir(in.StateDir, id)
+	if err != nil {
+		return model.Verification{}, err
+	}
+	var investigation model.Investigation
+	if err := readJSON(filepath.Join(dir, "investigation.json"), &investigation); err != nil {
+		return model.Verification{}, fmt.Errorf("investigation %s is not in %s (diagnose keeps it there): %w", id, in.StateDir, err)
+	}
+	if err := investigation.Validate(); err != nil {
+		return model.Verification{}, fmt.Errorf("investigation %s does not validate: %w", id, err)
+	}
+	var record verify.Record
+	if err := readJSON(filepath.Join(dir, "record.json"), &record); err != nil {
+		return model.Verification{}, fmt.Errorf("the record of %s cannot be read: %w", id, err)
+	}
+	if err := record.Check(investigation); err != nil {
+		return model.Verification{}, err
+	}
+	// The vantage is the diagnosis's: an edge, a token or a process
+	// environment measured from anywhere else is a different measurement,
+	// and could pass where nothing was fixed.
+	if in.From != record.Vantage {
+		return model.Verification{}, fmt.Errorf("%s was diagnosed from %s; verify it from there (--from %s), not from %s",
+			investigation.ID, vantageWords(record.Vantage), record.Vantage, vantageWords(in.From))
+	}
+
+	resolved, err := resolveManifestPath(in.ManifestPath)
+	if err != nil {
+		return model.Verification{}, err
+	}
+	manifest, err := extract.LoadManifest(resolved)
+	if err != nil {
+		return model.Verification{}, err
+	}
+	for _, request := range record.Requests {
+		if _, declared := manifest.Environments[request.Environment]; !declared {
+			return model.Verification{}, fmt.Errorf("environment %q is not declared under environments: in %s", request.Environment, resolved)
+		}
+	}
+
+	var before, after *model.CaptureBundle
+	if record.BeforeCapture != "" {
+		envelope, err := capture.ReadEnvelope(filepath.Join(dir, "before.json"))
+		if err != nil {
+			return model.Verification{}, fmt.Errorf("the capture before cannot be read: %w", err)
+		}
+		before = &envelope.Bundle
+		taken, absent := captureBefore(ctx, manifest, resolved, record.Environment, nil)
+		if taken == nil {
+			return model.Verification{}, fmt.Errorf("the environment cannot be captured again to compare with: %s", absent)
+		}
+		after = taken
+	}
+
+	intent, err := check.Run(ctx, check.Options{
+		ManifestPath: resolved, Now: captureTime(), PluginTimeout: in.PluginTimeout,
+		SkipPlugins: in.NoPlugins, Version: Version,
+	})
+	if err != nil {
+		return model.Verification{}, err
+	}
+	runner := &verifyRunner{
+		manifest: manifest, manifestPath: resolved, agentID: in.AgentID, timeout: in.Timeout,
+		catalogue: catalogue(), facts: intent.Bundle.Facts, runners: map[string]*probe.Runner{},
+		through: in.Through,
+	}
+	verification, err := verify.Run(ctx, verify.Options{
+		ID: newVerificationID(), Investigation: investigation, Record: record, Changes: named,
+		Before: before, After: after, Runner: runner,
+	})
+	if err != nil {
+		return model.Verification{}, err
+	}
+	if runner.err != nil {
+		return model.Verification{}, runner.err
+	}
+	if err := writePrivate(filepath.Join(dir, "verifications", verification.ID+".json"), verification); err != nil {
+		fmt.Fprintf(in.Stderr, "culprit: the verification was not kept: %v\n", err)
+	}
+	return verification, nil
 }
 
 func vantageWords(component string) string {

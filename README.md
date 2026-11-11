@@ -77,6 +77,7 @@ check — never as a root or a cause:
 | **Compare environments safely** | `culprit env capture` reads Compose, Kubernetes or a process environment and writes a sealed, optionally signed envelope. Config values are recorded as a shape — type, length class, format — unless you grant that one key. |
 | **Ask a running system** | Thirteen read-only probes — DNS, TCP, TLS, HTTP reachability, route and schema conformance, token shape, database connectivity and schema, config presence, installed versions, edge impedance. Each asks permission before it dials anything. Two need more than a running service to reach a verdict: config presence compares against a declaration of the key, and installed versions needs the environment to declare a `packages:` command — without one it is `refused` or `inconclusive`, and says why ([`docs/PROBES.md`](docs/PROBES.md)). |
 | **Check that a fix fixed it** | `culprit verify <investigation>` runs every probe the diagnosis ran again, twice, and compares the environment with the record of it taken at diagnosis. `verified` only when what failed now passes, what passed still passes, and nothing changed that the fix you name does not explain; otherwise `not_resolved`, `regressed`, `changed_underneath` or `inconclusive`, with the reason. From the CLI, or through the agent that diagnosed it, asked from the investigation's page, which keeps every verification. |
+| **Let a coding agent ask** | `culprit mcp` serves six read-only tools over MCP on stdio — the system model, `check`, a connection explained, `probe`, `diagnose` and `verify` — each answering with the JSON its command prints. The agent proposes and applies a change; Culprit diagnoses and judges it. No argument can grant a capability, and no tool writes. |
 | **See what was not checked** | Every gap is listed with its reason. A route table that could not be read never produces "that route does not exist" — it produces a line saying nobody looked. |
 
 ## How it works
@@ -444,6 +445,42 @@ install it into your project's environment instead
 keys and never their values, and the loader refuses anything that looks like
 a credential.
 
+### For a coding agent: `culprit mcp`
+
+A coding agent that speaks MCP can start the binary as a tool server and run
+the loop itself — diagnose, change something, verify:
+
+```json
+{
+  "mcpServers": {
+    "culprit": {
+      "command": "culprit",
+      "args": ["mcp", "-f", "/path/to/culprit.yaml", "--from", "order-service"]
+    }
+  }
+}
+```
+
+| Tool | What it answers |
+|---|---|
+| `culprit_system_model` | components, connections, each environment's adapter and grants, this server's vantage |
+| `culprit_check` | `culprit check --format json` |
+| `culprit_explain_connection` | the facts and contradictions about one connection, and which probes can measure it under an environment's grants |
+| `culprit_probe` | `culprit probe --format json`, for named probes |
+| `culprit_diagnose` | the investigation `culprit diagnose --format json` prints, and the `culprit_verify` call that checks a fix |
+| `culprit_verify` | the verification `culprit verify --format json` prints |
+
+What it cannot do: grant itself anything — grants are the environment's, in
+`culprit.yaml`, fixed when the server starts (an edit to the file refuses every
+later call until it is restarted), an argument that names one is refused, and a
+probe the environment does not grant is refused before anything is sent; choose where it
+runs — `--from` and the state directory are the server's, set when it starts;
+or change anything — no tool writes to `culprit.yaml`, an environment or the
+control plane, and Culprit never applies a fix. It speaks stdio only, calls no
+model, and its answers carry no prose. Run it where `culprit diagnose` would
+run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
+"The agent surface").
+
 <!-- accuracy:begin -->
 <!-- Rendered by `just accuracy-readme` from cli/testdata/faultlib/results.json. Do not edit by hand: CI fails if this differs. -->
 
@@ -503,13 +540,13 @@ dogfooding, and it is why the "Not checked" list is never optional.
 
 | Path | What it is |
 |---|---|
-| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose`, `verify`, `agent` |
+| [`cli/`](cli) | the Go binary: `check`, `intent`, `env capture`, `diff`, `probe`, `diagnose`, `verify`, `agent`, `mcp` |
 | [`extractors/`](extractors) | the Python and Node extractor plugins ([protocol](docs/EXTRACTOR_PROTOCOL.md)) |
 | [`shared/`](shared) | the core model — planes, facts, subjects, readings — shared by the Python services |
 | [`api/`](api) | FastAPI: the dashboard's API, the ingest gateway, capture and reading endpoints, migrations |
 | [`worker/`](worker) | arq jobs: stream draining, anomaly and impedance scoring, postmortem embedding |
 | [`frontend/`](frontend) | the React dashboard |
-| [`mcp_server/`](mcp_server) | read-only MCP tools over Culprit's engineering memory, for coding agents |
+| [`mcp_server/`](mcp_server) | read-only MCP tools over Culprit's engineering memory, for coding agents (the diagnostic tools are `culprit mcp`, in the binary) |
 | [`demo-services/`](demo-services) | three small instrumented services the quickstart runs |
 | [`infra/`](infra) | Compose files, Caddy, deployment |
 | [`deploy/agent/`](deploy/agent) | the agent's recipes: Docker, Compose, Kubernetes, systemd |
@@ -531,8 +568,9 @@ What comes next, as plans:
 
 - **The demonstration video,** recorded from the script, storyboard and
   checklist in [`docs/video/`](docs/video); linked here once it exists.
-- **Phase 35 — An agent surface,** so a coding agent can ask Culprit before
-  it changes something, with the narrator constrained to settled facts.
+- **Phase 35, part 2 — The narrator:** prose for a settled investigation, in
+  the control plane, held to what the investigation contains. The agent
+  surface, `culprit mcp`, is part 1.
 
 ## Author and licence
 
