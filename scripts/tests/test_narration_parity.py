@@ -66,6 +66,23 @@ def test_ids_times_and_durations_are_not_differences(tmp_path: Path) -> None:
     assert narration_parity.compare(a, b) == 0
 
 
+def test_the_runs_agent_named_in_text_and_a_tokens_lifetime_are_not_differences(
+    tmp_path: Path,
+) -> None:
+    """Found in CI: each run pairs its own agent, whose name appears inside
+    a reason as well as under agent_id; a token's remaining lifetime is a
+    time."""
+    first = copy.deepcopy(RECORDS)
+    first["investigation"]["note"] = "a verify task, sent to agent e2e-agent-1, measures it"
+    first["investigation"]["readings"][0]["reading"]["measured"]["expires_in_seconds"] = 3597
+    second = copy.deepcopy(first)
+    second["investigation"]["readings"][0]["reading"]["agent_id"] = "e2e-agent-2"
+    second["investigation"]["note"] = "a verify task, sent to agent e2e-agent-2, measures it"
+    second["investigation"]["readings"][0]["reading"]["measured"]["expires_in_seconds"] = 3598
+    a, b = _write(tmp_path, "a.json", first), _write(tmp_path, "b.json", second)
+    assert narration_parity.compare(a, b) == 0
+
+
 def test_a_verdict_or_a_reading_that_differs_is_a_difference(tmp_path: Path) -> None:
     for change in (
         lambda r: r["verifications"][0].update(verdict="not_resolved"),

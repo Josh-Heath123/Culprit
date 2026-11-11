@@ -26,22 +26,43 @@ from typing import Any
 #: Keys whose values differ between two runs of the same loop by nature.
 _VOLATILE_KEY = re.compile(
     r"^(id|investigation_id|agent_id|submitted_by|before_capture|after_capture)$"
-    r"|_at$|_ms$|^elapsed"
+    r"|_at$|_ms$|_seconds$|^elapsed"
 )
 #: Identifiers minted per run, wherever they appear inside text.
 _MINTED = re.compile(r"\b(inv|ver|cap|nar|task)-[0-9a-z]{6,}\b")
 
 
-def normalised(value: Any) -> Any:
+def _agents(value: Any, found: set[str]) -> set[str]:
+    """Every agent the records name (`agent_id`, `submitted_by: agent:<id>`):
+    each run pairs its own, and its name also appears inside text."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "agent_id" and isinstance(item, str) and item:
+                found.add(item)
+            elif key == "submitted_by" and isinstance(item, str) and item.startswith("agent:"):
+                found.add(item.removeprefix("agent:"))
+            else:
+                _agents(item, found)
+    elif isinstance(value, list):
+        for item in value:
+            _agents(item, found)
+    return found
+
+
+def normalised(value: Any, agents: frozenset[str] | None = None) -> Any:
+    if agents is None:
+        agents = frozenset(_agents(value, set()))
     if isinstance(value, dict):
         return {
-            key: normalised(item)
+            key: normalised(item, agents)
             for key, item in sorted(value.items())
             if not _VOLATILE_KEY.search(key)
         }
     if isinstance(value, list):
-        return [normalised(item) for item in value]
+        return [normalised(item, agents) for item in value]
     if isinstance(value, str):
+        for agent in sorted(agents, key=len, reverse=True):
+            value = value.replace(agent, "<agent>")
         return _MINTED.sub(r"\1-<id>", value)
     return value
 
@@ -70,10 +91,13 @@ def dump(base: str, investigation_id: str, out: str) -> int:
     token = login["access_token"]
     investigation = _get(base, f"/investigations/{investigation_id}", token)
     verifications = _get(base, f"/investigations/{investigation_id}/verifications", token)
-    records = {
-        "investigation": normalised(investigation),
-        "verifications": [normalised(item["verification"]) for item in verifications["items"]],
+    raw = {
+        "investigation": investigation,
+        "verifications": [item["verification"] for item in verifications["items"]],
     }
+    # The agent may be named only in a stored row's submitted_by.
+    agents = frozenset(_agents(verifications, _agents(raw, set())))
+    records = normalised(raw, agents)
     with open(out, "w", encoding="utf-8") as handle:
         json.dump(records, handle, indent=2, sort_keys=True)
         handle.write("\n")
