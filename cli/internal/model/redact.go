@@ -28,6 +28,9 @@ var credentialPattern = regexp.MustCompile(
 		`|\bAKIA[0-9A-Z]{16}\b` +
 		`|\bgh[pousr]_[A-Za-z0-9]{20,}` +
 		`|\bsk-[A-Za-z0-9]{20,}` +
+		// Anthropic's keys (sk-ant-api03-...): hyphens break the pattern
+		// above. Phase 35 part 2 made this a key the control plane holds.
+		`|\bsk-ant-[A-Za-z0-9_-]{20,}` +
 		`|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.`)
 
 // LooksLikeCredential reports whether free text carries something

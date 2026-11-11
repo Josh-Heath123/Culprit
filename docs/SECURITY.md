@@ -223,13 +223,18 @@ reply says anything, and its error says anything.
   prose unless it passes the same check, which the API runs again.
   `api/tests/test_narrations_api.py::test_a_row_inserted_with_unchecked_prose_is_not_served_as_prose`
 - A provider's error text **cannot** reach the record, the log or the page:
-  a failure's reason is built from Culprit's own words.
+  a failure's reason is built from Culprit's own words. Nor can the model's
+  own sentence through a refusal: what it named is one word or a label.
+  `shared/tests/test_narration.py::test_what_a_refusal_names_is_never_the_models_sentence_a_url_or_a_secret`,
+  `worker/tests/test_narrate_job.py::test_anthropic_failures_are_closed_vocabulary`,
   `worker/tests/test_narrate_job.py::test_a_provider_error_leaves_no_trace_of_what_it_said`,
   `worker/tests/test_narrate_job.py::test_a_failure_is_stored_with_a_reason_and_nothing_the_provider_said`
 - The narrator **cannot** rewrite or remove a narration, or write anything
   but a narration. `api/tests/test_narrations_api.py::test_the_narrator_can_append_and_nothing_else`
-- It **cannot** be asked a fourth time about one investigation.
+- It **cannot** be asked a fourth time about one investigation, nor twice
+  for one attempt by ticks that overlap.
   `worker/tests/test_narrate_job.py::test_three_attempts_then_no_fourth_call`,
+  `worker/tests/test_narrate_job.py::test_overlapping_ticks_call_the_provider_once`,
   `api/tests/test_narrations_api.py::test_a_fourth_attempt_and_a_status_carrying_another_s_columns_are_refused`
 
 What it can still do is describe the cited evidence wrongly in plain words.

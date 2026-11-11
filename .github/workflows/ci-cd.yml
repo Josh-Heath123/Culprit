@@ -529,9 +529,12 @@ jobs:
     env:
       QUICKSTART_NARRATOR_STUB: "1"
       QUICKSTART_NARRATOR_STUB_PORT: "11435"
+      # Only LLM_PROVIDER differs between the legs. The none leg is given
+      # the stub's model and address too, so its zero count proves the
+      # `none` guard held — not that the worker had nowhere to call.
       LLM_PROVIDER: ${{ matrix.narration == 'stub' && 'ollama' || 'none' }}
-      NARRATOR_MODEL: ${{ matrix.narration == 'stub' && 'stub' || '' }}
-      OLLAMA_URL: ${{ matrix.narration == 'stub' && 'http://narrator-stub:11434' || '' }}
+      NARRATOR_MODEL: stub
+      OLLAMA_URL: http://narrator-stub:11434
       NARRATOR_RETRY_SECONDS: "5"
       CULPRIT_E2E_NARRATION: ${{ matrix.narration }}
       CULPRIT_E2E_NARRATOR_STUB_URL: http://127.0.0.1:11435

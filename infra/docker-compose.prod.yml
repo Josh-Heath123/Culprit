@@ -70,6 +70,10 @@ services:
       # under a unique name (DASHBOARD_DATABASE_URL) and remapped here,
       # per-container, instead of renaming anything in application code.
       DATABASE_URL: ${DASHBOARD_DATABASE_URL}
+      # Phase 35 part 2: the narration provider's key is the worker's alone.
+      # The api never calls a provider, so it is not handed the key that
+      # .env.prod (env_file) would otherwise give every service.
+      ANTHROPIC_API_KEY: ""
     depends_on:
       postgres:
         condition: service_healthy

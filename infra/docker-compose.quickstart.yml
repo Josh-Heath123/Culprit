@@ -60,6 +60,9 @@ services:
       # Phase 35 part 2: narration off or on (.env.prod's LLM_PROVIDER, or the
       # shell's: CI runs the journeys once with the stub and once with none).
       LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      # The narration provider's key is the worker's alone (as in
+      # docker-compose.prod.yml): the api never calls a provider.
+      ANTHROPIC_API_KEY: ""
     depends_on:
       postgres:
         condition: service_healthy

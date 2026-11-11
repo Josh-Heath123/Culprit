@@ -13,6 +13,7 @@ func TestRedactCredentials(t *testing.T) {
 		{"query-string password", "dsn https://db.example.com/x?user=a&password=hunter2-q&ssl=1", "hunter2-q"},
 		{"a PEM block", "key -----BEGIN PRIVATE KEY-----\nMIIEvQhunter2pem\n-----END PRIVATE KEY----- end", "hunter2pem"},
 		{"a provider key", "token sk-ABCDEFGHIJKLMNOPQRSTUVWX leaked", "sk-ABCDEFGHIJKLMNOPQRSTUVWX"},
+		{"an anthropic key", "key sk-ant-api03-ABCDEFGHIJ_KLMNOPQRST-uv leaked", "ABCDEFGHIJ_KLMNOPQRST"},
 		{"a JWT", "bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig", "eyJhbGciOiJIUzI1NiJ9"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -76,5 +76,8 @@ narrations = sa.Table(
     sa.Column("reason", sa.Text),
     sa.Column("named", postgresql.ARRAY(sa.Text)),
     sa.Column("narrated_at", sa.DateTime(timezone=True), nullable=False),
+    # The migration's: one row per attempt. Declared here too, so the
+    # worker's own tests (metadata.create_all) hold it as the database does.
+    sa.UniqueConstraint("investigation_id", "attempt", name="uq_narrations_attempt"),
     implicit_returning=False,
 )

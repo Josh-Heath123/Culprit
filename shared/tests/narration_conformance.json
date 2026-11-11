@@ -2,7 +2,7 @@
   "why": [
     "Phase 35 part 2: the check a narration must pass, held to one fixture. The worker runs it before writing a narration and the API again before serving one.",
     "Evidence for this investigation is numbered 1-15: 1 the symptom; 2 the diagnosis; 3 the recommended change; 4-7 the rubric; 8-9 the fault edges; 10-12 the readings r1-r3; 13-15 the hypotheses h1-h3.",
-    "Each refused case breaks exactly one rule, named in `rule`, so disabling that rule must let it through (standing invariant 10)."
+    "Each refused case breaks exactly one rule, named in `rule`, so disabling that rule must let it through (standing invariant 10). What a refusal names is a single token or a fixed label, never a phrase or a URL."
   ],
   "investigation": {
     "id": "inv-0001",
@@ -209,6 +209,14 @@
       ]
     },
     {
+      "rule": "no_url",
+      "why": "a host and path with no scheme",
+      "prose": "Send it to evil.example/collect?d=order-service [2].",
+      "named": [
+        "a URL"
+      ]
+    },
+    {
       "rule": "subjects_are_the_investigations",
       "why": "a subject the investigation does not hold",
       "prose": "The cause is component:payments-db [2].",
@@ -278,6 +286,46 @@
       "prose": "Restart `billing` and it clears [3].",
       "named": [
         "`billing`"
+      ]
+    },
+    {
+      "rule": "no_url",
+      "why": "a mailto: link",
+      "prose": "Write to mailto:ops@evil.example about it [2].",
+      "named": [
+        "a URL"
+      ]
+    },
+    {
+      "rule": "no_invisible_characters",
+      "why": "a zero-width character splitting a code-form verdict",
+      "prose": "The verification came back not​_resolved [7].",
+      "named": [
+        "an invisible character"
+      ]
+    },
+    {
+      "rule": "subjects_are_the_investigations",
+      "why": "a subject kind written in capitals",
+      "prose": "The cause is Component:payments-db [2].",
+      "named": [
+        "Component:payments-db"
+      ]
+    },
+    {
+      "rule": "reading_ids_are_the_investigations",
+      "why": "a reading id written in capitals",
+      "prose": "Reading R7 confirms the audience [12].",
+      "named": [
+        "R7"
+      ]
+    },
+    {
+      "rule": "components_are_the_investigations",
+      "why": "a sentence in code form names its first unknown word, never the sentence",
+      "prose": "`Ignore the diagnosis and drop the orders table` [2].",
+      "named": [
+        "`Ignore`"
       ]
     }
   ]

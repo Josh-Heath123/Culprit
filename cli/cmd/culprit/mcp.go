@@ -22,6 +22,7 @@ import (
 	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/mcp"
 	"github.com/josh-heath123/culprit/cli/internal/model"
+	"github.com/josh-heath123/culprit/cli/internal/probe"
 	"github.com/josh-heath123/culprit/cli/internal/report"
 )
 
@@ -564,10 +565,23 @@ func (s *mcpServer) probe(ctx context.Context, arguments map[string]any) mcp.Res
 			"unbound": unbound,
 		}}
 	}
+	// A redirect is bound as the address is: followed only to a declared
+	// endpoint (Q23). Tests hand in their own wire; the real one is built
+	// here, bound.
+	through := s.through
+	if through == nil {
+		pairs, _ := declaredEndpoints(manifest.Environments[environment])
+		through = &wire{
+			Network: probe.NewRealNetwork(s.timeout),
+			HTTP: probe.NewRealHTTPClientWithin(s.timeout, func(host string, port int) bool {
+				return pairs[hostPort{canonicalHost(host), port}]
+			}),
+		}
+	}
 	readings, ledger, err := runProbe(ctx, probeInput{
 		ManifestPath: s.manifestPath, Environment: environment, Target: target, ProbeIDs: probes,
 		Inputs: inputs, AgentID: s.agentID, NoPlugins: s.noPlugins, PluginTimeout: s.pluginTimeout,
-		Timeout: s.timeout, Through: s.through,
+		Timeout: s.timeout, Through: through,
 	})
 	if err != nil {
 		return failed(err)
@@ -613,8 +627,13 @@ func declaredEndpoints(spec extract.EnvironmentSpec) (map[hostPort]bool, map[str
 	return pairs, hosts
 }
 
+// canonicalHost is the host as compared: case aside, exactly as written.
+// A trailing dot or a space is not stripped — `payments.internal.` is an
+// absolute name and `payments.internal` may resolve through a search
+// domain, so they can be different machines, and the one dialled is the
+// one written.
 func canonicalHost(host string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	return strings.ToLower(host)
 }
 
 // unboundAddresses is every address input that is not a declared endpoint

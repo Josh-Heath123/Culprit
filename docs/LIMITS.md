@@ -2227,13 +2227,22 @@ host, a URL carrying credentials, a port with no host, a scheme other than
 the input and the reason. `culprit_diagnose` already placed its probes from
 `culprit.yaml` alone.
 
+A redirect is bound the same way: an HTTP probe run through `culprit_probe`
+follows a redirect (at most three) only to a declared endpoint, and stops
+at any other — so a declared service that answers 302 cannot carry the
+request somewhere undeclared.
+
 What the binding does not hold:
-- **It binds names, not addresses.** A declared host is compared as written
-  (case and a trailing dot aside); what it resolves to is DNS's answer at the
-  vantage. A hostile record for a declared name is not caught.
+- **It binds names, not addresses.** A declared host is compared as written,
+  case aside: `payments.internal.` (an absolute name) or one with a space is
+  refused rather than taken for `payments.internal`, because it may be a
+  different machine. What a declared name resolves to is DNS's answer at the
+  vantage; a hostile record for a declared name is not caught.
 - **It binds these four inputs.** Every catalogue probe that dials takes its
-  address through them. A plugin probe that took an address under another
-  name would not be bound; `--no-plugins` serves the catalogue alone.
+  address through them, and a test fails when a catalogue probe takes an
+  input name nobody has classified as an address or not one. A plugin probe
+  that took an address under another name would not be bound;
+  `--no-plugins` serves the catalogue alone.
 - **Declare what an agent may reach.** An endpoint declared for the walk is
   also one an agent may probe directly.
 
@@ -2312,6 +2321,28 @@ the fragment left over is named. A subject the prose truncates or
 reformats is refused, even when a person would read it as the same thing.
 Refusal is the safe failure: the evidence is still on the page.
 
+### What counts as a URL
+
+A scheme (`https://…`), a protocol-relative `//host`, `www.…`, `data:` and
+`mailto:`, and a dotted host followed by a path (`evil.example/collect?d=…`)
+are refused. A bare domain with no path (`evil.example`) is not, and nor is
+an HTML attribute that names no URL (`<img src="x">`): neither can carry
+data anywhere while the prose is shown as text, which it always is.
+
+### Invisible characters are refused
+
+A zero-width or other Unicode format character anywhere in the prose
+refuses it. One can split a name the other rules would see
+(`not` + U+200B + `_resolved`) or reorder what is shown.
+
+### What a refusal names is a word, not the model's sentence
+
+A refused narration stores and shows what it named, each item a single
+identifier-shaped token or a fixed label ("a URL", "an invisible
+character", "a name in code form"), redacted and at most 80 characters.
+For a name written in backticks only its first unknown word is named, so
+a sentence in code form is never shown. At most 20 are kept.
+
 ### URLs are refused even when the investigation holds one
 
 A symptom description can carry a URL (`POST http://order-service:8001/orders`).
@@ -2358,6 +2389,12 @@ is a failure too, not truncated.
 
 Markdown and HTML in a narration appear as the characters they are: no
 bold, no list, no link, no image. Line breaks are kept.
+
+### Only the worker holds the provider's key
+
+`ANTHROPIC_API_KEY` is set empty for the api service in both Compose files,
+so `.env.prod` gives it to the worker alone. A deployment that does not use
+these Compose files passes `.env.prod` as it chooses.
 
 ### Settings are read when the worker starts
 

@@ -33,12 +33,14 @@ module is the check *on* a model, and imports none.
 """
 
 import re
+import unicodedata
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
 from culprit_model.capabilities import Capability
 from culprit_model.investigations import Investigation, Relation
+from culprit_model.redaction import redact_credentials
 from culprit_model.subjects import SubjectError, SubjectKind
 from culprit_model.subjects import parse as parse_subject
 
@@ -125,10 +127,12 @@ def evidence(investigation: Investigation) -> list[EvidenceItem]:
 # ---- the check -------------------------------------------------------------
 
 _CITATION = re.compile(r"\[(\d{1,4})\]")
-#: Any scheme://, a protocol-relative //host, www., or a data: URI — what a
-#: link or an image would need to carry data out.
+#: Any scheme://, a protocol-relative //host, www., a data: URI, or a
+#: dotted host with a path and no scheme (`evil.example/collect?d=...`) —
+#: what a link or an image would need to carry data out.
 _URL = re.compile(
-    r"\b[a-z][a-z0-9+.-]*://\S*|(?<![\w/])//[a-z0-9-]+\.\S*|\bwww\.\S+|\bdata:[a-z]+/\S*",
+    r"\b[a-z][a-z0-9+.-]*://\S*|(?<![\w/])//[a-z0-9-]+\.\S*|\bwww\.\S+|\bdata:[a-z]+/\S*"
+    r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?/\S*|\bmailto:\S+",
     re.IGNORECASE,
 )
 #: An identifier-shaped run: what a subject, a probe id, a reading id or a
@@ -136,8 +140,15 @@ _URL = re.compile(
 #: sentence's full stop is not part of it.
 _TOKEN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_.:/>@\-]*[A-Za-z0-9])?")
 _BACKTICKED = re.compile(r"`([^`\n]{1,200})`")
-_SUBJECT_PREFIX = re.compile(r"^(?:" + "|".join(kind.value for kind in SubjectKind) + r"):")
-_READING_ID = re.compile(r"^[a-z]{1,3}\d+$")
+_SUBJECT_PREFIX = re.compile(
+    r"^(?:" + "|".join(kind.value for kind in SubjectKind) + r"):", re.IGNORECASE
+)
+_READING_ID = re.compile(r"^[a-z]{1,3}\d+$", re.IGNORECASE)
+#: What may be stored and shown as "what it named": one identifier-shaped
+#: token, never a phrase — so a refusal cannot carry the model's sentence
+#: to the page.
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,39}$")
+_MAX_NAMED = 80
 _CAPABILITIES = frozenset(capability.value for capability in Capability)
 #: Words that, as part of a hyphenated name, make it a component's name:
 #: `inventory-service`, `orders-db`. A component named as one plain word is
@@ -235,6 +246,12 @@ def _unknown_tokens(prose: str, ctx: Context) -> Iterator[str]:
 Rule = Callable[[str, Context], list[str]]
 
 
+def no_invisible_characters(prose: str, ctx: Context) -> list[str]:
+    """No zero-width or other format character: one can split a name the
+    other rules would see (`not` + U+200B + `_resolved`), or reorder what is shown."""
+    return ["an invisible character" for ch in prose if unicodedata.category(ch) == "Cf"][:1]
+
+
 def citations_name_items(prose: str, ctx: Context) -> list[str]:
     """Every citation names an item in the list."""
     return [
@@ -278,9 +295,12 @@ def components_are_the_investigations(prose: str, ctx: Context) -> list[str]:
     with a component word or a digit (`inventory-service`, `db-2`)."""
     named: list[str] = []
     for span in _BACKTICKED.findall(_CITATION.sub(" ", prose)):
-        inside = _masked(span, ctx)
-        if any(token.lower() not in ctx.tokens for token in _TOKEN.findall(inside)):
-            named.append(f"`{span}`")
+        unknown = [t for t in _TOKEN.findall(_masked(span, ctx)) if t.lower() not in ctx.tokens]
+        if unknown:
+            # The first unknown name, never the span: a span can hold a
+            # sentence, and what was named is stored and shown.
+            first = unknown[0]
+            named.append(f"`{first}`" if _SAFE_NAME.match(first) else "a name in code form")
     for token in _unknown_tokens(prose, ctx):
         if "-" not in token or "_" in token or ":" in token or "." in token:
             continue
@@ -295,6 +315,7 @@ def components_are_the_investigations(prose: str, ctx: Context) -> list[str]:
 RULES: tuple[Rule, ...] = (
     citations_name_items,
     no_url,
+    no_invisible_characters,
     subjects_are_the_investigations,
     probes_are_the_investigations,
     capabilities_are_the_investigations,
@@ -302,6 +323,15 @@ RULES: tuple[Rule, ...] = (
     code_forms_are_the_investigations,
     components_are_the_investigations,
 )
+
+
+def _shown(name: str) -> str:
+    """What was named, made safe to store and show: never a URL, never a
+    credential, never longer than _MAX_NAMED characters."""
+    if _URL.search(name):
+        return "a URL"
+    name = redact_credentials(name)
+    return name if len(name) <= _MAX_NAMED else name[: _MAX_NAMED - 1] + "…"
 
 
 @dataclass(frozen=True)
@@ -318,7 +348,8 @@ def check(investigation: Investigation, prose: str, rules: tuple[Rule, ...] = RU
     ctx = context(investigation)
     named: list[str] = []
     for rule in rules:
-        for name in rule(prose, ctx):
+        for found in rule(prose, ctx):
+            name = _shown(found)
             if name not in named:
                 named.append(name)
     if not prose.strip():

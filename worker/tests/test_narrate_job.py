@@ -25,13 +25,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 import pytest_asyncio
 from app.db import metadata
 from app.narrate import prompts, tables
 from app.narrate.config import NarratorConfig
 from app.narrate.job import MAX_ATTEMPTS, narrate_investigations, narrate_one
-from app.narrate.providers import OllamaProvider, ProviderError
+from app.narrate.providers import AnthropicProvider, OllamaProvider, ProviderError
 from culprit_model.investigations import Investigation
 from culprit_model.narration import evidence
 from sqlalchemy import delete, insert, select, text
@@ -246,6 +247,18 @@ async def test_three_attempts_then_no_fourth_call(engine: AsyncEngine) -> None:
     assert {row["status"] for row in rows} == {"failed"}
 
 
+async def test_overlapping_ticks_call_the_provider_once(engine: AsyncEngine) -> None:
+    """A slow provider and a cron every 15 seconds: ticks overlap. The
+    attempt is claimed before the call, so only one tick calls."""
+    await store(engine, recorded(), datetime.now(UTC))
+    provider = Scripted(0.5)  # sleeps half a second, then answers
+
+    await asyncio.gather(*(narrate_investigations(ctx(engine, provider)) for _ in range(4)))
+
+    assert len(provider.calls) == 1
+    assert [row["attempt"] for row in await narrations(engine)] == [1]
+
+
 async def test_a_failed_attempt_waits_before_the_next(engine: AsyncEngine) -> None:
     await store(engine, recorded(), datetime.now(UTC))
     provider = Scripted(ProviderError("scripted answered HTTP 500"))
@@ -319,3 +332,74 @@ async def test_a_provider_error_leaves_no_trace_of_what_it_said(
     for secret in SECRETS:
         assert secret not in stored
         assert secret not in caplog.text
+
+
+# ---- the anthropic provider's request, with no network --------------------------
+
+
+def anthropic(handler) -> AnthropicProvider:
+    config = NarratorConfig(provider="anthropic", model="a-model", api_key="test-key-not-real")
+    return AnthropicProvider(config, transport=httpx.MockTransport(handler))
+
+
+async def test_anthropic_sends_one_message_no_tools_and_no_stream() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "thinking", "thinking": ""},
+                    {"type": "text", "text": "It failed [1]."},
+                ],
+            },
+        )
+
+    reply = await anthropic(handler).complete("the system prompt", "the evidence")
+
+    assert reply == "It failed [1]."
+    (request,) = seen
+    assert request.method == "POST" and str(request.url) == "https://api.anthropic.com/v1/messages"
+    assert request.headers["x-api-key"] == "test-key-not-real"
+    assert request.headers["anthropic-version"] == "2023-06-01"
+    body = json.loads(request.content)
+    assert set(body) == {"model", "max_tokens", "system", "messages"}
+    assert body["system"] == "the system prompt"
+    assert body["messages"] == [{"role": "user", "content": "the evidence"}]
+
+
+@pytest.mark.parametrize(
+    "response, reason",
+    [
+        (
+            httpx.Response(529, json={"error": {"message": "sk-ant-api03-" + "Q" * 40}}),
+            "anthropic answered HTTP 529",
+        ),
+        (
+            httpx.Response(200, json={"stop_reason": "refusal", "content": []}),
+            "anthropic declined to answer (refusal)",
+        ),
+        (
+            httpx.Response(200, json={"stop_reason": "max_tokens", "content": []}),
+            "anthropic's reply was cut off at its token limit",
+        ),
+        (
+            httpx.Response(200, text="<html>not json</html>"),
+            "anthropic answered with something that is not JSON",
+        ),
+        (
+            httpx.Response(200, json={"content": "not a list"}),
+            "anthropic answered in a shape it does not use",
+        ),
+    ],
+    ids=["http-error", "refusal", "max-tokens", "not-json", "wrong-shape"],
+)
+async def test_anthropic_failures_are_closed_vocabulary(
+    response: httpx.Response, reason: str
+) -> None:
+    with pytest.raises(ProviderError) as raised:
+        await anthropic(lambda request: response).complete("s", "u")
+    assert raised.value.reason == reason

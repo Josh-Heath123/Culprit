@@ -21,6 +21,7 @@ narrations, as the `narrator` role — and does nothing else.
 """
 
 import asyncio
+import hashlib
 import logging
 import secrets
 from collections.abc import Mapping, Sequence
@@ -174,40 +175,67 @@ async def attempt(
     return {"status": "complete", "prose": prose}
 
 
+def _claim_key(investigation_id: str) -> int:
+    """The advisory lock that claims an investigation for one attempt: a
+    stable signed 64-bit number from its id."""
+    digest = hashlib.sha256(f"culprit-narrate:{investigation_id}".encode()).digest()
+    return int.from_bytes(digest[:8], "big", signed=True)
+
+
 async def narrate_one(
     engine: AsyncEngine, provider: Provider, investigation_id: str, timeout_seconds: float
 ) -> str | None:
     """Narrate one investigation once, if it is still due. Returns the
-    status written, or None when nothing was attempted."""
+    status written, or None when nothing was attempted.
+
+    The attempt is claimed before the provider is called: a session-level
+    advisory lock on the investigation, held on this connection until the
+    attempt's row is written. Two ticks that overlap — a slow provider and
+    a cron that fires every 15 seconds — cannot both call the provider for
+    one attempt; the second finds the lock taken and does nothing. The
+    attempts are counted again under the lock, so one written meanwhile is
+    seen. (The database's uq_narrations_attempt stays the backstop.)
+    """
+    key = _claim_key(investigation_id)
     async with engine.connect() as conn:
-        count, done = await _attempts(conn, investigation_id)
-        if done or count >= MAX_ATTEMPTS:
+        claimed = (await conn.execute(select(func.pg_try_advisory_lock(key)))).scalar_one()
+        await conn.commit()
+        if not claimed:
             return None
-        investigation = await load(conn, investigation_id)
-    if investigation is None:
-        return None
-    outcome = await attempt(provider, investigation, timeout_seconds)
-    row: dict[str, Any] = {
-        "id": _id(),
-        "investigation_id": investigation_id,
-        "attempt": count + 1,
-        "provider": provider.name,
-        "model": provider.model[:200],
-        "prose": None,
-        "reason": None,
-        "named": None,
-        "narrated_at": datetime.now(UTC),
-        **outcome,
-    }
-    try:
-        async with engine.begin() as conn:
-            await conn.execute(insert(tables.narrations).values(**row))
-    except IntegrityError as exc:
-        if _constraint(exc) != "uq_narrations_attempt":
-            raise
-        # Another worker wrote this attempt first; its row stands.
-        logger.info("narration_attempt_taken investigation=%s", investigation_id)
-        return None
+        try:
+            count, done = await _attempts(conn, investigation_id)
+            investigation = (
+                None if done or count >= MAX_ATTEMPTS else await load(conn, investigation_id)
+            )
+            await conn.commit()
+            if investigation is None:
+                return None
+            outcome = await attempt(provider, investigation, timeout_seconds)
+            row: dict[str, Any] = {
+                "id": _id(),
+                "investigation_id": investigation_id,
+                "attempt": count + 1,
+                "provider": provider.name,
+                "model": provider.model[:200],
+                "prose": None,
+                "reason": None,
+                "named": None,
+                "narrated_at": datetime.now(UTC),
+                **outcome,
+            }
+            try:
+                await conn.execute(insert(tables.narrations).values(**row))
+                await conn.commit()
+            except IntegrityError as exc:
+                await conn.rollback()
+                if _constraint(exc) != "uq_narrations_attempt":
+                    raise
+                # Written by a worker that did not take the lock; its row stands.
+                logger.info("narration_attempt_taken investigation=%s", investigation_id)
+                return None
+        finally:
+            await conn.execute(select(func.pg_advisory_unlock(key)))
+            await conn.commit()
     # Never the prose, and the reason is closed vocabulary, redacted.
     logger.info(
         "narration status=%s investigation=%s attempt=%d provider=%s",

@@ -10,11 +10,15 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -367,6 +371,12 @@ func TestAProbeReachesOnlyDeclaredEndpoints(t *testing.T) {
 		{"probe.http.reachable", map[string]any{"url": "http://payments.internal:8443@169.254.169.254/"}},
 		{"probe.net.tcp_connect", map[string]any{"port": 8443}},
 		{"probe.http.reachable", map[string]any{"url": "file:///etc/passwd"}},
+		// The declared host written another way: an absolute name, or with
+		// a space, is not compared as the declared one (it may be another
+		// machine), so it is refused rather than normalised.
+		{"probe.net.tcp_connect", map[string]any{"host": "payments.internal.", "port": 8443}},
+		{"probe.net.tcp_connect", map[string]any{"host": " payments.internal", "port": 8443}},
+		{"probe.http.reachable", map[string]any{"url": "http://payments.internal.:8443/health"}},
 	}
 	for _, c := range refused {
 		result := call(c.probe, c.inputs)
@@ -391,6 +401,99 @@ func TestAProbeReachesOnlyDeclaredEndpoints(t *testing.T) {
 	}
 	if requests := http.requests.Load(); requests != 1 {
 		t.Fatalf("%d requests for one reachable to the declared endpoint, want 1", requests)
+	}
+}
+
+// TestARedirectIsBoundAsTheAddressIs: a declared endpoint that answers
+// 302 does not carry culprit_probe to an address the environment does not
+// declare — the undeclared server is never reached — while a redirect to
+// a declared endpoint is followed. Real sockets, on loopback.
+func TestARedirectIsBoundAsTheAddressIs(t *testing.T) {
+	var undeclaredHits atomic.Int64
+	undeclared := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		undeclaredHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer undeclared.Close()
+	var declared *httptest.Server
+	declared = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/away":
+			http.Redirect(w, r, undeclared.URL+"/latest/meta-data/", http.StatusFound)
+		case "/home":
+			http.Redirect(w, r, declared.URL+"/ok", http.StatusFound)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer declared.Close()
+	port := declared.Listener.Addr().(*net.TCPAddr).Port
+	manifest := fmt.Sprintf(`version: 1
+components:
+  - name: web
+    kind: service
+environments:
+  local:
+    adapter: process
+    components:
+      web: {}
+    endpoints:
+      web: { host: 127.0.0.1, port: %d }
+    grants:
+      net.http.outbound: true
+`, port)
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	if err := os.WriteFile(path, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// No wire handed in: the server builds the real one, bound.
+	client := mcpSession(t, &mcpServer{
+		manifestPath: path, stateDir: t.TempDir(), agentID: "test", noPlugins: true,
+		timeout: 5 * time.Second, stderr: io.Discard,
+	})
+	reach := func(path string) model.Reading {
+		result := client.call("culprit_probe", map[string]any{"target": "component:web", "environment": "local",
+			"probes": []string{"probe.http.reachable"},
+			"inputs": map[string]any{"url": fmt.Sprintf("http://127.0.0.1:%d%s", port, path)}})
+		var probed struct {
+			Readings []model.Reading `json:"readings"`
+		}
+		if err := json.Unmarshal(result.Structured, &probed); err != nil || result.IsError || len(probed.Readings) != 1 {
+			t.Fatalf("%s: %v %s", path, err, result.Structured)
+		}
+		return probed.Readings[0]
+	}
+	if reading := reach("/away"); reading.Verdict == model.VerdictPass {
+		t.Errorf("a redirect off the declared endpoints was followed: %+v", reading)
+	}
+	if hits := undeclaredHits.Load(); hits != 0 {
+		t.Fatalf("the undeclared server was reached %d time(s) through a redirect", hits)
+	}
+	if reading := reach("/home"); reading.Verdict != model.VerdictPass {
+		t.Errorf("a redirect to the declared endpoint was not followed: %+v", reading)
+	}
+}
+
+// TestEveryCatalogueInputIsClassified: the binding holds four input names
+// (url, base_url, host, port). It covers every address only while no probe
+// takes an address under another name, so every input name in the
+// catalogue is listed here as one of those four or as not an address. A
+// probe added with a new input name fails this until someone decides
+// which it is — and binds it in unboundAddresses if it is an address.
+func TestEveryCatalogueInputIsClassified(t *testing.T) {
+	bound := map[string]bool{"url": true, "base_url": true, "host": true, "port": true}
+	notAnAddress := map[string]bool{
+		"method": true, "token": true, "token_env": true, "key": true, "package": true, "schema": true,
+		"table": true, "expect_fields": true, "expect_columns": true, "expect_audience": true,
+		"expect_issuer": true, "expect_version": true,
+	}
+	for _, manifest := range catalogue().Manifests() {
+		properties, _ := manifest.Inputs["properties"].(map[string]any)
+		for name := range properties {
+			if !bound[name] && !notAnAddress[name] {
+				t.Errorf("%s takes input %q, which is neither bound as an address nor listed as not one", manifest.ID, name)
+			}
+		}
 	}
 }
 

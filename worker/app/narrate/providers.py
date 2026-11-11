@@ -50,10 +50,17 @@ def _http_failure(provider: str, exc: httpx.HTTPError) -> ProviderError:
 
 
 async def _post(
-    provider: str, url: str, headers: dict[str, str], body: dict[str, Any], timeout: float
+    provider: str,
+    url: str,
+    headers: dict[str, str],
+    body: dict[str, Any],
+    timeout: float,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> dict[str, Any]:
     try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=timeout, follow_redirects=False, transport=transport
+        ) as client:
             response = await client.post(url, headers=headers, json=body)
             response.raise_for_status()
             parsed = response.json()
@@ -69,10 +76,14 @@ async def _post(
 class AnthropicProvider:
     name = "anthropic"
 
-    def __init__(self, config: NarratorConfig) -> None:
+    def __init__(
+        self, config: NarratorConfig, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
         self.model = config.model
         self._key = config.api_key
         self._timeout = config.timeout_seconds
+        # Tests only: what the request would be, with no network.
+        self._transport = transport
 
     async def complete(self, system: str, user: str) -> str:
         reply = await _post(
@@ -90,6 +101,7 @@ class AnthropicProvider:
                 "messages": [{"role": "user", "content": user}],
             },
             self._timeout,
+            self._transport,
         )
         stop = reply.get("stop_reason")
         if stop == "refusal":
