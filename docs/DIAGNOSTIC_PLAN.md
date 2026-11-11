@@ -15,6 +15,10 @@ probe loop. Phases 31.2 and 32.1 fold in the productisation brief
 32.1 builds the design system and the interface around investigations, after
 it. The order is 31 → 31.1 → 31.2 → 32 → 32.1 → 33 → 34 → 35.
 
+**Phases 36 onward are in `docs/PERFORMANCE_PLAN.md`** (written 2026-11-11):
+performance conformance, Phases 36–39. This plan's standing invariants and
+D1–D8 hold there.
+
 **This plan evolves the existing repository. There is no new repository.**
 Every phase below names the existing files it modifies. Where something is
 removed, the reason is stated; nothing is removed merely because the product
@@ -3225,6 +3229,184 @@ above differ, this block wins.
 **Do NOT implement in part 1.** No narrator, no prose, no write-capable tool,
 no remediation, no network transport for MCP, no change to the Python MCP
 server beyond what its tests need.
+
+**Architecture review of part 1, 2026-11-11 — signed off; the gate is main's
+push run.** Merged via PR #34 (`60d2c92`). Every pull-request check passed
+except `e2e`, which failed three times installing `just` from apt, before any
+test ran, because the runner could not resolve Ubuntu's mirrors; the pull
+request was merged without it. Every part 1 criterion was run by a job that did
+run: the fault-library job runs `TestTheFaultLibrary` unfiltered
+(`ci-cd.yml:405`), so `mcp/auth-audience` and `mcp/wrong-fix` ran on Linux
+through the real binary and could not have been skipped, and the `cli` job ran
+the rest. But `e2e` also runs the agent journeys against this binary, so part 1
+is complete only once `main`'s push run on `60d2c92` is green, `e2e` included
+(standing invariant 12). Part 2's first step confirms it. Checked on `main`:
+`internal/mcp` imports only standard-library packages that link no network;
+every tool's arguments are a closed schema, checked before its handler runs;
+`culprit.yaml` is pinned by its digest when the server starts; the tests the
+criteria name exist under the names the report gives. Phase 36 onward is
+`docs/PERFORMANCE_PLAN.md`, written 2026-11-11 and committed with this
+sign-off. Decisions:
+
+- **Q22 — criterion 3 accepted as built, and reworded.** A tool with a CLI
+  command answers exactly what that command prints with `--format json`. A tool
+  without one (`culprit_system_model`, `culprit_explain_connection`) answers in
+  records that each validate as a model record, inside an envelope the README's
+  tool table documents. No `outputSchema` for now: an error result carries
+  `{error}`, which a schema for the success shape would not admit. Revisit if a
+  client needs to validate responses.
+- **Q23 — `culprit_probe`'s address inputs are bound to the declared
+  endpoints.** It is the first item of part 2. At a terminal, `culprit probe`
+  reaches nothing the person running it could not reach with `curl`. Through
+  `culprit mcp` the caller is a coding agent, which may be carrying
+  instructions from something it read: an issue, a README, a web page. The
+  network capabilities take no allowlist (§2.7 keeps per-item grants for
+  values, rows and commands). So the current LIMITS advice — grant them only
+  where reaching anything is acceptable — leaves the person to reason about
+  everywhere an agent could reach. `culprit_diagnose` already places its probes
+  from `culprit.yaml` alone, and `culprit_probe` will do the same.
+  `culprit probe` from a terminal is unchanged.
+- **Q24 — no change to the workflow.** Moving `just` off apt would not take the
+  job off Ubuntu's mirrors: the step after it,
+  `npx playwright install --with-deps chromium`, installs Chromium's system
+  libraries from the same archive. A runner that cannot resolve the archive
+  cannot run this job at all; re-run it. If it recurs, the fix is a bounded
+  retry on the apt steps, not a different installer.
+- **Decisions taken in the run, all accepted.** The vantage is the server's
+  flag. `culprit.yaml` is pinned for the session — a good catch by the
+  invariant auditor: without the pin, an agent that can edit the repository
+  could grant itself a capability between two calls. `culprit_probe` requires
+  named probes and refuses the whole call when one is not granted. Input names
+  are reserved. Calls are handled one at a time. The `Serve` → `Run` rename is
+  accepted: `TestNothingInTheBinaryListens` matches call names, which a rename
+  can always evade, but `internal/mcp` links no `net` package at all. The
+  network allowlist test, not the name match, is what proves it cannot listen.
+
+**Part 2 — the narrator. Brief and criteria, 2026-11-11.**
+
+**Decisions.**
+- **Where it runs.** `worker/app/narrate/` is a job in the worker, scheduled
+  like the others. It narrates a stored investigation and writes one narration
+  record per attempt, once, with its final status, as a new `narrator` role.
+  That role reads the investigation tables and its own narrations, inserts
+  narrations, and does nothing else (standing invariant 3). The API reads narrations through `api-reader`:
+  a same-job read beside `investigations`, justified in the migration. Nothing
+  in `cli/` reads or receives a narration, and nothing in the binary changes
+  for it.
+- **Providers sit behind one interface.**
+  - `none` is the default: nothing is narrated, and the interface says
+    narration is off.
+  - `anthropic`.
+  - `ollama`: a model on the operator's own machine, with no key, so nothing
+    leaves it.
+  - Tests use a provider with scripted replies. CI points the `ollama`
+    provider at a stub serving scripted replies, so the real provider code
+    runs with no key and no model.
+  - The provider, model and any key are the operator's settings in
+    `.env.prod`. Claude Code writes none of them.
+- **What the narrator is given.** The investigation and nothing else: no
+  telemetry, no tools, no second call. The evidence comes as a numbered list.
+  It writes plain prose — what failed, why, and what to change, in words — and
+  cites evidence by number.
+- **The check.** One pure function in `shared/culprit_model`, with a fixture.
+  The worker runs it before writing, and the API runs it again before serving
+  prose, as Phase 34 re-judges a verification. A narration passes only when:
+  - every citation names an item in the list;
+  - the prose outside citations names no subject, reading id, probe id,
+    capability, component or code-form verdict (`not_resolved`,
+    `breaks_request_path`, …) that is absent from the investigation;
+  - it contains no URL.
+
+  A narration that fails is stored as `refused`, with what it named. When
+  prose is shown, each citation is replaced by its item's own text, taken from
+  the record and never from the model. **What the check cannot hold:** it
+  holds identifiers, not meaning. Prose can still describe cited evidence
+  wrongly in plain words. That is why the evidence is shown beside it, the
+  prose is labelled as derived, and LIMITS says so.
+- **Status, never pending (2026-11-04).**
+  - `complete`.
+  - `failed`, with a reason: a provider error, a timeout or an empty reply.
+    The reason passes the redaction choke point.
+  - `refused`, with what it named.
+  - At most three attempts per investigation; the last status stands.
+  - The interface shows off, not narrated yet, complete, failed or refused.
+    None of them is a spinner that does not end.
+  - Prose is rendered as text: never HTML, and never markdown with links or
+    images, since an injected image is a way out for data.
+- **`LLM_PROVIDER=none` is a CI job again (D8, amended 2026-11-05).** It means
+  something now: every command and journey is complete, only the prose is
+  absent, and no provider is called.
+
+**Work order.**
+0. Confirm `main`'s push run on `60d2c92` is green, `e2e` included. If `e2e`
+   failed on the runners' DNS, re-run it. If a test failed, stop and escalate.
+1. Bind `culprit_probe`'s address inputs to declared endpoints (Q23): `url`,
+   `base_url`, `host` and `port` must match an endpoint the environment
+   declares. LIMITS' "A granted probe goes where its inputs say" is rewritten
+   for the two surfaces.
+2. The check, with its fixture, written before any provider exists.
+3. The narration record: migration, the `narrator` role, append-only.
+4. The providers and the job.
+5. The API and the interface: the narration beside the investigation,
+   labelled as derived, with its status.
+6. CI: the `LLM_PROVIDER=none` job, and the stub provider's journeys in `e2e`.
+7. README (narration and its providers, Ollama included), LIMITS, PERMISSIONS
+   (the `narrator` role; exactly what is sent to a provider, and that with
+   `anthropic` it leaves the machine).
+
+**Acceptance criteria (part 2).**
+- `culprit_probe` refuses, before anything is dialled (dials counted), an
+  address input that is not a declared endpoint of the environment. The
+  refused cases include `169.254.169.254`, an undeclared host, and an
+  undeclared port on a declared host. A declared endpoint dials once. The
+  refusal is shown red with the binding disabled. `culprit probe` from a
+  terminal behaves as before.
+- The check's fixture refuses each of the following, with what it named, and
+  passes faithful narrations:
+  - a citation to an item not in the list;
+  - a reading id, probe id, subject, component or capability not in the
+    investigation;
+  - a code-form verdict not in it;
+  - a URL.
+
+  Each rule is shown red by disabling it (standing invariant 10). A row
+  inserted directly with unchecked prose is not served as prose.
+- With the stub provider, in CI:
+  - a complete narration is shown, labelled as derived, with its provider and
+    model;
+  - a provider failure is stored and shown as `failed` with a reason, and a
+    secret-looking string in the stub's error leaves no trace;
+  - a refused narration is shown as refused, with what it named;
+  - after three attempts, no fourth call is made;
+  - nothing is ever pending.
+- The narrator's input is built from the investigation record alone (a test
+  asserts it), and each attempt is one call, with no tools.
+- With `LLM_PROVIDER=none` in CI, all of these pass with no provider called
+  (counted), and the interface says narration is off:
+  - the fault library;
+  - `culprit check`, `diagnose` and `verify`;
+  - every `e2e` journey.
+
+  The investigation and verification records from the same loop are identical
+  with narration on and off, apart from their ids and times.
+- Nothing downstream reads a narration. Only `app.narrate` may talk to a
+  provider, and no deterministic package may import `app.narrate`. Both are
+  enforced by `lint-imports` contracts and shown red by a deliberate import.
+- The `narrator` role cannot update or delete a narration, and a test tries.
+  The migration round-trips.
+- Markdown and HTML in a narration's prose are shown literally (`e2e`) — and
+  refused anyway, if they carry a URL.
+
+**Definition of done.** Above, plus a recorded end-to-end demonstration, made
+by Malcolm after the merge, not by `/next`. Claude Code is pointed at
+`culprit mcp` against the quickstart's audience fault: it diagnoses, applies
+the fix and verifies, and then the investigation's page shows its narration.
+With `ollama`, the recording needs no key.
+
+**Do NOT implement in part 2.** No hypothesis ranking. Nothing model-related in
+the binary. No tool for the narrator, and no second call. No narration of
+verifications. No narration through `culprit mcp`. No streaming. No
+remediation applied by anything.
 
 ---
 

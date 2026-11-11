@@ -54,12 +54,12 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **35, part 1 — The agent surface** — status `gates red` (ambient): implemented, every local gate and every CI job green except `e2e`, which failed three times installing `just` from apt because the runner could not resolve Ubuntu's mirrors — no e2e test ran. PR #34, not merged. Q24. Report in §5. |
-| Previous phase | **34 — The verification loop and calibration: complete** (two parts), part 2 signed off 2026-11-11 by the architecture session. Merged via PR #33 (`0effc53`), every pull-request check green. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
+| Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted); then `docs/PERFORMANCE_PLAN.md` (Phases 36–39) |
+| Current phase | **35, part 2 — The narrator** — `not started`. Brief: `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Part 2". Its step 0 confirms `main`'s push run on `60d2c92` green, `e2e` included. |
+| Previous phase | **35, part 1 — The agent surface: complete**, signed off 2026-11-11 by the architecture session. Merged via PR #34 (`60d2c92`); `e2e` had not run on the pull request (ambient, Q24), so the gate is `main`'s push run, confirmed by part 2's step 0. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-35-mcp`, cut from `origin/main` = `0effc53`; its first commit is the Phase 34 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **Q24** blocks PR #34's merge gate (CI's `e2e` cannot install `just`), not the design. Q22 and Q23 are for review. |
+| Branch | `phase-35-narrator`, to be cut from `origin/main` = `60d2c92`; its first commit is the Phase 35 part 1 sign-off already in the working tree (message: `../phase-35-1-signoff.txt`, in the outer folder). Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Blocking questions | None. |
 
 ---
 
@@ -70,9 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q22 | Phase 35 part 1, criterion 3 — "every tool's response validates against the same model the CLI's JSON uses" — cannot hold literally for `culprit_system_model` and `culprit_explain_connection`, which have no CLI command. Built: every record inside them is a model record that validates (facts, check's own divergence objects, built subjects, catalogue manifests); their envelopes are new. Accept that reading, or ask for the envelopes published as each tool's `outputSchema`? | 2026-11-11, Phase 35 part 1 | No |
-| Q23 | A probe's `url`/`host`/`port` inputs are not bound to the endpoints `culprit.yaml` declares — true of `culprit probe` since Phase 31, and now reachable by a coding agent through `culprit_probe` (the phase-auditor sent a GET to an arbitrary local address under `net.http.outbound`). Documented in LIMITS ("A granted probe goes where its inputs say"). Bind `culprit_probe`'s inputs to declared endpoints, or accept the limit? | 2026-11-11, Phase 35 part 1 | No |
-| Q24 | CI's `e2e` job installs `just` with `apt-get` (ci-cd.yml:513). On PR #34 (run 43045419342) it failed three times, 15:12–15:40 UTC, resolving Ubuntu's mirrors, before any test ran; every other job passed. Re-run it once the runners' DNS recovers, or install `just` another way (its GitHub release with a pinned checksum; the workflow comment at :511 records that a third-party action was avoided on purpose)? Claude Code has not changed the workflow. | 2026-11-11, Phase 35 part 1 | PR #34's merge gate |
+| — | None open. Q22, Q23 and Q24 were ruled 2026-11-11 (`DIAGNOSTIC_PLAN.md`, end of Phase 35): criterion 3 accepted as built and reworded; `culprit_probe`'s address inputs bound to declared endpoints, as part 2's first item; no workflow change for `e2e` — re-run it. | | |
 
 ---
 
@@ -103,8 +101,12 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
-| 35, part 1 | The agent surface | **gates red** (ambient: CI `e2e` could not install `just`; Q24) — PR #34, not merged | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — all 17 fields, read with "How Phase 35 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, five criteria and what not to build. `culprit mcp` is served by the binary over stdio; the Python MCP server is not repointed. Branch `phase-35-mcp`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 35, part 2 | The narrator | not started | Criteria written at part 1's review. |
+| 35, part 1 | The agent surface | **complete** (PR #34 merged, `60d2c92`) | **Signed off 2026-11-11** (architecture session): every criterion run in CI — the MCP loop through the real binary on Linux in the fault-library job, unfilterable; `e2e` did not run on the pull request (ambient, Q24), so part 2's step 0 confirms `main`'s push run green. Q22–Q24 ruled. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
+| 35, part 2 | The narrator | not started | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — "How Phase 35 is run", then "Part 2" at the end of the section for the decisions, work order, criteria and what not to build. Step 0 first: `main`'s push run on `60d2c92` green, `e2e` included. Item 1 is a Go change (Q23); the rest is the control plane. Branch `phase-35-narrator` from `origin/main` = `60d2c92`, its first commit the part 1 sign-off. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 36 | Latency budgets, and a walk that can see slow | not started | `docs/PERFORMANCE_PLAN.md` Phase 36. Starts after Phase 35 is complete; "How Phase 36 is run" is written at the review of Phase 35 part 2. |
+| 37 | The database: statements, plans and indexes | not started | `docs/PERFORMANCE_PLAN.md` Phase 37. "How Phase 37 is run" is written at the review before it. |
+| 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
+| 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
