@@ -1,0 +1,73 @@
+{
+  "why": "Written by TestTheFaultLibrary (CULPRIT_FAULT_LIBRARY_RESULTS): each planted fault, diagnosed, its known fix applied and verified; and each scenario, a deliberate wrong or partial fix. scripts/accuracy_readme.py renders the README's number from this file.",
+  "faults": [
+    {
+      "name": "auth-audience",
+      "root_subject": "auth:order-service->inventory-service/audience",
+      "complete": true,
+      "verdict": "verified"
+    },
+    {
+      "name": "auth-audience-ungranted",
+      "root_subject": "component:order-service",
+      "complete": false,
+      "verdict": "inconclusive"
+    },
+    {
+      "name": "network-partition",
+      "root_subject": "connection:order-service->inventory-service",
+      "complete": true,
+      "verdict": "verified"
+    },
+    {
+      "name": "contract",
+      "root_subject": "http:inventory-service/GET /stock",
+      "complete": true,
+      "verdict": "verified"
+    },
+    {
+      "name": "config",
+      "root_subject": "config:payments-service/PAYMENTS_PROVIDER_KEY",
+      "complete": true,
+      "verdict": "verified"
+    },
+    {
+      "name": "error-rate",
+      "root_subject": "component:inventory-service",
+      "complete": true,
+      "verdict": "verified"
+    },
+    {
+      "name": "latency",
+      "root_subject": "component:order-service",
+      "complete": false,
+      "verdict": "inconclusive"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "wrong-fix",
+      "root_subject": "auth:order-service->inventory-service/audience",
+      "complete": true,
+      "verdict": "not_resolved"
+    },
+    {
+      "name": "regressed",
+      "root_subject": "http:inventory-service/GET /stock",
+      "complete": true,
+      "verdict": "regressed"
+    },
+    {
+      "name": "changed-underneath",
+      "root_subject": "http:inventory-service/GET /stock",
+      "complete": true,
+      "verdict": "changed_underneath"
+    },
+    {
+      "name": "no-change-named",
+      "root_subject": "http:inventory-service/GET /stock",
+      "complete": true,
+      "verdict": "inconclusive"
+    }
+  ]
+}

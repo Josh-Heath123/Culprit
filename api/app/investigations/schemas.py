@@ -59,6 +59,9 @@ class HypothesisGroups(BaseModel):
 class InvestigationTree(BaseModel):
     id: str
     environment: str
+    #: Who stored it: "project-token", or "agent:<id>" — the agent that
+    #: holds its record of before, and so the one that can verify it.
+    submitted_by: str
     opened_at: datetime
     symptom: Symptom
     diagnosis: Diagnosis | None

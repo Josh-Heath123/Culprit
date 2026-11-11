@@ -11,9 +11,10 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 34, part 1 — the loop, in the binary (`culprit verify`),
-  on branch `phase-34-verify`. Phases 26–33 are merged. Part 2 follows after
-  a review.
+- **Current phase:** 34, part 2 — outcomes in the control plane
+  (verifications stored and shown, the agent's `verify` task,
+  `GET /outcomes/accuracy`), on branch `phase-34-outcomes`. Phases 26–33 and
+  34 part 1 are merged.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35). Read §1 (D1–D8),
   §2 (the core model) and the phase you are working on — not the whole file.
 - **Deploy is paused** (2026-11-05): the hosted VM is offline, and the `deploy`

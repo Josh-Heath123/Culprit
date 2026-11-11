@@ -64,6 +64,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AGENT_ADMIN_DB_PASSWORD": "test-agent-admin-password",
     "AGENT_REGISTRAR_DB_PASSWORD": "test-agent-registrar-password",
     "AGENT_GATEWAY_DB_PASSWORD": "test-agent-gateway-password",
+    "VERIFICATION_WRITER_DB_PASSWORD": "test-verification-writer-password",
 }
 
 

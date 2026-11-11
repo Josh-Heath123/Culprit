@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **34, part 1 — The loop, in the binary** — status `in progress`: implemented, every criterion executed and passing locally (the fault library 11/11 under Docker), both audits run and their findings fixed; committed and pushed, pull request open, `/ci` recorded in §5. Q20 and Q21 for review, neither blocking. |
-| Previous phase | **33 — The production agent and the permission model: complete** (three parts), part 3 signed off 2026-11-10 by the architecture session. Part 3 merged via PR #31 (`e125b4b`), every pull-request check green, no open alert. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`; Q19 ruled there. |
+| Current phase | **34, part 2 — Outcomes in the control plane** — status `awaiting decision`: implemented, CI green on PR #33 (run 42989682700), awaiting the architecture review and the human's merge. Report in §5. |
+| Previous phase | **34, part 1 — The loop, in the binary: complete**, signed off 2026-11-10 by the architecture session. Merged via PR #32 (`2ef3da6`), every pull-request check green, the fault library 11/11 on Linux. Q20 and Q21 ruled at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-34-verify`, cut from `origin/main` = `e125b4b`; its first commit is the Phase 33 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** Q20 and Q21 are open and do not block (§3). |
+| Branch | `phase-34-outcomes`, cut from `origin/main` = `2ef3da6`; its first commit is the part 1 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Blocking questions | **None.** §3 is empty. |
 
 ---
 
@@ -70,8 +70,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q20 | **A fix that is none of image, config key or commit.** The decided change kinds are an image, a config key, or a commit. Three of the fault library's fixes are runtime actions — the partition's firewall rule removed, the injected error rate and latency cleared — so part 1 names them as `commit:<ref>` with a ref derived from the fix's name (`cli/testdata/faultlib/expected.json` says so), because no real commit applied them. A commit explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed: nothing is called verified that the readings do not show. But the record says "commit" for something that was not one. Should part 2 add a fourth kind (an operator's action, described, explaining nothing), or should the library apply those fixes as config changes instead? | 2026-11-10, Phase 34 part 1 | Nothing in part 1. Part 2's change vocabulary, and how the README describes the library's outcomes. |
-| Q21 | **Criterion 3 and a fault the walk cannot see failing.** "For every fault class in the library: inject, diagnose, apply the known fix, verify — `verified`." The latency fault slows every request without failing any, so its diagnosis is partial with no failing reading, and no fix can be *seen* to fix it: its verification is `inconclusive`, with that reason, and the library asserts exactly that. Five classes reach `verified`; the audience fault under narrower grants is `inconclusive` because its probe is still refused. Proposed wording: "for every fault class the walk diagnoses with a failing reading: ... `verified`; a diagnosis with no failing reading: `inconclusive`, saying so." Accept, or should latency be made detectable (a latency budget the walk can fail against) first? | 2026-11-10, Phase 34 part 1 | Nothing in part 1. Whether part 1's criterion 3 is met as written. |
+| — | None open. Q20 and Q21 were ruled 2026-11-10 (`DIAGNOSTIC_PLAN.md`, end of Phase 34): an `action` change kind in part 2; criterion 3 refined for a diagnosis with no failing reading, and latency detection left to Phase 36. | | |
 
 ---
 
@@ -100,8 +99,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 33, part 1 | The agent, standing alone | **complete** (PR #27 merged, `57541e3`) | **Signed off 2026-11-06** (architecture session): every criterion executed by the tests and by `phase-auditor` on the real binary; the image check's Linux-only failure found by the audit and fixed before merge. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
-| 34, part 1 | The loop, in the binary | in progress — PR open, `/ci` in §5 | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — all 17 fields, read with "How Phase 34 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, the criteria and what not to build. The `Verification` model and its conformance fixture come first. No API, migration or interface. Branch `phase-34-verify`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 34, part 2 | Outcomes in the control plane | not started | Criteria written at part 1's review. First item: Q19's column grant. |
+| 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
+| 34, part 2 | Outcomes in the control plane | **awaiting decision** (PR #33, CI green, not merged) | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — "How Phase 34 is run", then "Part 2" at the end of the section: work order, how outcomes and accuracy are counted, nine criteria, what not to build. Carried-in items first (Q19's column grant; Q20's `action` kind). Branch `phase-34-outcomes`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 35 | Agent surface and the narrator | not started | — |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
@@ -134,170 +133,167 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        34, part 1 — the loop, in the binary
-Branch:       phase-34-verify, from origin/main = e125b4b; its first commit is
-              the Phase 33 sign-off (5c56ff5). Commits f35e37f..HEAD.
-Run:          2026-11-10, /next.
-Status:       IMPLEMENTED; CI GREEN on PR #32 (/ci below), the fault library
-              11/11 on Linux as well as locally. Every criterion executed;
-              both audits run and their findings fixed. Two questions for
-              review (Q20, Q21), neither blocking.
+Phase:        34, part 2 — outcomes in the control plane
+Branch:       phase-34-outcomes, from origin/main = 2ef3da6 (PR #32's merge);
+              its first commit is the part 1 sign-off (a15f79d). Commits
+              690e778..HEAD. PR #33.
+Run:          2026-11-10 (/next, the build) and 2026-11-11 (an e2e repair).
+Status:       IMPLEMENTED; CI GREEN on PR #33 (run 42989682700, below). Not merged: the merge is the
+              human's, after the architecture review.
 
-WHAT WAS BUILT (work order 1-5)
-  1 The Verification model (f35e37f), Go (cli/internal/model/verification.go)
-    and Python (shared/culprit_model/verifications.py), with
-    shared/tests/verification_conformance.json written first: 20 accepted
-    cases (every verdict), 33 rejected, 10 "what a change touches". The
-    verdict is a pure function of the record — model.Judge / judge(): the
-    re-runs (two each), the changes named, the captures before and after,
-    the differences. Both refuse a record whose verdict or clause flags the
-    record does not support, so `verified` cannot be built with a clause
-    false — in code, from a file, or (Go) by encoding one.
-  2 `culprit diagnose` captures the environment under its own grants before
-    the walk, and keeps the investigation, the request behind every reading
-    (isolate.Walk.Requests; the counterfactual's under the reference
-    environment) and the capture as a sealed envelope, in the state
-    directory ($CULPRIT_STATE_DIR, else the user's state directory; 0600).
-    With no capture allowed, the rubric's `verified` reason says why
-    ("...because the capture of X recorded nothing (refused: ...)").
-  3 cli/internal/verify and `culprit verify <id> --change ... --from ...`
-    (b0bde12): checks the record covers every reading; refuses a vantage
-    other than the diagnosis's; re-runs every request twice through a
-    Runner (probes under the environment's current grants); captures again;
-    compares before and after with diverge.CompareAll (the engine
-    `culprit diff` uses, the two captures as two scopes); judges. Exit 0
-    verified, 1 any other verdict, 2 could not run. Links no network
-    package: the D8 allowlist is unchanged.
-  4 The fault library (d3ab1af): every fault injected, diagnosed, fixed with
-    its known fix and verified, in its vantage, with the change named; plus
-    four scenarios — wrong fix, regression, change underneath, no change.
-  5 LIMITS ("Verification", eleven entries), PROBES, PERMISSIONS, README,
-    UPGRADING, ARCHITECTURE, CLAUDE.md.
+WHAT WAS BUILT (work order 1-7)
+  1 Carried in (690e778). Q19: api-reader reads agent_nonces (agent_id,
+    seen_at) by a column grant and is refused `nonce` (f1a9c3d7e2b4). Q20:
+    an `action` change kind in Go, Python and the conformance fixture (23
+    accepted, 40 rejected, 12 touches), `--change action:<what was done>`;
+    the fault library's three runtime fixes are named as actions, and a
+    test holds the library to naming no commit.
+  2 Storage. `verifications`, append-only as agent_audit_log is: triggers
+    refuse UPDATE, DELETE and TRUNCATE to every role, the owner included; a
+    CHECK holds `verified` to its three clauses. One new role,
+    verification-writer, INSERT and nothing else (f2b7d4e9a1c6).
+  3 The API. POST /investigations/{id}/verifications (project token or an
+    agent, recorded which) re-judges with judge(); refuses re-runs before
+    the investigation, a `was` that disagrees with the stored reading, a
+    skipped reading, a verified_at before its own last run or after the
+    server's clock, and a source contradicting an earlier one (409);
+    redacts; never writes to the investigation. GET .../verifications,
+    newest first. GET /outcomes/accuracy: each complete diagnosis's newest
+    verification, per fault class (the root's subject kind) and source,
+    every verdict counted, the denominator stated, inconclusive beside it.
+  4 The agent. A walk keeps each reading's request and a before capture
+    under the agent's own grants, beside its audit log. A `verify` task
+    re-measures an investigation it diagnosed and posts the verification
+    before its result; asked about one it did not diagnose, it answers
+    inconclusive, holding no record of before. VerifySpec redacts every
+    action's words at the choke point (invariant 11).
+  5 The view (255fc9a). Verifications newest first — verdict, the three
+    conditions, the change, planted or real, who recorded it; the rubric's
+    `verified` from the newest. An admin asks an agent to verify from the
+    page, naming the change; the diagnosing agent is the default.
+  6 The README's number. The fault library writes
+    cli/testdata/faultlib/results.json when every case passes; CI must
+    reproduce it. `just accuracy-readme` renders the section with the
+    function GET /outcomes/accuracy uses: 5 of 5 planted faults verified,
+    two partial diagnoses not counted, "planted faults in our own demo
+    services", not accuracy on a real system.
+  7 LIMITS (nine entries), PROBES, PERMISSIONS, SECURITY, UPGRADING,
+    ARCHITECTURE, README, CLAUDE.md, the database rule's role list.
 
-CRITERIA (part 1)
-  1  conformance fixture holds in Go and Python, incl. a verified
-     with one clause false neither can construct          PASS. Go
-       TestVerification* / TestAVerifiedVerificationCannotBeConstructed...;
-       Python 369 shared tests. Six "verified with its first/second/third
-       clause false" cases; the phase-auditor corrected only verdict and
-       flags on each and each then validates — rejected for the clause.
-  2  re-runs exactly the investigation's probes, count asserted,
-     no stored reading reused                              PASS.
-       TestEveryReadingIsMeasuredAgainTwiceAndNoneIsReused (runs ==
-       2 x readings; fresh runner stamps); TestTheLoopEndToEnd (real
-       command, real server: same ids and order, every run after closed_at);
-       the fault library ("7 readings re-run twice").
-  3  every fault class: inject, diagnose, fix, verify -> verified,
-     in CI                                                  PASS for the
-       five whose diagnosis has a failing reading: auth-audience,
-       network-partition, contract, config, error-rate -> verified. NOT AS
-       WRITTEN for latency: the walk finds no failing reading, so nothing
-       can be seen fixed -> inconclusive, with that reason (Q21).
-       auth-audience-ungranted (the audience class under narrower grants)
-       -> inconclusive: "...was refused: ... config.inspect.values is not
-       granted". In CI: PASS, run 42826962752, fault-library job 11/11.
-  4  a wrong fix -> not_resolved                             PASS. Library
-       verify/wrong-fix: a token re-minted for 'inventory-svc': "still
-       failing on both runs: probe.auth.token_shape on the token audience
-       order-service presents to inventory-service (r5, r7)".
-  5  a fix that breaks a passing probe -> regressed           PASS.
-       verify/regressed: contract fixed, payments-service erroring: "these
-       passed before and fail now: probe.http.reachable on payments-service
-       (r2)".
-  6  a config key changed on another component ->
-     changed_underneath                                     PASS.
-       verify/changed-underneath: contract fixed (inventory-service), a key
-       added to order-service: "...where the change to CONTRACT_FAULT in
-       inventory-service's configuration does not explain it:
-       CULPRIT_UNRELATED_FLAG in order-service's configuration (exists)".
-       Also in-process (TestTheLoopEndToEnd). Caveat: under the process
-       adapter only the vantage's own config is captured (LIMITS).
-  7  a flip, no change named, no before -> inconclusive     PASS. Flip:
-       TestTheVerdicts/a_result_that_flips and the fixture (unit level).
-       No change: library verify/no-change-named and in-process. No
-       before: in-process, environment `blind` — the investigation says
-       why, the verification is inconclusive.
-  8  D8 allowlist unchanged; LLM_PROVIDER=none changes nothing PASS.
-       check_test.go untouched; TestTheNetworkBoundaryIsAnAllowlist PASS;
-       `go list -deps ./internal/verify` has no net, net/http, crypto/tls.
-       Nothing in cli/ reads LLM_PROVIDER; the loop test runs with it none.
+CRITERIA (part 2) — evidence from the build run (commits 690e778, 255fc9a,
+f329b11 and PR #33); not re-executed one by one in the repair run.
+  1 api-reader reads agent_id, seen_at; refused nonce; agents screen
+    still shows last request                 column-grant test; agents e2e.
+  2 `action` holds in Go/Python/fixture, explains nothing a capture
+    records; no library record names a non-commit   fixture; library test.
+  3 refuses re-runs predating, `was` disagreeing, verdict judge() does
+    not reach — a test each                   api tests (690e778, f329b11).
+  4 no role can update/delete a verification, red with the trigger
+    removed; investigation row byte-identical  trigger-removed test (UPDATE
+    and DELETE, f329b11).
+  5 end to end through an agent: verified, and not_resolved for a wrong
+    fix, shown on the page                    `just agent-e2e` then
+    `just e2e-verified` (verifications.spec.ts), both in CI's e2e job.
+  6 an agent that did not diagnose it -> inconclusive, "no record of
+    before"                                   `just agent-e2e`.
+  7 /outcomes/accuracy gives exactly the seeded numbers; empty says so
+                                              api tests.
+  8 README number regenerated by a committed command, method, count,
+    "planted faults" in so many words         `just accuracy-readme`; CI
+    reproduces results.json.
+  9 migration round-trips with verifications present; D8 allowlist
+    unchanged; LLM_PROVIDER=none changes nothing   migration-round-trip job
+    seeds a verification and a verify task.
 
-  Real comparison seen working in the library: the config fix's
-  verification found one difference (PAYMENTS_PROVIDER_KEY appearing) and
-  explained it by the change named.
+AUDITS (build run, f329b11)
+  invariant-auditor: ONE VIOLATION, fixed — an action's words were stored
+    in agent_tasks.spec unredacted; VerifySpec now redacts, tested by
+    reading the stored spec.
+  phase-auditor: fixed — verified_at bounds; one source per investigation
+    (409); the method states what `verified` measures; the README counts
+    all seven planted faults; the trigger-removed test covers DELETE.
 
-GATES (local, Windows, Docker up)
-  lint, typecheck, lint-imports, check-schema-drift, check-no-llm-imports,
-  check-invariants, check-scan-coverage, check-frontend-tokens,
-  check-security-doc, cli-lint, check_coupled_files --base origin/main PASS
-  go test ./... (16 packages)                                   PASS
-  api+scripts+shared 1233 / 6 skipped, worker 65, mcp 21        PASS
-  culprit check --fail-on=breaks_request_path / LLM_PROVIDER=none exit 0 / 0
-  just fault-library (Docker): 11/11                             PASS
-  Not run locally: e2e, migration round trip (no migration, no api or
-  frontend change) — CI runs both.
+CI HISTORY ON PR #33
+  42860211571 (on 255fc9a): red, e2e only — the agents journey asserted
+    not_resolved for a verification an agent outside every component, with
+    network grants alone, can only make inconclusive. Fixed in f329b11: it
+    asserts the verification lands and is not `verified`.
+  42862315900 (on f329b11): red, e2e only — the repair below.
 
-AUDITS
-  invariant-auditor: ONE VIOLATION, fixed. The Python model accepted a
-    difference whose subject is not a subject URI, and blank ids, where Go
-    refused them; and the two disagreed on an empty subject or ref. Now
-    Python parses the subject and refuses blanks, both read "" as absent,
-    and the fixture has a case for each (the drift would have been caught).
-    Risks taken up: verify now takes --from and refuses another vantage;
-    diagnose keeps files only after the investigation validates; a failure
-    to keep no longer puts a local path into the investigation; PERMISSIONS
-    says what a grant added since diagnosis does. Left as risks, in LIMITS:
-    recorded inputs are re-used as written (same probe, target and
-    environment, checked); Windows ACLs, not 0600, protect the state
-    directory.
-  phase-auditor: every executable criterion PASS locally; NOT YET COMPLETE
-    on the handoff (this report), CI, and criterion 3 for latency (Q21).
-    Fixed: the vantage (its finding 2, the same as the invariant risk);
-    PROBES' wording on refusals (not_resolved and regressed take
-    precedence). Noted for part 2: the agent's walk takes no before and
-    says only "no change has been verified" (LIMITS); the type cannot
-    check that runs post-date the investigation or that `was` matches it —
-    the API must, once it stores verifications; a commit ref is checked
-    for form, not existence (Q20).
+THE E2E REPAIR (2026-11-11, 71f22fc)
+  Failing test, verbatim:
+    e2e/investigations.spec.ts:106:1 › the main journey works by keyboard
+    alone (476ms)
+      Error: never reached by Tab
+        > 124 |     throw new Error("never reached by Tab");
+          at tabUntil (frontend/e2e/investigations.spec.ts:124:11)
+          at frontend/e2e/investigations.spec.ts:132:3
+    1 failed, 1 skipped (verifications.spec.ts, by design), 17 passed.
+  Screenshot (e2e-failures): /investigations/<complete> on its loading
+    skeleton; focus on the header's "Users" link.
+  Attribution: FLAKY — a race in the test, present on main; not this
+    branch's code. Line 132 is the second tabUntil, toward the first
+    edge-toggle. waitForURL resolves when the URL changes, before the
+    tree's request returns; 60 Tabs take ~300 ms, and until the tree
+    renders Tab only cycles the header. The test took 459 ms on main
+    (42839202555) and 507 ms on this branch's previous run (42860211571):
+    the margin was always a few hundred milliseconds. What made this run
+    lose it is not shown; this branch's agents journey now runs a verify
+    task immediately before, which is the likeliest load, unproven.
+  Local reproduction (quickstart of this branch, Windows, port 8088):
+    unmodified, the test PASSED (1.1 s) — no natural reproduction. Forced:
+    the tree's response delayed 1.5 s by a temporary page.route -> FAILED,
+    "never reached by Tab", as in CI; with the fix and the same delay ->
+    PASSED (3.4 s). The probe was removed before commit.
+  Fix: wait for the first edge-toggle to be visible before tabbing, as the
+    list step already waits for its link. No retry, no longer timeout, the
+    assertion and the 60-Tab bound unchanged; the target is still reached
+    by Tab alone.
+  Local e2e after the fix: 17 passed, 1 skipped, 1 failed — the agents
+    journey, which cannot run on this machine: scripts/agent_recipe.sh
+    compose-prepare needs sudo ("Sudo is disabled on this machine"). It
+    passes in CI (42862315900: 13.8 s). Not this change.
+  Met on the way, none of them CI's:
+    - Docker's first build after Docker Desktop started failed DNS
+      (proxy.golang.org: no such host); the retry built.
+    - A local infra/.env.prod from before Phase 34 lacked
+      VERIFICATION_WRITER_DB_PASSWORD; migration f2b7d4e9a1c6 refused to
+      run, as UPGRADING says it will. The key was added by hand, at the
+      human's terminal (Claude Code does not write credentials). CI
+      generates a fresh env.
+    - A second e2e run within a minute hit the sign-in rate limit (HTTP 429,
+      LIMITS "The browser tests need the whole stack...") — waited it out.
+    - The push printed "Bypassed rule violations for
+      refs/heads/phase-34-outcomes: Cannot update this protected ref." The
+      push landed; a ruleset on the phase branch that this account bypasses.
+      Worth a look at the review: either the rule is meant for main only, or
+      phase branches are meant to be protected and the bypass is too wide.
+  Gates for this commit: oxlint and tsc on the spec clean; /verify not run
+    (a test-only change: CLAUDE.md). Prettier reports the file, before and
+    after this change alike; it is not a gate in CI or the justfile.
 
-DECISIONS TAKEN HERE (for review)
-  - The verdict lives in the model: Judge is the rules, and both languages
-    refuse any other verdict. verify computes nothing it could disagree on.
-  - Re-runs carry their own environment: a counterfactual reading is re-run
-    in its reference environment and judged with the rest; only the
-    investigation's environment is captured before and after (LIMITS).
-  - Field 7's `reran [reading_id]` is a list of re-runs (id, was, probe,
-    target, environment, both readings), so a verification can be checked
-    from itself; `changes_explained` is the third clause's flag beside
-    failing_now_passes and no_regressions.
-  - What a change explains: a config key, that key; an image, that
-    component's image and packages (not config keys its ENV sets); a
-    commit, nothing a capture records.
-  - The record of each reading's request (inputs included) and the capture
-    live in a local state directory, not in the investigation: adding a
-    field to the investigation would be refused by POST /investigations'
-    model, and part 1 has no API change.
-  - A capture with no facts is no record of before: comparing two empty
-    captures would call every change "nothing changed".
-  - Field 10's `verify:` (reference environment, regression tolerance) not
-    built: a regression tolerance contradicts "every reading that passed
-    still passes", and the reference is the diagnosis's own.
-
-/CI — PR #32
-  commit   f278dfe6ae6765d37583ea4f33419255d1ad349f (merge result: origin/main
-           e125b4b is an ancestor; merging it changes nothing)
-  run      42826962752  CI/CD, pull_request, success
-  jobs     lint, typecheck, test, cli, migration-round-trip, self-check,
-           kind-capture, fault-library, e2e, build x5: success; publish and
-           deploy skipped
-  fault    TestTheFaultLibrary PASS (115 s): the seven faults and the four
-           verify scenarios, each PASS
-  checks   gh pr checks 32: 20 pass, 2 skipping, 0 fail (CodeQL included)
-  alerts   none open (pr=32, refs/pull/32/merge, refs/pull/32/head)
+/CI — PR #33, for the repair commit
+  commit   71f22fcc655d29d56509494cc2943907b9b9cf9e (merge result: origin/main
+           2ef3da6 is an ancestor; merging it changes nothing)
+  run      42989682700  CI/CD, pull_request, success
+           https://github.com/Josh-Heath123/Culprit/actions/runs/42989682700
+  jobs     lint, typecheck, cli, e2e, migration-round-trip, test,
+           kind-capture, self-check, fault-library, build x5: success;
+           publish and deploy skipped
+  e2e      main journeys 18 passed, 1 skipped (verifications.spec, run
+           next); the keyboard journey 601 ms — past the old margin, the
+           wait held; the agents journey 14.6 s; `just e2e-verified`:
+           verifications.spec.ts 1 passed (criterion 5 in CI)
+  tests    api+scripts+shared 1299 passed / 4 skipped; worker 65; mcp 21
+  checks   gh pr checks 33: 20 pass, 2 skipping, 0 fail (CodeQL included)
+  alerts   none open (pr=33, refs/pull/33/merge, refs/pull/33/head)
   This report's own commit is checked the same way before the run stops.
 
 LEFT OPEN
-  - Q20 (change kinds for runtime fixes), Q21 (criterion 3 and latency).
+  - Nothing blocking. For review: how a fault class and a source are
+    decided; what counts as an outcome; what the API cannot check of a
+    project-token verification (LIMITS) — PR #33's "For review".
+  - The protected-ref bypass on push (above).
 ```
 
 ## §6. Escalate to the architecture session when

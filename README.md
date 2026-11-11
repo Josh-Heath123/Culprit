@@ -76,7 +76,7 @@ check — never as a root or a cause:
 | **Annotate pull requests** | `--format sarif` gives GitHub pull-request annotations; JSON and JUnit are there too. Exit codes are a contract: `0` clean, `1` findings at or above `--fail-on`, `2` could not run. |
 | **Compare environments safely** | `culprit env capture` reads Compose, Kubernetes or a process environment and writes a sealed, optionally signed envelope. Config values are recorded as a shape — type, length class, format — unless you grant that one key. |
 | **Ask a running system** | Thirteen read-only probes — DNS, TCP, TLS, HTTP reachability, route and schema conformance, token shape, database connectivity and schema, config presence, installed versions, edge impedance. Each asks permission before it dials anything. Two need more than a running service to reach a verdict: config presence compares against a declaration of the key, and installed versions needs the environment to declare a `packages:` command — without one it is `refused` or `inconclusive`, and says why ([`docs/PROBES.md`](docs/PROBES.md)). |
-| **Check that a fix fixed it** | `culprit verify <investigation>` runs every probe the diagnosis ran again, twice, and compares the environment with the record of it taken at diagnosis. `verified` only when what failed now passes, what passed still passes, and nothing changed that the fix you name does not explain; otherwise `not_resolved`, `regressed`, `changed_underneath` or `inconclusive`, with the reason. |
+| **Check that a fix fixed it** | `culprit verify <investigation>` runs every probe the diagnosis ran again, twice, and compares the environment with the record of it taken at diagnosis. `verified` only when what failed now passes, what passed still passes, and nothing changed that the fix you name does not explain; otherwise `not_resolved`, `regressed`, `changed_underneath` or `inconclusive`, with the reason. From the CLI, or through the agent that diagnosed it, asked from the investigation's page, which keeps every verification. |
 | **See what was not checked** | Every gap is listed with its reason. A route table that could not be read never produces "that route does not exist" — it produces a line saying nobody looked. |
 
 ## How it works
@@ -191,9 +191,13 @@ each reading and a capture of the environment in a local state directory;
 verify measures every reading again, twice, captures the environment again
 and compares the two with the engine `culprit diff` uses. A difference the
 named change does not explain makes the verdict `changed_underneath`, not
-`verified`. Verifications stay on the machine that ran them for now: the
-control plane does not store or show them yet ([`docs/LIMITS.md`](docs/LIMITS.md),
-"Verification").
+`verified`. An agent does the same as a `verify` task, for the
+investigations it diagnosed, and posts what it found: the investigation's
+page lists every verification, newest first, and takes the rubric's
+`verified` from the newest — the investigation itself is never edited. An
+admin asks for one from that page, naming the change and saying whether the
+fault was planted. `GET /outcomes/accuracy` counts the outcomes, per fault
+class, planted apart from real; its method is the README's, below.
 
 The dashboard also pairs and manages agents (Settings → Agents), starts an
 investigation through one, keeps postmortems, settings for components,
@@ -440,6 +444,31 @@ install it into your project's environment instead
 keys and never their values, and the loader refuses anything that looks like
 a credential.
 
+<!-- accuracy:begin -->
+<!-- Rendered by `just accuracy-readme` from cli/testdata/faultlib/results.json. Do not edit by hand: CI fails if this differs. -->
+
+## Accuracy, on faults we planted
+
+**5 of 5 planted faults verified fixed** (100%), of 7 faults planted: 5 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
+
+**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 5 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
+
+**Method.** Each fault in the library (`cli/testdata/faultlib/`) is planted in the demo stack, diagnosed by `culprit diagnose` from inside a service, its known fix is applied, and `culprit verify` measures every reading again, twice, and compares the environment with the record of it taken at diagnosis. An outcome is the verification of a **complete** diagnosis; its fault class is the subject kind of the diagnosis's root. Per class, `verified` is counted against the decided outcomes (every verdict but inconclusive), and inconclusive is reported beside it, never folded in. A `verified` outcome shows that the fix for the root the walk diagnosed was seen to fix what it saw failing; a fault diagnosed at the wrong root would be counted under that root's class, so this measures diagnosis-then-fix, not whether every diagnosis named the true cause. `GET /outcomes/accuracy` counts verifications recorded through the control plane the same way, with the same function, and says for each count whether its faults were planted or real.
+
+| Fault class | Planted fault | Outcomes | Verified | Decided | Inconclusive |
+|---|---|---|---|---|---|
+| `auth` | `auth-audience` | 1 | 1 | 1 | 0 |
+| `component` | `error-rate` | 1 | 1 | 1 | 0 |
+| `config` | `config` | 1 | 1 | 1 | 0 |
+| `connection` | `network-partition` | 1 | 1 | 1 | 0 |
+| `http` | `contract` | 1 | 1 | 1 | 0 |
+
+Not counted, because the walk's diagnosis was partial — an outcome is the verification of a complete one: `auth-audience-ungranted` (inconclusive); `latency` (inconclusive).
+
+Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive).
+
+<!-- accuracy:end -->
+
 ## Testing
 
 | Command | Covers |
@@ -502,10 +531,6 @@ What comes next, as plans:
 
 - **The demonstration video,** recorded from the script, storyboard and
   checklist in [`docs/video/`](docs/video); linked here once it exists.
-- **Phase 34, part 2 — Outcomes in the control plane:** verifications stored
-  and shown, verification run through an agent, and an accuracy number
-  computed only from recorded outcomes, with its sample size. (`culprit
-  verify` itself exists: part 1.)
 - **Phase 35 — An agent surface,** so a coding agent can ask Culprit before
   it changes something, with the narrator constrained to settled facts.
 

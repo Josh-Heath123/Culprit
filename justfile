@@ -195,7 +195,7 @@ _self-check-env *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY VERIFICATION_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit check -f ../culprit.yaml {{ARGS}}
@@ -216,8 +216,17 @@ cli-test-docker:
 # vantage container, against cli/testdata/faultlib/expected.json. The
 # regression suite for "the walk finds the root, not the symptom". Needs
 # Docker; also a CI job.
+# Writes cli/testdata/faultlib/results.json when every case passes: the
+# results the README's number is rendered from (just accuracy-readme).
 fault-library:
-    cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+    cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+
+# Phase 34 part 2: the README's accuracy section, rendered from the fault
+# library's committed results (scripts/accuracy_readme.py). CI fails if
+# either is stale: the library's run must reproduce results.json, and the
+# README must be what this renders from it.
+accuracy-readme:
+    uv run --project api python scripts/accuracy_readme.py
 
 cli-test-kind:
     #!/usr/bin/env bash
@@ -278,7 +287,7 @@ intent *ARGS:
     set -euo pipefail
     export JWT_SECRET_KEY=culprit-intent-extraction-placeholder
     export AGENT_AUTOMATION_TOKEN=culprit-intent-extraction-placeholder
-    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY; do
+    for name in INGEST_GATEWAY API_READER REGISTRY_ADMIN AUTH_SERVICE POSTMORTEM_WRITER FACT_WRITER CAPTURE_WRITER PROBE_WRITER INVESTIGATION_WRITER AGENT_ADMIN AGENT_REGISTRAR AGENT_GATEWAY VERIFICATION_WRITER; do
         export "${name}_DATABASE_URL=postgresql+asyncpg://localhost:5432/culprit-intent-placeholder"
     done
     cd cli && exec go run ./cmd/culprit intent -f ../culprit.yaml {{ARGS}}
@@ -360,7 +369,7 @@ create-user *ARGS:
 # frontend-build` and the frontend's Docker build) only worked on a
 # machine that already had a hand-written api/.env.
 generate-types:
-    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       INVESTIGATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_REGISTRAR_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+    cd api &&       JWT_SECRET_KEY=local-schema-dump-not-a-real-secret       INGEST_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       API_READER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       REGISTRY_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AUTH_SERVICE_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       POSTMORTEM_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       FACT_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       CAPTURE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       PROBE_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       INVESTIGATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_ADMIN_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_REGISTRAR_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       AGENT_GATEWAY_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       VERIFICATION_WRITER_DATABASE_URL=postgresql+asyncpg://unused:unused@localhost:5432/unused       uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
     cd frontend && npm run generate-types
 
 # Frontend dev server (Phase 8) — talks to the dashboard API from `just dev`
@@ -437,6 +446,7 @@ quickstart:
         CAPTURE_WRITER_DATABASE_URL=$unused PROBE_WRITER_DATABASE_URL=$unused \
         INVESTIGATION_WRITER_DATABASE_URL=$unused \
         AGENT_ADMIN_DATABASE_URL=$unused AGENT_REGISTRAR_DATABASE_URL=$unused AGENT_GATEWAY_DATABASE_URL=$unused \
+        VERIFICATION_WRITER_DATABASE_URL=$unused \
         /app/.venv/bin/python -m scripts.dump_openapi_schema > frontend/openapi.schema.json
     MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
         -v "$(pwd)/frontend:/frontend" -w /tmp node:22-alpine sh -euc '
@@ -600,7 +610,18 @@ agent-e2e:
     CULPRIT_E2E_USERNAME=$(read_env QUICKSTART_ADMIN_USERNAME)
     CULPRIT_E2E_PASSWORD=$(read_env QUICKSTART_ADMIN_PASSWORD)
     export CULPRIT_E2E_USERNAME CULPRIT_E2E_PASSWORD
-    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 20m
+    # Phase 34 part 2: the investigation it verified, for `just e2e-verified`.
+    export CULPRIT_E2E_VERIFIED_OUT="$(pwd)/cli/bin/agent-e2e-verified.txt"
+    mkdir -p cli/bin && rm -f "$CULPRIT_E2E_VERIFIED_OUT"
+    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 30m
+
+# Phase 34 part 2: the investigation `just agent-e2e` verified through an
+# agent — a wrong fix, then the right one — on its page in the browser.
+e2e-verified:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    id=$(cat cli/bin/agent-e2e-verified.txt)
+    CULPRIT_E2E_VERIFIED_INVESTIGATION="$id" just e2e verifications.spec.ts
 
 # Phase 33 part 3: the agent's Kubernetes and systemd recipes, for real,
 # against a running quickstart — systemd-analyze verify on the unit, and the

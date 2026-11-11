@@ -69,8 +69,8 @@ Someone controls an agent: its process, its configuration, its key.
 
 They **can**: run any probe that agent's configuration grants, anywhere its
 network reaches, without asking the control plane; claim and answer tasks
-addressed to that agent; post readings and investigations as that agent;
-append to that agent's audit chain.
+addressed to that agent; post readings, investigations and verifications as
+that agent; append to that agent's audit chain.
 
 - It **cannot** claim another agent's task, or one task twice.
   `api/tests/test_agents_api.py::test_an_agent_claims_only_its_own_tasks_and_each_once`
@@ -79,6 +79,22 @@ append to that agent's audit chain.
 - It **cannot** post readings, or an investigation, as another agent.
   `api/tests/test_agents_api.py::test_a_reading_naming_another_agent_is_refused`,
   `api/tests/test_agents_api.py::test_an_agent_cannot_store_another_agents_readings_as_an_investigation`
+- It **cannot** post a verification as another agent: every run in it must
+  name the agent that signed the request.
+  `api/tests/test_agents_api.py::test_an_agent_posts_the_verification_it_measured_and_is_recorded`
+- It **cannot** store a verification the verdict rule does not reach, one whose
+  runs were taken before the investigation closed, one whose recorded verdicts
+  disagree with the stored readings, or one that skips a reading: the control
+  plane checks each against the stored investigation.
+  `api/tests/test_verifications_api.py::test_a_verification_whose_verdict_judge_does_not_reach_is_refused`,
+  `api/tests/test_verifications_api.py::test_a_verification_whose_runs_predate_the_investigation_is_refused`,
+  `api/tests/test_verifications_api.py::test_a_verification_whose_was_disagrees_with_the_stored_reading_is_refused`,
+  `api/tests/test_verifications_api.py::test_a_verification_of_part_of_the_reading_set_is_refused`
+- It **cannot** change a stored investigation by verifying it, nor rewrite or
+  delete a stored verification: no role can update or delete one, the owner
+  included.
+  `api/tests/test_verifications_api.py::test_a_verification_is_stored_beside_an_investigation_it_never_touches`,
+  `api/tests/test_verifications_api.py::test_no_role_the_owner_included_can_rewrite_a_verification`
 - It **cannot** rewrite or delete the audit entries the control plane holds —
   no role can update or delete a row, the owner included — nor append one that
   does not extend its stored chain.
@@ -89,7 +105,8 @@ append to that agent's audit chain.
   agent-management route needs an admin's session.
   `api/tests/test_route_credentials.py::test_every_agent_admin_route_needs_an_admin`
 - It **cannot** use a route meant for CI or for people: an agent's signature is
-  accepted only on its own routes, `POST /readings` and `POST /investigations`.
+  accepted only on its own routes, `POST /readings`, `POST /investigations` and
+  `POST /investigations/{id}/verifications`.
   `api/tests/test_route_credentials.py::test_every_route_an_agent_calls_for_itself_is_signed`,
   `api/tests/test_route_credentials.py::test_the_project_token_works_on_exactly_the_capture_endpoints_and_investigations`
 - After it is revoked, it **cannot** make another request: the very next one
@@ -145,11 +162,14 @@ chain — which is everything in section 2.
 Someone has `CULPRIT_PROJECT_TOKEN`, the credential CI posts captures with.
 
 They **can**: post captures (facts, divergences, the system model's
-captures) and investigations, which are recorded as submitted by the project
-token, not by an agent.
+captures), investigations and verifications, which are recorded as submitted
+by the project token, not by an agent. A verification it posts is held to the
+same checks as an agent's, but nothing shows its runs were really measured
+(`docs/LIMITS.md`, "Verification").
 
 - It **cannot** be used on any route but `POST /facts/captures`,
-  `POST /divergences/captures`, `POST /captures` and `POST /investigations`.
+  `POST /divergences/captures`, `POST /captures`, `POST /investigations` and
+  `POST /investigations/{id}/verifications`.
   `api/tests/test_route_credentials.py::test_the_project_token_works_on_exactly_the_capture_endpoints_and_investigations`,
   `api/tests/test_route_credentials.py::test_the_project_token_is_only_checked_where_the_route_table_can_see_it`
 - It **cannot** post readings: only an agent's signature can.
@@ -159,6 +179,8 @@ token, not by an agent.
   audit chain. `api/tests/test_route_credentials.py::test_every_route_an_agent_calls_for_itself_is_signed`
 - An investigation it posts **cannot** pass as an agent's: each records who
   submitted it. `api/tests/test_agents_api.py::test_an_investigation_records_who_stored_it`
+- A verification it posts **cannot** pass as an agent's either.
+  `api/tests/test_verifications_api.py::test_a_verification_is_stored_beside_an_investigation_it_never_touches`
 
 ## 6. A replayed or tampered request
 

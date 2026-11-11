@@ -68,25 +68,53 @@ const (
 	ChangeImage  ChangeKind = "image"
 	ChangeConfig ChangeKind = "config"
 	ChangeCommit ChangeKind = "commit"
+	// ChangeAction is a fix that is none of the others — a firewall rule
+	// removed, a flag cleared, a service restarted — described in words
+	// (Q20, ruled 2026-11-10). The record never says "commit" for
+	// something that was not one.
+	ChangeAction ChangeKind = "action"
 )
 
 // ChangeKinds is every kind, in the fixture's order.
-var ChangeKinds = []ChangeKind{ChangeImage, ChangeConfig, ChangeCommit}
+var ChangeKinds = []ChangeKind{ChangeImage, ChangeConfig, ChangeCommit, ChangeAction}
+
+// MaxActionDescription is the longest an action's description may be, in
+// characters: a sentence, not a log.
+const MaxActionDescription = 500
 
 var commitRef = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 
 // Change is what was applied: an image for a component, a config key for
-// a component, or a commit.
+// a component, a commit, or an action described in words.
 type Change struct {
 	Kind ChangeKind `json:"kind"`
 	// Subject is image:<component> or config:<component>/<key>.
 	Subject string `json:"subject,omitempty"`
 	// Ref is a commit id, 7 to 40 lowercase hex characters.
 	Ref string `json:"ref,omitempty"`
+	// Description is what an action did, in words.
+	Description string `json:"description,omitempty"`
 }
 
 // Validate refuses a change that does not name one thing of its kind.
 func (c Change) Validate() error {
+	if c.Kind == ChangeAction {
+		if c.Subject != "" || c.Ref != "" {
+			return fmt.Errorf("an action change is described in words, with no subject or ref")
+		}
+		described := strings.TrimSpace(c.Description)
+		if described == "" {
+			return fmt.Errorf("an action change says what was done")
+		}
+		if len([]rune(described)) > MaxActionDescription {
+			return fmt.Errorf("an action's description is %d characters; at most %d",
+				len([]rune(described)), MaxActionDescription)
+		}
+		return nil
+	}
+	if c.Description != "" {
+		return fmt.Errorf("%s change names what was applied; only an action is described in words", article(c.Kind))
+	}
 	switch c.Kind {
 	case ChangeCommit:
 		if c.Subject != "" {
@@ -110,28 +138,31 @@ func (c Change) Validate() error {
 		}
 		return nil
 	}
-	return fmt.Errorf("unknown change kind %q (want image, config or commit)", c.Kind)
+	return fmt.Errorf("unknown change kind %q (want image, config, commit or action)", c.Kind)
 }
 
 func article(kind ChangeKind) string {
-	if kind == ChangeImage {
-		return "an image"
+	if kind == ChangeImage || kind == ChangeAction {
+		return "an " + string(kind)
 	}
 	return "a " + string(kind)
 }
 
 // Label is how a difference cites the change that explains it.
 func (c Change) Label() string {
-	if c.Kind == ChangeCommit {
+	switch c.Kind {
+	case ChangeCommit:
 		return "commit:" + c.Ref
+	case ChangeAction:
+		return "action: " + strings.TrimSpace(c.Description)
 	}
 	return c.Subject
 }
 
 // Touches reports whether a difference on subject is one this change
 // explains. A config key explains that key. An image explains that
-// component's image and its packages, which ship in it. A commit explains
-// nothing a capture records: captures hold no commits.
+// component's image and its packages, which ship in it. A commit or an
+// action explains nothing a capture records: captures hold neither.
 func (c Change) Touches(subject string) bool {
 	switch c.Kind {
 	case ChangeConfig:

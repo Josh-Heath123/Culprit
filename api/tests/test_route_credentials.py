@@ -21,6 +21,9 @@ PROJECT_TOKEN_ROUTES = {
     "POST /divergences/captures",
     "POST /captures",
     "POST /investigations",
+    # Phase 34 part 2: CI posting what `culprit verify` wrote, as it posts
+    # what `culprit diagnose` wrote.
+    "POST /investigations/{investigation_id}/verifications",
 }
 
 #: The credential each dependency stands for.

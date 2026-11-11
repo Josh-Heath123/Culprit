@@ -55,6 +55,32 @@ export function SeverityBadge({ severity, className }: { severity: Severity; cla
   );
 }
 
+/** A verification's verdict (Phase 34): five, a closed set, each with its
+ * own tone, icon and word. `regressed` takes the breaks tone — the fix broke
+ * something that worked — and `changed_underneath` the degrades one. */
+export type VerificationVerdict = "verified" | "not_resolved" | "regressed" | "changed_underneath" | "inconclusive";
+
+const VERIFICATION: Record<
+  VerificationVerdict,
+  { icon: LucideIcon; variant: "pass" | "fail" | "breaks" | "degrades" | "inconclusive"; label: string }
+> = {
+  verified: { icon: CircleCheckIcon, variant: "pass", label: "verified" },
+  not_resolved: { icon: CircleXIcon, variant: "fail", label: "not resolved" },
+  regressed: { icon: OctagonAlertIcon, variant: "breaks", label: "regressed" },
+  changed_underneath: { icon: TriangleAlertIcon, variant: "degrades", label: "changed underneath" },
+  inconclusive: { icon: CircleHelpIcon, variant: "inconclusive", label: "inconclusive" },
+};
+
+export function VerificationBadge({ verdict, className }: { verdict: VerificationVerdict; className?: string }) {
+  const { icon: Icon, variant, label } = VERIFICATION[verdict];
+  return (
+    <Badge variant={variant} className={className} data-verification-verdict={verdict}>
+      <Icon aria-hidden className="size-3" />
+      {label}
+    </Badge>
+  );
+}
+
 /** Whether the walk reached a diagnosis and finished. A partial one is
  * where the walk stopped — the inconclusive tone, never the fail one,
  * because nothing was shown to be the fault. */

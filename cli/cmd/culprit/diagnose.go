@@ -136,7 +136,7 @@ command could not run.`,
 
 			// The environment before anything is fixed: what a verification
 			// compares with, so a change underneath is not taken for the fix.
-			before, absent := captureBefore(command.Context(), manifest, resolved, environment)
+			before, absent := captureBefore(command.Context(), manifest, resolved, environment, nil)
 
 			opened := captureTime()
 			investigation, err := walk.Diagnose(command.Context(), symptom, entry)
@@ -150,7 +150,8 @@ command could not run.`,
 			}
 			// Kept only once it validates; the verified reason it then
 			// carries is one more sentence, checked again below.
-			if err := keepForVerification(stateDir, &investigation, walk.Requests(), from, before, absent); err != nil {
+			how := "`culprit verify " + investigation.ID + " --change ...`"
+			if err := keepForVerification(stateDir, &investigation, walk.Requests(), from, before, absent, how); err != nil {
 				fmt.Fprintf(command.ErrOrStderr(), "culprit: the investigation was not kept for verification: %v\n", err)
 			}
 			if err := investigation.Validate(); err != nil {

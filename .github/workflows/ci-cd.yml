@@ -309,6 +309,7 @@ jobs:
           AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
@@ -332,6 +333,7 @@ jobs:
           AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
           AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
           go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
@@ -400,7 +402,12 @@ jobs:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
       - name: Walk every fault in the library
-        run: cd cli && CULPRIT_FAULT_LIBRARY=1 go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+        run: cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+      # Phase 34 part 2: the README's number is rendered from the committed
+      # results (just accuracy-readme). This run must reproduce them exactly,
+      # or the number describes a library that no longer behaves that way.
+      - name: The committed results are this run's
+        run: git diff --exit-code -- cli/testdata/faultlib/results.json
 
   test:
     needs: typecheck
@@ -493,7 +500,7 @@ jobs:
   e2e:
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -542,6 +549,15 @@ jobs:
         env:
           QUICKSTART_HTTP_PORT: "8088"
         run: just agent-e2e
+      # Phase 34 part 2: the fix that agent verified, on its investigation's
+      # page — the verifications newest first, the rubric's verified from
+      # the newest.
+      - name: The verified fix, in the browser
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+          CULPRIT_E2E_SCREENSHOTS: ${{ github.workspace }}/e2e-screenshots
+          CI: "true"
+        run: just e2e-verified
       # Phase 33 part 3: the agent's Kubernetes recipe in a kind cluster,
       # paired with this quickstart and Ready as a non-root user with a
       # read-only root filesystem; its systemd unit through

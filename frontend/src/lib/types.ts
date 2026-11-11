@@ -76,3 +76,11 @@ export type PairingCodeCreated = components["schemas"]["PairingCodeCreated"];
 export type TaskCreate = components["schemas"]["TaskCreate"];
 export type TaskCreated = components["schemas"]["TaskCreated"];
 export type TaskView = components["schemas"]["TaskView"];
+
+// Phase 34 part 2: verifications, and the outcomes they make.
+export type Verification = components["schemas"]["Verification"];
+export type VerificationVerdict = Verification["verdict"];
+export type Change = components["schemas"]["Change"];
+export type StoredVerification = components["schemas"]["StoredVerification"];
+export type VerificationList = components["schemas"]["VerificationList"];
+export type Accuracy = components["schemas"]["Accuracy"];

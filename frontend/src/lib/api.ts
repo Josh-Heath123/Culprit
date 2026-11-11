@@ -30,6 +30,7 @@ import type {
   TaskCreate,
   TaskCreated,
   TaskView,
+  VerificationList,
   TopologyEdgeRef,
   TopologySuggestionsOut,
   UserOut,
@@ -324,6 +325,11 @@ export function createTask(agentId: string, body: TaskCreate): Promise<TaskCreat
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// Phase 34 part 2: an investigation's verifications, newest first.
+export function fetchVerifications(investigationId: string): Promise<VerificationList> {
+  return request<VerificationList>(`/investigations/${encodeURIComponent(investigationId)}/verifications`);
 }
 
 export function fetchTask(agentId: string, taskId: string): Promise<TaskView> {

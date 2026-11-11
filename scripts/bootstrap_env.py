@@ -61,6 +61,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("AGENT_ADMIN_DB_PASSWORD", "agent-admin role (Phase 33)"),
     ("AGENT_REGISTRAR_DB_PASSWORD", "agent-registrar role (Phase 33)"),
     ("AGENT_GATEWAY_DB_PASSWORD", "agent-gateway role (Phase 33)"),
+    ("VERIFICATION_WRITER_DB_PASSWORD", "verification-writer role (Phase 34)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
@@ -260,6 +261,12 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["AGENT_GATEWAY_DB_PASSWORD"] = passwords["AGENT_GATEWAY_DB_PASSWORD"]
     env["AGENT_GATEWAY_DATABASE_URL"] = _db_url(
         "agent-gateway", passwords["AGENT_GATEWAY_DB_PASSWORD"], "postgres"
+    )
+    # Phase 34 part 2: verification-writer -- INSERT on verifications and
+    # nothing else, behind POST /investigations/{id}/verifications.
+    env["VERIFICATION_WRITER_DB_PASSWORD"] = passwords["VERIFICATION_WRITER_DB_PASSWORD"]
+    env["VERIFICATION_WRITER_DATABASE_URL"] = _db_url(
+        "verification-writer", passwords["VERIFICATION_WRITER_DB_PASSWORD"], "postgres"
     )
 
     # Phase 28: the project token `culprit` presents to POST

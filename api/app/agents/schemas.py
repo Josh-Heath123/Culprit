@@ -6,6 +6,9 @@ from datetime import datetime
 from typing import Any, Literal
 
 from culprit_model.capabilities import Capability
+from culprit_model.redaction import redact_credentials
+from culprit_model.subjects import SubjectError, build
+from culprit_model.verifications import Change, ChangeKind
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agents.signing import AGENT_ID
@@ -118,11 +121,81 @@ class DiagnoseSpec(_Strict):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+class VerifySpec(_Strict):
+    """`culprit verify` as a task (Phase 34 part 2): measure again what an
+    investigation this agent diagnosed found, after a change was applied."""
+
+    investigation_id: str = Field(pattern=r"^inv-[0-9a-f]{16}$")
+    #: What was applied. Each is a change, or the words `culprit verify
+    #: --change` takes — `config:<component>/<key>`, `image:<component>`,
+    #: `commit:<sha>`, `action:<what was done>` — read into one here, with
+    #: its subject built by `subjects.build()` (the dashboard formats no
+    #: subject). None named is allowed and verifies as inconclusive.
+    #: (Typed `Change | str` so the schema says both are accepted; every
+    #: string is read into a Change before the field is validated.)
+    changes: list[Change | str] = Field(default_factory=list, max_length=32)
+
+    @field_validator("changes", mode="before")
+    @classmethod
+    def _read_change_words(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        return [parse_change(item) if isinstance(item, str) else item for item in value]
+
+    @field_validator("changes")
+    @classmethod
+    def _redact_action_words(cls, value: list[Change | str]) -> list[Change | str]:
+        # Standing invariant 11: an action's words are free text a person
+        # typed; they are stored in agent_tasks.spec, shown back and sent
+        # to the agent, so they are redacted here, at the choke point, as a
+        # verification's are when it is stored.
+        return [
+            change.model_copy(update={"description": redact_credentials(change.description)})
+            if isinstance(change, Change) and change.description
+            else change
+            for change in value
+        ]
+
+    #: Whether the fault was planted (a drill) or happened on a real
+    #: system: said by whoever asks, never guessed.
+    source: Literal["planted", "real"]
+
+
+def parse_change(words: str) -> Change:
+    """`--change` words into a change: the Python half of the binary's
+    parseChanges (cli/cmd/culprit/verify.go), subjects built, never
+    formatted."""
+    kind, found, rest = words.partition(":")
+    if not found:
+        raise ValueError(
+            f"{words!r}: want config:<component>/<key>, image:<component>, commit:<sha> "
+            "or action:<what was done>"
+        )
+    try:
+        if kind == "config":
+            component, slash, key = rest.partition("/")
+            if not slash:
+                raise ValueError(f"{words!r}: want config:<component>/<key>")
+            return Change(
+                kind=ChangeKind.CONFIG, subject=build("config", component=component, key=key)
+            )
+        if kind == "image":
+            return Change(kind=ChangeKind.IMAGE, subject=build("image", component=rest))
+        if kind == "commit":
+            return Change(kind=ChangeKind.COMMIT, ref=rest.strip().lower())
+        if kind == "action":
+            return Change(kind=ChangeKind.ACTION, description=rest.strip())
+    except SubjectError as exc:
+        raise ValueError(f"{words!r}: {exc}") from None
+    raise ValueError(f"{words!r}: {kind!r} is not config, image, commit or action")
+
+
 class TaskCreate(_Strict):
     environment: str = Field(min_length=1, max_length=128)
-    kind: Literal["probe", "diagnose"]
+    kind: Literal["probe", "diagnose", "verify"]
     probe: ProbeSpec | None = None
     diagnose: DiagnoseSpec | None = None
+    verify: VerifySpec | None = None
 
 
 class TaskCreated(BaseModel):
@@ -137,6 +210,7 @@ class ClaimedTask(BaseModel):
     kind: str
     probe: dict[str, Any] | None = None
     diagnose: dict[str, Any] | None = None
+    verify: dict[str, Any] | None = None
     #: The operator's allowance for this environment, as it stood when the
     #: task was claimed. The agent intersects it with its own grants.
     allowance: list[str]
@@ -149,6 +223,13 @@ class TaskResult(_Strict):
     allowance_ignored: list[str] = []
     readings: int = 0
     investigation_id: str | None = Field(default=None, max_length=128)
+    #: A verify task's verification, once stored, and its verdict — or the
+    #: verdict alone, `inconclusive`, when nothing could be measured.
+    verification_id: str | None = Field(default=None, max_length=128)
+    verdict: (
+        Literal["verified", "not_resolved", "regressed", "changed_underneath", "inconclusive"]
+        | None
+    ) = None
 
 
 class TaskView(BaseModel):

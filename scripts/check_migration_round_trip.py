@@ -81,6 +81,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AGENT_ADMIN_DB_PASSWORD": "round-trip-agent-admin",
     "AGENT_REGISTRAR_DB_PASSWORD": "round-trip-agent-registrar",
     "AGENT_GATEWAY_DB_PASSWORD": "round-trip-agent-gateway",
+    "VERIFICATION_WRITER_DB_PASSWORD": "round-trip-verification-writer",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:
@@ -256,6 +257,25 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             ") "
             "INSERT INTO agent_audit_log (agent_id, seq, prev, hash, kind, task_id, entry) "
             f"SELECT n.agent_id, 1, '{'0' * 64}', '{'b' * 64}', 'task', 'task-rt', '{{}}' FROM n",
+        ),
+        (
+            # Phase 34 part 2: a verification of the investigation above,
+            # and the verify task an agent ran for it. The f2b7d4e9a1c6
+            # downgrade drops the append-only table over a row it can never
+            # delete, and removes the verify task with its kind.
+            "verification and verify task",
+            "WITH v AS ("
+            "  INSERT INTO verifications (id, investigation_id, environment, verdict, "
+            "    failing_now_passes, no_regressions, changes_explained, verified_at, source, "
+            "    submitted_by, verification) "
+            "  VALUES ('ver-00000000000000aa', 'inv-round-trip', 'rt-env', 'verified', "
+            "          true, true, true, now(), 'planted', 'agent:rt-agent', '{}'::jsonb) "
+            "  RETURNING investigation_id"
+            ") "
+            "INSERT INTO agent_tasks (id, agent_id, environment, kind, spec, created_by) "
+            "SELECT 'task-rt-verify', 'rt-agent', 'rt-env', 'verify', "
+            "       jsonb_build_object('verify', jsonb_build_object('investigation_id', "
+            "       v.investigation_id)), 'rt-admin' FROM v",
         ),
     )
 

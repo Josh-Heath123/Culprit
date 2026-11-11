@@ -341,8 +341,12 @@ func describe(judged model.Judgement, reran []model.Rerun, changes []model.Chang
 func changeList(changes []model.Change) string {
 	var labels []string
 	for _, change := range changes {
-		if change.Kind == model.ChangeCommit {
+		switch change.Kind {
+		case model.ChangeCommit:
 			labels = append(labels, "commit "+change.Ref)
+			continue
+		case model.ChangeAction:
+			labels = append(labels, "the action \""+strings.TrimSpace(change.Description)+"\"")
 			continue
 		}
 		labels = append(labels, "the change to "+isolate.Describe(change.Subject))

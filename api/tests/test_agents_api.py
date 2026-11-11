@@ -55,6 +55,11 @@ async def client(
             "investigation-writer",
             "INVESTIGATION_WRITER_DB_PASSWORD",
         ),
+        (
+            "VERIFICATION_WRITER_DATABASE_URL",
+            "verification-writer",
+            "VERIFICATION_WRITER_DB_PASSWORD",
+        ),
     ):
         os.environ[variable] = role_database_url(role, password)
     os.environ["CULPRIT_PROJECT_TOKEN"] = PROJECT_TOKEN
@@ -70,8 +75,10 @@ async def client(
     from app.agents import router as agents_router
     from app.investigations import router as investigations_router
     from app.readings import router as readings_router
+    from app.verifications import router as verifications_router
 
-    for module in (agents_router, investigations_router, readings_router):
+    routers = (agents_router, investigations_router, readings_router, verifications_router)
+    for module in routers:
         importlib.reload(module)
 
     from app.auth.dependencies import require_admin, require_auth
@@ -92,6 +99,9 @@ async def client(
         "investigation_writer_session_factory": create_async_engine(
             os.environ["INVESTIGATION_WRITER_DATABASE_URL"]
         ),
+        "verification_writer_session_factory": create_async_engine(
+            os.environ["VERIFICATION_WRITER_DATABASE_URL"]
+        ),
         "session_factory": create_async_engine(
             role_database_url("api-reader", "API_READER_PASSWORD")
         ),
@@ -100,7 +110,7 @@ async def client(
     for name, engine in engines.items():
         setattr(app.state, name, async_sessionmaker(engine, expire_on_commit=False))
     install_error_handlers(app)
-    for module in (agents_router, investigations_router, readings_router):
+    for module in routers:
         app.include_router(module.router)
     admin = AuthenticatedUser(id=uuid.uuid4(), username="test-admin", role="admin")
     app.dependency_overrides[require_admin] = lambda: admin
@@ -419,7 +429,12 @@ async def test_an_investigation_records_who_stored_it(
     client: TestClient, db_engine: AsyncEngine
 ) -> None:
     async with db_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE investigations CASCADE"))
+        # verifications (Phase 34) cascade from investigations, and refuse
+        # TRUNCATE to every role: test setup lifts that, as the owner, and
+        # restores it at once.
+        await conn.execute(text("ALTER TABLE verifications DISABLE TRIGGER USER"))
+        await conn.execute(text("TRUNCATE investigations, verifications CASCADE"))
+        await conn.execute(text("ALTER TABLE verifications ENABLE TRIGGER USER"))
     agent = paired(client)
     by_token = json.loads((RECORDED / "network-partition.json").read_text("utf-8"))
     response = client.post(
@@ -617,6 +632,7 @@ def test_every_signed_route_is_covered() -> None:
         "POST /investigations",
         "POST /agents/me/audit",
         "POST /agents/me/tasks/{task_id}/result",
+        "POST /investigations/{investigation_id}/verifications",
     } <= set(routes), routes
 
 
@@ -639,7 +655,9 @@ def test_an_unsigned_or_badly_signed_request_is_refused_before_its_body_is_parse
     for route in _signed_routes():
         method, template = route.split(" ", 1)
         assert route in served, f"{route} is not mounted in this test's app"
-        path = template.replace("{task_id}", "task-unknown")
+        path = template.replace("{task_id}", "task-unknown").replace(
+            "{investigation_id}", "inv-0000000000000000"
+        )
         attempts = {
             "unsigned": {"Content-Type": "application/json"},
             "signed over other bytes": agent.headers(method, path, b'{"other": "body"}'),
@@ -728,9 +746,14 @@ async def test_the_last_signed_request_is_listed_and_survives_nonce_cleanup(
         "INSERT INTO agent_nonces (agent_id, nonce, seen_at) VALUES ('x', 'y', now())",
         "DELETE FROM agent_nonces",
         "UPDATE agent_nonces SET nonce = 'z'",
+        "SELECT nonce FROM agent_nonces",
+        "SELECT * FROM agent_nonces",
     ],
 )
 async def test_api_reader_reads_nonces_and_writes_none(role_database_url, statement: str) -> None:
+    """Q19 (Phase 34 part 2): api-reader reads the two columns the agents
+    screen shows — agent_id and seen_at — and is refused the nonce itself,
+    and every write."""
     reader = create_async_engine(role_database_url("api-reader", "API_READER_PASSWORD"))
     try:
         async with reader.connect() as conn:
@@ -740,3 +763,117 @@ async def test_api_reader_reads_nonces_and_writes_none(role_database_url, statem
                 await conn.execute(text(statement))
     finally:
         await reader.dispose()
+
+
+# ---- verification (Phase 34 part 2) -------------------------------------------------------
+
+
+async def _fresh(db_engine: AsyncEngine) -> None:
+    async with db_engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE verifications DISABLE TRIGGER USER"))
+        await conn.execute(text("TRUNCATE investigations, verifications CASCADE"))
+        await conn.execute(text("ALTER TABLE verifications ENABLE TRIGGER USER"))
+
+
+def _verification_by(agent: Agent, investigation: dict[str, Any]) -> dict[str, Any]:
+    from tests.test_verifications_api import verification_of
+
+    verification = verification_of(investigation)
+    for rerun in verification["reran"]:
+        for run in rerun["runs"]:
+            run["agent_id"] = agent.id
+    return verification
+
+
+@pytest.mark.asyncio
+async def test_an_agent_posts_the_verification_it_measured_and_is_recorded(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    await _fresh(db_engine)
+    agent = paired(client)
+    investigation = json.loads((RECORDED / "auth-audience.json").read_text("utf-8"))
+    for held in investigation["readings"]:
+        held["reading"]["agent_id"] = agent.id
+    assert agent.send("POST", "/investigations", investigation).status_code == 201
+
+    verification = _verification_by(agent, investigation)
+    path = f"/investigations/{investigation['id']}/verifications"
+    response = agent.send("POST", path, {"source": "planted", "verification": verification})
+    assert response.status_code == 201, response.text
+    listed = client.get(path).json()["items"]
+    assert [item["submitted_by"] for item in listed] == [f"agent:{agent.id}"]
+
+    # Runs that name another agent are not this agent's to post.
+    other = _verification_by(agent, investigation)
+    other["id"] = "ver-00000000000000aa"
+    other["reran"][0]["runs"][0]["agent_id"] = "someone-else"
+    refused = agent.send("POST", path, {"source": "planted", "verification": other})
+    assert refused.status_code == 403, refused.text
+
+
+@pytest.mark.asyncio
+async def test_a_verify_task_names_an_investigation_in_its_environment(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    await _fresh(db_engine)
+    investigation = json.loads((RECORDED / "auth-audience.json").read_text("utf-8"))
+    from culprit_model.subjects import build
+
+    token_key = build("config", component="order-service", key="INVENTORY_TOKEN")
+    stored = client.post(
+        "/investigations", json=investigation, headers={"Authorization": f"Bearer {PROJECT_TOKEN}"}
+    )
+    assert stored.status_code == 201, stored.text
+    agent = paired(client, {investigation["environment"]: ["net.tcp.connect"]})
+    verify = {
+        "investigation_id": investigation["id"],
+        "changes": [{"kind": "config", "subject": token_key}],
+        "source": "planted",
+    }
+
+    def task(**body: Any):
+        payload = {"environment": investigation["environment"], "kind": "verify"} | body
+        return client.post(f"/agents/{agent.id}/tasks", json=payload)
+
+    created = task(verify=verify)
+    assert created.status_code == 201, created.text
+    claimed = agent.send("POST", "/agents/me/tasks/claim")
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["kind"] == "verify"
+    assert claimed.json()["verify"] == verify
+
+    unknown = verify | {"investigation_id": "inv-00000000000000ff"}
+    assert task(verify=unknown).status_code == 404
+    elsewhere = client.post(
+        f"/agents/{agent.id}/tasks",
+        json={"environment": "somewhere-else", "kind": "verify", "verify": verify},
+    )
+    assert elsewhere.status_code == 422
+    assert task().status_code == 422  # a verify task with nothing to verify
+    assert task(verify=verify | {"source": "guess"}).status_code == 422  # source is said
+    bad_change = verify | {"changes": [{"kind": "commit", "ref": "main"}]}
+    assert task(verify=bad_change).status_code == 422
+
+    # The words `culprit verify --change` takes, read here with subjects
+    # built by subjects.build(): the dashboard formats no subject. (A
+    # config key's words are its subject's text.)
+    words = verify | {"changes": [token_key, "action: restarted it"]}
+    assert task(verify=words).status_code == 201
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["verify"]["changes"] == [
+        {"kind": "config", "subject": token_key},
+        {"kind": "action", "description": "restarted it"},
+    ]
+    # An action's words are redacted before the task is stored (invariant 11).
+    leaked = "postgresql://svc:hunter2-not-real@db.internal:5432/app"
+    redacted = task(verify=verify | {"changes": [f"action: rotated {leaked}"]})
+    assert redacted.status_code == 201, redacted.text
+    async with db_engine.connect() as conn:
+        spec = (
+            await conn.execute(
+                text("SELECT spec::text FROM agent_tasks WHERE id = :id"),
+                {"id": redacted.json()["id"]},
+            )
+        ).scalar_one()
+    assert "hunter2-not-real" not in spec
+    for wrong in ("restart:order-service", "commit:main", "action:   "):
+        assert task(verify=verify | {"changes": [wrong]}).status_code == 422, wrong

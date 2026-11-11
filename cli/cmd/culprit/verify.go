@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/josh-heath123/culprit/cli/internal/capability"
 	"github.com/josh-heath123/culprit/cli/internal/capture"
 	"github.com/josh-heath123/culprit/cli/internal/check"
 	"github.com/josh-heath123/culprit/cli/internal/extract"
@@ -102,15 +103,18 @@ func readJSON(path string, into any) error {
 // ---- what `culprit diagnose` keeps ---------------------------------------------------
 
 // captureBefore records the environment as diagnosis finds it, under the
-// environment's own grants. It returns the bundle, or why there is none:
+// environment's own grants — or, for an agent, under the grants it holds
+// (grants non-nil). It returns the bundle, or why there is none:
 // a capture that could see nothing at all is not a record of anything,
 // and comparing two of them would call every change "nothing changed".
-func captureBefore(ctx context.Context, manifest *extract.Manifest, manifestPath, environment string) (*model.CaptureBundle, string) {
+func captureBefore(ctx context.Context, manifest *extract.Manifest, manifestPath, environment string,
+	grants *capability.Grants,
+) (*model.CaptureBundle, string) {
 	bundle, err := capture.Run(ctx, capture.Options{
 		Manifest: manifest, ManifestDir: filepath.Dir(manifestPath), Environment: environment,
 		Now: captureTime(), Version: Version,
 		Runner: capture.ExecRunner{Timeout: 30 * time.Second}, Network: capture.RealNetwork{},
-		Database: capture.PostgresReader{},
+		Database: capture.PostgresReader{}, Grants: grants,
 	})
 	if err != nil {
 		return nil, "the environment could not be captured: " + err.Error()
@@ -150,9 +154,10 @@ func uniqueSorted(values []string) []string {
 // capture before into the state directory, and says in the rubric's
 // `verified` reason what a verification can do with them. If they cannot
 // be kept, the reason says that instead, and the error is returned for a
-// warning: the diagnosis itself stands.
+// warning: the diagnosis itself stands. how says, in the reason, how a
+// verification is asked for: a command, or a task for the agent.
 func keepForVerification(stateDir string, investigation *model.Investigation, requests map[string]isolate.Recorded,
-	vantage string, before *model.CaptureBundle, absent string,
+	vantage string, before *model.CaptureBundle, absent, how string,
 ) error {
 	record := verify.Record{
 		Version: verify.RecordVersion, InvestigationID: investigation.ID,
@@ -176,9 +181,8 @@ func keepForVerification(stateDir string, investigation *model.Investigation, re
 			investigation.Diagnosis.Confidence.Verified.Reason = reason
 		}
 	}
-	command := "culprit verify " + investigation.ID + " --change ..."
 	if before != nil {
-		setVerified("not yet verified: after a fix is applied, `" + command + "` measures every reading again " +
+		setVerified("not yet verified: after a fix is applied, " + how + " measures every reading again " +
 			"and compares the environment with the record of it taken at diagnosis")
 	} else {
 		setVerified("not yet verified, and a verification can be inconclusive at best: " +
@@ -204,7 +208,7 @@ func keepForVerification(stateDir string, investigation *model.Investigation, re
 	if err != nil {
 		// The cause goes to stderr, not into the investigation: it can name
 		// local paths, and the investigation is printed and uploaded.
-		setVerified("not verifiable: the investigation could not be kept in the state directory for `culprit verify`")
+		setVerified("not verifiable: the investigation could not be kept in the state directory for verification")
 		return err
 	}
 	return nil
@@ -237,6 +241,9 @@ Name what was applied with --change, repeatable:
   image:<component>             a new image for a component
   config:<component>/<key>      a config key changed for a component
   commit:<sha>                  a commit (explains nothing a capture records)
+  action:<what was done>        anything else — a rule removed, a flag
+                                cleared, a restart — in words (explains
+                                nothing a capture records)
 
 Verdicts: verified (what failed passes on both runs, what passed still
 passes, and every change in the environment is explained by the change
@@ -304,7 +311,7 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 					return fmt.Errorf("the capture before cannot be read: %w", err)
 				}
 				before = &envelope.Bundle
-				taken, absent := captureBefore(command.Context(), manifest, resolved, record.Environment)
+				taken, absent := captureBefore(command.Context(), manifest, resolved, record.Environment, nil)
 				if taken == nil {
 					return fmt.Errorf("the environment cannot be captured again to compare with: %s", absent)
 				}
@@ -348,7 +355,7 @@ Exit codes: 0 verified, 1 any other verdict, 2 the command could not run.`,
 	command.Flags().StringVarP(&manifestPath, "file", "f", "", "path to culprit.yaml (default: search upward from the working directory)")
 	command.Flags().StringVar(&stateDir, "state-dir", defaultStateDir(), "where `culprit diagnose` kept the investigation ($CULPRIT_STATE_DIR)")
 	command.Flags().StringVar(&from, "from", "", "the component this binary runs inside — the same as the diagnosis's --from")
-	command.Flags().StringArrayVar(&changes, "change", nil, "what was applied: image:<component>, config:<component>/<key> or commit:<sha> (repeatable)")
+	command.Flags().StringArrayVar(&changes, "change", nil, "what was applied: image:<component>, config:<component>/<key>, commit:<sha> or action:<what was done> (repeatable)")
 	command.Flags().StringVar(&format, "format", "text", "text|json")
 	command.Flags().StringVarP(&outputPath, "output", "o", "", "write to this file instead of stdout")
 	command.Flags().StringVar(&agentID, "agent-id", "culprit-cli", "identifies who took these readings")
@@ -372,12 +379,14 @@ func parseChanges(values []string) ([]model.Change, error) {
 	for _, value := range values {
 		kind, rest, found := strings.Cut(value, ":")
 		if !found {
-			return nil, fmt.Errorf("--change %q: want image:<component>, config:<component>/<key> or commit:<sha>", value)
+			return nil, fmt.Errorf("--change %q: want image:<component>, config:<component>/<key>, commit:<sha> or action:<what was done>", value)
 		}
 		var change model.Change
 		switch kind {
 		case "commit":
-			change = model.Change{Kind: model.ChangeCommit, Ref: strings.ToLower(rest)}
+			change = model.Change{Kind: model.ChangeCommit, Ref: strings.ToLower(strings.TrimSpace(rest))}
+		case "action":
+			change = model.Change{Kind: model.ChangeAction, Description: strings.TrimSpace(rest)}
 		case "image":
 			subject, err := model.BuildSubject(model.KindImage, model.Parts{"component": rest})
 			if err != nil {
@@ -395,7 +404,7 @@ func parseChanges(values []string) ([]model.Change, error) {
 			}
 			change = model.Change{Kind: model.ChangeConfig, Subject: subject}
 		default:
-			return nil, fmt.Errorf("--change %q: %q is not image, config or commit", value, kind)
+			return nil, fmt.Errorf("--change %q: %q is not image, config, commit or action", value, kind)
 		}
 		if err := change.Validate(); err != nil {
 			return nil, fmt.Errorf("--change %q: %w", value, err)

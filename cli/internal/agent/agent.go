@@ -156,6 +156,7 @@ func (a *Agent) Handle(ctx context.Context, incoming *Incoming) error {
 		return finish(OutcomeError, err.Error())
 	}
 	result.Readings, result.Investigation = executed.Readings, executed.Investigation
+	result.Verification, result.Verdict = executed.Verification, executed.Verdict
 
 	reason := ""
 	if len(ignored) > 0 {

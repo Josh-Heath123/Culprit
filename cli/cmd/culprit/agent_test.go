@@ -420,3 +420,112 @@ func TestAgentVerifyOnAnUnreadableLogIsAnErrorNotAFinding(t *testing.T) {
 		t.Fatalf("err = %v, want a plain error (exit 2), not a finding (exit 1)", err)
 	}
 }
+
+// ---- verification, as a task (Phase 34 part 2) ------------------------------------------
+
+// verifyingAgent is an agent over the loop's switchable server, holding
+// config.read.names so its walk can take a record of before.
+func verifyingAgent(t *testing.T) (*agentWorld, *api) {
+	t.Helper()
+	server, port := startSwitchableAPI(t)
+	world := newAgentWorld(t, fmt.Sprintf(loopFixture, port, port), "")
+	world.agent.Executor = &agentExecutor{timeout: 2 * time.Second, wire: realWire, stateDir: t.TempDir()}
+	text := "version: 1\nagent_id: agent-under-test\nmanifest: ./culprit.yaml\nenvironments:\n  local:\n    grants:\n" +
+		"      net.http.outbound: true\n      net.tcp.connect: true\n      net.dns.resolve: true\n" +
+		"      config.read.names: true\n"
+	if err := os.WriteFile(world.configPath, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return world, server
+}
+
+func probeEntries(entries []agent.Entry) int {
+	count := 0
+	for _, entry := range entries {
+		if entry.Kind == agent.EntryProbe {
+			count++
+		}
+	}
+	return count
+}
+
+func TestAnAgentVerifiesWhatItDiagnosed(t *testing.T) {
+	world, server := verifyingAgent(t)
+	world.submit(agent.Task{ID: "walk-1", Environment: "local", Kind: agent.TaskDiagnose,
+		Diagnose: &agent.DiagnoseTask{Symptom: "web", From: "web"}})
+	world.drain()
+	diagnosed := world.result("walk-1")
+	if diagnosed.Investigation == nil || diagnosed.Investigation.Diagnosis == nil {
+		t.Fatalf("no diagnosis: %s %q", diagnosed.Outcome, diagnosed.Reason)
+	}
+	investigation := diagnosed.Investigation
+	if reason := investigation.Diagnosis.Confidence.Verified.Reason; !strings.Contains(reason, "a verify task for "+investigation.ID) {
+		t.Errorf("the verified criterion does not say how to verify through the agent: %s", reason)
+	}
+
+	// A wrong fix first: nothing changed, so what failed still fails.
+	change := []model.Change{{Kind: model.ChangeCommit, Ref: "9f2c4e1"}}
+	world.submit(agent.Task{ID: "verify-1", Environment: "local", Kind: agent.TaskVerify,
+		Verify: &agent.VerifyTask{InvestigationID: investigation.ID, Changes: change, Source: agent.SourcePlanted}})
+	world.drain()
+	if wrong := world.result("verify-1"); wrong.Verdict != model.VerificationNotResolved || wrong.Verification == nil {
+		t.Fatalf("a wrong fix: verdict %q, %s", wrong.Verdict, wrong.Reason)
+	}
+
+	server.ordersServed.Store(true)
+	world.submit(agent.Task{ID: "verify-2", Environment: "local", Kind: agent.TaskVerify,
+		Verify: &agent.VerifyTask{InvestigationID: investigation.ID, Changes: change, Source: agent.SourcePlanted}})
+	world.drain()
+	result := world.result("verify-2")
+	if result.Outcome != agent.OutcomeCompleted || result.Verdict != model.VerificationVerified || result.Verification == nil {
+		t.Fatalf("the fix: %s, verdict %q: %s", result.Outcome, result.Verdict, result.Reason)
+	}
+	if result.Verification.BeforeCapture == nil {
+		t.Error("the agent's walk kept no record of before")
+	}
+	// Every reading measured again twice, and each run in the audit log.
+	if got, want := len(result.Verification.Reran), len(investigation.Readings); got != want {
+		t.Errorf("%d re-runs for %d readings", got, want)
+	}
+	if got, want := probeEntries(world.entries("verify-2")), 2*len(investigation.Readings); got != want {
+		t.Errorf("%d probe entries for the verification, want %d", got, want)
+	}
+	for _, rerun := range result.Verification.Reran {
+		for _, run := range rerun.Runs {
+			if run.AgentID != "agent-under-test" {
+				t.Errorf("a run names %q, not the agent", run.AgentID)
+			}
+		}
+	}
+}
+
+func TestAnAgentAskedToVerifyWhatItDidNotDiagnoseSaysItHoldsNoRecord(t *testing.T) {
+	world, _ := verifyingAgent(t)
+	world.submit(agent.Task{ID: "verify-1", Environment: "local", Kind: agent.TaskVerify,
+		Verify: &agent.VerifyTask{InvestigationID: "inv-00000000000000aa", Source: agent.SourceReal,
+			Changes: []model.Change{{Kind: model.ChangeAction, Description: "restarted it"}}}})
+	world.drain()
+	result := world.result("verify-1")
+	if result.Verdict != model.VerificationInconclusive || result.Verification != nil {
+		t.Fatalf("verdict %q, verification %v", result.Verdict, result.Verification)
+	}
+	if !strings.Contains(result.Reason, "holds no record of before") || !strings.Contains(result.Reason, "did not diagnose it") {
+		t.Errorf("the reason does not say why: %s", result.Reason)
+	}
+	if probes := probeEntries(world.entries("verify-1")); probes != 0 {
+		t.Errorf("%d probes ran for an investigation the agent holds nothing of", probes)
+	}
+}
+
+func TestAVerifyTaskMustSayWhereItsFaultCameFrom(t *testing.T) {
+	task := agent.Task{ID: "v", Environment: "local", Kind: agent.TaskVerify,
+		Verify: &agent.VerifyTask{InvestigationID: "inv-00000000000000aa"}}
+	if err := task.Validate(); err == nil || !strings.Contains(err.Error(), "source") {
+		t.Errorf("a verify task with no source: %v", err)
+	}
+	task.Verify.Source = agent.SourcePlanted
+	task.Verify.Changes = []model.Change{{Kind: model.ChangeCommit, Ref: "main"}}
+	if err := task.Validate(); err == nil {
+		t.Error("a verify task naming a commit that is not one was accepted")
+	}
+}

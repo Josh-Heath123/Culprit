@@ -128,6 +128,10 @@ test("the main journey works by keyboard alone", async ({ page }) => {
   );
   await page.keyboard.press("Enter");
   await page.waitForURL(`**/investigations/${complete}`);
+  // The URL changes before the tree has loaded: until it renders, the page
+  // is a skeleton, and Tab only cycles the header. Wait for the target to
+  // exist, as the list step above does, then reach it by Tab alone.
+  await expect(page.getByTestId("edge-toggle").first()).toBeVisible();
 
   await tabUntil(() =>
     page.evaluate(() => document.activeElement?.getAttribute("data-testid") === "edge-toggle"),

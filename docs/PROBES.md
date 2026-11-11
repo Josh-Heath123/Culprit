@@ -298,6 +298,14 @@ gone, and the environment changed in a way the named change does not
 explain). Exit codes: `0` verified, `1` any other verdict, `2` could not
 run. Its limits are in `docs/LIMITS.md`, "Verification".
 
+An agent does the same as a `verify` task (Phase 34 part 2), for an
+investigation it diagnosed: every probe re-run twice, under the grants the
+task holds, each run an entry in its audit log. A reading the walk took in a
+reference environment is re-run there under no grant — an allowance is per
+environment — so it is `refused`. The verification is posted to the control
+plane, which judges it again with the same rule and stores it beside the
+investigation; the investigation itself is never edited.
+
 ## Where readings go
 
 `culprit probe` prints them. `POST /readings` stores them, under the

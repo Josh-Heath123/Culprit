@@ -289,7 +289,17 @@ async def load(session: AsyncSession, investigation_id: str) -> Investigation | 
     )
 
 
-def tree(investigation: Investigation) -> dict[str, Any]:
+async def submitted_by(session: AsyncSession, investigation_id: str) -> str | None:
+    return (
+        await session.execute(
+            select(tables.investigations.c.submitted_by).where(
+                tables.investigations.c.id == investigation_id
+            )
+        )
+    ).scalar_one_or_none()
+
+
+def tree(investigation: Investigation, submitter: str = "project-token") -> dict[str, Any]:
     """The view's shape: every edge carries the readings that established
     it, the rubric stays four booleans, and hypotheses are grouped so that
     untested (open) and unexplored are never shown as one thing."""
@@ -306,6 +316,7 @@ def tree(investigation: Investigation) -> dict[str, Any]:
     return {
         "id": investigation.id,
         "environment": investigation.environment,
+        "submitted_by": submitter,
         "opened_at": investigation.opened_at,
         "symptom": investigation.symptom.model_dump(mode="json"),
         "diagnosis": (

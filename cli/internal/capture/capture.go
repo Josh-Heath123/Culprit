@@ -109,6 +109,11 @@ type Options struct {
 	LookupEnv func(string) (string, bool)
 	// Environ is what the process adapter reads.
 	Environ func() []string
+	// Grants, when set, are what the capture runs under instead of the
+	// environment's grants in culprit.yaml: an agent captures under its
+	// own configuration's grants, narrowed by its task's allowance, as it
+	// probes (Phase 34 part 2).
+	Grants *capability.Grants
 }
 
 // Defaults fills in the real implementations for anything not injected.
@@ -160,6 +165,9 @@ func Run(ctx context.Context, options Options) (model.CaptureBundle, error) {
 	grants, err := spec.ParsedGrants()
 	if err != nil {
 		return model.CaptureBundle{}, err
+	}
+	if options.Grants != nil {
+		grants = *options.Grants
 	}
 	adapter, err := NewAdapter(spec, options.ManifestDir, options.Runner, options.Environ)
 	if err != nil {

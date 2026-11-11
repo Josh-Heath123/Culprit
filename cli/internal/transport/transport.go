@@ -223,6 +223,7 @@ type claimed struct {
 	Kind        string              `json:"kind"`
 	Probe       *agent.ProbeTask    `json:"probe,omitempty"`
 	Diagnose    *agent.DiagnoseTask `json:"diagnose,omitempty"`
+	Verify      *agent.VerifyTask   `json:"verify,omitempty"`
 	Allowance   []string            `json:"allowance"`
 }
 
@@ -262,7 +263,7 @@ func (s *Source) Next(ctx context.Context) (*agent.Incoming, error) {
 		Handle: task.ID,
 		Task: agent.Task{
 			ID: task.ID, Environment: task.Environment, Kind: task.Kind,
-			Probe: task.Probe, Diagnose: task.Diagnose, Allowance: allowance,
+			Probe: task.Probe, Diagnose: task.Diagnose, Verify: task.Verify, Allowance: allowance,
 		},
 	}, nil
 }
@@ -274,6 +275,8 @@ type resultSummary struct {
 	AllowanceIgnored []string `json:"allowance_ignored"`
 	Readings         int      `json:"readings"`
 	InvestigationID  string   `json:"investigation_id,omitempty"`
+	VerificationID   string   `json:"verification_id,omitempty"`
+	Verdict          string   `json:"verdict,omitempty"`
 }
 
 // Complete ships the audit chain, then what the task measured, then its
@@ -304,14 +307,34 @@ func (s *Source) Complete(ctx context.Context, incoming *agent.Incoming, result 
 		}
 		investigation = result.Investigation.ID
 	}
+	verification := ""
+	if result.Verification != nil && incoming.Task.Verify != nil {
+		// The verification, before the result that names it: by the time
+		// the control plane hears the task ended, it holds what it measured.
+		path := "/investigations/" + url.PathEscape(result.Verification.InvestigationID) + "/verifications"
+		response, err := s.Client.send(ctx, http.MethodPost, path, map[string]any{
+			"source": incoming.Task.Verify.Source, "verification": result.Verification,
+		}, true)
+		if err != nil {
+			return err
+		}
+		if err := expect(response, path, http.StatusCreated, http.StatusConflict); err != nil {
+			return err
+		}
+		verification = result.Verification.ID
+	}
 	readings := len(result.Readings)
 	if result.Investigation != nil {
 		readings = len(result.Investigation.Readings)
+	}
+	if result.Verification != nil {
+		readings = len(result.Verification.Reran)
 	}
 	summary := resultSummary{
 		Outcome: result.Outcome, Reason: truncate(result.Reason, 4000),
 		GrantsHeld: nonNil(result.GrantsHeld), AllowanceIgnored: nonNil(result.AllowanceIgnored),
 		Readings: readings, InvestigationID: investigation,
+		VerificationID: verification, Verdict: string(result.Verdict),
 	}
 	path := "/agents/me/tasks/" + url.PathEscape(incoming.Handle) + "/result"
 	response, err := s.Client.send(ctx, http.MethodPost, path, summary, true)
