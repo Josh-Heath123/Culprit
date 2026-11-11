@@ -55,11 +55,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **35, part 1 — The agent surface** — status `not started`. Brief in §4. |
+| Current phase | **35, part 1 — The agent surface** — status `gates red` (ambient): implemented, every local gate and every CI job green except `e2e`, which failed three times installing `just` from apt because the runner could not resolve Ubuntu's mirrors — no e2e test ran. PR #34, not merged. Q24. Report in §5. |
 | Previous phase | **34 — The verification loop and calibration: complete** (two parts), part 2 signed off 2026-11-11 by the architecture session. Merged via PR #33 (`0effc53`), every pull-request check green. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-35-mcp`, cut from `origin/main` = `0effc53`; its first commit is the Phase 34 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
-| Blocking questions | **None.** §3 is empty. |
+| Blocking questions | **Q24** blocks PR #34's merge gate (CI's `e2e` cannot install `just`), not the design. Q22 and Q23 are for review. |
 
 ---
 
@@ -70,7 +70,9 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q20 and Q21 were ruled 2026-11-10 (`DIAGNOSTIC_PLAN.md`, end of Phase 34): an `action` change kind in part 2; criterion 3 refined for a diagnosis with no failing reading, and latency detection left to Phase 36. | | |
+| Q22 | Phase 35 part 1, criterion 3 — "every tool's response validates against the same model the CLI's JSON uses" — cannot hold literally for `culprit_system_model` and `culprit_explain_connection`, which have no CLI command. Built: every record inside them is a model record that validates (facts, check's own divergence objects, built subjects, catalogue manifests); their envelopes are new. Accept that reading, or ask for the envelopes published as each tool's `outputSchema`? | 2026-11-11, Phase 35 part 1 | No |
+| Q23 | A probe's `url`/`host`/`port` inputs are not bound to the endpoints `culprit.yaml` declares — true of `culprit probe` since Phase 31, and now reachable by a coding agent through `culprit_probe` (the phase-auditor sent a GET to an arbitrary local address under `net.http.outbound`). Documented in LIMITS ("A granted probe goes where its inputs say"). Bind `culprit_probe`'s inputs to declared endpoints, or accept the limit? | 2026-11-11, Phase 35 part 1 | No |
+| Q24 | CI's `e2e` job installs `just` with `apt-get` (ci-cd.yml:513). On PR #34 (run 43045419342) it failed three times, 15:12–15:40 UTC, resolving Ubuntu's mirrors, before any test ran; every other job passed. Re-run it once the runners' DNS recovers, or install `just` another way (its GitHub release with a pinned checksum; the workflow comment at :511 records that a third-party action was avoided on purpose)? Claude Code has not changed the workflow. | 2026-11-11, Phase 35 part 1 | PR #34's merge gate |
 
 ---
 
@@ -101,7 +103,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
-| 35, part 1 | The agent surface | not started | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — all 17 fields, read with "How Phase 35 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, five criteria and what not to build. `culprit mcp` is served by the binary over stdio; the Python MCP server is not repointed. Branch `phase-35-mcp`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 35, part 1 | The agent surface | **gates red** (ambient: CI `e2e` could not install `just`; Q24) — PR #34, not merged | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — all 17 fields, read with "How Phase 35 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, five criteria and what not to build. `culprit mcp` is served by the binary over stdio; the Python MCP server is not repointed. Branch `phase-35-mcp`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 35, part 2 | The narrator | not started | Criteria written at part 1's review. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
@@ -134,167 +136,216 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        34, part 2 — outcomes in the control plane
-Branch:       phase-34-outcomes, from origin/main = 2ef3da6 (PR #32's merge);
-              its first commit is the part 1 sign-off (a15f79d). Commits
-              690e778..HEAD. PR #33.
-Run:          2026-11-10 (/next, the build) and 2026-11-11 (an e2e repair).
-Status:       IMPLEMENTED; CI GREEN on PR #33 (run 42989682700, below). Not merged: the merge is the
-              human's, after the architecture review.
+Phase:        35, part 1 — the agent surface
+Branch:       phase-35-mcp, from origin/main = 0effc53 (PR #33's merge); its
+              first commit is the Phase 34 sign-off (eb09d15).
+Run:          2026-11-11, /next.
+Status:       IMPLEMENTED; every local gate green; the fault library 13/13
+              locally with Docker; both audits clean, their findings fixed.
+              CI: NOT GREEN — every job but e2e passed on
+              PR #34; e2e failed three times installing `just` from apt
+              (runner DNS), before any test ran. Status gates red (ambient).
 
-WHAT WAS BUILT (work order 1-7)
-  1 Carried in (690e778). Q19: api-reader reads agent_nonces (agent_id,
-    seen_at) by a column grant and is refused `nonce` (f1a9c3d7e2b4). Q20:
-    an `action` change kind in Go, Python and the conformance fixture (23
-    accepted, 40 rejected, 12 touches), `--change action:<what was done>`;
-    the fault library's three runtime fixes are named as actions, and a
-    test holds the library to naming no commit.
-  2 Storage. `verifications`, append-only as agent_audit_log is: triggers
-    refuse UPDATE, DELETE and TRUNCATE to every role, the owner included; a
-    CHECK holds `verified` to its three clauses. One new role,
-    verification-writer, INSERT and nothing else (f2b7d4e9a1c6).
-  3 The API. POST /investigations/{id}/verifications (project token or an
-    agent, recorded which) re-judges with judge(); refuses re-runs before
-    the investigation, a `was` that disagrees with the stored reading, a
-    skipped reading, a verified_at before its own last run or after the
-    server's clock, and a source contradicting an earlier one (409);
-    redacts; never writes to the investigation. GET .../verifications,
-    newest first. GET /outcomes/accuracy: each complete diagnosis's newest
-    verification, per fault class (the root's subject kind) and source,
-    every verdict counted, the denominator stated, inconclusive beside it.
-  4 The agent. A walk keeps each reading's request and a before capture
-    under the agent's own grants, beside its audit log. A `verify` task
-    re-measures an investigation it diagnosed and posts the verification
-    before its result; asked about one it did not diagnose, it answers
-    inconclusive, holding no record of before. VerifySpec redacts every
-    action's words at the choke point (invariant 11).
-  5 The view (255fc9a). Verifications newest first — verdict, the three
-    conditions, the change, planted or real, who recorded it; the rubric's
-    `verified` from the newest. An admin asks an agent to verify from the
-    page, naming the change; the diagnosing agent is the default.
-  6 The README's number. The fault library writes
-    cli/testdata/faultlib/results.json when every case passes; CI must
-    reproduce it. `just accuracy-readme` renders the section with the
-    function GET /outcomes/accuracy uses: 5 of 5 planted faults verified,
-    two partial diagnoses not counted, "planted faults in our own demo
-    services", not accuracy on a real system.
-  7 LIMITS (nine entries), PROBES, PERMISSIONS, SECURITY, UPGRADING,
-    ARCHITECTURE, README, CLAUDE.md, the database rule's role list.
+WHAT WAS BUILT (work order 1-4)
+  1 `culprit mcp` (cli/cmd/culprit/mcp.go): MCP over stdin and stdout from
+    the binary, six read-only tools — culprit_system_model, culprit_check,
+    culprit_explain_connection, culprit_probe, culprit_diagnose,
+    culprit_verify. cli/internal/mcp is the protocol and nothing else:
+    newline-delimited JSON-RPC 2.0; initialize (2025-06-18, 2025-03-26,
+    2024-11-05), tools/list, tools/call, ping; notifications unanswered.
+    It links no Culprit package and no network package. Every tool's
+    arguments are a closed schema (additionalProperties false), checked
+    before the handler runs, so an argument naming a grant is a protocol
+    error. The vantage (--from), the state directory, the agent id and the
+    timeouts are the server's flags, never arguments.
+    To call the same code as the commands, the bodies of `culprit
+    diagnose`, `verify` and `probe` were lifted into runDiagnose, runVerify
+    and runProbe, which the commands and the tools both call; check.Run
+    was already a function. No second implementation of anything.
+  2 Each answer is the command's --format json: culprit_check is `culprit
+    check --format json`; culprit_probe is `culprit probe --format json`
+    ({readings, refused}); culprit_diagnose is {investigation, verify} —
+    the investigation `culprit diagnose --format json` prints, and the
+    culprit_verify call to make with the four change kinds and what each
+    explains; culprit_verify is the Verification. The text content is the
+    same JSON. No prose field anywhere.
+  3 A scripted MCP client (mcp_test.go, mcpClient) drives the server over
+    a pair of streams: in-process through the real cobra command, and in
+    the fault library through the real linux binary, `docker exec -i
+    <vantage> culprit mcp`, over its stdin and stdout: subtests
+    mcp/auth-audience (fix applied -> verified) and mcp/wrong-fix (token
+    re-minted for the wrong audience -> not_resolved, reason naming
+    probe.auth.token_shape). Neither is counted in results.json.
+  4 README ("For a coding agent: culprit mcp": the mcpServers snippet, the
+    tool table, what it cannot do; a Key-features row; project structure;
+    future work now part 2), LIMITS ("The agent surface", nine entries),
+    ARCHITECTURE (layer 26), CLAUDE.md.
 
-CRITERIA (part 2) — evidence from the build run (commits 690e778, 255fc9a,
-f329b11 and PR #33); not re-executed one by one in the repair run.
-  1 api-reader reads agent_id, seen_at; refused nonce; agents screen
-    still shows last request                 column-grant test; agents e2e.
-  2 `action` holds in Go/Python/fixture, explains nothing a capture
-    records; no library record names a non-commit   fixture; library test.
-  3 refuses re-runs predating, `was` disagreeing, verdict judge() does
-    not reach — a test each                   api tests (690e778, f329b11).
-  4 no role can update/delete a verification, red with the trigger
-    removed; investigation row byte-identical  trigger-removed test (UPDATE
-    and DELETE, f329b11).
-  5 end to end through an agent: verified, and not_resolved for a wrong
-    fix, shown on the page                    `just agent-e2e` then
-    `just e2e-verified` (verifications.spec.ts), both in CI's e2e job.
-  6 an agent that did not diagnose it -> inconclusive, "no record of
-    before"                                   `just agent-e2e`.
-  7 /outcomes/accuracy gives exactly the seeded numbers; empty says so
-                                              api tests.
-  8 README number regenerated by a committed command, method, count,
-    "planted faults" in so many words         `just accuracy-readme`; CI
-    reproduces results.json.
-  9 migration round-trips with verifications present; D8 allowlist
-    unchanged; LLM_PROVIDER=none changes nothing   migration-round-trip job
-    seeds a verification and a verify task.
+CRITERIA (part 1)
+  1 over stdio: diagnose the audience fault -> rooted tree; known fix ->
+    verified; wrong fix -> not_resolved; in CI          PASS locally.
+      Fault library, Docker, Windows: 13/13, mcp/auth-audience "verified,
+      7 readings re-run twice", mcp/wrong-fix "not_resolved ... still
+      failing on both runs: probe.auth.token_shape ...". In-process:
+      TestTheLoopThroughMCP (both). In CI: the fault-library job runs
+      TestTheFaultLibrary unfiltered (ci-cd.yml:405), so the mcp/ subtests
+      run there — and it did: run 43045419342, both PASS on Linux.
+      Note: the fix recreates order-service, and the MCP server running
+      inside it with it, so diagnose and verify are two sessions; the
+      state directory carries the investigation (LIMITS).
+  2 an argument naming a grant, or a probe the environment does not
+    grant, refused before anything is dialled (dials counted)  PASS.
+      TestNoArgumentAcquiresACapability: five protocol refusals (grants,
+      a capability as an argument name, capabilities on diagnose, grants
+      on verify, grant on check), four tool refusals (an input named
+      grants, an input named a capability, an ungranted probe, one
+      ungranted probe beside a granted one) — 0 dials, 0 requests; the
+      granted control then dials once. Shown red: with the pre-check
+      disabled, "1 dial(s) and 0 request(s) for calls that were all
+      refused". Also TestDiagnoseAndVerifyDialNothingUngranted (0 dials
+      for a walk and a verification in an environment granting no network
+      capability) and TestEditingCulpritYamlMidSessionGrantsNothing.
+      The phase-auditor drove the real binary with 14 hostile lines and a
+      counting TCP listener: nothing connected except a genuine call to a
+      granted environment.
+  3 every tool's response validates against the CLI's model   PASS, with
+    the wording question below.
+      TestEveryToolAnswersInTheCLIsModel: culprit_check equals `culprit
+      check --format json` once parsed; readings, the Investigation and
+      the Verification Validate() (decoded with unknown fields refused);
+      culprit_system_model's intent is the CaptureBundle `culprit intent`
+      prints (the auditor checked equality), every fact valid; the
+      explanation's facts valid, its divergences check's own objects, each
+      probe entry's capabilities and grant decision equal to the
+      catalogue's and the environment's.
+      NOT TESTABLE AS WRITTEN for two tools: culprit_system_model and
+      culprit_explain_connection have no CLI command, so no CLI JSON. What
+      holds: every record inside them is a model record that validates;
+      their envelopes are new (Q22).
+  4 links no network package beyond probe and capture; nothing calls a
+    model                                                    PASS.
+      check_test.go untouched; TestTheNetworkBoundaryIsAnAllowlist covers
+      internal/mcp (go list ./internal/...), which links no net, net/http
+      or crypto/tls; TestNothingInTheBinaryListens PASS;
+      check_no_llm_imports covers cli/, cmd included. LLM_PROVIDER=none
+      throughout the loop tests; nothing reads it.
+  5 no tool writes                                           PASS.
+      TestNoToolWrites: all six offered readOnlyHint, closed arguments;
+      the whole loop leaves culprit.yaml's directory byte-identical; the
+      protocol package links no Culprit package; mcp.go names no
+      transport, os.WriteFile or os.Create. The only writes are the
+      server's own state directory, as for the commands (LIMITS).
 
-AUDITS (build run, f329b11)
-  invariant-auditor: ONE VIOLATION, fixed — an action's words were stored
-    in agent_tasks.spec unredacted; VerifySpec now redacts, tested by
-    reading the stored spec.
-  phase-auditor: fixed — verified_at bounds; one source per investigation
-    (409); the method states what `verified` measures; the README counts
-    all seven planted faults; the trigger-removed test covers DELETE.
+DELIBERATELY NOT BUILT (part 1's list and field 17)
+  No narrator, no prose, no write-capable tool, no remediation, no network
+  transport (stdio only; no listener), no change to the Python MCP server
+  (mcp_server/ not in the diff). No LLM_PROVIDER=none CI job: it returns
+  with the narrator in part 2 (D8, amended 2026-11-05).
 
-CI HISTORY ON PR #33
-  42860211571 (on 255fc9a): red, e2e only — the agents journey asserted
-    not_resolved for a verification an agent outside every component, with
-    network grants alone, can only make inconclusive. Fixed in f329b11: it
-    asserts the verification lands and is not `verified`.
-  42862315900 (on f329b11): red, e2e only — the repair below.
+GATES (local, Windows, Docker up)
+  lint, typecheck, lint-imports, check-schema-drift, check-invariants,
+  check-scan-coverage, check-frontend-tokens, check-security-doc,
+  cli-lint, check-no-llm-imports, check_coupled_files --base origin/main
+                                                                 PASS
+  just test: api+scripts+shared 1297 passed / 6 skipped, worker 65,
+    mcp_server 21, extractors 31 + node; go test ./... all ok      PASS
+  culprit check --fail-on=breaks_request_path; LLM_PROVIDER=none  exit 0/0
+  just fault-library (Docker): 13/13, results.json reproduced     PASS
+    — run before the audit fixes; the fixes (pinning, input handling,
+    the kind match) are covered by the in-process tests, and CI runs the
+    library again.
+  Not run locally: migration round trip (no migration), e2e (no api or
+  frontend change) — CI runs both.
 
-THE E2E REPAIR (2026-11-11, 71f22fc)
-  Failing test, verbatim:
-    e2e/investigations.spec.ts:106:1 › the main journey works by keyboard
-    alone (476ms)
-      Error: never reached by Tab
-        > 124 |     throw new Error("never reached by Tab");
-          at tabUntil (frontend/e2e/investigations.spec.ts:124:11)
-          at frontend/e2e/investigations.spec.ts:132:3
-    1 failed, 1 skipped (verifications.spec.ts, by design), 17 passed.
-  Screenshot (e2e-failures): /investigations/<complete> on its loading
-    skeleton; focus on the header's "Users" link.
-  Attribution: FLAKY — a race in the test, present on main; not this
-    branch's code. Line 132 is the second tabUntil, toward the first
-    edge-toggle. waitForURL resolves when the URL changes, before the
-    tree's request returns; 60 Tabs take ~300 ms, and until the tree
-    renders Tab only cycles the header. The test took 459 ms on main
-    (42839202555) and 507 ms on this branch's previous run (42860211571):
-    the margin was always a few hundred milliseconds. What made this run
-    lose it is not shown; this branch's agents journey now runs a verify
-    task immediately before, which is the likeliest load, unproven.
-  Local reproduction (quickstart of this branch, Windows, port 8088):
-    unmodified, the test PASSED (1.1 s) — no natural reproduction. Forced:
-    the tree's response delayed 1.5 s by a temporary page.route -> FAILED,
-    "never reached by Tab", as in CI; with the fix and the same delay ->
-    PASSED (3.4 s). The probe was removed before commit.
-  Fix: wait for the first edge-toggle to be visible before tabbing, as the
-    list step already waits for its link. No retry, no longer timeout, the
-    assertion and the 60-Tab bound unchanged; the target is still reached
-    by Tab alone.
-  Local e2e after the fix: 17 passed, 1 skipped, 1 failed — the agents
-    journey, which cannot run on this machine: scripts/agent_recipe.sh
-    compose-prepare needs sudo ("Sudo is disabled on this machine"). It
-    passes in CI (42862315900: 13.8 s). Not this change.
-  Met on the way, none of them CI's:
-    - Docker's first build after Docker Desktop started failed DNS
-      (proxy.golang.org: no such host); the retry built.
-    - A local infra/.env.prod from before Phase 34 lacked
-      VERIFICATION_WRITER_DB_PASSWORD; migration f2b7d4e9a1c6 refused to
-      run, as UPGRADING says it will. The key was added by hand, at the
-      human's terminal (Claude Code does not write credentials). CI
-      generates a fresh env.
-    - A second e2e run within a minute hit the sign-in rate limit (HTTP 429,
-      LIMITS "The browser tests need the whole stack...") — waited it out.
-    - The push printed "Bypassed rule violations for
-      refs/heads/phase-34-outcomes: Cannot update this protected ref." The
-      push landed; a ruleset on the phase branch that this account bypasses.
-      Worth a look at the review: either the rule is meant for main only, or
-      phase branches are meant to be protected and the bypass is too wide.
-  Gates for this commit: oxlint and tsc on the spec clean; /verify not run
-    (a test-only change: CLAUDE.md). Prettier reports the file, before and
-    after this change alike; it is not a gate in CI or the justfile.
+AUDITS
+  invariant-auditor: CLEAN, no violation. Risks taken up:
+    - culprit.yaml was re-read on every call, so an agent that can edit
+      the repository could grant itself a capability between calls. Now
+      the server pins the file's digest at start and refuses every call
+      once it changes (TestEditingCulpritYamlMidSessionGrantsNothing).
+    - The probe tool's description said "refused before anything is
+      sent" without saying that is per declared capability; reworded, and
+      LIMITS says an item-by-item grant is decided when the probe runs.
+    - "443" as a string stayed a string where --input port=443 is an int;
+      now the same rule as parseInputs (TestProbeInputsAreWhatTheCLIWouldPass).
+    - The explanation picked probes by text prefix; now by the template's
+      kind, compared with model.KindConnection / KindAuth.
+    Left as risks, in LIMITS: error text can name local paths (the same
+    text the command prints to stderr); diagnose and verify write the
+    state directory under readOnlyHint; probe inputs are not bound to
+    declared endpoints. Recorded only: `culprit probe` now reports a
+    malformed --input before a missing culprit.yaml (exit 2 either way).
+    It judged the Serve -> Run rename honest: TestNothingInTheBinaryListens
+    matches by name, the method reads streams it is handed, and changing
+    the test instead would have weakened it.
+  phase-auditor: every criterion PASS (3 with the caveat above); work
+    order complete; nothing from field 17 built. Fixed: a granted probe
+    can reach any address the vantage can (LIMITS entry, Q23); the input
+    filter compared capability names case-sensitively (now lower-cased);
+    no dial-counted test covered diagnose and verify (added); the
+    explanation's probe check validated the catalogue, not the entry
+    returned (now compares them).
 
-/CI — PR #33, for the repair commit
-  commit   71f22fcc655d29d56509494cc2943907b9b9cf9e (merge result: origin/main
-           2ef3da6 is an ancestor; merging it changes nothing)
-  run      42989682700  CI/CD, pull_request, success
-           https://github.com/Josh-Heath123/Culprit/actions/runs/42989682700
-  jobs     lint, typecheck, cli, e2e, migration-round-trip, test,
-           kind-capture, self-check, fault-library, build x5: success;
-           publish and deploy skipped
-  e2e      main journeys 18 passed, 1 skipped (verifications.spec, run
-           next); the keyboard journey 601 ms — past the old margin, the
-           wait held; the agents journey 14.6 s; `just e2e-verified`:
-           verifications.spec.ts 1 passed (criterion 5 in CI)
-  tests    api+scripts+shared 1299 passed / 4 skipped; worker 65; mcp 21
-  checks   gh pr checks 33: 20 pass, 2 skipping, 0 fail (CodeQL included)
-  alerts   none open (pr=33, refs/pull/33/merge, refs/pull/33/head)
-  This report's own commit is checked the same way before the run stops.
+DECISIONS TAKEN HERE (for review)
+  - The vantage is the server's (--from), not an argument: where the
+    binary runs is a fact of how it was started, and a verification from
+    anywhere else is refused anyway.
+  - culprit.yaml is pinned for the session (above). A restart is needed
+    to pick up an edit.
+  - culprit_probe requires the probes to be named (the command's default
+    is the whole catalogue, most of it refused), and refuses the whole
+    call when any named probe's declared capabilities are not granted —
+    a refusal the agent can act on, with nothing sent.
+  - culprit_probe refuses an input whose name is a capability or
+    grant/grants/capability/capabilities/allow, in any case.
+  - culprit_system_model: components, connections, environments (adapter
+    and grant names, not allowlist items), the vantage, and the INTENT
+    bundle the walk uses. culprit_explain_connection: the connection, its
+    and its auth relationships' facts and check divergences, and the
+    probes whose readings are about a connection or auth relationship,
+    with, for a named environment, whether each is granted. Neither
+    probes anything.
+  - Request handling is sequential and notifications/cancelled is
+    ignored (LIMITS).
+  - No outputSchema is published: an error result carries {error}, which
+    a schema for the success shape would not admit.
+  - The listener test matched the new method's name; the method was
+    renamed Serve -> Run, the test untouched.
+
+IN THE PLAN, FOR CORRECTION
+  - Criterion 3 cannot be met literally for the two tools with no CLI
+    command (Q22).
+  - Fields 4-6 name worker/app/narrate and rag/prompts.py; already marked
+    stale by "How Phase 35 is run" — part 2's.
+
+/CI
+  commit   b43ecd34360ded7851ab014b7aceb04d59f626a4 (merge result: origin/main
+           0effc53 is an ancestor; merging it changes nothing)
+  run      43045419342  CI/CD, pull_request — FAILURE, three attempts
+  jobs     lint, typecheck, cli, test, migration-round-trip, kind-capture,
+           self-check, fault-library, build x5: success; publish and
+           deploy skipped; e2e: FAILURE on every attempt, at "Install
+           just", before any test:
+             E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/
+             universe/r/rust-just/just_1.45.0-1_amd64v3.deb  Temporary
+             failure resolving 'security.ubuntu.com'
+           (and azure.archive.ubuntu.com, archive.ubuntu.com; 20 such
+           lines on attempt 3). AMBIENT: the runner could not resolve
+           Ubuntu's mirrors. e2e is the only job that installs from apt
+           (ci-cd.yml:513), so the only one hit. No e2e test ran, so the
+           browser and agent journeys are NOT RUN on this commit.
+  fault    TestTheFaultLibrary PASS (132 s) on Linux, mcp/auth-audience and
+           mcp/wrong-fix PASS — criterion 1 in CI.
+  checks   gh pr checks 34: 19 pass, 2 skipping, 1 fail (e2e); CodeQL pass
+  alerts   none open (pr=34, refs/pull/34/merge, refs/pull/34/head)
+  Verdict: NOT GREEN. Nothing in this branch's code is implicated; the
+  gate is not met until e2e runs (Q24).
 
 LEFT OPEN
-  - Nothing blocking. For review: how a fault class and a source are
-    decided; what counts as an outcome; what the API cannot check of a
-    project-token verification (LIMITS) — PR #33's "For review".
-  - The protected-ref bypass on push (above).
+  - Q24 (blocking the merge, not the design): e2e cannot install `just`
+    while the runners cannot resolve Ubuntu's mirrors.
+  - Q22 (criterion 3's wording), Q23 (binding probe inputs to declared
+    endpoints) — neither blocking.
 ```
 
 ## §6. Escalate to the architecture session when
