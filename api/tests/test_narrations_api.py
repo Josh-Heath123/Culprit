@@ -20,6 +20,7 @@ import pytest
 import pytest_asyncio
 from culprit_model.investigations import Investigation
 from culprit_model.narration import evidence
+from culprit_model.subjects import build
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -27,6 +28,8 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 PROJECT_TOKEN = "test-project-token-not-a-real-secret"
+#: A component the recorded investigation does not hold.
+BILLING = build("component", name="billing-service")
 RECORDED = Path(__file__).parent / "data" / "investigations"
 INSERT = text(
     "INSERT INTO narrations (id, investigation_id, attempt, status, provider, model, prose, "
@@ -214,13 +217,13 @@ async def test_a_row_inserted_with_unchecked_prose_is_not_served_as_prose(
             investigation["id"],
             1,
             "complete",
-            prose="Blame component:billing-service [99], see https://evil.example/x",
+            prose=f"Blame {BILLING} [99], see https://evil.example/x",
         )
         shown = narration(client, investigation)
 
     assert shown["state"] == "refused"
     assert shown["segments"] is None
-    assert shown["named"] == ["[99]", "a URL", "component:billing-service"]
+    assert shown["named"] == ["[99]", "a URL", BILLING]
 
 
 # ---- what the database holds ---------------------------------------------------------

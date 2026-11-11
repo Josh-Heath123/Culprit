@@ -57,6 +57,9 @@ services:
     env_file: .env.prod
     environment:
       DATABASE_URL: ${DASHBOARD_DATABASE_URL}
+      # Phase 35 part 2: narration off or on (.env.prod's LLM_PROVIDER, or the
+      # shell's: CI runs the journeys once with the stub and once with none).
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,11 +85,30 @@ services:
     env_file: .env.prod
     environment:
       DATABASE_URL: ${WORKER_INGESTION_DATABASE_URL}
+      # Phase 35 part 2: the narrator's settings, from .env.prod or the
+      # shell. Any key stays in .env.prod and arrives through env_file.
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      NARRATOR_MODEL: ${NARRATOR_MODEL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      NARRATOR_RETRY_SECONDS: ${NARRATOR_RETRY_SECONDS:-60}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # Phase 35 part 2: a stub narration provider (scripts/narrator_stub.py)
+  # for CI's journeys — scripted replies on Ollama's /api/chat, no model and
+  # no key. Only with --profile narrator-stub, and only on 127.0.0.1, where
+  # the journeys read GET /calls to count what was asked of it.
+  narrator-stub:
+    profiles: ["narrator-stub"]
+    image: python:3.12-slim
+    command: ["python", "-I", "/stub/stub.py", "--port", "11434"]
+    volumes:
+      - ../scripts/narrator_stub.py:/stub/stub.py:ro
+    ports:
+      - "127.0.0.1:${QUICKSTART_NARRATOR_STUB_PORT:-11435}:11434"
 
   frontend:
     build:

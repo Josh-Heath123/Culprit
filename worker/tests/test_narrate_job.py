@@ -6,7 +6,7 @@ what it named, or failed with a reason that carries nothing the provider
 said. Three attempts, then none. With no provider, nothing at all.
 
 Most tests use a scripted provider; two run the real `ollama` provider
-against infra/narrator-stub/stub.py, the stub CI uses, so the HTTP code is
+against scripts/narrator_stub.py, the stub CI uses, so the HTTP code is
 exercised too. Schema by `metadata.create_all`, as test_link_job.py does:
 the role and append-only rules are the migration's, and api/tests/
 test_narrations_api.py holds them against a migrated database.
@@ -40,7 +40,7 @@ from testcontainers.community.postgres import PostgresContainer
 
 ROOT = Path(__file__).resolve().parents[2]
 RECORDED = ROOT / "api" / "tests" / "data" / "investigations" / "auth-audience.json"
-STUB = ROOT / "infra" / "narrator-stub" / "stub.py"
+STUB = ROOT / "scripts" / "narrator_stub.py"
 SECRETS = ("sk-ant-api03-", "hunter2", "postgresql://")
 
 pytestmark = pytest.mark.asyncio

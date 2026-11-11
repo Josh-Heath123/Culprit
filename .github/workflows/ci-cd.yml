@@ -153,6 +153,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
+      # Phase 35 part 2 (D8): narration off; the binary never reads it.
+      LLM_PROVIDER: none
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -248,6 +250,11 @@ jobs:
       # is most of the adoption story for a CI tool - and it would be odd
       # to ship that and then not use it ourselves.
       security-events: write
+    # Phase 35 part 2 (D8): with narration off. The binary reads no provider
+    # setting and links no model client (check_no_llm_imports covers cli/),
+    # so this is complete output with LLM_PROVIDER=none by construction.
+    env:
+      LLM_PROVIDER: none
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -395,6 +402,11 @@ jobs:
   fault-library:
     needs: cli
     runs-on: ubuntu-latest
+    # Phase 35 part 2 (D8): with narration off. The binary reads no provider
+    # setting and links no model client (check_no_llm_imports covers cli/),
+    # so this is complete output with LLM_PROVIDER=none by construction.
+    env:
+      LLM_PROVIDER: none
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -497,10 +509,32 @@ jobs:
   # The frontend's lint and unit tests run here too: this is the one job
   # with node_modules installed. The screenshots are kept as an artifact;
   # the README's are taken by this same suite (docs/screenshots/).
+  #
+  # Phase 35 part 2: twice, as a matrix. `stub` points the worker's `ollama`
+  # narrator at scripts/narrator_stub.py (scripted replies, no model, no
+  # key) and runs the narration journeys; `none` is LLM_PROVIDER=none (D8,
+  # amended 2026-11-05): every journey and the agent loop complete with no
+  # provider called — the stub runs in that leg too, and is asked nothing.
+  # Both legs dump the agent loop's records; `narration-parity` compares them.
+  # The settings are the job's, not a step's, so every compose call in the
+  # job — a later `up` included — starts the worker with them.
   e2e:
     needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        narration: [none, stub]
+    env:
+      QUICKSTART_NARRATOR_STUB: "1"
+      QUICKSTART_NARRATOR_STUB_PORT: "11435"
+      LLM_PROVIDER: ${{ matrix.narration == 'stub' && 'ollama' || 'none' }}
+      NARRATOR_MODEL: ${{ matrix.narration == 'stub' && 'stub' || '' }}
+      OLLAMA_URL: ${{ matrix.narration == 'stub' && 'http://narrator-stub:11434' || '' }}
+      NARRATOR_RETRY_SECONDS: "5"
+      CULPRIT_E2E_NARRATION: ${{ matrix.narration }}
+      CULPRIT_E2E_NARRATOR_STUB_URL: http://127.0.0.1:11435
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -558,6 +592,27 @@ jobs:
           CULPRIT_E2E_SCREENSHOTS: ${{ github.workspace }}/e2e-screenshots
           CI: "true"
         run: just e2e-verified
+      # Phase 35 part 2: the records the agent loop made, ids and times
+      # taken out, for narration-parity to compare across the two legs.
+      - name: The agent loop's records, for the narration parity check
+        env:
+          QUICKSTART_HTTP_PORT: "8088"
+        run: |
+          read_env() { grep -E "^$1=" infra/.env.prod | cut -d= -f2- | sed 's/\$\$/$/g'; }
+          CULPRIT_E2E_USERNAME=$(read_env QUICKSTART_ADMIN_USERNAME)           CULPRIT_E2E_PASSWORD=$(read_env QUICKSTART_ADMIN_PASSWORD)             python3 scripts/narration_parity.py dump http://localhost:8088             "$(cat cli/bin/agent-e2e-verified.txt)" loop-records-${{ matrix.narration }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loop-records-${{ matrix.narration }}
+          path: loop-records-${{ matrix.narration }}.json
+          if-no-files-found: error
+      # With LLM_PROVIDER=none nothing called the provider, counted at the
+      # stub, after every journey and the whole agent loop.
+      - name: No provider was called with narration off
+        if: matrix.narration == 'none'
+        run: |
+          calls=$(curl -fsS http://127.0.0.1:11435/calls)
+          echo "the stub provider's calls: $calls"
+          python3 -c 'import json,sys; c=json.loads(sys.argv[1]); sys.exit(0 if c["total"]==0 else 1)' "$calls"
       # Phase 33 part 3: the agent's Kubernetes recipe in a kind cluster,
       # paired with this quickstart and Ready as a non-root user with a
       # read-only root filesystem; its systemd unit through
@@ -575,7 +630,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ matrix.narration }}
           path: e2e-screenshots
           if-no-files-found: ignore
       # Screenshots only. No traces are recorded (frontend/playwright.config.ts:
@@ -586,9 +641,25 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-failures
+          name: e2e-failures-${{ matrix.narration }}
           path: frontend/test-results/**/*.png
           if-no-files-found: ignore
+
+  # Phase 35 part 2: the investigation and verification records from the
+  # same agent loop are identical with narration on and off, apart from
+  # their ids and times (scripts/narration_parity.py).
+  narration-parity:
+    needs: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: loop-records-*
+          merge-multiple: true
+      - name: The loop's records, narration on and off
+        run: python3 scripts/narration_parity.py compare loop-records-none.json loop-records-stub.json
 
   build:
     needs: [test, migration-round-trip, cli]

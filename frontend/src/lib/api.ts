@@ -19,6 +19,7 @@ import type {
   IncidentDetail,
   InvestigationList,
   InvestigationTree,
+  NarrationView,
   KeyCreateResponse,
   LoginResponse,
   PaginatedIncidents,
@@ -325,6 +326,12 @@ export function createTask(agentId: string, body: TaskCreate): Promise<TaskCreat
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// Phase 35 part 2: an investigation's narration — off, not narrated yet,
+// complete, failed or refused. The API re-checks prose before it serves it.
+export function fetchNarration(investigationId: string): Promise<NarrationView> {
+  return request<NarrationView>(`/investigations/${encodeURIComponent(investigationId)}/narration`);
 }
 
 // Phase 34 part 2: an investigation's verifications, newest first.

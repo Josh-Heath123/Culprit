@@ -8,9 +8,9 @@ sent (an investigation's symptom description):
 - `narrator-stub:fail`      HTTP 500, with a secret-looking string and a
                             connection string in the body, which must leave
                             no trace in what Culprit stores, logs or shows;
-- `narrator-stub:refuse`    prose naming a component, a probe and a subject
-                            the investigation does not hold, and a markdown
-                            image with a URL — stored as refused;
+- `narrator-stub:refuse`    prose naming a component the investigation does
+                            not hold, and a markdown image with a URL —
+                            stored as refused;
 - `narrator-stub:markup`    markdown and HTML with no URL, which passes the
                             check and must be shown literally;
 - anything else             a faithful narration that cites the evidence.
@@ -19,7 +19,7 @@ sent (an investigation's symptom description):
 a test can count them: none with LLM_PROVIDER=none, and never a fourth for
 an investigation that has had three. Standard library only.
 
-    python stub.py [--port 11434]
+    python scripts/narrator_stub.py [--port 11434]
 """
 
 import argparse
@@ -102,9 +102,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"error": "upstream exploded: " + " ".join(FAKE_SECRETS)})
             return
         if marker == "narrator-stub:refuse":
+            # A component the investigation does not hold, beside a probe it
+            # does, and a markdown image carrying a URL. (The subject rule is
+            # held by shared/tests/narration_conformance.json and the API's
+            # tests; a subject here would be a hand-formatted one.)
             content = (
-                "The billing-service is the cause, as probe.http.reachable and "
-                "component:billing-service show [1]. ![x](https://evil.example/p.png)"
+                "The billing-service is the cause, as probe.http.reachable shows [1]. "
+                "![x](https://evil.example/p.png)"
             )
         elif marker == "narrator-stub:markup":
             content = "**Root cause:** <b>see the diagnosis</b> <script>alert(1)</script> [2]."

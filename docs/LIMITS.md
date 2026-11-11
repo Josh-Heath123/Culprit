@@ -91,7 +91,9 @@ gone with it.
 
 Diagnoses are investigations now: `culprit diagnose`, run where the
 environment is, posted to `POST /investigations`. No step of that path calls
-a model, so it is complete with `LLM_PROVIDER=none` and no keys at all.
+a model, so it is complete with `LLM_PROVIDER=none` and no keys at all. The
+optional narrator (Phase 35 part 2, "Narration" below) writes prose beside a
+stored investigation and changes nothing in it.
 
 The anomaly scorer still runs and still writes `anomalies` and impedance
 readings; it is the grouping into incidents that stopped.
@@ -2272,4 +2274,100 @@ Nothing in the binary calls a model, so there is no prose field to be
 missing when there is no model. A diagnosis or verification is kept in the
 state directory and uploaded nowhere: posting it to a control plane remains
 the CLI's and the agent's job.
+
+## Narration
+
+Phase 35 part 2. An optional narrator writes prose for a stored
+investigation, shown beside it on its page, labelled as derived. Off by
+default (`LLM_PROVIDER=none`); the README's "Narration, if you want it" says
+how to turn it on, and `docs/PERMISSIONS.md` exactly what is sent.
+
+### The check holds identifiers, not meaning
+
+A narration is refused when it cites an item not in its evidence list,
+names a subject, reading id, probe id, capability, component or code-form
+verdict the investigation does not hold, or carries a URL. That is all the
+check can see. Prose can still say something false about evidence it cites
+correctly — "the token was missing" where the reading says its audience was
+wrong — and it will be shown. The evidence is beside it, in the record's
+own words, for that reason; read the prose as a summary of the page, never
+instead of it.
+
+### A component's name is seen only in some forms
+
+The check recognises a component written as a subject
+(`component:payments`), in backticks, or as a hyphenated name with a
+component word or a digit in it (`billing-service`, `orders-db`, `db-2`).
+A component named as one plain word — "payments" — is indistinguishable
+from English and is not checked. Ordinary hyphenated English passes
+(`read-only`, `re-run`), but a phrase with a component word in it
+(`web-based`, `api-driven`) is taken for a name and refuses the narration —
+the safe failure.
+
+### A held subject is accepted only whole
+
+`http:order-service/POST /orders` in the investigation does not let
+`http:order-service/POST /refunds` through: a subject is matched whole, and
+the fragment left over is named. A subject the prose truncates or
+reformats is refused, even when a person would read it as the same thing.
+Refusal is the safe failure: the evidence is still on the page.
+
+### URLs are refused even when the investigation holds one
+
+A symptom description can carry a URL (`POST http://order-service:8001/orders`).
+The narrator is told not to write one, and a narration that does is refused
+all the same: a link or an image in model output is a way out for data.
+
+### Three attempts, then the last status stands
+
+Each investigation is narrated at most three times. A failed or refused
+attempt is retried no sooner than `NARRATOR_RETRY_SECONDS` later (60 by
+default); the third's status is final. There is no button to narrate
+again. Narrations are append-only — a new provider or model does not
+re-narrate what is already complete.
+
+### The newest investigations first, a few at a time
+
+The job narrates at most three investigations every 15 seconds, newest
+first. Turning narration on narrates the whole stored history, eventually,
+starting from the newest; with a slow local model that can take a while,
+and each one is a call to the provider.
+
+### Nothing is pending, but "not narrated yet" can last
+
+The page shows off, not narrated yet, complete, failed or refused. "Not
+narrated yet" means no attempt has finished: a provider that never answers
+holds an investigation there until the attempt times out
+(`NARRATOR_TIMEOUT_SECONDS`, 60 by default), then it is failed.
+
+### A failure says little, on purpose
+
+A failure's reason is Culprit's own words: the provider, and the HTTP
+status, or that it timed out, answered nothing, answered something that is
+not its API's shape, or declined. The provider's own error text is never
+read, so a useful detail in it is lost along with any secret.
+
+### One request, no tools, and a fixed budget
+
+Each attempt is one request: no tools, no streaming, no second call to ask
+for more. With `anthropic`, `max_tokens` is 16000 and a reply cut off at
+that limit, or declined, is a failure. A reply longer than 4000 characters
+is a failure too, not truncated.
+
+### Prose is shown as text
+
+Markdown and HTML in a narration appear as the characters they are: no
+bold, no list, no link, no image. Line breaks are kept.
+
+### Settings are read when the worker starts
+
+`LLM_PROVIDER`, `NARRATOR_MODEL`, `OLLAMA_URL` and `ANTHROPIC_API_KEY` are
+read once, and a half-set provider (no model; anthropic with no key; ollama
+with no address) stops the worker at start. Changing them needs a restart
+of the worker, and of the api, which reads `LLM_PROVIDER` only to say
+whether narration is off. If only one of them is restarted the two can
+disagree: an api that thinks narration is on beside a worker that has it
+off says "not narrated yet" for ever. Turning narration off does not hide
+what was already narrated: a stored narration is still shown, and "off" is
+said only for an investigation with none.
 

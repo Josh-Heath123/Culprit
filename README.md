@@ -78,6 +78,7 @@ check — never as a root or a cause:
 | **Ask a running system** | Thirteen read-only probes — DNS, TCP, TLS, HTTP reachability, route and schema conformance, token shape, database connectivity and schema, config presence, installed versions, edge impedance. Each asks permission before it dials anything. Two need more than a running service to reach a verdict: config presence compares against a declaration of the key, and installed versions needs the environment to declare a `packages:` command — without one it is `refused` or `inconclusive`, and says why ([`docs/PROBES.md`](docs/PROBES.md)). |
 | **Check that a fix fixed it** | `culprit verify <investigation>` runs every probe the diagnosis ran again, twice, and compares the environment with the record of it taken at diagnosis. `verified` only when what failed now passes, what passed still passes, and nothing changed that the fix you name does not explain; otherwise `not_resolved`, `regressed`, `changed_underneath` or `inconclusive`, with the reason. From the CLI, or through the agent that diagnosed it, asked from the investigation's page, which keeps every verification. |
 | **Let a coding agent ask** | `culprit mcp` serves six read-only tools over MCP on stdio — the system model, `check`, a connection explained, `probe`, `diagnose` and `verify` — each answering with the JSON its command prints. The agent proposes and applies a change; Culprit diagnoses and judges it. No argument can grant a capability, and no tool writes. |
+| **Read it in words, if you want** | Optional narration: a model of your choosing — on your own machine with Ollama, or Anthropic's API — writes a short account of a finished investigation beside it, labelled as derived. It is given the investigation and nothing else, and its prose is checked against it: anything it names that the investigation does not hold, and any URL, and the prose is refused, not shown. Off by default; nothing else changes when it is off. |
 | **See what was not checked** | Every gap is listed with its reason. A route table that could not be read never produces "that route does not exist" — it produces a line saying nobody looked. |
 
 ## How it works
@@ -207,6 +208,47 @@ the engine that grouped anomalies into incidents and the LLM narrative
 written over them, and the incident tables are read-only. What the dashboard
 does and does not do is in [`docs/LIMITS.md`](docs/LIMITS.md).
 
+### Narration, if you want it
+
+An investigation's page can show a short account of it in words, written by
+a language model — the one place Culprit calls one (D8). It is off by
+default: with `LLM_PROVIDER=none` every command, page and journey is
+complete, and the page says narration is off. It is never a finding. The
+fault tree, readings and rubric on the page are; the prose restates them.
+
+- **What the model is given.** The investigation's own record, written out
+  as a numbered list of evidence — the symptom, the diagnosis and its
+  recommended change, the rubric, the fault tree, each reading's probe,
+  target, verdict and reason, each hypothesis. No telemetry, no tools, no
+  second call. [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) lists exactly
+  what is sent.
+- **What it may write.** Plain prose, citing evidence by number. Before a
+  narration is stored, and again before it is shown, it is checked. Every
+  citation must name an item in the list. The prose may name no subject,
+  reading, probe, capability, component or code-form verdict the
+  investigation does not hold, and no URL. A narration that fails is stored
+  as **refused**, with what it named, and the prose is not shown.
+- **How it is shown.** As text: markdown and HTML appear as the characters
+  they are. Each citation is replaced by its evidence item's own words,
+  taken from the record rather than from the model. The page says which
+  provider and model wrote it.
+- **When it does not work.** A provider error, a timeout or an empty reply
+  is shown as **failed**, with a reason that never repeats what the provider
+  said. Three attempts per investigation, then none. Nothing is ever shown
+  as pending.
+
+Providers are set in `infra/.env.prod`, by you:
+
+| `LLM_PROVIDER` | Also set | Where the evidence goes |
+|---|---|---|
+| `none` (default) | — | nowhere; nothing is narrated |
+| `ollama` | `NARRATOR_MODEL` (a model you have pulled), `OLLAMA_URL` (from the worker container, `http://host.docker.internal:11434`) | a model on your own machine; no key, nothing leaves it |
+| `anthropic` | `NARRATOR_MODEL`, `ANTHROPIC_API_KEY` | Anthropic's API: the evidence leaves your machine |
+
+The check holds identifiers, not meaning: prose can still describe the
+cited evidence wrongly in plain words. That is why the evidence is shown
+beside it ([`docs/LIMITS.md`](docs/LIMITS.md), "Narration").
+
 ## Technology stack
 
 | Role | Used |
@@ -246,9 +288,11 @@ In plain terms:
   connections, contracts — not every function and import.
 - **D7 — Divergence detection is generic.** All domain knowledge lives in
   extractors and probes.
-- **D8 — No language model decides anything.** Nothing in Culprit calls one
-  today. A narrator may come later (Phase 35), only to turn a settled result
-  into prose: it may not create a fact, a divergence, a reading or a verdict.
+- **D8 — No language model decides anything.** The one call to a model is
+  the optional narrator, which turns a settled investigation into prose and
+  is checked against it; it cannot create a fact, a divergence, a reading or
+  a verdict, nothing reads what it writes, and `lint-imports` contracts make
+  any other route to a provider a build failure.
 
 Two standing rules come up everywhere: **a config value never appears in a
 report** unless you grant that key — every report format has a test that
@@ -547,7 +591,7 @@ dogfooding, and it is why the "Not checked" list is never optional.
 | [`extractors/`](extractors) | the Python and Node extractor plugins ([protocol](docs/EXTRACTOR_PROTOCOL.md)) |
 | [`shared/`](shared) | the core model — planes, facts, subjects, readings — shared by the Python services |
 | [`api/`](api) | FastAPI: the dashboard's API, the ingest gateway, capture and reading endpoints, migrations |
-| [`worker/`](worker) | arq jobs: stream draining, anomaly and impedance scoring, postmortem embedding |
+| [`worker/`](worker) | arq jobs: stream draining, anomaly and impedance scoring, postmortem embedding, narration (optional) |
 | [`frontend/`](frontend) | the React dashboard |
 | [`mcp_server/`](mcp_server) | read-only MCP tools over Culprit's engineering memory, for coding agents (the diagnostic tools are `culprit mcp`, in the binary) |
 | [`demo-services/`](demo-services) | three small instrumented services the quickstart runs |
@@ -571,9 +615,9 @@ What comes next, as plans:
 
 - **The demonstration video,** recorded from the script, storyboard and
   checklist in [`docs/video/`](docs/video); linked here once it exists.
-- **Phase 35, part 2 — The narrator:** prose for a settled investigation, in
-  the control plane, held to what the investigation contains. The agent
-  surface, `culprit mcp`, is part 1.
+- **Performance, Phases 36–39** ([`docs/PERFORMANCE_PLAN.md`](docs/PERFORMANCE_PLAN.md)):
+  latency budgets and a walk that can see slow, the database's statements
+  and indexes, bounds on what a page downloads and a list returns, and N+1.
 
 ## Author and licence
 
