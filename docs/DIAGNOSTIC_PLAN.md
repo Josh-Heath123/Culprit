@@ -3054,6 +3054,31 @@ than showing 0% or 100%.
 tolerance, no latency budget (Phase 36), no change to how the walk runs, no
 write capability.
 
+**Architecture review of part 2, 2026-11-11 — signed off; Phase 34 is
+complete.** Merged via PR #33 (`0effc53`), every pull-request check green, no
+open alert. Checked on `main`: `agent-e2e` asserts a wrong fix lands
+`not_resolved` and the right one then `verified`, and `verifications.spec.ts`
+asserts the page shows that order — both in CI's `e2e` job. The agents journey's
+assertion was relaxed from `not_resolved` to "not `verified`" after the first red
+run; accepted, because that journey's agent holds network grants alone and can
+only reach `inconclusive`, and the exact loop is asserted where it can happen.
+The e2e repair was a race in the test, reproduced both ways under a forced delay
+and fixed by waiting for the tree, with the assertion and the Tab bound
+unchanged. Decisions:
+
+- **An outcome is a complete diagnosis's newest verification**, its fault class
+  the root subject's kind. Accepted: it measures whether fixing the diagnosed
+  root resolved the fault, not whether the first fix tried was right. The
+  README's method says so.
+- **A verification's source (planted or real) is declared by whoever posts
+  it**, and the API cannot check a project-token poster's claim (LIMITS).
+  Accepted for now: the README's number is rendered from the fault library's
+  own results file, not from what the API was told.
+- **The push bypassed a ruleset on the phase branch.** The ruleset reaches
+  beyond `main`, and the bypass lets the account Claude Code pushes with
+  update protected refs. That is Malcolm's setting to correct: the ruleset on
+  `main` only, with no bypass for direct pushes.
+
 ---
 
 ### Phase 35 — The agent surface and the narrator
@@ -3130,6 +3155,76 @@ remediation. No multi-tenancy.
 timeout — is recorded as a status the interface shows, never a permanent
 `pending`. The incident copilot's narrative job never did this
 (`docs/LIMITS.md`).
+
+**How Phase 35 is run — decided 2026-11-11.** Where this block and the fields
+above differ, this block wins.
+
+**Two parts, two `/next` runs, an architecture review after each.**
+- **Part 1 — the agent surface.** `culprit mcp`, served by the binary.
+- **Part 2 — the narrator.** Prose for a settled investigation, in the control
+  plane, held to its input. Its criteria are written at part 1's review.
+
+**Decisions — where the fields predate the build.**
+- **The diagnostic tools are served by the binary, not the Python MCP server.**
+  The walk, the probes and verification run only in the binary (D1 and D2,
+  amended); a Python server that ran them would be a second implementation,
+  which is D2's first revisit trigger. So `culprit mcp` speaks MCP over stdio
+  and calls the same code as `culprit check`, `diagnose`, `probe` and `verify`.
+  The Python MCP server keeps its engineering-memory tools and is not
+  repointed.
+- **A coding agent cannot acquire a capability by asking.** Tool arguments
+  carry no grants; the grants are the environment's in `culprit.yaml`, exactly
+  as for the CLI.
+- **The binary still calls no model.** Its tool responses are structured and
+  carry no prose field; prose belongs to the narrator, in the control plane.
+  "Removing the LLM leaves every tool functional" is therefore true of every
+  `culprit mcp` tool by construction.
+- **Fields 5 and 6 are stale.** Phase 32 already removed the incident narrative
+  job and its prompts; the narrator is new code, not a rewrite.
+- **The narrator narrates; it does not rank.** Phase 32 left ranking open
+  hypotheses with the postmortem corpus to the narrator under D8. Dropped: the
+  walk is complete and deterministic, and a ranking the walk never needed is
+  a model's opinion beside the evidence.
+- **A narration is its own record** (field 8 corrected). Investigations are
+  final, so a narration points at one and carries a status the interface
+  shows — complete, failed with its reason, or refused by the check below —
+  never a permanent `pending` (2026-11-04).
+- **The narrator is held to its input structurally.** Every subject, reading
+  id, probe id, grant and verdict in its prose must appear in the investigation
+  it was given; a narration that names anything else is stored as refused,
+  with what it named, and never shown as prose. That check is field 13's test,
+  and it runs on every narration, not only in CI.
+
+**Part 1 — the agent surface. Brief and criteria, 2026-11-11.**
+
+**Work order.**
+1. `culprit mcp`: an MCP server on stdio in the binary, with
+   `culprit_check`, `culprit_diagnose`, `culprit_probe`, `culprit_verify`,
+   `culprit_system_model` and `culprit_explain_connection`.
+2. Each response is the structured result the CLI's JSON already gives — the
+   fault tree, readings, rubric — and `culprit_diagnose` adds how to verify:
+   the `culprit_verify` call to make, and the change kinds it accepts.
+3. A scripted MCP client in the tests that drives the loop against the fault
+   library: diagnose, apply the known fix, verify.
+4. README and LIMITS: how a coding agent is pointed at `culprit mcp`, and what
+   it cannot do.
+
+**Acceptance criteria (part 1).**
+- Over stdio, a scripted MCP client calls `culprit_diagnose` on the audience
+  fault and receives the rooted tree; applies the known fix; calls
+  `culprit_verify` and receives `verified`. With the wrong fix it receives
+  `not_resolved`. In CI.
+- A tool call whose arguments name a grant, or ask for a probe the environment
+  does not grant, is refused before anything is dialled (a test counts dials).
+- Every tool's response validates against the same model the CLI's JSON uses.
+- `culprit mcp` links no network package beyond what `probe` and `capture`
+  already do — the D8 allowlist is unchanged — and nothing in it calls a model.
+- No tool writes: none changes `culprit.yaml`, an environment or the control
+  plane.
+
+**Do NOT implement in part 1.** No narrator, no prose, no write-capable tool,
+no remediation, no network transport for MCP, no change to the Python MCP
+server beyond what its tests need.
 
 ---
 

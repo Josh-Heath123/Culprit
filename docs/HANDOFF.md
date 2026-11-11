@@ -55,10 +55,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted) |
-| Current phase | **34, part 2 — Outcomes in the control plane** — status `awaiting decision`: implemented, CI green on PR #33 (run 42989682700), awaiting the architecture review and the human's merge. Report in §5. |
-| Previous phase | **34, part 1 — The loop, in the binary: complete**, signed off 2026-11-10 by the architecture session. Merged via PR #32 (`2ef3da6`), every pull-request check green, the fault library 11/11 on Linux. Q20 and Q21 ruled at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
+| Current phase | **35, part 1 — The agent surface** — status `not started`. Brief in §4. |
+| Previous phase | **34 — The verification loop and calibration: complete** (two parts), part 2 signed off 2026-11-11 by the architecture session. Merged via PR #33 (`0effc53`), every pull-request check green. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-34-outcomes`, cut from `origin/main` = `2ef3da6`; its first commit is the part 1 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Branch | `phase-35-mcp`, cut from `origin/main` = `0effc53`; its first commit is the Phase 34 sign-off. Lands through a pull request. Do not stage `shared/uv.lock`. |
 | Blocking questions | **None.** §3 is empty. |
 
 ---
@@ -100,8 +100,9 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 33, part 2 | The agent meets the control plane | **complete** (PR #28 merged, `58e7593`) | **Signed off 2026-11-10** (architecture session): every check on the pull request green, code scanning included after Q18; the CI-only criteria 8–10 verified to run and unable to skip. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 33, part 3 | The operator's surface | **complete** (PR #31 merged, `e125b4b`) | **Signed off 2026-11-10** (architecture session): every pull-request check green; the Kubernetes recipe Ready in CI's kind cluster; every "cannot" in `SECURITY.md` held to a test by CI. Q19 ruled. Decisions at the end of Phase 33 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
-| 34, part 2 | Outcomes in the control plane | **awaiting decision** (PR #33, CI green, not merged) | **Brief (2026-11-10):** `DIAGNOSTIC_PLAN.md` Phase 34 — "How Phase 34 is run", then "Part 2" at the end of the section: work order, how outcomes and accuracy are counted, nine criteria, what not to build. Carried-in items first (Q19's column grant; Q20's `action` kind). Branch `phase-34-outcomes`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 35 | Agent surface and the narrator | not started | — |
+| 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
+| 35, part 1 | The agent surface | not started | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — all 17 fields, read with "How Phase 35 is run" at the end of the section, which wins where they differ; then "Part 1" there for the work order, five criteria and what not to build. `culprit mcp` is served by the binary over stdio; the Python MCP server is not repointed. Branch `phase-35-mcp`. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 35, part 2 | The narrator | not started | Criteria written at part 1's review. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
