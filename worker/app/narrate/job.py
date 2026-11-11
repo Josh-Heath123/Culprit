@@ -234,8 +234,17 @@ async def narrate_one(
                 logger.info("narration_attempt_taken investigation=%s", investigation_id)
                 return None
         finally:
-            await conn.execute(select(func.pg_advisory_unlock(key)))
-            await conn.commit()
+            # Roll back first: after a database error the transaction is
+            # aborted and the unlock would fail, stranding the claim on a
+            # pooled connection. If the unlock fails anyway, the connection
+            # is discarded, and the session lock goes with it.
+            try:
+                await conn.rollback()
+                await conn.execute(select(func.pg_advisory_unlock(key)))
+                await conn.commit()
+            except Exception:
+                await conn.invalidate()
+                raise
     # Never the prose, and the reason is closed vocabulary, redacted.
     logger.info(
         "narration status=%s investigation=%s attempt=%d provider=%s",

@@ -132,7 +132,8 @@ _CITATION = re.compile(r"\[(\d{1,4})\]")
 #: what a link or an image would need to carry data out.
 _URL = re.compile(
     r"\b[a-z][a-z0-9+.-]*://\S*|(?<![\w/])//[a-z0-9-]+\.\S*|\bwww\.\S+|\bdata:[a-z]+/\S*"
-    r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?/\S*|\bmailto:\S+",
+    r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?[/?\\]\S*"
+    r"|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+:\d+\b|\bmailto:\S+",
     re.IGNORECASE,
 )
 #: An identifier-shaped run: what a subject, a probe id, a reading id or a
@@ -246,10 +247,19 @@ def _unknown_tokens(prose: str, ctx: Context) -> Iterator[str]:
 Rule = Callable[[str, Context], list[str]]
 
 
+#: Characters that render as nothing but are not format characters: the
+#: Hangul and halfwidth fillers and the blank Braille pattern.
+_BLANKS = frozenset("\u115f\u1160\u3164\uffa0\u2800")
+
+
 def no_invisible_characters(prose: str, ctx: Context) -> list[str]:
     """No zero-width or other format character: one can split a name the
     other rules would see (`not` + U+200B + `_resolved`), or reorder what is shown."""
-    return ["an invisible character" for ch in prose if unicodedata.category(ch) == "Cf"][:1]
+    return [
+        "an invisible character"
+        for ch in prose
+        if unicodedata.category(ch) in ("Cf", "Mn", "Me") or ch in _BLANKS
+    ][:1]
 
 
 def citations_name_items(prose: str, ctx: Context) -> list[str]:

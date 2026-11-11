@@ -327,6 +327,38 @@
       "named": [
         "`Ignore`"
       ]
+    },
+    {
+      "rule": "no_url",
+      "why": "a host with a query and no path",
+      "prose": "Look at evil.example?d=r3 for it [2].",
+      "named": [
+        "a URL"
+      ]
+    },
+    {
+      "rule": "no_url",
+      "why": "a host and port",
+      "prose": "It answers on evil.example:8080 now [2].",
+      "named": [
+        "a URL"
+      ]
+    },
+    {
+      "rule": "no_invisible_characters",
+      "why": "a combining mark splitting a code-form verdict",
+      "prose": "The verification came back not͏_resolved [7].",
+      "named": [
+        "an invisible character"
+      ]
+    },
+    {
+      "rule": "no_invisible_characters",
+      "why": "a Hangul filler splitting a code-form verdict",
+      "prose": "The verification came back notㅤ_resolved [7].",
+      "named": [
+        "an invisible character"
+      ]
     }
   ]
 }

@@ -2318,28 +2318,41 @@ the safe failure.
 `http:order-service/POST /orders` in the investigation does not let
 `http:order-service/POST /refunds` through: a subject is matched whole, and
 the fragment left over is named. A subject the prose truncates or
-reformats is refused, even when a person would read it as the same thing.
+reformats is refused, even when a person would read it as the same thing —
+`Component:order-service` included: subject kinds and reading ids are
+recognised in any case, so a capitalised one the record does not hold
+verbatim is refused, and so is an ordinary word shaped like a reading id
+(`S3`, `EC2`).
 Refusal is the safe failure: the evidence is still on the page.
 
 ### What counts as a URL
 
 A scheme (`https://…`), a protocol-relative `//host`, `www.…`, `data:` and
-`mailto:`, and a dotted host followed by a path (`evil.example/collect?d=…`)
-are refused. A bare domain with no path (`evil.example`) is not, and nor is
-an HTML attribute that names no URL (`<img src="x">`): neither can carry
-data anywhere while the prose is shown as text, which it always is.
+`mailto:`, a dotted host followed by a path, a query or a backslash
+(`evil.example/x`, `evil.example?d=…`, `evil.example\x`), and a dotted host
+with a port (`evil.example:8080`) are refused. A bare domain
+(`evil.example`), one written with a non-ASCII full stop (`evil。example`),
+and an HTML attribute that names no URL (`<img src="x">`) are not: none can
+carry data anywhere while the prose is shown as text, which it always is.
+Faithful prose that repeats a `host:port` from a reading's reason is
+refused too — the safe failure.
 
 ### Invisible characters are refused
 
-A zero-width or other Unicode format character anywhere in the prose
-refuses it. One can split a name the other rules would see
-(`not` + U+200B + `_resolved`) or reorder what is shown.
+A zero-width or other Unicode format character, a combining mark, or a
+character that renders as a blank (the Hangul and halfwidth fillers, the
+blank Braille pattern) anywhere in the prose refuses it. One can split a
+name the other rules would see (`not` + U+200B + `_resolved`) or reorder
+what is shown. Prose written with decomposed accents (a letter followed by
+a combining mark) is refused with them.
 
 ### What a refusal names is a word, not the model's sentence
 
 A refused narration stores and shows what it named, each item a single
 identifier-shaped token or a fixed label ("a URL", "an invisible
-character", "a name in code form"), redacted and at most 80 characters.
+character", "a name in code form"), redacted and at most 80 characters. A
+token has no spaces but can still be up to 80 characters of the model's
+own text joined by underscores or hyphens.
 For a name written in backticks only its first unknown word is named, so
 a sentence in code form is never shown. At most 20 are kept.
 

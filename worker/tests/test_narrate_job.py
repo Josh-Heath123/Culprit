@@ -36,6 +36,7 @@ from app.narrate.providers import AnthropicProvider, OllamaProvider, ProviderErr
 from culprit_model.investigations import Investigation
 from culprit_model.narration import evidence
 from sqlalchemy import delete, insert, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.community.postgres import PostgresContainer
 
@@ -257,6 +258,30 @@ async def test_overlapping_ticks_call_the_provider_once(engine: AsyncEngine) -> 
 
     assert len(provider.calls) == 1
     assert [row["attempt"] for row in await narrations(engine)] == [1]
+
+
+async def test_a_database_error_mid_attempt_releases_the_claim(
+    engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A database error aborts the transaction the claim was taken on. The
+    error must surface as itself, and the advisory lock must not outlive it
+    on a pooled connection."""
+    from app.narrate import job
+
+    investigation = await store(engine, recorded(), datetime.now(UTC))
+
+    async def broken_load(conn, investigation_id):
+        await conn.execute(text("SELECT 1 / 0"))
+
+    monkeypatch.setattr(job, "load", broken_load)
+    with pytest.raises(DBAPIError, match="division by zero"):
+        await narrate_one(engine, Scripted("x"), investigation.id, timeout_seconds=1.0)
+
+    async with engine.connect() as conn:
+        held = (
+            await conn.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'"))
+        ).scalar_one()
+    assert held == 0
 
 
 async def test_a_failed_attempt_waits_before_the_next(engine: AsyncEngine) -> None:
