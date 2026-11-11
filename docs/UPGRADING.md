@@ -208,6 +208,34 @@ to it (AGPL-3.0 section 13; `LICENSING.md`).
   diagnosis. Anything that matched the old sentence should match on
   `holds`, not the text.
 
+**Phase 35 part 2 adds one role, one migration and one secret; narration is
+off unless you turn it on.**
+
+```
+NARRATOR_DB_PASSWORD=<generate one>
+NARRATOR_DATABASE_URL=postgresql+asyncpg://narrator:<same password>@postgres:5432/culprit
+LLM_PROVIDER=none
+```
+
+The password and URL are required: migration `a6c2e9d4f8b1` will not
+create the role without the password, and the worker will not start without
+the URL — even with narration off. `LLM_PROVIDER` may be left out (it means
+`none`). To narrate, set `LLM_PROVIDER=ollama` with `NARRATOR_MODEL` and
+`OLLAMA_URL`, or `anthropic` with `NARRATOR_MODEL` and `ANTHROPIC_API_KEY`
+(the README's "Narration, if you want it"); restart the worker and the api.
+
+- **`a6c2e9d4f8b1` adds `narrations`**, append-only like `verifications`.
+  A script that runs `TRUNCATE investigations CASCADE` now reaches it too and
+  must lift its trigger as the owner (`ALTER TABLE narrations DISABLE
+  TRIGGER USER`) and restore it.
+- **An `infra/.env.prod` from before this phase lacks the two narrator
+  lines.** `just quickstart` reuses an existing file, so add them by hand
+  (or move the file aside to have a new one generated) before running it.
+- **`culprit_probe` through `culprit mcp` now refuses an address that is not
+  a declared endpoint** of the environment (`url`, `base_url`, `host`,
+  `port`). An agent that probed something `culprit.yaml` does not declare
+  must have it declared under `endpoints:`. `culprit probe` is unchanged.
+
 **Phase 34 part 2 adds one role, two migrations and one secret.**
 
 ```

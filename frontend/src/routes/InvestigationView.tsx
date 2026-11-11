@@ -6,12 +6,14 @@ import { SourceLink } from "@/components/layout/SourceLink";
 import { DiagnosisCard } from "@/components/investigation/Diagnosis";
 import { FaultTree } from "@/components/investigation/FaultTree";
 import { Hypotheses } from "@/components/investigation/Hypotheses";
+import { Narration } from "@/components/investigation/Narration";
 import { Verifications } from "@/components/investigation/Verifications";
 import { ErrorPanel, LoadingInvestigation } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useInvestigationTree } from "@/hooks/useInvestigations";
+import { useNarration } from "@/hooks/useNarration";
 import { useVerifications } from "@/hooks/useVerifications";
 import { ApiError } from "@/lib/api";
 import type { InvestigationTree, Symptom } from "@/lib/types";
@@ -65,6 +67,7 @@ function InvestigationBody({ investigation }: { investigation: InvestigationTree
   const { diagnosis, symptom } = investigation;
   const { data: me } = useCurrentUser();
   const { data: verificationList } = useVerifications(investigation.id);
+  const { data: narration } = useNarration(investigation.id);
   const verifications = verificationList?.items ?? [];
   const latest = verifications[0]?.verification;
   // The rubric's `verified` is the newest verification's: the stored
@@ -86,6 +89,7 @@ function InvestigationBody({ investigation }: { investigation: InvestigationTree
         <div className="flex min-w-0 flex-col gap-5 lg:col-span-2">
           <DiagnosisCard diagnosis={diagnosis} unexplored={investigation.hypotheses.unexplored} verified={verified} />
           <Verifications investigation={investigation} verifications={verifications} isAdmin={me?.role === "admin"} />
+          <Narration narration={narration} />
           <FaultTree
             edges={investigation.fault_tree}
             symptom={symptom.subject}

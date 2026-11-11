@@ -17,8 +17,10 @@ one this investigation took.** An edge is a claim; a claim no measurement
 established is narrative masquerading as diagnosis.
 """
 
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -277,3 +279,63 @@ class Investigation(BaseModel):
                     "reaches. A root the readings did not establish is a guess."
                 )
         return self
+
+
+def _numbered(identifier: str) -> tuple[int, str]:
+    digits = "".join(ch for ch in identifier if ch.isdigit())
+    return (int(digits) if digits else 0, identifier)
+
+
+def from_rows(
+    row: Mapping[Any, Any],
+    readings: Sequence[Mapping[Any, Any]],
+    hypotheses: Sequence[Mapping[Any, Any]],
+    edges: Sequence[Mapping[Any, Any]],
+    links: Sequence[Mapping[Any, Any]],
+) -> Investigation:
+    """An investigation rebuilt from its five tables' rows, through the
+    model — so a read passes the same rules a write did.
+
+    One function for every reader (the API, and the worker's narrator since
+    Phase 35 part 2): a narration cites evidence by number, and the API
+    re-checks it against the investigation it rebuilds, so both must order
+    readings, hypotheses and edges identically. Readings and hypotheses in
+    their ids' numeric order (r2 before r10), edges by their stored order.
+    """
+    cited: dict[int, list[str]] = {}
+    for link in links:
+        cited.setdefault(link["edge_id"], []).append(link["reading_id"])
+    reading_rows = sorted(readings, key=lambda r: _numbered(r["id"]))
+    hypothesis_rows = sorted(hypotheses, key=lambda h: _numbered(h["id"]))
+    edge_rows = sorted(edges, key=lambda e: e["id"])
+    return Investigation.model_validate(
+        {
+            "id": row["id"],
+            "opened_at": row["opened_at"],
+            "closed_at": row["closed_at"],
+            "environment": row["environment"],
+            "symptom": row["symptom"],
+            "hypotheses": [
+                {
+                    "id": h["id"],
+                    "kind": h["kind"],
+                    "subject": h["subject"],
+                    "status": h["status"],
+                    "reason": h["reason"],
+                    "readings": list(h["readings"]),
+                }
+                for h in hypothesis_rows
+            ],
+            "readings": [{"id": r["id"], "reading": r["reading"]} for r in reading_rows],
+            "fault_tree": [
+                {
+                    "from_subject": e["from_subject"],
+                    "to_subject": e["to_subject"],
+                    "relation": e["relation"],
+                    "established_by": sorted(cited.get(e["id"], []), key=_numbered),
+                }
+                for e in edge_rows
+            ],
+            "diagnosis": row["diagnosis"],
+        }
+    )

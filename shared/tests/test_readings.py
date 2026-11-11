@@ -111,6 +111,16 @@ def test_the_redaction_heuristic_is_a_net_not_a_proof() -> None:
     assert Evidence(kind="opaque", value="sk-live-abcdef0123456789").redacted is False
 
 
+def test_an_anthropic_key_is_redacted() -> None:
+    """Phase 35 part 2: the narration provider's key has hyphens the
+    generic `sk-` shape does not allow; it has a pattern of its own, as in
+    cli/internal/model/redact.go."""
+    from culprit_model.redaction import redact_credentials
+
+    text = "upstream said sk-ant-api03-" + "Q" * 40 + "-xyz and stopped"
+    assert "Q" * 40 not in redact_credentials(text)
+
+
 def test_evidence_describing_a_credential_is_fine() -> None:
     evidence = Evidence(kind="authorization", value="<redacted>", redacted=True)
     assert evidence.redacted

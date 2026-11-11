@@ -83,4 +83,9 @@ export type VerificationVerdict = Verification["verdict"];
 export type Change = components["schemas"]["Change"];
 export type StoredVerification = components["schemas"]["StoredVerification"];
 export type VerificationList = components["schemas"]["VerificationList"];
+
+// Phase 35 part 2: an investigation's narration — derived prose, never a finding.
+export type NarrationView = components["schemas"]["NarrationView"];
+export type NarrationSegment = components["schemas"]["NarrationSegment"];
+export type NarrationState = NarrationView["state"];
 export type Accuracy = components["schemas"]["Accuracy"];

@@ -52,8 +52,10 @@ async def client(
         # TRUNCATE to every role: test setup lifts that, as the owner, and
         # restores it at once.
         await conn.execute(text("ALTER TABLE verifications DISABLE TRIGGER USER"))
-        await conn.execute(text("TRUNCATE investigations, verifications CASCADE"))
+        await conn.execute(text("ALTER TABLE narrations DISABLE TRIGGER USER"))
+        await conn.execute(text("TRUNCATE investigations, verifications, narrations CASCADE"))
         await conn.execute(text("ALTER TABLE verifications ENABLE TRIGGER USER"))
+        await conn.execute(text("ALTER TABLE narrations ENABLE TRIGGER USER"))
 
     os.environ["INVESTIGATION_WRITER_DATABASE_URL"] = role_database_url(
         "investigation-writer", "INVESTIGATION_WRITER_DB_PASSWORD"

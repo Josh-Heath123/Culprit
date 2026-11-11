@@ -10,7 +10,7 @@ paths:
 
 ## Least privilege
 
-One Postgres role per job. Eighteen exist: `ingestion-writer`, `api-reader`,
+One Postgres role per job. Nineteen exist: `ingestion-writer`, `api-reader`,
 `ingest-gateway`, `anomaly-detector`, `correlation-engine`, `root-cause-writer`,
 `registry-admin`, `auth-service`, `postmortem-writer`, `mcp-reader`,
 `fact-writer`, `capture-writer` (Phase 30 — INSERT on `captures` and
@@ -32,7 +32,11 @@ surface — `agent-admin` (pairing codes, allowances, revocation, tasks),
 audit entries). No role holds UPDATE or DELETE on `agent_audit_log`, and
 triggers refuse both, and TRUNCATE, to the owner as well. Phase 34 added
 `verification-writer` (INSERT on `verifications` and nothing else, not even
-SELECT); `verifications` is append-only the same way. The Phase 32
+SELECT); `verifications` is append-only the same way. Phase 35 part 2
+added `narrator` (SELECT on the five investigation tables and on
+`narrations`, INSERT on `narrations`, nothing else) for the worker's
+narration job; `narrations` is append-only the same way, and `api-reader`
+reads it beside `investigations`. The Phase 32
 migration *narrowed* two roles:
 `correlation-engine` and `root-cause-writer` lost every write on the incident
 tables, which are history now.

@@ -26,23 +26,32 @@ ROOT = Path(__file__).resolve().parent.parent
 # Both snippets intentionally use only stdlib + sqlalchemy so they run
 # fine in either project's venv without extra deps, and print one JSON
 # object to stdout so this script has a single, stable thing to parse.
+#: The api's tables: the ORM's, and the Core tables the investigation,
+#: verification and narration routes declare on their own metadata (Phase
+#: 35 part 2 brought the worker's narrator to read the investigation
+#: tables, so they are compared now too).
 API_DUMP_CODE = """
 import json
 from app.db.models import Base
+from app.investigations import tables as investigations
+from app.narrations import tables as narrations
+from app.verifications import tables as verifications
 
-out = {
-    table_name: {
-        col.name: {"type": str(col.type), "nullable": bool(col.nullable)}
-        for col in table.columns
-    }
-    for table_name, table in Base.metadata.tables.items()
-}
+out = {}
+for metadata in (Base.metadata, investigations.metadata, verifications.metadata,
+                 narrations.metadata):
+    for table_name, table in metadata.tables.items():
+        out[table_name] = {
+            col.name: {"type": str(col.type), "nullable": bool(col.nullable)}
+            for col in table.columns
+        }
 print(json.dumps(out))
 """
 
 WORKER_DUMP_CODE = """
 import json
 from app.db import metadata
+import app.narrate.tables  # declares the narrator's tables on app.db's metadata
 
 out = {
     table_name: {

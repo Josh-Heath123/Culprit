@@ -206,6 +206,41 @@ refused except to a loopback address, or where its configuration says
   `cli/internal/agent/config_test.go::TestPlainHTTPIsRefusedExceptToLoopbackOrWithAllowPlainHTTP`,
   `cli/cmd/culprit/agent_transport_test.go::TestAllowPlainHTTPIsReportedAtEveryStart`
 
+## 7. A narrator that writes what it was not given
+
+The narration provider (Phase 35 part 2) is outside Culprit's control: a
+model can invent, and a hosted one is reached over the network. Assume its
+reply says anything, and its error says anything.
+
+- Its prose **cannot** be shown when it names a subject, reading, probe,
+  capability, component or code-form verdict the investigation does not
+  hold, cites an item that is not in the list, or carries a URL: it is
+  stored as refused, with what it named.
+  `shared/tests/test_narration.py::test_a_narration_that_names_what_is_not_there_is_refused`,
+  `shared/tests/test_narration.py::test_each_rule_is_load_bearing`,
+  `worker/tests/test_narrate_job.py::test_a_reply_naming_what_is_not_there_is_refused_and_its_prose_not_kept`
+- A row put into `narrations` by any other route **cannot** be served as
+  prose unless it passes the same check, which the API runs again.
+  `api/tests/test_narrations_api.py::test_a_row_inserted_with_unchecked_prose_is_not_served_as_prose`
+- A provider's error text **cannot** reach the record, the log or the page:
+  a failure's reason is built from Culprit's own words. Nor can the model's
+  own sentence through a refusal: what it named is one word or a label.
+  `shared/tests/test_narration.py::test_what_a_refusal_names_is_never_the_models_sentence_a_url_or_a_secret`,
+  `worker/tests/test_narrate_job.py::test_anthropic_failures_are_closed_vocabulary`,
+  `worker/tests/test_narrate_job.py::test_a_provider_error_leaves_no_trace_of_what_it_said`,
+  `worker/tests/test_narrate_job.py::test_a_failure_is_stored_with_a_reason_and_nothing_the_provider_said`
+- The narrator **cannot** rewrite or remove a narration, or write anything
+  but a narration. `api/tests/test_narrations_api.py::test_the_narrator_can_append_and_nothing_else`
+- It **cannot** be asked a fourth time about one investigation, nor twice
+  for one attempt by ticks that overlap.
+  `worker/tests/test_narrate_job.py::test_three_attempts_then_no_fourth_call`,
+  `worker/tests/test_narrate_job.py::test_overlapping_ticks_call_the_provider_once`,
+  `api/tests/test_narrations_api.py::test_a_fourth_attempt_and_a_status_carrying_another_s_columns_are_refused`
+
+What it can still do is describe the cited evidence wrongly in plain words.
+The evidence is shown beside the prose, and the prose is labelled as
+derived, for that reason (`docs/LIMITS.md`, "Narration").
+
 ## What this model does not cover
 
 - **The machine the agent runs on.** Root there owns the agent's key, its

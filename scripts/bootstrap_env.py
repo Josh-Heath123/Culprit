@@ -62,6 +62,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("AGENT_REGISTRAR_DB_PASSWORD", "agent-registrar role (Phase 33)"),
     ("AGENT_GATEWAY_DB_PASSWORD", "agent-gateway role (Phase 33)"),
     ("VERIFICATION_WRITER_DB_PASSWORD", "verification-writer role (Phase 34)"),
+    ("NARRATOR_DB_PASSWORD", "narrator role (Phase 35)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
 ]
 
@@ -268,6 +269,16 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     env["VERIFICATION_WRITER_DATABASE_URL"] = _db_url(
         "verification-writer", passwords["VERIFICATION_WRITER_DB_PASSWORD"], "postgres"
     )
+    # Phase 35 part 2: narrator -- the worker's narration job. SELECT on the
+    # investigation tables and its own narrations, INSERT on narrations.
+    env["NARRATOR_DB_PASSWORD"] = passwords["NARRATOR_DB_PASSWORD"]
+    env["NARRATOR_DATABASE_URL"] = _db_url(
+        "narrator", passwords["NARRATOR_DB_PASSWORD"], "postgres"
+    )
+    # Narration is off until the operator turns it on, in this file:
+    # LLM_PROVIDER=anthropic or ollama, with NARRATOR_MODEL and, for
+    # anthropic, ANTHROPIC_API_KEY (docs/INSTALL.md, "Narration").
+    env["LLM_PROVIDER"] = "none"
 
     # Phase 28: the project token `culprit` presents to POST
     # /facts/captures. Not a DB role password (like JWT_SECRET_KEY and

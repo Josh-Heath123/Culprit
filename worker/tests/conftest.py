@@ -23,6 +23,7 @@ _IMPORT_TIME_DEFAULTS = {
     "CORRELATION_DATABASE_URL": "postgresql+asyncpg://correlation-engine:test@localhost:5432/test",
     "ROOT_CAUSE_DATABASE_URL": "postgresql+asyncpg://root-cause-writer:test@localhost:5432/test",
     "PROBE_WRITER_DATABASE_URL": "postgresql+asyncpg://probe-writer:test@localhost:5432/test",
+    "NARRATOR_DATABASE_URL": "postgresql+asyncpg://narrator:test@localhost:5432/test",
 }
 
 for _name, _value in _IMPORT_TIME_DEFAULTS.items():

@@ -49,6 +49,7 @@ from app.memory.router import router as memory_router  # noqa: E402
 from app.model.capture_config import CAPTURE_WRITER_DATABASE_URL  # noqa: E402
 from app.model.captures_router import router as captures_router  # noqa: E402
 from app.model.router import router as model_router  # noqa: E402
+from app.narrations.router import router as narrations_router  # noqa: E402
 from app.observability import configure_observability  # noqa: E402
 from app.outcomes.router import router as outcomes_router  # noqa: E402
 from app.postmortems.config import POSTMORTEM_WRITER_DATABASE_URL  # noqa: E402
@@ -328,3 +329,6 @@ app.include_router(agents_router)
 # they make (a user session).
 app.include_router(verifications_router)
 app.include_router(outcomes_router)
+# Phase 35 part 2: an investigation's narration (a user session; read-only —
+# only the worker's narrator writes one).
+app.include_router(narrations_router)

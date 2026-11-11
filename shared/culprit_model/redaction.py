@@ -20,6 +20,8 @@ _CREDENTIAL = re.compile(
     r"|\bAKIA[0-9A-Z]{16}\b"
     r"|\bgh[pousr]_[A-Za-z0-9]{20,}"
     r"|\bsk-[A-Za-z0-9]{20,}"
+    # Anthropic's keys (sk-ant-api03-...): hyphens break the pattern above.
+    r"|\bsk-ant-[A-Za-z0-9_-]{20,}"
     r"|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.",
     re.IGNORECASE,
 )

@@ -10,12 +10,17 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/capability"
 	"github.com/josh-heath123/culprit/cli/internal/extract"
@@ -293,16 +298,16 @@ func TestNoArgumentAcquiresACapability(t *testing.T) {
 	refusedByTheTool := []map[string]any{
 		// An input that names a grant.
 		{"target": connection, "environment": "production", "probes": []string{"probe.net.tcp_connect"},
-			"inputs": map[string]any{"host": "payments", "port": 443, "grants": []string{"net.tcp.connect"}}},
+			"inputs": map[string]any{"host": "payments.internal", "port": 8443, "grants": []string{"net.tcp.connect"}}},
 		{"target": connection, "environment": "production", "probes": []string{"probe.net.tcp_connect"},
-			"inputs": map[string]any{"host": "payments", "port": 443, "net.tls.inspect": true}},
+			"inputs": map[string]any{"host": "payments.internal", "port": 8443, "net.tls.inspect": true}},
 		// A probe production does not grant: net.tls.inspect is withheld.
 		{"target": connection, "environment": "production", "probes": []string{"probe.net.tls_validity"},
-			"inputs": map[string]any{"host": "payments", "port": 443}},
+			"inputs": map[string]any{"host": "payments.internal", "port": 8443}},
 		// One ungranted probe refuses the whole call, the granted one too.
 		{"target": connection, "environment": "production",
 			"probes": []string{"probe.net.tcp_connect", "probe.net.tls_validity"},
-			"inputs": map[string]any{"host": "payments", "port": 443}},
+			"inputs": map[string]any{"host": "payments.internal", "port": 8443}},
 	}
 	for _, arguments := range refusedByTheTool {
 		result := client.call("culprit_probe", arguments)
@@ -317,12 +322,201 @@ func TestNoArgumentAcquiresACapability(t *testing.T) {
 	// The control: the same call, granted, does dial — the counter is
 	// connected to what the tool reaches the network through.
 	result := client.call("culprit_probe", map[string]any{"target": connection, "environment": "production",
-		"probes": []string{"probe.net.tcp_connect"}, "inputs": map[string]any{"host": "payments", "port": 443}})
+		"probes": []string{"probe.net.tcp_connect"}, "inputs": map[string]any{"host": "payments.internal", "port": 8443}})
 	if result.IsError {
 		t.Fatalf("the granted probe was refused: %s", result.Structured)
 	}
 	if dials := network.dials.Load(); dials != 1 {
 		t.Fatalf("%d dials for one granted tcp_connect, want 1", dials)
+	}
+}
+
+// TestAProbeReachesOnlyDeclaredEndpoints (Q23): through culprit mcp an
+// address input — url, base_url, host, port — that is not an endpoint the
+// environment declares is refused before anything is dialled, counted on
+// a network that answers everything. production declares one endpoint,
+// payments.internal:8443, and grants dns, tcp and http.
+func TestAProbeReachesOnlyDeclaredEndpoints(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	if err := os.WriteFile(path, []byte(agentManifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	network, http := &countingNetwork{}, &countingHTTP{}
+	client := mcpSession(t, &mcpServer{
+		manifestPath: path, stateDir: t.TempDir(), agentID: "test", noPlugins: true,
+		through: &wire{Network: network, HTTP: http}, stderr: io.Discard,
+	})
+	call := func(probeID string, inputs map[string]any) mcpCallResult {
+		return client.call("culprit_probe", map[string]any{"target": "connection:orders->payments",
+			"environment": "production", "probes": []string{probeID}, "inputs": inputs})
+	}
+	refused := []struct {
+		probe  string
+		inputs map[string]any
+	}{
+		// The instance metadata service, by host and by URL.
+		{"probe.net.tcp_connect", map[string]any{"host": "169.254.169.254", "port": 80}},
+		{"probe.net.dns_resolve", map[string]any{"host": "169.254.169.254"}},
+		{"probe.http.reachable", map[string]any{"url": "http://169.254.169.254/latest/meta-data/"}},
+		// An undeclared host, on the declared port.
+		{"probe.net.tcp_connect", map[string]any{"host": "db.internal", "port": 8443}},
+		{"probe.http.reachable", map[string]any{"url": "http://db.internal:8443/health"}},
+		// An undeclared port on the declared host.
+		{"probe.net.tcp_connect", map[string]any{"host": "payments.internal", "port": 22}},
+		{"probe.net.tcp_connect", map[string]any{"host": "payments.internal", "port": "22"}},
+		{"probe.http.reachable", map[string]any{"url": "http://payments.internal/health"}},
+		{"probe.http.route_conformance", map[string]any{"base_url": "https://payments.internal:9000"}},
+		// Disguises: credentials before the host, a port with no host, a
+		// scheme that is not http.
+		{"probe.http.reachable", map[string]any{"url": "http://payments.internal:8443@169.254.169.254/"}},
+		{"probe.net.tcp_connect", map[string]any{"port": 8443}},
+		{"probe.http.reachable", map[string]any{"url": "file:///etc/passwd"}},
+		// The declared host written another way: an absolute name, or with
+		// a space, is not compared as the declared one (it may be another
+		// machine), so it is refused rather than normalised.
+		{"probe.net.tcp_connect", map[string]any{"host": "payments.internal.", "port": 8443}},
+		{"probe.net.tcp_connect", map[string]any{"host": " payments.internal", "port": 8443}},
+		{"probe.http.reachable", map[string]any{"url": "http://payments.internal.:8443/health"}},
+	}
+	for _, c := range refused {
+		result := call(c.probe, c.inputs)
+		if !result.IsError || !strings.Contains(string(result.Structured), "unbound") {
+			t.Errorf("%s %v: not refused: %s", c.probe, c.inputs, result.Structured)
+		}
+	}
+	if dials, requests := network.dials.Load()+network.resolves.Load(), http.requests.Load(); dials != 0 || requests != 0 {
+		t.Fatalf("%d dial(s) and %d request(s) for calls that were all refused", dials, requests)
+	}
+
+	// The declared endpoint dials once, by host and port and by URL, and
+	// the host is compared without regard to case.
+	if result := call("probe.net.tcp_connect", map[string]any{"host": "Payments.Internal", "port": 8443}); result.IsError {
+		t.Fatalf("the declared endpoint was refused: %s", result.Structured)
+	}
+	if dials := network.dials.Load(); dials != 1 {
+		t.Fatalf("%d dials for one tcp_connect to the declared endpoint, want 1", dials)
+	}
+	if result := call("probe.http.reachable", map[string]any{"url": "http://payments.internal:8443/health"}); result.IsError {
+		t.Fatalf("the declared endpoint's URL was refused: %s", result.Structured)
+	}
+	if requests := http.requests.Load(); requests != 1 {
+		t.Fatalf("%d requests for one reachable to the declared endpoint, want 1", requests)
+	}
+}
+
+// TestARedirectIsBoundAsTheAddressIs: a declared endpoint that answers
+// 302 does not carry culprit_probe to an address the environment does not
+// declare — the undeclared server is never reached — while a redirect to
+// a declared endpoint is followed. Real sockets, on loopback.
+func TestARedirectIsBoundAsTheAddressIs(t *testing.T) {
+	var undeclaredHits atomic.Int64
+	undeclared := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		undeclaredHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer undeclared.Close()
+	var declared *httptest.Server
+	declared = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/away":
+			http.Redirect(w, r, undeclared.URL+"/latest/meta-data/", http.StatusFound)
+		case "/home":
+			http.Redirect(w, r, declared.URL+"/ok", http.StatusFound)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer declared.Close()
+	port := declared.Listener.Addr().(*net.TCPAddr).Port
+	manifest := fmt.Sprintf(`version: 1
+components:
+  - name: web
+    kind: service
+environments:
+  local:
+    adapter: process
+    components:
+      web: {}
+    endpoints:
+      web: { host: 127.0.0.1, port: %d }
+    grants:
+      net.http.outbound: true
+`, port)
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	if err := os.WriteFile(path, []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// No wire handed in: the server builds the real one, bound.
+	client := mcpSession(t, &mcpServer{
+		manifestPath: path, stateDir: t.TempDir(), agentID: "test", noPlugins: true,
+		timeout: 5 * time.Second, stderr: io.Discard,
+	})
+	reach := func(path string) model.Reading {
+		result := client.call("culprit_probe", map[string]any{"target": "component:web", "environment": "local",
+			"probes": []string{"probe.http.reachable"},
+			"inputs": map[string]any{"url": fmt.Sprintf("http://127.0.0.1:%d%s", port, path)}})
+		var probed struct {
+			Readings []model.Reading `json:"readings"`
+		}
+		if err := json.Unmarshal(result.Structured, &probed); err != nil || result.IsError || len(probed.Readings) != 1 {
+			t.Fatalf("%s: %v %s", path, err, result.Structured)
+		}
+		return probed.Readings[0]
+	}
+	if reading := reach("/away"); reading.Verdict == model.VerdictPass {
+		t.Errorf("a redirect off the declared endpoints was followed: %+v", reading)
+	}
+	if hits := undeclaredHits.Load(); hits != 0 {
+		t.Fatalf("the undeclared server was reached %d time(s) through a redirect", hits)
+	}
+	if reading := reach("/home"); reading.Verdict != model.VerdictPass {
+		t.Errorf("a redirect to the declared endpoint was not followed: %+v", reading)
+	}
+}
+
+// TestEveryCatalogueInputIsClassified: the binding holds four input names
+// (url, base_url, host, port). It covers every address only while no probe
+// takes an address under another name, so every input name in the
+// catalogue is listed here as one of those four or as not an address. A
+// probe added with a new input name fails this until someone decides
+// which it is — and binds it in unboundAddresses if it is an address.
+func TestEveryCatalogueInputIsClassified(t *testing.T) {
+	bound := map[string]bool{"url": true, "base_url": true, "host": true, "port": true}
+	notAnAddress := map[string]bool{
+		"method": true, "token": true, "token_env": true, "key": true, "package": true, "schema": true,
+		"table": true, "expect_fields": true, "expect_columns": true, "expect_audience": true,
+		"expect_issuer": true, "expect_version": true,
+	}
+	for _, manifest := range catalogue().Manifests() {
+		properties, _ := manifest.Inputs["properties"].(map[string]any)
+		for name := range properties {
+			if !bound[name] && !notAnAddress[name] {
+				t.Errorf("%s takes input %q, which is neither bound as an address nor listed as not one", manifest.ID, name)
+			}
+		}
+	}
+}
+
+// TestCulpritProbeFromATerminalIsUnbound: the binding is culprit mcp's.
+// runProbe — what `culprit probe` runs — still goes where its inputs say:
+// a person at a terminal reaches nothing they could not reach with curl.
+func TestCulpritProbeFromATerminalIsUnbound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	if err := os.WriteFile(path, []byte(agentManifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	network := &countingNetwork{}
+	readings, _, err := runProbe(context.Background(), probeInput{
+		ManifestPath: path, Environment: "production", Target: "connection:orders->payments",
+		ProbeIDs: []string{"probe.net.tcp_connect"}, Inputs: map[string]any{"host": "db.internal", "port": 22},
+		AgentID: "test", NoPlugins: true, Timeout: 2 * time.Second,
+		Through: &wire{Network: network, HTTP: &countingHTTP{}},
+	})
+	if err != nil || len(readings) != 1 || readings[0].Verdict != model.VerdictPass {
+		t.Fatalf("culprit probe to an undeclared endpoint: %v %+v", err, readings)
+	}
+	if dials := network.dials.Load(); dials != 1 {
+		t.Fatalf("%d dials, want 1", dials)
 	}
 }
 
@@ -612,7 +806,7 @@ func TestEditingCulpritYamlMidSessionGrantsNothing(t *testing.T) {
 		through: &wire{Network: network, HTTP: http}, stderr: io.Discard,
 	})
 	tls := map[string]any{"target": "connection:orders->payments", "environment": "production",
-		"probes": []string{"probe.net.tls_validity"}, "inputs": map[string]any{"host": "payments", "port": 443}}
+		"probes": []string{"probe.net.tls_validity"}, "inputs": map[string]any{"host": "payments.internal", "port": 8443}}
 	if result := client.call("culprit_probe", tls); !result.IsError {
 		t.Fatalf("tls_validity ran before the grant was added: %s", result.Structured)
 	}

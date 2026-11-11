@@ -456,6 +456,11 @@ quickstart:
             npm ci --no-audit --no-fund && npm run generate-types
             cp src/lib/api-types.generated.ts /frontend/src/lib/api-types.generated.ts'
     echo "==> Building and starting Culprit"
+    # Phase 35 part 2: with QUICKSTART_NARRATOR_STUB set (CI), the stub
+    # narration provider starts first, so the worker can reach it.
+    if [ -n "${QUICKSTART_NARRATOR_STUB:-}" ]; then
+        "${COMPOSE[@]}" --profile narrator-stub up -d narrator-stub
+    fi
     "${COMPOSE[@]}" up -d --build postgres redis api ingest-gateway worker frontend
     echo "==> Running bootstrap (migrations, demo service registration, admin user)"
     # `run`, not part of the `up` above: `up -d` only waits for containers
@@ -655,7 +660,7 @@ check-frontend-tokens:
 # volumes, and infra/.env.prod / demo-services/.env, are left in place so
 # a following `just quickstart` doesn't regenerate secrets or keys).
 quickstart-down:
-    docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod --profile demo down
+    docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod --profile demo --profile narrator-stub down
 
 # Generate infra/.env.prod for a real install (docs/INSTALL.md) -- prompts
 # for DOMAIN and, optionally, VOYAGE_API_KEY. e.g.:

@@ -59,9 +59,17 @@ model" is always the shortest path and always looks fine in a demo.
 - The MCP tool implementations (`mcp_server/tools.py`)
 - The repo's own check scripts (`scripts/check_*.py`)
 
-**The single LLM call** is narration: rendering an already-settled fault tree
-into prose, and ranking hypotheses within an already-computed set. It may not
-create a fact, a divergence, a reading, a verdict or a hypothesis.
+**The single LLM call** is narration (Phase 35 part 2, `worker/app/narrate/`):
+rendering an already-settled investigation into prose, checked against it by
+`shared/culprit_model/narration.py` before it is stored and again before it is
+served. It does not rank hypotheses — the walk is complete and deterministic,
+and that was dropped (DIAGNOSTIC_PLAN.md, "How Phase 35 is run"). It may not
+create a fact, a divergence, a reading, a verdict or a hypothesis, and nothing
+reads what it writes: two `lint-imports` contracts in `worker/pyproject.toml`
+keep every other package from reaching a provider or importing `app.narrate`,
+and `scripts/check_no_llm_imports.py` forbids `app.narrate` in every
+deterministic package and covers `api/app`. Nothing in the binary calls a
+model.
 
 ## Enforcement, not intention
 

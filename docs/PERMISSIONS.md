@@ -418,6 +418,60 @@ role holds UPDATE or DELETE on `verifications`, and triggers refuse both,
 and TRUNCATE, to every role including the owner. `api-reader` reads it for
 the investigation page and `GET /outcomes/accuracy`.
 
+## The narrator — what it reads, and what it sends
+
+Narration is off unless `LLM_PROVIDER` in `infra/.env.prod` says otherwise
+(Phase 35 part 2; the README's "Narration, if you want it").
+
+### The narrator role
+
+**`narrator`** (migration `a6c2e9d4f8b1`) is the worker's narration job.
+It holds SELECT on the five investigation tables (`investigations`,
+`investigation_readings`, `hypotheses`, `fault_edges`,
+`fault_edge_readings`), SELECT and INSERT on `narrations`, and nothing
+else: it cannot write an investigation, a reading or a verification, and
+cannot read a reading outside an investigation, a capture, a fact or a
+user. No role holds UPDATE or DELETE on `narrations`, and triggers refuse
+both, and TRUNCATE, to every role including the owner — a narration is
+never rewritten; a later attempt is a new row. `api-reader` reads
+`narrations` for the investigation page, and the API checks the prose
+against the investigation again before it serves it. The role's URL,
+`NARRATOR_DATABASE_URL`, is required by the worker even with narration
+off, so turning it on is a setting, not a missing credential.
+
+### What the narrator sends
+
+One request per attempt, at most three attempts per investigation, made
+only by the worker's `app.narrate` (no other package may reach a provider;
+a `lint-imports` contract fails the build otherwise). The request carries:
+
+- a fixed instruction (`worker/app/narrate/prompts.py`), the same for
+  every investigation;
+- the investigation as numbered evidence, built from its stored record and
+  nothing else (`culprit_model.narration.evidence`): the symptom's subject,
+  description and attestation, and the environment's name; the diagnosis's
+  statement, root, recommended change and the four rubric criteria with
+  their reasons; each fault edge and the reading ids that established it;
+  each reading's id, probe id, target, verdict and reason; each hypothesis's
+  id, kind, subject, status, reading ids and reason.
+
+It does not carry a reading's measured values or evidence, a capture, a
+configuration value, a token, telemetry, the names of users or agents, or
+any tool. Everything in it was already redacted when the investigation was
+stored (`redact_reading`, `redact_credentials`). A symptom description or
+a reason can still say anything its writer put in it — a URL, a hostname —
+and is sent as written.
+
+| Provider | Where it goes |
+|---|---|
+| `none` | nowhere |
+| `ollama` | `OLLAMA_URL`, the operator's own Ollama: on the same machine, nothing leaves it |
+| `anthropic` | `https://api.anthropic.com/v1/messages`, with `ANTHROPIC_API_KEY`: **the evidence leaves your machine** and is handled under Anthropic's terms for API data |
+
+What comes back is stored only after the check, as prose, or as what it
+named, or as a failure reason built from Culprit's own words — never the
+provider's error text, which is not read.
+
 ## How Culprit reaches an environment
 
 | Adapter | Reads through | Needs on the machine running Culprit |

@@ -77,6 +77,34 @@ func NewRealHTTPClient(timeout time.Duration) *RealHTTPClient {
 	}
 }
 
+// NewRealHTTPClientWithin is NewRealHTTPClient whose redirects are
+// followed only to an address within reports true for (Phase 35 part 2,
+// Q23). `culprit_probe` binds a probe's address to the endpoints the
+// environment declares; without this, a declared endpoint that answered
+// 302 would carry the request to wherever the redirect pointed.
+func NewRealHTTPClientWithin(timeout time.Duration, within func(host string, port int) bool) *RealHTTPClient {
+	bound := NewRealHTTPClient(timeout)
+	bound.client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) >= MaxRedirects {
+			return fmt.Errorf("stopped after %d redirects", MaxRedirects)
+		}
+		port := 80
+		if request.URL.Scheme == "https" {
+			port = 443
+		}
+		if given := request.URL.Port(); given != "" {
+			if _, err := fmt.Sscanf(given, "%d", &port); err != nil {
+				return fmt.Errorf("refused a redirect with a port that is not a number")
+			}
+		}
+		if (request.URL.Scheme != "http" && request.URL.Scheme != "https") || !within(request.URL.Hostname(), port) {
+			return fmt.Errorf("refused a redirect to an address the environment does not declare")
+		}
+		return nil
+	}
+	return bound
+}
+
 // Get issues a GET.
 func (c *RealHTTPClient) Get(
 	ctx context.Context, url string, headers map[string]string,
