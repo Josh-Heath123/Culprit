@@ -23,7 +23,7 @@ Core inserts with no RETURNING, as app/readings/service.py explains:
 from datetime import UTC, datetime
 from typing import Any
 
-from culprit_model.investigations import Investigation
+from culprit_model.investigations import Investigation, from_rows
 from culprit_model.readings import redact_reading
 from culprit_model.redaction import redact_credentials
 from sqlalchemy import insert, select
@@ -245,48 +245,9 @@ async def load(session: AsyncSession, investigation_id: str) -> Investigation | 
     hypotheses = (await session.execute(scoped(tables.hypotheses))).mappings()
     edges = (await session.execute(scoped(tables.fault_edges).order_by("id"))).mappings()
     links = (await session.execute(scoped(tables.fault_edge_readings))).mappings()
-
-    cited: dict[int, list[str]] = {}
-    for link in links:
-        cited.setdefault(link["edge_id"], []).append(link["reading_id"])
-
-    def numbered(identifier: str) -> tuple[int, str]:
-        digits = "".join(ch for ch in identifier if ch.isdigit())
-        return (int(digits) if digits else 0, identifier)
-
-    reading_rows = sorted(readings, key=lambda r: numbered(r["id"]))
-    hypothesis_rows = sorted(hypotheses, key=lambda h: numbered(h["id"]))
-    return Investigation.model_validate(
-        {
-            "id": row["id"],
-            "opened_at": row["opened_at"],
-            "closed_at": row["closed_at"],
-            "environment": row["environment"],
-            "symptom": row["symptom"],
-            "hypotheses": [
-                {
-                    "id": h["id"],
-                    "kind": h["kind"],
-                    "subject": h["subject"],
-                    "status": h["status"],
-                    "reason": h["reason"],
-                    "readings": list(h["readings"]),
-                }
-                for h in hypothesis_rows
-            ],
-            "readings": [{"id": r["id"], "reading": r["reading"]} for r in reading_rows],
-            "fault_tree": [
-                {
-                    "from_subject": e["from_subject"],
-                    "to_subject": e["to_subject"],
-                    "relation": e["relation"],
-                    "established_by": sorted(cited.get(e["id"], []), key=numbered),
-                }
-                for e in edges
-            ],
-            "diagnosis": row["diagnosis"],
-        }
-    )
+    # The same assembly the worker's narrator uses (Phase 35 part 2), so
+    # the evidence a narration cites is numbered here as it was there.
+    return from_rows(row, list(readings), list(hypotheses), list(edges), list(links))
 
 
 async def submitted_by(session: AsyncSession, investigation_id: str) -> str | None:

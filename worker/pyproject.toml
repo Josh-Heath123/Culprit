@@ -20,6 +20,10 @@ dependencies = [
     "opentelemetry-sdk>=1.44.0",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "culprit-shared",
+    # Phase 35 part 2: the narrator's providers speak plain HTTP. Already in
+    # this lockfile (under voyageai and opentelemetry); declared because
+    # app.narrate imports it, and only app.narrate may (the contract below).
+    "httpx>=0.28",
 ]
 
 [tool.uv]
@@ -95,3 +99,45 @@ source_modules = ["culprit_model"]
 # of an external distribution, and the whole namespace is a fine thing
 # for a canonicalisation library to be barred from anyway.
 forbidden_modules = ["app.rag", "anthropic", "voyageai", "google"]
+
+# Phase 35 part 2 (docs/DIAGNOSTIC_PLAN.md, D8): the narrator is the one LLM
+# call in the system, and these two contracts are what make that a build
+# failure rather than a convention. Their source lists name every package
+# under app/ except app.narrate itself and app.main (which only schedules
+# it), plus culprit_model; worker/tests/test_narrate_boundary.py fails when
+# a package is added to app/ and not to both lists (standing invariant 9).
+#
+# Only app.narrate may talk to a provider: no other package may import an
+# HTTP client or a model SDK. (app.rag reaches Voyage through voyageai's
+# own client, which is an embedding call, held by the contracts above.)
+[[tool.importlinter.contracts]]
+name = "only the narrator talks to a provider"
+type = "forbidden"
+source_modules = [
+    "app.anomaly",
+    "app.consumer",
+    "app.db",
+    "app.env",
+    "app.memory",
+    "app.observability",
+    "app.rag",
+    "culprit_model",
+]
+forbidden_modules = ["httpx", "anthropic", "openai", "ollama", "aiohttp", "requests"]
+
+# Nothing downstream reads a narration: no package may import app.narrate,
+# where the narrations table and the providers live.
+[[tool.importlinter.contracts]]
+name = "nothing downstream reads a narration"
+type = "forbidden"
+source_modules = [
+    "app.anomaly",
+    "app.consumer",
+    "app.db",
+    "app.env",
+    "app.memory",
+    "app.observability",
+    "app.rag",
+    "culprit_model",
+]
+forbidden_modules = ["app.narrate"]

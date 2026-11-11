@@ -19,6 +19,9 @@ configure_observability("culprit-worker")
 from app.anomaly.job import score_new_metrics  # noqa: E402
 from app.consumer import drain_edges, drain_streams, ensure_consumer_groups  # noqa: E402
 from app.memory.link_job import link_recent_changes  # noqa: E402
+from app.narrate import providers as narrate_providers  # noqa: E402
+from app.narrate.config import from_env as narrator_config_from_env  # noqa: E402
+from app.narrate.job import narrate_investigations  # noqa: E402
 from app.rag.embed_job import (  # noqa: E402
     embed_ai_change_record,
     embed_architecture_decision,
@@ -53,6 +56,17 @@ PROBE_WRITER_DATABASE_URL = require_env(
     "PROBE_WRITER_DATABASE_URL", hint="probe-writer; see worker/.env.example"
 )
 
+# Phase 35 part 2: the narrator, as its own role -- SELECT on the
+# investigation tables and its narrations, INSERT on narrations. Required
+# even with narration off, so turning it on is a setting, not a credential.
+NARRATOR_DATABASE_URL = require_env(
+    "NARRATOR_DATABASE_URL", hint="narrator; see worker/.env.example"
+)
+# LLM_PROVIDER, NARRATOR_MODEL and the provider's key or address: read and
+# checked now, so a half-set provider stops the worker instead of failing
+# every narration later (app/narrate/config.py).
+NARRATOR_CONFIG = narrator_config_from_env()
+
 #: Still defaulted, deliberately: an unreachable Redis is a loud,
 #: immediate connection error at the point of use, not a silent
 #: connection under the wrong identity. It is a service address, not a
@@ -84,6 +98,11 @@ async def startup(ctx: dict) -> None:
     ctx["correlation_engine"] = create_async_engine(CORRELATION_DATABASE_URL)
     # app/rag/embed_job.py's engine, as root-cause-writer.
     ctx["rag_engine"] = create_async_engine(ROOT_CAUSE_DATABASE_URL)
+    # app/narrate/job.py's engine, as narrator. With LLM_PROVIDER=none the
+    # provider is None and the job returns before touching it.
+    ctx["narrator_engine"] = create_async_engine(NARRATOR_DATABASE_URL, hide_parameters=True)
+    ctx["narrator_config"] = NARRATOR_CONFIG
+    ctx["narrator_provider"] = narrate_providers.build(NARRATOR_CONFIG)
 
 
 async def shutdown(ctx: dict) -> None:
@@ -94,6 +113,7 @@ async def shutdown(ctx: dict) -> None:
     await ctx["probe_engine"].dispose()
     await ctx["correlation_engine"].dispose()
     await ctx["rag_engine"].dispose()
+    await ctx["narrator_engine"].dispose()
 
 
 class WorkerSettings:
@@ -129,6 +149,9 @@ class WorkerSettings:
         # creates incidents, so this finds none to link; it is kept because
         # it reads only, and its table is not one of the frozen ones.
         cron(link_recent_changes, second=set(range(3, 60, 5))),  # pyright: ignore[reportArgumentType]
+        # Phase 35 part 2: narrate settled investigations. Every 15 seconds;
+        # a no-op with LLM_PROVIDER=none.
+        cron(narrate_investigations, second={4, 19, 34, 49}),  # pyright: ignore[reportArgumentType]
     ]
     on_startup = startup
     on_shutdown = shutdown

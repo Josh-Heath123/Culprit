@@ -49,6 +49,9 @@ CHAT_LLM_PREFIXES = (
     "openai",
     "app.rag",
     "worker.app.rag",
+    # Phase 35 part 2: the narrator is this repo's one route to a model now.
+    "app.narrate",
+    "worker.app.narrate",
 )
 
 #: The embedding client, kept separate on purpose. Embedding is a
@@ -83,6 +86,10 @@ DETERMINISTIC_PACKAGES: dict[str, tuple[str, ...]] = {
     # a *fact* was invented rather than read, which is the one thing D8
     # forbids outright.
     "extractors/python": CHAT_LLM_PREFIXES + EMBEDDING_PREFIXES,
+    # Phase 35 part 2. The API serves narrations and runs the narration
+    # check again before it does; it never calls a provider. Only the
+    # worker's app.narrate may (worker/pyproject.toml's contracts).
+    "api/app": CHAT_LLM_PREFIXES + EMBEDDING_PREFIXES,
 }
 
 #: Go module paths for every LLM/embedding SDK a Go program could

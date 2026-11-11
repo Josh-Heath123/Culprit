@@ -433,8 +433,10 @@ async def test_an_investigation_records_who_stored_it(
         # TRUNCATE to every role: test setup lifts that, as the owner, and
         # restores it at once.
         await conn.execute(text("ALTER TABLE verifications DISABLE TRIGGER USER"))
-        await conn.execute(text("TRUNCATE investigations, verifications CASCADE"))
+        await conn.execute(text("ALTER TABLE narrations DISABLE TRIGGER USER"))
+        await conn.execute(text("TRUNCATE investigations, verifications, narrations CASCADE"))
         await conn.execute(text("ALTER TABLE verifications ENABLE TRIGGER USER"))
+        await conn.execute(text("ALTER TABLE narrations ENABLE TRIGGER USER"))
     agent = paired(client)
     by_token = json.loads((RECORDED / "network-partition.json").read_text("utf-8"))
     response = client.post(
@@ -771,8 +773,10 @@ async def test_api_reader_reads_nonces_and_writes_none(role_database_url, statem
 async def _fresh(db_engine: AsyncEngine) -> None:
     async with db_engine.begin() as conn:
         await conn.execute(text("ALTER TABLE verifications DISABLE TRIGGER USER"))
-        await conn.execute(text("TRUNCATE investigations, verifications CASCADE"))
+        await conn.execute(text("ALTER TABLE narrations DISABLE TRIGGER USER"))
+        await conn.execute(text("TRUNCATE investigations, verifications, narrations CASCADE"))
         await conn.execute(text("ALTER TABLE verifications ENABLE TRIGGER USER"))
+        await conn.execute(text("ALTER TABLE narrations ENABLE TRIGGER USER"))
 
 
 def _verification_by(agent: Agent, investigation: dict[str, Any]) -> dict[str, Any]:

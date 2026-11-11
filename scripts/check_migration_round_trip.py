@@ -82,6 +82,7 @@ _MIGRATION_ROLE_PASSWORDS = {
     "AGENT_REGISTRAR_DB_PASSWORD": "round-trip-agent-registrar",
     "AGENT_GATEWAY_DB_PASSWORD": "round-trip-agent-gateway",
     "VERIFICATION_WRITER_DB_PASSWORD": "round-trip-verification-writer",
+    "NARRATOR_DB_PASSWORD": "round-trip-narrator",
 }
 
 def _seed_statements() -> tuple[tuple[str, str], ...]:
@@ -276,6 +277,18 @@ def _seed_statements() -> tuple[tuple[str, str], ...]:
             "SELECT 'task-rt-verify', 'rt-agent', 'rt-env', 'verify', "
             "       jsonb_build_object('verify', jsonb_build_object('investigation_id', "
             "       v.investigation_id)), 'rt-admin' FROM v",
+        ),
+        (
+            # Phase 35 part 2: two narrations of the investigation above, a
+            # failed attempt and a complete one. The a6c2e9d4f8b1 downgrade
+            # drops the append-only table over rows it can never delete.
+            "narrations",
+            "INSERT INTO narrations (id, investigation_id, attempt, status, provider, model, "
+            "  prose, reason) VALUES "
+            "('nar-00000000000000aa', 'inv-round-trip', 1, 'failed', 'ollama', 'rt-model', "
+            "  NULL, 'ollama answered HTTP 500'), "
+            "('nar-00000000000000ab', 'inv-round-trip', 2, 'complete', 'ollama', 'rt-model', "
+            "  'It failed [1].', NULL)",
         ),
     )
 

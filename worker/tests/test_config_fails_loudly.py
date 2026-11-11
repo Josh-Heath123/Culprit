@@ -27,6 +27,9 @@ WORKER_DATABASE_URLS = [
     # four: a worker that starts without it would score metrics and
     # silently write no readings, which looks like "nothing to report".
     "PROBE_WRITER_DATABASE_URL",
+    # Phase 35 part 2: required even with narration off, so turning it on
+    # later is a setting, not a missing credential.
+    "NARRATOR_DATABASE_URL",
 ]
 
 
