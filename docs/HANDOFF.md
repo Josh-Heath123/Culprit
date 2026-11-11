@@ -55,10 +55,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted); then `docs/PERFORMANCE_PLAN.md` (Phases 36–39) |
-| Current phase | **35, part 2 — The narrator** — `not started`. Brief: `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Part 2". Its step 0 confirms `main`'s push run on `60d2c92` green, `e2e` included. |
+| Current phase | **35, part 2 — The narrator** — `complete` (CI green on the merge result), awaiting the architecture review. PR #35. Run report in §5. |
 | Previous phase | **35, part 1 — The agent surface: complete**, signed off 2026-11-11 by the architecture session. Merged via PR #34 (`60d2c92`); `e2e` had not run on the pull request (ambient, Q24), so the gate is `main`'s push run, confirmed by part 2's step 0. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-35-narrator`, to be cut from `origin/main` = `60d2c92`; its first commit is the Phase 35 part 1 sign-off already in the working tree (message: `../phase-35-1-signoff.txt`, in the outer folder). Lands through a pull request. Do not stage `shared/uv.lock`. |
+| Branch | `phase-35-narrator`, cut from `origin/main` = `60d2c92`; first commit the part 1 sign-off (`8e13685`). PR #35, open; only the human merges. Do not stage `shared/uv.lock`. |
 | Blocking questions | None. |
 
 ---
@@ -102,7 +102,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 35, part 1 | The agent surface | **complete** (PR #34 merged, `60d2c92`) | **Signed off 2026-11-11** (architecture session): every criterion run in CI — the MCP loop through the real binary on Linux in the fault-library job, unfilterable; `e2e` did not run on the pull request (ambient, Q24), so part 2's step 0 confirms `main`'s push run green. Q22–Q24 ruled. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
-| 35, part 2 | The narrator | not started | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — "How Phase 35 is run", then "Part 2" at the end of the section for the decisions, work order, criteria and what not to build. Step 0 first: `main`'s push run on `60d2c92` green, `e2e` included. Item 1 is a Go change (Q23); the rest is the control plane. Branch `phase-35-narrator` from `origin/main` = `60d2c92`, its first commit the part 1 sign-off. Lands through a pull request. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 35, part 2 | The narrator | **complete** (CI green on the merge result; PR #35 awaiting review) | Run 2026-11-11: step 0 met (run 43067489387). Built: the Q23 binding (redirects too); the check (nine rules, each load-bearing); `narrations` and the `narrator` role; the job (none, anthropic, ollama; claimed attempts); the read and the card; CI's none/stub matrix and narration parity; the documents. Both audits' findings fixed. §5. **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — "How Phase 35 is run", then "Part 2". |
 | 36 | Latency budgets, and a walk that can see slow | not started | `docs/PERFORMANCE_PLAN.md` Phase 36. Starts after Phase 35 is complete; "How Phase 36 is run" is written at the review of Phase 35 part 2. |
 | 37 | The database: statements, plans and indexes | not started | `docs/PERFORMANCE_PLAN.md` Phase 37. "How Phase 37 is run" is written at the review before it. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
@@ -138,216 +138,262 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        35, part 1 — the agent surface
-Branch:       phase-35-mcp, from origin/main = 0effc53 (PR #33's merge); its
-              first commit is the Phase 34 sign-off (eb09d15).
+Phase:        35, part 2 — the narrator
+Branch:       phase-35-narrator, from origin/main = 60d2c92 (PR #34's merge);
+              its first commit is the part 1 sign-off (8e13685). PR #35.
 Run:          2026-11-11, /next.
-Status:       IMPLEMENTED; every local gate green; the fault library 13/13
-              locally with Docker; both audits clean, their findings fixed.
-              CI: NOT GREEN — every job but e2e passed on
-              PR #34; e2e failed three times installing `just` from apt
-              (runner DNS), before any test ran. Status gates red (ambient).
+Status:       IMPLEMENTED; every local gate green; both audits run, every finding
+              fixed, the phase-auditor's re-audit CLOSED on all six items.
+              CI green on 8a09d7e (run 43090673530) on every job and every
+              PR check, e2e (none), e2e (stub) and narration-parity included.
+              The report commit's own run, which also carries ec05453, is
+              below.
 
-WHAT WAS BUILT (work order 1-4)
-  1 `culprit mcp` (cli/cmd/culprit/mcp.go): MCP over stdin and stdout from
-    the binary, six read-only tools — culprit_system_model, culprit_check,
-    culprit_explain_connection, culprit_probe, culprit_diagnose,
-    culprit_verify. cli/internal/mcp is the protocol and nothing else:
-    newline-delimited JSON-RPC 2.0; initialize (2025-06-18, 2025-03-26,
-    2024-11-05), tools/list, tools/call, ping; notifications unanswered.
-    It links no Culprit package and no network package. Every tool's
-    arguments are a closed schema (additionalProperties false), checked
-    before the handler runs, so an argument naming a grant is a protocol
-    error. The vantage (--from), the state directory, the agent id and the
-    timeouts are the server's flags, never arguments.
-    To call the same code as the commands, the bodies of `culprit
-    diagnose`, `verify` and `probe` were lifted into runDiagnose, runVerify
-    and runProbe, which the commands and the tools both call; check.Run
-    was already a function. No second implementation of anything.
-  2 Each answer is the command's --format json: culprit_check is `culprit
-    check --format json`; culprit_probe is `culprit probe --format json`
-    ({readings, refused}); culprit_diagnose is {investigation, verify} —
-    the investigation `culprit diagnose --format json` prints, and the
-    culprit_verify call to make with the four change kinds and what each
-    explains; culprit_verify is the Verification. The text content is the
-    same JSON. No prose field anywhere.
-  3 A scripted MCP client (mcp_test.go, mcpClient) drives the server over
-    a pair of streams: in-process through the real cobra command, and in
-    the fault library through the real linux binary, `docker exec -i
-    <vantage> culprit mcp`, over its stdin and stdout: subtests
-    mcp/auth-audience (fix applied -> verified) and mcp/wrong-fix (token
-    re-minted for the wrong audience -> not_resolved, reason naming
-    probe.auth.token_shape). Neither is counted in results.json.
-  4 README ("For a coding agent: culprit mcp": the mcpServers snippet, the
-    tool table, what it cannot do; a Key-features row; project structure;
-    future work now part 2), LIMITS ("The agent surface", nine entries),
-    ARCHITECTURE (layer 26), CLAUDE.md.
+STEP 0
+  main's push run on 60d2c92: run 43067489387, every job success, e2e
+  included; deploy skipped. Part 1's gate is met.
 
-CRITERIA (part 1)
-  1 over stdio: diagnose the audience fault -> rooted tree; known fix ->
-    verified; wrong fix -> not_resolved; in CI          PASS locally.
-      Fault library, Docker, Windows: 13/13, mcp/auth-audience "verified,
-      7 readings re-run twice", mcp/wrong-fix "not_resolved ... still
-      failing on both runs: probe.auth.token_shape ...". In-process:
-      TestTheLoopThroughMCP (both). In CI: the fault-library job runs
-      TestTheFaultLibrary unfiltered (ci-cd.yml:405), so the mcp/ subtests
-      run there — and it did: run 43045419342, both PASS on Linux.
-      Note: the fix recreates order-service, and the MCP server running
-      inside it with it, so diagnose and verify are two sessions; the
-      state directory carries the investigation (LIMITS).
-  2 an argument naming a grant, or a probe the environment does not
-    grant, refused before anything is dialled (dials counted)  PASS.
-      TestNoArgumentAcquiresACapability: five protocol refusals (grants,
-      a capability as an argument name, capabilities on diagnose, grants
-      on verify, grant on check), four tool refusals (an input named
-      grants, an input named a capability, an ungranted probe, one
-      ungranted probe beside a granted one) — 0 dials, 0 requests; the
-      granted control then dials once. Shown red: with the pre-check
-      disabled, "1 dial(s) and 0 request(s) for calls that were all
-      refused". Also TestDiagnoseAndVerifyDialNothingUngranted (0 dials
-      for a walk and a verification in an environment granting no network
-      capability) and TestEditingCulpritYamlMidSessionGrantsNothing.
-      The phase-auditor drove the real binary with 14 hostile lines and a
-      counting TCP listener: nothing connected except a genuine call to a
-      granted environment.
-  3 every tool's response validates against the CLI's model   PASS, with
-    the wording question below.
-      TestEveryToolAnswersInTheCLIsModel: culprit_check equals `culprit
-      check --format json` once parsed; readings, the Investigation and
-      the Verification Validate() (decoded with unknown fields refused);
-      culprit_system_model's intent is the CaptureBundle `culprit intent`
-      prints (the auditor checked equality), every fact valid; the
-      explanation's facts valid, its divergences check's own objects, each
-      probe entry's capabilities and grant decision equal to the
-      catalogue's and the environment's.
-      NOT TESTABLE AS WRITTEN for two tools: culprit_system_model and
-      culprit_explain_connection have no CLI command, so no CLI JSON. What
-      holds: every record inside them is a model record that validates;
-      their envelopes are new (Q22).
-  4 links no network package beyond probe and capture; nothing calls a
-    model                                                    PASS.
-      check_test.go untouched; TestTheNetworkBoundaryIsAnAllowlist covers
-      internal/mcp (go list ./internal/...), which links no net, net/http
-      or crypto/tls; TestNothingInTheBinaryListens PASS;
-      check_no_llm_imports covers cli/, cmd included. LLM_PROVIDER=none
-      throughout the loop tests; nothing reads it.
-  5 no tool writes                                           PASS.
-      TestNoToolWrites: all six offered readOnlyHint, closed arguments;
-      the whole loop leaves culprit.yaml's directory byte-identical; the
-      protocol package links no Culprit package; mcp.go names no
-      transport, os.WriteFile or os.Create. The only writes are the
-      server's own state directory, as for the commands (LIMITS).
+WHAT WAS BUILT (work order 1-7)
+  1 Q23. culprit_probe binds url, base_url, host and port to the endpoints
+    the environment declares (endpoints:, a component's endpoint:): any
+    other address refuses the whole call before anything is dialled, with
+    the input and the reason. A redirect is bound the same way: through
+    culprit mcp the HTTP client follows one only to a declared endpoint
+    (probe.NewRealHTTPClientWithin). A host is compared as written, case
+    aside — a trailing dot or a space is refused, not normalised. culprit
+    probe from a terminal is unchanged. LIMITS rewritten for the two
+    surfaces.
+  2 shared/culprit_model/narration.py, pure: evidence() — the numbered
+    list, from the record alone; check() — nine rules, one function each
+    (citations name items; no URL; no invisible character; subjects,
+    probes, capabilities, reading ids, code forms and components must be
+    the investigation's); segments() — the prose with each citation
+    replaced by its item's text from the record. What a refusal names is
+    one token or a fixed label, URL-replaced, redacted, at most 80 chars.
+    shared/tests/narration_conformance.json: 4 faithful, 24 refused, each
+    breaking one rule. Written before any provider existed.
+  3 Migration a6c2e9d4f8b1: narrations, one row per attempt with its final
+    status; CHECKs hold what each status carries, attempts 1-3 unique per
+    investigation; triggers refuse UPDATE, DELETE, TRUNCATE to every role.
+    New role narrator: SELECT on the five investigation tables and
+    narrations, INSERT on narrations. api-reader SELECT on narrations
+    (same job, beside investigations; justified in the migration, revoked
+    in the downgrade).
+  4 worker/app/narrate: providers none (default), anthropic, ollama behind
+    one interface, plain httpx; one call per attempt, a fixed system
+    prompt and the evidence, no tools, no stream. Each attempt is claimed
+    with an advisory lock before the call, so overlapping ticks cannot
+    call twice; the claim is released even after a database error. Failures
+    are Culprit's own words, redacted; a provider's
+    error text is never read. Three attempts, retried no sooner than
+    NARRATOR_RETRY_SECONDS (60). The narrator's tables live in app.narrate.
+  5 GET /investigations/{id}/narration (api-reader): off, not_narrated,
+    complete, failed, refused — never pending; the check runs again before
+    prose is served. culprit_model.investigations.from_rows rebuilds an
+    investigation for the API and the narrator alike, so evidence numbers
+    agree. The page: a Narration card, badged Derived, beside the
+    verifications; prose as text nodes; provider and model named.
+  6 CI: e2e is a matrix, narration none and stub (scripts/narrator_stub.py,
+    Ollama's /api/chat, scripted by a marker in the symptom). Both legs get
+    the stub's model and address; only LLM_PROVIDER differs. The none leg
+    asserts the stub had no call after every journey and the agent loop.
+    narration-parity compares the agent loop's records across the legs.
+    LLM_PROVIDER=none on the cli, self-check and fault-library jobs.
+  7 README (feature row, "Narration, if you want it", providers incl.
+    Ollama, D8), PERMISSIONS (the role; exactly what is sent; anthropic
+    leaves the machine), SECURITY §7 (each "cannot" names its test),
+    LIMITS (Narration, probe binding), ARCHITECTURE 27, UPGRADING, the
+    database and determinism rules.
 
-DELIBERATELY NOT BUILT (part 1's list and field 17)
-  No narrator, no prose, no write-capable tool, no remediation, no network
-  transport (stdio only; no listener), no change to the Python MCP server
-  (mcp_server/ not in the diff). No LLM_PROVIDER=none CI job: it returns
-  with the narrator in part 2 (D8, amended 2026-11-05).
+CRITERIA (part 2)
+  1 culprit_probe refuses an undeclared address before dialling (dials
+    counted): 169.254.169.254, an undeclared host, an undeclared port on a
+    declared host; a declared endpoint dials once; red with the binding
+    disabled; culprit probe unchanged                       PASS.
+      TestAProbeReachesOnlyDeclaredEndpoints: 15 refusals, 0 dials, 0
+      requests; the declared endpoint dials once and requests once. Red
+      with the binding disabled: "5 dial(s) and 5 request(s) for calls that
+      were all refused" (by hand, and again by the phase-auditor).
+      TestARedirectIsBoundAsTheAddressIs (real loopback servers): red with
+      the unbound client, "the undeclared server was reached 1 time(s)".
+      TestCulpritProbeFromATerminalIsUnbound. TestEveryCatalogueInputIs-
+      Classified fails on an input name nobody classified (shown red).
+  2 the fixture refuses each case with what it named and passes faithful
+    narrations; each rule red when disabled; a row inserted with unchecked
+    prose is not served as prose                            PASS.
+      test_narration.py: test_each_rule_is_load_bearing removes each of the
+      nine rules and its cases get through; test_what_a_refusal_names_is_
+      never_the_models_sentence_a_url_or_a_secret over every refusal and
+      four hostile replies. test_narrations_api.py: an owner-inserted
+      "complete" row naming an unknown subject, a bad citation and a URL is
+      served as refused.
+  3 with the stub, in CI: complete shown, derived, provider and model;
+    failed with a reason, the stub's secret leaves no trace; refused with
+    what it named; no fourth call; never pending              PASS in CI.
+      e2e/narration.spec.ts (stub leg). Also locally: the worker's job
+      tests against a real Postgres and the real ollama provider pointed at
+      the stub (failure reason "ollama answered HTTP 500", no secret in the
+      row or the log); test_three_attempts_then_no_fourth_call;
+      test_overlapping_ticks_call_the_provider_once (red without the claim:
+      4 calls).
+  4 the narrator's input is built from the record alone (asserted); one
+    call per attempt, no tools                                PASS.
+      test_a_faithful_reply_is_stored_complete_after_one_call_built_from_
+      the_record: calls == [(SYSTEM, render(evidence(record)))];
+      test_the_evidence_is_the_record_and_nothing_else. anthropic: the
+      request through httpx.MockTransport has exactly model, max_tokens,
+      system, one message — no tools, no stream. The stub refuses a
+      request offering tools.
+  5 LLM_PROVIDER=none in CI: fault library, check/diagnose/verify, every
+    e2e journey, no provider called (counted), the page says off; records
+    identical on and off apart from ids and times             PASS in CI, with the wording
+    question below.
+      e2e (none): every journey, the agent loop (diagnose, a wrong fix, the
+      right fix, verify) and the stub's /calls total == 0 with the stub's
+      address given to the worker. narration-parity: the loop's
+      investigation and verifications compared across the legs.
+      NOT TESTABLE AS WRITTEN for the binary jobs (fault library, culprit
+      check/diagnose/verify in the cli and self-check jobs): the binary
+      reads no provider setting and links no model client, so there is
+      nothing to count; held by construction (check_no_llm_imports over
+      cli/, TestTheNetworkBoundaryIsAnAllowlist). The jobs set
+      LLM_PROVIDER=none and pass.
+  6 nothing downstream reads a narration; only app.narrate talks to a
+    provider; no deterministic package imports it; lint-imports, shown red
+    by a deliberate import                                    PASS.
+      "only the narrator talks to a provider" and "nothing downstream reads
+      a narration": both BROKEN with `import httpx` in app.anomaly.scorer
+      and `from app.narrate import tables` in app.memory.link_job, KEPT
+      without. test_narrate_boundary.py holds their source lists to every
+      package in app/. check_no_llm_imports forbids app.narrate everywhere
+      deterministic and now covers api/app.
+  7 the narrator cannot update or delete a narration (a test tries); the
+    migration round-trips                                     PASS.
+      test_the_narrator_can_append_and_nothing_else (update, delete,
+      truncate as narrator and as owner; no investigation write; no read of
+      verifications or readings). check_migration_round_trip clean with two
+      narrations seeded.
+  8 markdown and HTML shown literally (e2e), refused if they carry a URL
+                                                              PASS in CI.
+      e2e: the markup reply's **, <b>, <script> appear as characters, no
+      b/strong/script/img/a element; the refuse reply's markdown image is
+      refused for its URL, no img rendered.
 
-GATES (local, Windows, Docker up)
-  lint, typecheck, lint-imports, check-schema-drift, check-invariants,
-  check-scan-coverage, check-frontend-tokens, check-security-doc,
-  cli-lint, check-no-llm-imports, check_coupled_files --base origin/main
-                                                                 PASS
-  just test: api+scripts+shared 1297 passed / 6 skipped, worker 65,
-    mcp_server 21, extractors 31 + node; go test ./... all ok      PASS
-  culprit check --fail-on=breaks_request_path; LLM_PROVIDER=none  exit 0/0
-  just fault-library (Docker): 13/13, results.json reproduced     PASS
-    — run before the audit fixes; the fixes (pinning, input handling,
-    the kind match) are covered by the in-process tests, and CI runs the
-    library again.
-  Not run locally: migration round trip (no migration), e2e (no api or
-  frontend change) — CI runs both.
+DELIBERATELY NOT BUILT (part 2's list)
+  No hypothesis ranking. Nothing model-related in the binary (cli/ diff:
+  mcp.go, mcp_test.go, probe/http.go, model/redact.go — no model). No tool
+  for the narrator, no second call. No narration of verifications. No
+  narration through culprit mcp. No streaming. No remediation applied. No
+  button to narrate again.
+
+GATES (local, Windows, Docker up), on ec05453
+  lint, typecheck, lint-imports (6 kept), check-schema-drift (22 tables),
+  check-no-llm-imports (9 packages), check-invariants, check-scan-coverage
+  (303 files), check-frontend-tokens, cli-lint, check_security_doc (75
+  references), check_coupled_files --base origin/main            PASS
+  just test: api+scripts+shared 1400 passed / 6 skipped, worker 88,
+    mcp_server 21, extractors 31; go test ./... all ok; frontend npm test
+    19, oxlint, tsc                                              PASS
+  check_migration_round_trip (Docker)                            PASS
+  culprit check --fail-on=breaks_request_path, LLM_PROVIDER=none  exit 0
+  NOT RUN locally: just quickstart, just e2e, just fault-library — the
+  quickstart's infra/.env.prod is not readable in this session; CI runs
+  all three.
 
 AUDITS
-  invariant-auditor: CLEAN, no violation. Risks taken up:
-    - culprit.yaml was re-read on every call, so an agent that can edit
-      the repository could grant itself a capability between calls. Now
-      the server pins the file's digest at start and refuses every call
-      once it changes (TestEditingCulpritYamlMidSessionGrantsNothing).
-    - The probe tool's description said "refused before anything is
-      sent" without saying that is per declared capability; reworded, and
-      LIMITS says an item-by-item grant is decided when the probe runs.
-    - "443" as a string stayed a string where --input port=443 is an int;
-      now the same rule as parseInputs (TestProbeInputsAreWhatTheCLIWouldPass).
-    - The explanation picked probes by text prefix; now by the template's
-      kind, compared with model.KindConnection / KindAuth.
-    Left as risks, in LIMITS: error text can name local paths (the same
-    text the command prints to stderr); diagnose and verify write the
-    state directory under readOnlyHint; probe inputs are not bound to
-    declared endpoints. Recorded only: `culprit probe` now reports a
-    malformed --input before a missing culprit.yaml (exit 2 either way).
-    It judged the Serve -> Run rename honest: TestNothingInTheBinaryListens
-    matches by name, the method reads streams it is handed, and changing
-    the test instead would have weakened it.
-  phase-auditor: every criterion PASS (3 with the caveat above); work
-    order complete; nothing from field 17 built. Fixed: a granted probe
-    can reach any address the vantage can (LIMITS entry, Q23); the input
-    filter compared capability names case-sensitively (now lower-cased);
-    no dial-counted test covered diagnose and verify (added); the
-    explanation's probe check validated the catalogue, not the entry
-    returned (now compares them).
+  invariant-auditor: CLEAN, no violation. Risks taken up: a redirect
+    carried culprit_probe past the binding (fixed, test above); a trailing
+    dot compared as the declared host (now refused); the four bound input
+    names unasserted (TestEveryCatalogueInputIsClassified); a scheme-less
+    host/path not a URL (now is); the api handed ANTHROPIC_API_KEY by
+    env_file (set empty for the api in both Compose files). Left: app.main
+    is exempt from both contracts (it schedules the job); the contracts'
+    forbidden list names third-party clients, not stdlib urllib or
+    http.client.
+  phase-auditor: NOT COMPLETE at 8bda31b, on four findings, all fixed in
+    b50eff2: (1) a backticked span was stored and shown whole in what a
+    refusal named — the model's sentence could reach the page; (2) the
+    check missed capitalised subject kinds and reading ids, mailto:, and a
+    zero-width character splitting a verdict; (3) overlapping ticks could
+    call the provider four times for one attempt (reproduced); (4) the
+    none leg had no stub address, so its zero count proved nothing. Also
+    taken up: no test of the anthropic provider's request (added), and
+    redact_credentials missed sk-ant-... keys (Python and Go, with a test
+    each). Re-audited at 8a09d7e: all six items CLOSED (its own overlap
+    test: 1 call; its redirect mutation red). Leftovers fixed in ec05453:
+    combining marks and blank fillers splitting a verdict (now refused);
+    host?query, host\path and host:port (now URLs); the claim's cleanup
+    after a database error (the unlock failed and masked the error, the
+    lock outlived it on a pooled connection — now rolled back first,
+    test_a_database_error_mid_attempt_releases_the_claim, red before).
+    Left, in LIMITS or here: a bare domain and a non-ASCII full stop are
+    not URLs (text-only display); a named token can be 80 characters of
+    the model's text joined by underscores; a tick that read due() before
+    another wrote attempt N can make N+1 at once, skipping the retry
+    interval (still at most three); an insert failing other than on
+    uq_narrations_attempt writes no row and the next tick calls again —
+    no CHECK the code can violate was found; plugin probes' inputs are
+    not bound under culprit mcp (LIMITS).
 
 DECISIONS TAKEN HERE (for review)
-  - The vantage is the server's (--from), not an argument: where the
-    binary runs is a fact of how it was started, and a verification from
-    anywhere else is refused anyway.
-  - culprit.yaml is pinned for the session (above). A restart is needed
-    to pick up an edit.
-  - culprit_probe requires the probes to be named (the command's default
-    is the whole catalogue, most of it refused), and refuses the whole
-    call when any named probe's declared capabilities are not granted —
-    a refusal the agent can act on, with nothing sent.
-  - culprit_probe refuses an input whose name is a capability or
-    grant/grants/capability/capabilities/allow, in any case.
-  - culprit_system_model: components, connections, environments (adapter
-    and grant names, not allowlist items), the vantage, and the INTENT
-    bundle the walk uses. culprit_explain_connection: the connection, its
-    and its auth relationships' facts and check divergences, and the
-    probes whose readings are about a connection or auth relationship,
-    with, for a named environment, whether each is granted. Neither
-    probes anything.
-  - Request handling is sequential and notifications/cancelled is
-    ignored (LIMITS).
-  - No outputSchema is published: an error result carries {error}, which
-    a schema for the success shape would not admit.
-  - The listener test matched the new method's name; the method was
-    renamed Serve -> Run, the test untouched.
+  - Providers over plain httpx, not the anthropic SDK: field 11 says no
+    new dependency, httpx is already in the worker's lock (now declared),
+    and the CI stub then runs the same request code.
+  - The anthropic default model is unset: NARRATOR_MODEL is required with
+    a provider, so which model reads an investigation is the operator's.
+    anthropic-version 2023-06-01, max_tokens 16000.
+  - Evidence carries no reading's measured values or evidence, only probe,
+    target, verdict and reason (PERMISSIONS lists it).
+  - The rebuild from rows moved into culprit_model.investigations.from_rows
+    (the API's load used it alone before): numbering must agree.
+  - narrations stores no refused prose — only what it named.
+  - A stored narration is shown even after narration is turned off; "off"
+    only when there is none.
+  - The stub lives in scripts/ (scan coverage refused infra/), and its
+    refusal names a component and a URL rather than a hand-formatted
+    subject (the subject-construction lint).
+  - e2e check names are now "e2e (none)" and "e2e (stub)"; main requires
+    no checks by name (ruleset 26460341: deletion, non-fast-forward,
+    update only).
+  - Turning narration on narrates the stored history, newest first, three
+    every 15 seconds (LIMITS).
 
 IN THE PLAN, FOR CORRECTION
-  - Criterion 3 cannot be met literally for the two tools with no CLI
-    command (Q22).
-  - Fields 4-6 name worker/app/narrate and rag/prompts.py; already marked
-    stale by "How Phase 35 is run" — part 2's.
+  - Criterion 5's "(counted)" cannot apply to the binary jobs: there is
+    nothing to count. Suggested: "by construction — the binary reads no
+    provider setting and links no model client".
+  - Fields 4-6 (worker/app/narrate as a rewrite of rag) remain stale, as
+    "How Phase 35 is run" says.
 
 /CI
-  commit   b43ecd34360ded7851ab014b7aceb04d59f626a4 (merge result: origin/main
-           0effc53 is an ancestor; merging it changes nothing)
-  run      43045419342  CI/CD, pull_request — FAILURE, three attempts
-  jobs     lint, typecheck, cli, test, migration-round-trip, kind-capture,
-           self-check, fault-library, build x5: success; publish and
-           deploy skipped; e2e: FAILURE on every attempt, at "Install
-           just", before any test:
-             E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/
-             universe/r/rust-just/just_1.45.0-1_amd64v3.deb  Temporary
-             failure resolving 'security.ubuntu.com'
-           (and azure.archive.ubuntu.com, archive.ubuntu.com; 20 such
-           lines on attempt 3). AMBIENT: the runner could not resolve
-           Ubuntu's mirrors. e2e is the only job that installs from apt
-           (ci-cd.yml:513), so the only one hit. No e2e test ran, so the
-           browser and agent journeys are NOT RUN on this commit.
-  fault    TestTheFaultLibrary PASS (132 s) on Linux, mcp/auth-audience and
-           mcp/wrong-fix PASS — criterion 1 in CI.
-  checks   gh pr checks 34: 19 pass, 2 skipping, 1 fail (e2e); CodeQL pass
-  alerts   none open (pr=34, refs/pull/34/merge, refs/pull/34/head)
-  Verdict: NOT GREEN. Nothing in this branch's code is implicated; the
-  gate is not met until e2e runs (Q24).
+  run      43087534723 on 8bda31b — every job success except
+           narration-parity: the legs' records differed by the run's agent
+           named in a reason and a token's expires_in_seconds (3597 vs
+           3598) — ids and times. Fixed in 8a09d7e.
+  run      43090468335 on b50eff2 — the same narration-parity difference.
+  run      43090673530 on 8a09d7e (pull_request) — SUCCESS
+  jobs     lint, typecheck, cli, test, migration-round-trip, self-check,
+           kind-capture, fault-library, e2e (none), e2e (stub),
+           narration-parity, build x5: success; publish, deploy skipped
+  e2e      (none): 19 passed, the four stub journeys skipped by design,
+           "the stub provider's calls: {"total": 0}"; (stub): 22 passed,
+           all four narration journeys; parity: "identical apart from ids
+           and times"
+  checks   gh pr checks 35: every check pass or skipping, CodeQL and the
+           four Analyze checks included
+  alerts   none open (pr=35, refs/pull/35/merge, refs/pull/35/head)
+  merge    origin/main = 60d2c92, the branch's base: the branch is the
+           merge result
+  ec05453  pushed, but GitHub never synced PR #35 to it (no run in ten
+           minutes; the PR head stayed 8a09d7e). The report commit's push
+           carries it. That run is the one for the commit that writes this
+           report, so it is recorded on PR #35, not here.
 
 LEFT OPEN
-  - Q24 (blocking the merge, not the design): e2e cannot install `just`
-    while the runners cannot resolve Ubuntu's mirrors.
-  - Q22 (criterion 3's wording), Q23 (binding probe inputs to declared
-    endpoints) — neither blocking.
+  - The plan's criterion 5 wording (above, for correction).
+  - The re-audit's leftovers listed under AUDITS, for review.
+  - Definition of done: the recorded demonstration is Malcolm's, after
+    the merge (not /next's).
 ```
 
 ## §6. Escalate to the architecture session when
