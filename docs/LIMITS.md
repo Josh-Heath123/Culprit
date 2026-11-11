@@ -2214,18 +2214,31 @@ a person's act — or the agent's, if the agent is the one that starts the
 binary. Where that matters, keep the server's `culprit.yaml` somewhere the
 agent cannot write.
 
-### A granted probe goes where its inputs say
+### Where a probe may go: bound for an agent, not at a terminal
 
-A probe's `url`, `host` and `port` inputs are not bound to the endpoints
-`culprit.yaml` declares, for `culprit_probe` as for `culprit probe`. Under
-`net.http.outbound`, a probe can send a GET to any address reachable from the
-vantage — a cloud metadata address included — and report its status and
-timing; under `net.tcp.connect`, open and close a connection to any port. No
-body is sent and nothing is written, but an agent that has been handed
-hostile instructions can use it to look around. `culprit_diagnose` places its
-probes from `culprit.yaml` alone. Grant the network capabilities to an
-agent's environment only where reaching anything the vantage can reach is
-acceptable.
+Through `culprit mcp` (Phase 35 part 2, Q23), a probe's address inputs —
+`url`, `base_url`, `host` and `port` — must name an endpoint the environment
+declares (`endpoints:`, or a component's own `endpoint:`). Anything else — a
+cloud metadata address, an undeclared host, an undeclared port on a declared
+host, a URL carrying credentials, a port with no host, a scheme other than
+`http` or `https` — refuses the whole call before anything is dialled, with
+the input and the reason. `culprit_diagnose` already placed its probes from
+`culprit.yaml` alone.
+
+What the binding does not hold:
+- **It binds names, not addresses.** A declared host is compared as written
+  (case and a trailing dot aside); what it resolves to is DNS's answer at the
+  vantage. A hostile record for a declared name is not caught.
+- **It binds these four inputs.** Every catalogue probe that dials takes its
+  address through them. A plugin probe that took an address under another
+  name would not be bound; `--no-plugins` serves the catalogue alone.
+- **Declare what an agent may reach.** An endpoint declared for the walk is
+  also one an agent may probe directly.
+
+`culprit probe` from a terminal is unchanged: its inputs go where they say.
+Under `net.http.outbound` it can send a GET to any address the vantage can
+reach, and under `net.tcp.connect` open a connection to any port — nothing a
+person at that terminal could not do with `curl`.
 
 ### An error says what the command would have said
 

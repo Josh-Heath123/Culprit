@@ -466,14 +466,17 @@ the loop itself — diagnose, change something, verify:
 | `culprit_system_model` | components, connections, each environment's adapter and grants, this server's vantage |
 | `culprit_check` | `culprit check --format json` |
 | `culprit_explain_connection` | the facts and contradictions about one connection, and which probes can measure it under an environment's grants |
-| `culprit_probe` | `culprit probe --format json`, for named probes |
+| `culprit_probe` | `culprit probe --format json`, for named probes, at endpoints the environment declares |
 | `culprit_diagnose` | the investigation `culprit diagnose --format json` prints, and the `culprit_verify` call that checks a fix |
 | `culprit_verify` | the verification `culprit verify --format json` prints |
 
 What it cannot do: grant itself anything — grants are the environment's, in
 `culprit.yaml`, fixed when the server starts (an edit to the file refuses every
 later call until it is restarted), an argument that names one is refused, and a
-probe the environment does not grant is refused before anything is sent; choose where it
+probe the environment does not grant is refused before anything is sent; send a
+probe anywhere `culprit.yaml` does not declare — a `url`, `base_url`, `host` or
+`port` that is not one of the environment's endpoints is refused, nothing
+dialled (from a terminal, `culprit probe` still goes where its inputs say); choose where it
 runs — `--from` and the state directory are the server's, set when it starts;
 or change anything — no tool writes to `culprit.yaml`, an environment or the
 control plane, and Culprit never applies a fix. It speaks stdio only, calls no

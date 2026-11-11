@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,14 +188,15 @@ func (s *mcpServer) protocol() *mcp.Server {
 				Name: "culprit_probe", Title: "Probe a subject",
 				Description: "culprit probe: the named read-only probes against one subject, under the environment's " +
 					"grants. A call naming a probe whose declared capabilities the environment does not grant is refused " +
-					"before anything is sent; an item-by-item grant is decided when the probe runs. Readings " +
+					"before anything is sent, and so is an address input (url, base_url, host, port) that is not an " +
+					"endpoint the environment declares; an item-by-item grant is decided when the probe runs. Readings " +
 					"are pass, fail, inconclusive or refused; the same JSON as culprit probe --format json.",
 				Input: mcp.Schema{
 					Properties: map[string]mcp.Property{
 						"target":      {Type: mcp.String, Description: "a subject URI, e.g. connection:order-service->inventory-service"},
 						"environment": environment,
 						"probes":      {Type: mcp.Strings, Description: "probe ids to run (culprit_explain_connection lists those for a connection)"},
-						"inputs":      {Type: mcp.Object, Description: "probe inputs by name, e.g. {\"host\": \"inventory-service\", \"port\": 8002}"},
+						"inputs":      {Type: mcp.Object, Description: "probe inputs by name, e.g. {\"host\": \"inventory-service\", \"port\": 8002}; an address must be an endpoint declared for the environment"},
 					},
 					Required: []string{"target", "environment", "probes"},
 				},
@@ -550,6 +553,17 @@ func (s *mcpServer) probe(ctx context.Context, arguments map[string]any) mcp.Res
 			"refused": refused,
 		}}
 	}
+	// And where they go is culprit.yaml's too (Q23): an address input that
+	// is not an endpoint the environment declares is refused, nothing sent.
+	// A coding agent may be carrying instructions from something it read;
+	// the network capabilities take no allowlist, so this is the one.
+	if unbound := unboundAddresses(manifest.Environments[environment], inputs); len(unbound) > 0 {
+		return mcp.Result{IsError: true, Structured: map[string]any{
+			"error": "refused before anything was sent: through culprit mcp a probe reaches only the endpoints " +
+				"environment " + environment + " declares in culprit.yaml",
+			"unbound": unbound,
+		}}
+	}
 	readings, ledger, err := runProbe(ctx, probeInput{
 		ManifestPath: s.manifestPath, Environment: environment, Target: target, ProbeIDs: probes,
 		Inputs: inputs, AgentID: s.agentID, NoPlugins: s.noPlugins, PluginTimeout: s.pluginTimeout,
@@ -563,6 +577,109 @@ func (s *mcpServer) probe(ctx context.Context, arguments map[string]any) mcp.Res
 		refusals = []model.Refusal{}
 	}
 	return mcp.Result{Structured: map[string]any{"readings": readings, "refused": refusals}}
+}
+
+// unboundInput is one address input refused, and why.
+type unboundInput struct {
+	Input  string `json:"input"`
+	Reason string `json:"reason"`
+}
+
+type hostPort struct {
+	host string
+	port int
+}
+
+// declaredEndpoints are the addresses an environment names: endpoints:,
+// and each component's own endpoint:, as the walk places its probes.
+func declaredEndpoints(spec extract.EnvironmentSpec) (map[hostPort]bool, map[string]bool) {
+	pairs, hosts := map[hostPort]bool{}, map[string]bool{}
+	add := func(endpoint extract.EndpointSpec) {
+		host := canonicalHost(endpoint.Host)
+		if host == "" {
+			return
+		}
+		pairs[hostPort{host, endpoint.Port}] = true
+		hosts[host] = true
+	}
+	for _, endpoint := range spec.Endpoints {
+		add(endpoint)
+	}
+	for _, component := range spec.Components {
+		if component.Endpoint != nil {
+			add(*component.Endpoint)
+		}
+	}
+	return pairs, hosts
+}
+
+func canonicalHost(host string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+}
+
+// unboundAddresses is every address input that is not a declared endpoint
+// of the environment: a url or base_url whose host and port are not one;
+// a host that is not one; a port that is not declared for that host, or
+// given with no host. Inputs are compared after probeInputs, so a port is
+// an int however it was written.
+func unboundAddresses(spec extract.EnvironmentSpec, inputs map[string]any) []unboundInput {
+	pairs, hosts := declaredEndpoints(spec)
+	var unbound []unboundInput
+	refuse := func(input, reason string) { unbound = append(unbound, unboundInput{Input: input, Reason: reason}) }
+	for _, name := range []string{"url", "base_url"} {
+		raw, given := inputs[name]
+		if !given {
+			continue
+		}
+		text, ok := raw.(string)
+		if !ok {
+			refuse(name, "not a string")
+			continue
+		}
+		parsed, err := url.Parse(text)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+			refuse(name, "not an http or https URL with a host")
+			continue
+		}
+		if parsed.User != nil {
+			refuse(name, "carries credentials")
+			continue
+		}
+		port := 80
+		if parsed.Scheme == "https" {
+			port = 443
+		}
+		if given := parsed.Port(); given != "" {
+			number, err := strconv.Atoi(given)
+			if err != nil {
+				refuse(name, "its port is not a number")
+				continue
+			}
+			port = number
+		}
+		if !pairs[hostPort{canonicalHost(parsed.Hostname()), port}] {
+			refuse(name, fmt.Sprintf("%s:%d is not a declared endpoint", parsed.Hostname(), port))
+		}
+	}
+	rawHost, hasHost := inputs["host"]
+	host, hostIsText := rawHost.(string)
+	if hasHost && !hostIsText {
+		refuse("host", "not a string")
+	} else if hasHost && !hosts[canonicalHost(host)] {
+		refuse("host", fmt.Sprintf("%s is not the host of a declared endpoint", host))
+	}
+	if rawPort, hasPort := inputs["port"]; hasPort {
+		port, isInt := rawPort.(int)
+		switch {
+		case !isInt:
+			refuse("port", "not a whole number")
+		case !hasHost:
+			refuse("port", "given without a host")
+		case hostIsText && hosts[canonicalHost(host)] && !pairs[hostPort{canonicalHost(host), port}]:
+			refuse("port", fmt.Sprintf("%d is not a declared port of %s", port, host))
+		}
+	}
+	return unbound
 }
 
 // probeInputs is the inputs object as a probe takes it, as `--input`
