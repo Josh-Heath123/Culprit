@@ -1220,6 +1220,99 @@ merge.
 - No row read.
 - No index created by Culprit.
 
+**Architecture review of the close-out, 2026-11-12 — signed off; Q28 and Q29
+ruled. Part 1 is complete.** PR #40 was merged as `ee3e19e`. I read the checks
+from GitHub's API: the pull request's runs on `21651a8` (43287075789) and
+`24cf2a7` (43290346292) passed every job, and no code-scanning alert is open.
+Part 1's step 0 is met: `main`'s push run 43272962537 on `b3ef508` passed.
+
+Checked on disk:
+- `guardedhttp` and `dbsession` each hold one non-test file;
+- no other file under `internal/probe` or `internal/capture` imports
+  `net/http` or `pgx`.
+
+The phase-auditor's two attacks now fail to type-check, with the compiler's
+own words: "cannot refer to unexported field". CodeQL flagged the first YAML
+loader for unsafe deserialisation, and the run answered by changing the design
+rather than dismissing the alert. The API now builds plain data from a closed
+set of tags and constructs nothing through PyYAML.
+
+The pull request was merged while Q28 was open and blocking. Again, nothing on
+`main` is worse for it.
+
+- **Q28 — strict typing in both readers, and agreement held by a generated
+  corpus, not by listed cases.** The run is right that a fixture of named cases
+  is the denylist pattern again: the auditor's 85 generated manifests found 23
+  splits the 16 listed cases did not. The fix has three parts:
+  - **One type per field.** Every manifest field has one type. A scalar is
+    accepted only when its resolved YAML 1.2 core tag is that type:
+    - `why: true` and `name: 0454` are refused by both readers;
+    - `max_probes: 1.5` and `max_probes: "5"` are refused by both;
+    - `enabled: 1` is refused by both.
+  - **Null and empty are refused.** `~`, an empty value and an empty file are
+    refused by both, naming the field. Absent is how "not set" is written.
+  - **Untyped values keep their text.** A value with no fixed type, such as an
+    invariant's `value:`, keeps its text in both readers for anything that is
+    not a core integer, float, boolean or null. A date is its text, as written.
+
+  The gate is a differential test in CI. It generates manifests across every
+  field and every YAML 1.2 scalar form, plus the structural variants (merges,
+  anchors, a second document, an unknown key). Both readers must produce equal
+  canonical JSON, or both must refuse. The auditor's harness becomes this test,
+  and loosening either reader shows it red. Built as part 2's first item,
+  before part 2 adds `query_mean_ms_max` to both readers.
+- **Q29 (1) — criterion 6 reworded (accepted).** A case on which the readers
+  split at `b3ef508` is red on the reader that split. Cases that never split are
+  pins.
+- **Q29 (2) — statement text is kept only where Postgres normalises it.** The
+  re-audit found SQL `PASSWORD` redaction missing `E'…'`, `U&'…'`, dollar
+  quotes and a comment before the quote. A pattern per quoting form is a
+  denylist that will lose. The exposure it guards comes from one place:
+  `pg_stat_statements` stores a utility statement's text as it was written. A
+  `CREATE ROLE … PASSWORD '…'` is therefore readable by any `pg_read_all_stats`
+  role, Culprit's migrations' own included.
+
+  Part 2 keeps a statement's text only when the text begins with `SELECT`,
+  `WITH`, `INSERT`, `UPDATE`, `DELETE` or `MERGE`. Postgres replaces those
+  statements' constants with `$n`. Any other statement, including one whose
+  text begins with a comment, is listed by `queryid` and timings, and the
+  reading says "text not kept: not a statement Postgres normalises".
+  `redact_credentials` stays as the second layer, and LIMITS lists its known
+  gaps.
+- **Q29 (3) — the statistics template reads only this database.** It filters
+  `pg_stat_statements` to the connected database's `dbid` and excludes
+  Culprit's own role. PERMISSIONS already says what `pg_read_all_stats` could
+  reveal beyond that.
+- **Accepted as taken:**
+  - the Go loader refuses unknown top-level keys, so an older binary stops and
+    names a newer key; the shared list replaces the old tolerance;
+  - the alert answered by design;
+  - `setup_db` sets the role's password on every run, and is held to
+    `inventory`;
+  - `boundarytest` is a test-only package.
+- **Left, in LIMITS (accepted):** an exported function that returns the
+  connection as `any` escapes the surface test. The one-file rule and review
+  hold it.
+
+**Added to part 2, 2026-11-12, at the close-out's review.**
+- **Step 0:** confirm `main`'s push run on `ee3e19e` is green.
+- **Item 1, before anything else (Q28):** strict typing in both manifest
+  readers, with null and empty refused and untyped values keeping their text.
+  The differential corpus runs in CI, and loosening either reader shows it red.
+  `query_mean_ms_max` is then added to both readers under the same rule.
+- **In item 2 (Q29):** the statistics template filters to the current
+  database's `dbid`, and excludes Culprit's role. Statement text is kept only
+  for `SELECT`, `WITH`, `INSERT`, `UPDATE`, `DELETE` and `MERGE` texts.
+- **Added criteria:**
+  - The differential corpus agrees on every generated manifest: equal JSON, or
+    both readers refuse.
+  - Each of the auditor's 23 splits is in the corpus.
+  - Loosening either reader turns the corpus red.
+  - In CI on the quickstart's database, Culprit's migrations' `CREATE ROLE …
+    PASSWORD` appears in no reading, neither as text nor as a fragment, while
+    the products statement's text is kept.
+  - A statement from another database is not read.
+
 ---
 
 ### Phase 38 — Bounds: what the browser downloads, and what a list returns
