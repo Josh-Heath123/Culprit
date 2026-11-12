@@ -63,12 +63,12 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted); then `docs/PERFORMANCE_PLAN.md` (Phases 36–39) |
-| Current phase | **35, close-out** — `awaiting decision` on Q25. Built and green: PR #36, CI run 43162985716 on `d89f37c`, every pull-request check pass or skipping. Work item 4 (`culprit mcp --plugins`) was not built: no plugin probe exists to gate (§3). Then **36, part 1**. |
-| Previous phase | **35, part 2 — The narrator: signed off 2026-11-11** by the architecture session; complete when the close-out's merge is green on `main`. Merged via PR #35 (`ac0a939`). Every check on the pull request (run 43090673530) and on `main`'s push run (43092754729) was green, read from GitHub. Step 0 is met (run 43067489387), so part 1 is complete. The run continued after the merge: `ec05453` and the report (`356012e`) are on the branch, not on `main`. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
+| Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
+| Current phase | **36, part 1 — Budgets and the measurement** — implemented, awaiting review. PR #37; CI green on `3be789e` (run 43181751008), every pull-request check pass or skipping, no alert open. Report in §5. Then **36, part 2**, whose brief is written at this review. |
+| Previous phase | **35, close-out — complete**, signed off 2026-11-12. PR #36 merged as `08f7d65`; `main`'s push run 43167772415 green on every job (part 1's step 0, recorded). **Phase 35 is complete, and with it `DIAGNOSTIC_PLAN.md`.** |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-35-close-out` (PR #36, ready for review), from `356012e`; `origin/main` merged in. Do not stage `shared/uv.lock`. |
-| Blocking questions | **Q25** — blocks the close-out's sign-off on work item 4 and criterion 6 only. |
+| Branch | `phase-36-budgets` (PR #37, ready for review), from `origin/main` = `08f7d65`. Do not stage `shared/uv.lock`. |
+| Blocking questions | None. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| 25 | **Close-out work item 4 and criterion 6 have no subject.** "`culprit mcp` serves the catalogue alone unless started with `--plugins`" and "with a plugin installed, `culprit mcp` without `--plugins` lists and runs no plugin probe" assume a plugin probe can be installed. None can: `catalogue()` is `probe.BuiltIn()` (`cli/cmd/culprit/diagnose.go:232`), and nothing else calls `Catalogue.Register`. `--no-plugins` governs extractor plugins (INTENT). Part 2's LIMITS sentence that led here was wrong and is corrected. Options: drop the item; or replace it with a test that `Catalogue.Register` is called only from `BuiltIn` (the phase-auditor's suggestion); or rule that `--plugins` should gate extractor plugins under `culprit mcp` (a different decision). Nothing was built for it. | 2026-11-12, close-out run | The close-out's sign-off (item 4, criterion 6) |
+| — | None open. Q25 was ruled 2026-11-12 (`DIAGNOSTIC_PLAN.md`, end of Phase 35): close-out item 4 and criterion 6 are withdrawn, and a test that only `probe.BuiltIn` registers a probe joins Phase 36 part 1. | | |
 
 ---
 
@@ -111,9 +111,9 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 35, part 1 | The agent surface | **complete** (PR #34 merged, `60d2c92`) | **Signed off 2026-11-11** (architecture session): every criterion run in CI — the MCP loop through the real binary on Linux in the fault-library job, unfilterable; `e2e` did not run on the pull request (ambient, Q24), so part 2's step 0 confirms `main`'s push run green. Q22–Q24 ruled. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
-| 35, part 2 | The narrator | **complete when the close-out merges** (PR #35 merged, `ac0a939`) | **Signed off 2026-11-11** (architecture session): every check on the pull request and on `main`'s push run green, read from GitHub; step 0 met. Parity's widening (`8a09d7e`) is honest; Phase 36 part 2 narrows it. Merged before the run finished, so the re-audit's fixes (`ec05453`) and the run report (`356012e`) land with the close-out. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
-| 35, close-out | Land the re-audit's fixes; the review's corrections | **awaiting decision** (Q25); PR #36, CI green on `d89f37c` (run 43162985716) | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Close-out". Criteria 1–5 PASS by execution, 6 NOT TESTABLE AS WRITTEN (Q25), 7 green on the pull request; `main`'s push run is Phase 36 part 1's step 0. Report in §5. |
-| 36, part 1 | Budgets and the measurement | not started | **Brief (2026-11-11):** `docs/PERFORMANCE_PLAN.md` Phase 36: "How Phase 36 is run", then "Part 1" at the end of the section. Step 0: `main`'s push run on the close-out's merge green, both `e2e` legs and `narration-parity` included. Branch `phase-36-budgets` from `origin/main` at that merge. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 35, part 2 | The narrator | **complete** (PR #35 merged, `ac0a939`; its last commits through PR #36) | **Signed off 2026-11-11** (architecture session): every check on the pull request and on `main`'s push run green, read from GitHub; step 0 met. Parity's widening (`8a09d7e`) is honest; Phase 36 part 2 narrows it. Merged before the run finished, so the re-audit's fixes (`ec05453`) and the run report (`356012e`) landed with the close-out. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
+| 35, close-out | Land the re-audit's fixes; the review's corrections | **complete** (PR #36 merged, `08f7d65`) | **Signed off 2026-11-12** (architecture session): `main`'s push run 43167772415 green on every job; criteria 1–5 executed, each shown red before the change. Q25 ruled: item 4 and criterion 6 are withdrawn, because the brief rested on a wrong LIMITS sentence. The first run under the draft pull request rule, and it held. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
+| 36, part 1 | Budgets and the measurement | **implemented, awaiting review** (PR #37; CI green on `3be789e`, run 43181751008) | **Brief (2026-11-11, added to 2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 36: "How Phase 36 is run", "Part 1" and "Added 2026-11-12". Every criterion PASS; 3 and 4 were NOT MET at the first audit and are fixed, with tests counted at the server. Report in §5. |
 | 36, part 2 | The walk sees slow | not started | `docs/PERFORMANCE_PLAN.md` Phase 36, "How Phase 36 is run". The brief and criteria are written at part 1's review. |
 | 37 | The database: statements, plans and indexes | not started | `docs/PERFORMANCE_PLAN.md` Phase 37. "How Phase 37 is run" is written at the review before it. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
@@ -149,147 +149,215 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        35, close-out — land the re-audit's fixes; the review's corrections
-Branch:       phase-35-close-out, from origin/phase-35-narrator = 356012e;
-              b7e4d03 the part 2 sign-off, 0836e41 the work, 4f5ba7a the merge
-              of origin/main, d89f37c the audits' findings. PR #36 (draft
-              until this report).
+Phase:        36, part 1 — budgets and the measurement
+Branch:       phase-36-budgets, from origin/main = 08f7d65 (PR #36's merge);
+              10a09dd the close-out sign-off, fbdae75 the work, fb64c71 the
+              audits' findings, 3be789e the re-audit's. PR #37 (draft until
+              this report).
 Run:          2026-11-12, /next.
-Status:       AWAITING DECISION on Q25 (work item 4 and criterion 6 rest on
-              a plugin probe that does not exist). Everything else built;
-              every local gate green; both audits run, every finding taken
-              up; CI green on d89f37c (run 43162985716), every PR check.
+Status:       IMPLEMENTED; every local gate green; both audits run, every
+              finding fixed or written into LIMITS; CI green on 3be789e
+              (run 43181751008), every PR check. Awaiting review.
 
-WHAT WAS BUILT (work order 1-5)
-  1 characters_are_plain replaces no_invisible_characters:
-    PLAIN_CHARACTERS holds U+0020-U+007E, newline, tab, the brief's
-    typographic set and U+00A0; anything else is "a character outside
-    plain text". Fixture: U+FF3F, U+02CD, U+2017 for the underscore, a
-    Cyrillic letter in inventory-service (the three old invisible cases
-    renamed to this rule); a faithful case with curly quotes, an em dash
-    and an arrow. The prompt states the rule in words.
-  2 The job: a row the database refuses is stored as failed, "the
-    narration could not be stored" (logged by constraint name or error
-    class only); count, done and the retry interval are read again under
-    the claim (_attempts). If the failed row cannot be stored either,
-    NarrationNotStored names the constraint and chains nothing.
-    MAX_TOKENS = MAX_PROSE for anthropic's max_tokens and ollama's
-    options.num_predict; an ollama reply with done_reason "length" fails,
-    as anthropic's max_tokens stop already did (a cut reply would
-    otherwise be stored complete, truncated — counted as part of the
-    token bound, not a provider change).
-  3 shown() in culprit_model.narration: a fixed label (LABELS) or one
-    plain token with no whitespace, no URL, no credential, at most 80.
-    The check names through it; the API serves every refused row, stored
-    or re-checked, through it.
-  4 NOT BUILT — Q25. culprit mcp's catalogue is probe.BuiltIn() alone
-    (diagnose.go:232); nothing registers any other probe, so there is no
-    plugin probe to gate. --no-plugins governs extractor plugins. The
-    LIMITS sentence the decision rested on was wrong and is corrected.
-  5 README and PERMISSIONS: turning narration on narrates the stored
-    history, and with anthropic every stored investigation's evidence
-    leaves the machine. LIMITS: the character rule and its cost (English
-    only; a record's non-ASCII text can be cited, not copied), counted
-    calls, the token bound, credential coverage, the probe binding.
+STEP 0
+  main's push run 43167772415 on 08f7d65 (PR #36's merge): every job
+  success, e2e (none), e2e (stub) and narration-parity included; deploy
+  skipped. Recorded, as "Added 2026-11-12" says; nothing re-run.
 
-CRITERIA (close-out)
-  1 new fixture cases refused by characters_are_plain, through without
-    it; the faithful case passes; red state recorded           PASS.
-      test_each_rule_is_load_bearing[characters_are_plain]. Red, by hand
-      and by the phase-auditor against ec05453's rule: U+FF3F, U+02CD,
-      U+2017 and the Cyrillic case all pass it (passed=True).
-  2 insert failing on a CHECK: one call, one failed row, no call next
-    tick inside the interval; red without the change          PASS.
-      test_an_attempt_whose_row_is_refused_is_stored_failed_and_counted.
-      Red on b7e4d03's job.py: "assert 2 == 1" (two calls) — by hand and
-      by the phase-auditor.
-  3 two ticks that both read due() before either claims make one
-    attempt                                                     PASS.
-      test_ticks_that_read_due_before_either_claims_make_one_attempt;
-      red on the old job, "assert 2 == 1".
-  4 anthropic asks for at most MAX_PROSE tokens; ollama num_predict
-    likewise                                                    PASS.
-      test_anthropic_sends_one_message_no_tools_and_no_stream;
-      test_ollama_asks_for_no_more_tokens_than_a_narration_may_hold.
-  5 owner-inserted refused row naming a URL, a sentence and a credential
-    served as labels and single tokens, none appearing         PASS.
-      test_a_refused_row_is_served_as_labels_and_single_tokens_whatever_
-      it_holds: ["a URL", "a name that cannot be shown", "a credential",
-      "billing-service", 79 x + "…"]. Only credentials the shared pattern
-      knows are caught (LIMITS).
-  6 with a plugin installed, culprit mcp without --plugins lists and
-    runs no plugin probe                     NOT TESTABLE AS WRITTEN — Q25.
-      No plugin probe can be installed; confirmed independently by the
-      phase-auditor (only BuiltIn calls Catalogue.Register).
-  7 every PR check green, e2e (none), e2e (stub), narration-parity
-    included                                                    PASS.
-    main's push run on the merge                    NOT RUN — Phase 36
-      part 1's step 0, after the merge.
+WHAT WAS BUILT (work order 1-6, and the Q25 item)
+  1 The rule, first: shared/culprit_model/latency.py and
+    cli/internal/model/latency.go, held to shared/tests/latency_conformance.json
+    (16 judged cases with verdict and reason, 13 refused inputs). Integer
+    only: nearest-rank order statistics, bounds at the exact binomial's
+    ranks for 90% on each side (100^n and binomial coefficients; math/big
+    in Go). fail when the lower bound is over, pass when the upper is
+    within, inconclusive otherwise. A timeout sorts after every answer.
+    Bounds: budget 1-60000 ms, samples at most 1e9 us, requests at most 50,
+    in both languages.
+  2 Budgets: budgets: in culprit.yaml (Go loader extract/budgets.go, rank
+    100; culprit_model.latency.Budget; the API's manifest model, carried
+    and round-tripped); x-culprit-budget on an OpenAPI operation (rank 80;
+    a bad entry is a skip under want "budgets", not http_routes). Only
+    latency_p50_ms and latency_p95_ms. One budget per subject and predicate
+    in a file. Conflicts go through the unchanged comparator.
+    diverge.Budgets lists budgets that point at nothing and, when budgets:
+    is declared, the unbudgeted surface (routes declared `exists`);
+    rendered in text and JSON. Budgets do not count as a second source
+    for the unverifiable surface.
+  3 probe.http.latency (cli/internal/probe/latency_probes.go, timing.go):
+    50 GETs for a p95, 20 for a p50, sequential, >= 50 ms apart (also
+    between runs in one process), each on a new connection, dialling to
+    last byte (or the 1 MiB read cap), setup recorded as connect_us; no
+    redirect, header, body or credential. The budget comes from
+    expectation resolution, which now tries each predicate a manifest
+    produces (only this probe has two; p95 first). The budget's subject
+    fixes method and path: a non-GET budget, or a url on another path,
+    sends nothing. Request timeout 2x budget + 500 ms, cut to what the
+    120 s run has left. url and base_url are bound under culprit mcp.
+    Probe ids named twice run once. cost: metered.
+  4 Reading validation in Go (Reading.Validate) and Python (Reading), so
+    POST /readings refuses a latency reading whose verdict its samples and
+    budget do not give.
+  5 The demo: an invariant declaring inventory-service's GET /ready, and
+    its budget: latency_p95_ms 300. Chosen as well clear of both sides: a
+    healthy /ready on the Docker network answers in milliseconds, and the
+    library injects 800 ms; 300 sits ~2.7x under the fault and far above
+    healthy, and at p95 a pass needs all 50 samples within it, so a margin
+    that wide keeps the healthy case from being held inconclusive by one
+    slow request. The fault library runs culprit probe probe.http.latency
+    under the latency fault and after its fix.
+  6 PROBES (catalogue row and a section), PERMISSIONS (net.http.outbound:
+    what the probe sends, no new capability), LIMITS ("Latency budgets"),
+    README ("Latency budgets", budgets: and x-culprit-budget), ARCHITECTURE
+    28, CLAUDE.md. The tour waits for part 2.
+  Q25 register_test.go type-checks every non-test package of the module
+    (module packages from source, others stubbed: 0.1 s) and fails on any
+    call or method value of a Register that is Catalogue's or takes a
+    probe.Probe, outside probe.BuiltIn — in function bodies, package-level
+    initializers and testdata directories. TestCulpritMcpServesTheBuiltIn-
+    Catalogue holds what the binary serves to BuiltIn's 14.
 
-DELIBERATELY NOT BUILT (the close-out's list)
-  No change to the evidence, the record, the role or the providers beyond
-  the token bound (and the cut-off reply it implies). No new narration
-  feature. Nothing for Phase 36. No --plugins flag (Q25).
+CRITERIA (part 1)
+  1 the rule's fixture holds in Go and Python, same verdicts and reasons,
+    with the six named cases; red by moving a bound one rank   PASS.
+      TestTheLatencyRuleGivesTheFixturesVerdictAndReason, test_the_rule_
+      gives_the_fixtures_verdict_and_reason; ranks checked by hand in
+      both (p50 of 20: 7 and 14; p95: 44 none, 45 yes). Moving either
+      bound one rank turns cases red in both. The phase-auditor recomputed
+      ranks with exact fractions for n=1..50 (0 mismatches) and fuzzed Go
+      against Python on 40,000 inputs including bounds: 0 differences.
+  2 against a fake server, counted: under passes, over fails, straddling
+    inconclusive, mostly 401/500 inconclusive, a timeout counts as slow
+                                                              PASS.
+      TestTheLatencyProbeAgainstAServerWithControlledDelays (httptest).
+  3 nothing makes it send more than 50 or closer than 50 ms; a test tries
+    each                                                      PASS.
+      TestNothingMakesTheLatencyProbe... (inputs, a probes: timeout
+      override, the strictest budget, credentials as inputs);
+      TestTwoLatencyRunsAtOnceDoNotInterleave; TestALatencyProbeNamedTwice-
+      RunsOnce and ...ListedTwiceOverMCPRunsOnce (red without the
+      de-duplication: 40 requests). NOT MET at fbdae75 (phase-auditor:
+      `-p x -p x` sent 100 requests 0.1 ms apart); fixed in fb64c71, its
+      reproduction then 50 requests, 50.9 ms apart. Two separate processes
+      at once can still interleave (LIMITS).
+  4 a non-GET budget is inconclusive with nothing sent; never OPTIONS,
+    HEAD, a body or a credential                              PASS.
+      TestABudgetOnARouteThatIsNotGetSendsNothing, TestAPostBudgetSends-
+      NothingWhateverTheInputsSay, TestAUrlOnAnotherRouteSendsNothing (all
+      counted at the server); neverSentAnythingButAPlainGET on every
+      server test. NOT MET at fbdae75 (a url input made a POST budget
+      timed GETs); fixed in fb64c71; the re-audit then found a url on
+      another path judged against the budget; fixed in 3be789e.
+  5 through culprit mcp, the address input refuses an undeclared endpoint
+    before dialling (counted); classification covers it       PASS.
+      TestAProbeReachesOnlyDeclaredEndpoints (3 latency cases, 0 requests);
+      TestEveryCatalogueInputIsClassified. Red by the phase-auditor with
+      the binding removed (overlay).
+  6 culprit check: conflicting budgets -> intent_conflict; a budget on an
+    undeclared route reported; unknown predicate refused by the Go loader,
+    the Python model and the API's model                      PASS.
+      check/budgets_test.go; test_latency.py (Budget);
+      test_manifest_budgets.py.
+  7 a latency reading whose verdict disagrees is refused by Go, Python and
+    the API, each shown red                                    PASS.
+      Validators disabled by hand: Python + API 18 failed; Go
+      TestALatencyReadingWhoseVerdict... failed. Reproduced by the
+      phase-auditor.
+  8 in CI's fault-library job, on Linux: fails under the latency fault,
+    passes once cleared                                        PASS in CI.
+      measureLatency in faultlib_test.go; run 43175231182 and run 43181751008:
+      TestTheFaultLibrary/latency PASS. expected.json and results.json
+      unchanged.
+  9 from a fresh clone, the quickstart starts with the demo's budgets:
+                                                              PASS in CI.
+      Both e2e legs apply demo-services/culprit.yaml from a fresh
+      checkout; test_manifest_budgets.py loads and round-trips it.
+  10 every PR check green, both e2e legs and narration-parity;
+    LLM_PROVIDER=none changes nothing                          PASS.
+  Q25 only probe.BuiltIn calls Catalogue.Register, shown red   PASS.
+      TestOnlyBuiltInRegistersAProbe; TestARegistrationElsewhereIsFound
+      (a direct call, a package-level initializer, a call through an
+      interface, a package under testdata). Not caught by a source scan:
+      registration by reflection; TestCulpritMcpServesTheBuiltInCatalogue
+      holds the served catalogue instead.
 
-GATES (local, Windows, Docker up), on d89f37c
+DELIBERATELY NOT BUILT (part 1's list)
+  No walk change (isolate, verify, the library's verdicts untouched; the
+  probe discriminates nothing, so the walk never picks it). No credential.
+  No OPTIONS or HEAD. No parallel requests, configurable count or load. No
+  percentile but p50 and p95. No telemetry percentiles. No threshold
+  Culprit chose: the demo's 300 ms is the demo's declaration, with its why.
+
+GATES (local, Windows, Docker up), on 3be789e
   lint, typecheck, lint-imports (6 kept), check-schema-drift,
-  check-no-llm-imports, check-invariants, check-scan-coverage,
-  check-frontend-tokens, cli-lint, check_security_doc (75),
-  check_coupled_files --base origin/main                         PASS
-  just test: api+scripts+shared 1414 passed / 6 skipped, worker 93,
-    mcp_server 21, extractors 31; go test ./... 0 FAIL            PASS
-  culprit check --fail-on=breaks_request_path, LLM_PROVIDER=none  exit 0
-  NOT RUN locally: check_migration_round_trip (no migration changed;
-  CI ran it), quickstart, e2e, fault library (CI ran all three).
+  check-no-llm-imports, check-invariants, check-scan-coverage, cli-lint,
+  check_security_doc (75), check_coupled_files --base origin/main  PASS
+  just test: api+scripts+shared 1506 passed / 6 skipped, worker 93,
+    mcp_server 21, extractors 31; go test ./... 0 FAIL             PASS
+  culprit check --fail-on=breaks_request_path, LLM_PROVIDER=none   exit 0
+  NOT RUN locally: quickstart, e2e, fault library, migration round trip
+  (no migration); CI ran all of them.
 
 AUDITS
-  invariant-auditor: CLEAN. Risks: (1) a failed fallback insert chained
-    the first error, whose text renders the failing row — fixed
-    (NarrationNotStored, from None; test); (2) rows stored before the
-    close-out are served differently: an old "an invisible character"
-    becomes "a name that cannot be shown", and complete prose with a
-    character outside the allowlist is now served refused — the safe
-    failure, no data change; (3) the token comment overclaimed — fixed.
-  phase-auditor: criteria 1-5 PASS by execution, 6 NOT TESTABLE AS
-    WRITTEN, 7 not yet run at the time. Findings: F1 an en/em dash in a
-    name passed the component rule — fixed (a joining dash is read as a
-    hyphen; two fixture cases); F2 shown()'s "no credential" is the
-    shared pattern's coverage (password=..., Slack tokens, user:pass@host
-    pass) — in LIMITS, widening the pattern is a separate decision; F3
-    overclaims about tokens — fixed; F4 the double-failure path — fixed;
-    F5 the retry interval compares the worker's clock with Postgres's
-    now() — harmless on one host, left. CLAUDE.md's phase line — fixed.
+  invariant-auditor: CLEAN. Risks taken up: the rank functions were
+    exported mutable vars any package could swap (now unexported seams);
+    "last byte" overstated past the 1 MiB read cap (documented). Left:
+    TimeGet builds its own request, outside do()'s method check (a
+    constant GET); no limit across separate invocations; Resolve now tries
+    every Produces entry (only this probe has two).
+  phase-auditor: NOT COMPLETE at fbdae75 — criteria 3 and 4 NOT MET (A, B
+    above), with C a whole-float budget accepted by Go and refused by the
+    API, duplicate budgets silently dropped; D two evasions of the Q25
+    test; E a huge budget overflowing the timeout into a fail with nothing
+    sent; F large budgets sending almost nothing; G Python accepting
+    values Go refused. All fixed in fb64c71. Re-audit at fb64c71: A, B,
+    C, E, F, G CLOSED; two new — a url on another path (fixed in
+    3be789e), and a package under testdata hidden from the scan (fixed).
+    Left, in LIMITS or here: two processes at once can interleave;
+    `1e3`/`0o454` read differently by the two YAML readers; registration
+    by reflection is not caught by the source scan (the served catalogue
+    is held instead). The fixes in 3be789e were not re-audited; they are
+    tested and the tests counted at the server.
 
 DECISIONS TAKEN HERE (for review)
-  - An ollama reply cut off at num_predict fails, as anthropic's does.
-  - shown()'s labels: "a credential", "a name that cannot be shown".
-  - A joining en or em dash is a hyphen to the name rules (F1).
-  - The branch's upstream was unset after cutting it from
-    origin/phase-35-narrator, so no push could reach the merged branch.
+  - A budget is 1-60000 ms (model.MaxBudgetMS, MAX_BUDGET_MS): a bound on
+    what can be declared, so a timeout can mean "slower than the budget"
+    inside the 120 s run, not a judging threshold. Samples at most 1e9 us.
+  - Request timeout 2x budget + 500 ms, cut to the run's remaining time;
+    the probe's run is 120 s.
+  - When a route has both budgets, the p95 is measured.
+  - The budget's subject fixes method and path; inputs that disagree send
+    nothing.
+  - Duplicate budgets in one file are refused at load.
+  - A refusal, redirect or failed connection is "not a sample", counted as
+    not_samples.
+  - The demo's GET /ready is declared by an invariant (the walk follows
+    only `calls`, so the walk is unchanged).
+  - The fault library runs the probe from the latency fault's vantage
+    (order-service) with --input base_url.
 
 IN THE PLAN, FOR CORRECTION
-  - Work item 4 and criterion 6 (Q25).
-  - "English runs well under one token per character ... no reply short
-    enough to pass is cut off": a token is several characters, so 4000
-    tokens bounds cost at a few times MAX_PROSE, not at it.
+  - Field 4 and 12 still name OPTIONS; superseded by "How Phase 36 is run".
+  - Field 10's "10 to 50 requests" is superseded (fixed 20 / 50).
+  - Criterion 3 as written misses separate processes; the cap is per run
+    and per process.
 
 /CI
-  run      43161287549 on 4f5ba7a (pull_request) — SUCCESS, every job
-  run      43162985716 on d89f37c (pull_request) — SUCCESS
+  run      43175231182 on fbdae75 — SUCCESS, every job
+  run      43179287944 on fb64c71 — SUCCESS, every job
+  run      43181751008 on 3be789e (pull_request) — SUCCESS
   jobs     lint, typecheck, cli, test, migration-round-trip, self-check,
            kind-capture, fault-library, e2e (none), e2e (stub),
            narration-parity, build x5: success; publish, deploy skipped
-  checks   gh pr checks 36: every check pass or skipping, CodeQL and the
+  checks   gh pr checks 37: 22 pass, 2 skipping (publish, deploy), CodeQL and the
            four Analyze checks included
-  alerts   none open (pr=36, refs/pull/36/merge, refs/pull/36/head)
-  merge    origin/main = ac0a939 is merged into the branch (4f5ba7a): the
-           branch is the merge result
+  alerts   none open (pr=37, refs/pull/37/merge, refs/pull/37/head)
+  merge    origin/main = 08f7d65 is an ancestor of the branch: the branch
+           is the merge result
 
 LEFT OPEN
-  - Q25 (blocks the close-out's sign-off on item 4 / criterion 6).
-  - F2 and F5, above.
-  - main's push run on the merge: Phase 36 part 1's step 0.
-  - The definition of done's recorded demonstration is Malcolm's.
+  - The audit leftovers above, for review.
+  - Part 2's brief and criteria (written at this review).
 ```
 
 ## §6. Escalate to the architecture session when

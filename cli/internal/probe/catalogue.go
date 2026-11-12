@@ -10,7 +10,7 @@ import (
 // Catalogue is the set of probes a binary knows how to run.
 //
 // Field 3: "Manifests are data, not code, so the catalogue is extensible
-// without recompiling the engine." The thirteen below are compiled in
+// without recompiling the engine." The fourteen below are compiled in
 // because they are the core set; a third party adds one as a manifest
 // plus an `exec` procedure on `process.exec.allowlist` (field 7), which
 // is why Register is exported and why nothing here assumes a probe is
@@ -91,6 +91,8 @@ func builtIn() []Probe {
 		configPresent{},
 		depVersion{},
 		edgeImpedance{},
+		// Phase 36 part 1.
+		httpLatency{},
 	}
 }
 

@@ -23,7 +23,7 @@ held to by `shared/tests/reading_conformance.json`. The field names in
 same bytes the binary would emit, not a translation of them.
 
 The copy is kept honest by `api/tests/test_probes_api.py`, which parses
-every entry through the model and asserts the id set matches the thirteen
+every entry through the model and asserts the id set matches the fourteen
 `builtIn()` registers. A manifest that drifts is a manifest that fails
 that test; a manifest that is *invalid* fails at import, here, rather
 than at the first request.

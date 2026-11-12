@@ -203,6 +203,40 @@ async def test_an_unresolved_verdict_without_a_reason_is_refused(
     assert await _count(db_engine) == 0
 
 
+LATENCY_MEASURED = {"percentile": 95, "requests": 50, "samples_us": [10_000] * 50, "timeouts": 0}
+LATENCY_BUDGET = {"latency_p95_ms": 300}
+
+
+def _latency(verdict: str) -> dict:
+    return _reading(
+        probe_id="probe.http.latency",
+        target=build("http", component="inventory-service", method="GET", path="/ready"),
+        verdict=verdict,
+        measured=LATENCY_MEASURED,
+        expected=LATENCY_BUDGET,
+        reason="judged",
+        grants_used=["net.http.outbound"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_latency_reading_whose_verdict_its_samples_do_not_give_is_refused(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Phase 36: a latency reading carries its samples and its budget, so
+    its verdict is a pure function of the reading. Fifty answers at 10 ms
+    against a 300 ms p95 pass; a reading saying they fail is refused, and
+    nothing is stored."""
+    for wrong in ("fail", "inconclusive"):
+        response = _post(client, {"readings": [_latency(wrong)]})
+        assert response.status_code == 422, wrong
+    assert await _count(db_engine) == 0
+
+    response = _post(client, {"readings": [_latency("pass")]})
+    assert response.status_code == 201, response.text
+    assert await _count(db_engine) == 1
+
+
 @pytest.mark.asyncio
 async def test_a_hand_formatted_target_is_refused(
     client: TestClient, db_engine: AsyncEngine

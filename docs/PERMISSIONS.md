@@ -198,7 +198,8 @@ For a component's declared `endpoint` (a host and a port):
 **Used since Phase 31.** This is the one grant that lets Culprit make an
 application request to your running service, and it is what
 `probe.http.reachable`, `probe.http.route_conformance`,
-`probe.http.schema_conformance` and `probe.auth.propagation` need.
+`probe.http.schema_conformance`, `probe.auth.propagation` and, since
+Phase 36, `probe.http.latency` need.
 
 What it permits is deliberately narrow: `GET` and `OPTIONS` only. The
 HTTP client has no method that can send a body and no way to express any
@@ -207,6 +208,17 @@ is no `*.write` capability and no `effect: mutate` probe. Responses are
 read for their status, content type and top-level JSON **field names**;
 no response body is kept. At most 3 redirects are followed and at most
 1 MiB is parsed.
+
+**`probe.http.latency` needs no new capability.** Under this grant it
+sends a fixed number of plain `GET` requests to the one route a declared
+budget names: 50 for a p95 budget, 20 for a p50, one at a time, at least
+50 ms apart, each on a new connection, with no header beyond the
+defaults, no body and no credential. It follows no redirect, reads each
+response to its last byte or the same 1 MiB cap, whichever comes first, and keeps only the
+status class, the time each took and the connection setup time — never a
+header value or a byte of the body. No setting raises the count. That is
+more requests than any other probe makes, which is why its manifest says
+`cost: metered`; withhold `net.http.outbound` and it sends nothing.
 
 Withhold it and every HTTP probe reports `refused`, naming this grant.
 

@@ -53,6 +53,13 @@ func (h *countingHTTP) Options(context.Context, string, map[string]string) (prob
 	return probe.HTTPResponse{Status: 200}, nil
 }
 
+// TimeGet makes it a probe.Timer, so probe.http.latency's requests are
+// counted with every other (Phase 36).
+func (h *countingHTTP) TimeGet(context.Context, string, time.Duration) (probe.Timing, error) {
+	h.requests.Add(1)
+	return probe.Timing{Status: 200, Total: time.Millisecond}, nil
+}
+
 // agentWorld is a configuration, a manifest, a task directory and an
 // audit log in one temporary directory.
 type agentWorld struct {

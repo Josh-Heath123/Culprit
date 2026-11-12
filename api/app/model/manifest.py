@@ -58,6 +58,7 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
+from culprit_model.latency import Budget
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -411,6 +412,11 @@ class Manifest(BaseModel):
     invariants: tuple[InvariantSpec, ...] = ()
     suppress: tuple[SuppressionSpec, ...] = ()
     severity_overrides: tuple[SeverityOverrideSpec, ...] = ()
+    #: Phase 36: how fast a subject must be, as `culprit_model.latency.Budget`
+    #: judges an entry — an unknown predicate is refused here as in Go. Like
+    #: `invariants`, accepted and round-tripped, not acted on here; until it
+    #: was added, `apply-model` refused any manifest carrying one.
+    budgets: tuple[Budget, ...] = ()
 
     @model_validator(mode="after")
     def _check_environment_components(self) -> "Manifest":
@@ -427,6 +433,22 @@ class Manifest(BaseModel):
                 raise ValueError(
                     f"environments.{name}.components: {unknown} are not declared in this file"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _check_budgets_are_not_repeated(self) -> "Manifest":
+        """One budget per subject and predicate in a file, as the Go loader
+        holds: two would be one source saying two things, and one of them
+        would be measured and the other dropped without a word."""
+        seen: set[tuple[str, str]] = set()
+        for index, budget in enumerate(self.budgets):
+            key = (budget.subject, budget.predicate)
+            if key in seen:
+                raise ValueError(
+                    f"budgets[{index}] repeats an earlier budget: one subject and "
+                    "predicate may have one budget in a file"
+                )
+            seen.add(key)
         return self
 
     @model_validator(mode="after")
@@ -658,7 +680,7 @@ def dump_manifest(manifest: Manifest) -> str:
     # Phase 29's policy sections, carried in order for the same reason:
     # an export that dropped them would delete a team's suppressions, each
     # with the reason someone wrote for it.
-    for section in ("invariants", "suppress", "severity_overrides"):
+    for section in ("invariants", "suppress", "severity_overrides", "budgets"):
         entries = getattr(manifest, section)
         if entries:
             document[section] = [

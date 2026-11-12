@@ -366,6 +366,10 @@ func TestAProbeReachesOnlyDeclaredEndpoints(t *testing.T) {
 		{"probe.net.tcp_connect", map[string]any{"host": "payments.internal", "port": "22"}},
 		{"probe.http.reachable", map[string]any{"url": "http://payments.internal/health"}},
 		{"probe.http.route_conformance", map[string]any{"base_url": "https://payments.internal:9000"}},
+		// Phase 36: the latency probe's address, by URL and by base_url.
+		{"probe.http.latency", map[string]any{"url": "http://169.254.169.254/latest/meta-data/"}},
+		{"probe.http.latency", map[string]any{"url": "http://db.internal:8443/ready"}},
+		{"probe.http.latency", map[string]any{"base_url": "http://payments.internal:22"}},
 		// Disguises: credentials before the host, a port with no host, a
 		// scheme that is not http.
 		{"probe.http.reachable", map[string]any{"url": "http://payments.internal:8443@169.254.169.254/"}},

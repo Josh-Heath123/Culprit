@@ -56,6 +56,7 @@ func isOpenAPIFileName(name string) bool {
 func readOpenAPI(ctx captureContext) ([]model.Fact, []model.Skip) {
 	paths := findFiles(ctx.Root, isOpenAPIFileName)
 	var facts []model.Fact
+	var skips []model.Skip
 	var documents int
 
 	for _, path := range paths {
@@ -72,7 +73,9 @@ func readOpenAPI(ctx captureContext) ([]model.Fact, []model.Skip) {
 			continue
 		}
 		documents++
-		facts = append(facts, openAPIFacts(ctx, relative(ctx.Root, path), document)...)
+		found, refused := openAPIFacts(ctx, relative(ctx.Root, path), document)
+		facts = append(facts, found...)
+		skips = append(skips, refused...)
 	}
 
 	if documents == 0 {
@@ -82,7 +85,7 @@ func readOpenAPI(ctx captureContext) ([]model.Fact, []model.Skip) {
 			Extractor: ctx.Extractor,
 		}}
 	}
-	return facts, nil
+	return facts, skips
 }
 
 // parseOpenAPI accepts JSON or YAML. YAML is a superset of JSON, so one
@@ -104,7 +107,9 @@ func parseOpenAPI(text string) (openAPIDocument, bool) {
 	return document, true
 }
 
-func openAPIFacts(ctx captureContext, artefact string, document openAPIDocument) []model.Fact {
+func openAPIFacts(
+	ctx captureContext, artefact string, document openAPIDocument,
+) ([]model.Fact, []model.Skip) {
 	// Sorted, not map order: acceptance criterion 2 is that two runs
 	// over an unchanged tree produce byte-identical output, and Go
 	// randomises map iteration on purpose.
@@ -115,6 +120,7 @@ func openAPIFacts(ctx captureContext, artefact string, document openAPIDocument)
 	sort.Strings(routes)
 
 	var facts []model.Fact
+	var skips []model.Skip
 	for _, route := range routes {
 		item := document.Paths[route]
 		for _, method := range httpMethods {
@@ -149,9 +155,69 @@ func openAPIFacts(ctx captureContext, artefact string, document openAPIDocument)
 
 			details, _ := operation.(map[string]interface{})
 			facts = append(facts, operationFacts(ctx, subject, locator, artefact, details)...)
+			budgets, refused := operationBudgets(ctx, subject, locator, artefact, details)
+			facts = append(facts, budgets...)
+			skips = append(skips, refused...)
 		}
 	}
-	return facts
+	return facts, skips
+}
+
+// operationBudgets reads an operation's `x-culprit-budget` (Phase 36, P1):
+//
+//	paths:
+//	  /ready:
+//	    get:
+//	      x-culprit-budget: { latency_p95_ms: 400 }
+//
+// Each entry is a budget fact at rank 80, the spec's rank, below a
+// culprit.yaml budget's 100; two that differ for one route are an
+// `intent_conflict`, found by the comparator like any other. An entry with
+// a predicate outside the closed set, or a value that is not a whole,
+// positive number of milliseconds, is not a budget: it is reported as a
+// skip naming where it is, rather than dropped.
+func operationBudgets(
+	ctx captureContext, subject, locator, artefact string, operation map[string]interface{},
+) ([]model.Fact, []model.Skip) {
+	raw, present := operation["x-culprit-budget"]
+	if !present {
+		return nil, nil
+	}
+	where := locator + ".x-culprit-budget"
+	declared, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, []model.Skip{{
+			Component: ctx.Component, Want: BudgetSkipWant, Extractor: ctx.Extractor,
+			Reason: fmt.Sprintf("%s %s is not a mapping of budget predicate to milliseconds", artefact, where),
+		}}
+	}
+	predicates := make([]string, 0, len(declared))
+	for predicate := range declared {
+		predicates = append(predicates, predicate)
+	}
+	sort.Strings(predicates)
+
+	var facts []model.Fact
+	var skips []model.Skip
+	for _, predicate := range predicates {
+		value, valid := budgetValue(declared[predicate])
+		_, known := model.BudgetPredicates[predicate]
+		if !known || !valid {
+			skips = append(skips, model.Skip{
+				Component: ctx.Component, Want: BudgetSkipWant, Extractor: ctx.Extractor,
+				Reason: fmt.Sprintf(
+					"%s %s.%s is not a budget: the predicate must be one of %s and the value "+
+						"a whole, positive number of milliseconds",
+					artefact, where, predicate, strings.Join(budgetPredicateNames(), ", ")),
+			})
+			continue
+		}
+		provenance := ctx.provenance(model.SourceSpec, artefact, where+"."+predicate, model.RankCommittedSpec)
+		if fact, ok := ctx.fact(subject, predicate, value, provenance); ok {
+			facts = append(facts, fact)
+		}
+	}
+	return facts, skips
 }
 
 // operationFacts turns one operation into the aspect facts Phase 29 will

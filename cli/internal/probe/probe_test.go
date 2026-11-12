@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/capability"
 	"github.com/josh-heath123/culprit/cli/internal/model"
@@ -330,6 +331,26 @@ func cases() []probeCase {
 			Deps{Metrics: fakeMetrics{found: true, sample: ImpedanceSample{
 				Deviation: 7.8, Metric: "latency_ms", Samples: 500}}, Now: clock},
 			model.VerdictFail, nil},
+		// --- probe.http.latency (Phase 36) ---
+		{"twenty fast answers against a 300 ms p50", "probe.http.latency", componentTarget,
+			map[string]any{"url": "http://inventory.internal/ready"},
+			Deps{HTTP: &fakeTimer{timings: []Timing{{Status: 200, Total: 5 * time.Millisecond}}}, Now: clock},
+			model.VerdictPass,
+			declaredAs("http:inventory-service/GET /ready", "latency_p50_ms", 300)},
+		{"twenty slow answers against a 300 ms p50", "probe.http.latency", componentTarget,
+			map[string]any{"url": "http://inventory.internal/ready"},
+			Deps{HTTP: &fakeTimer{timings: []Timing{{Status: 200, Total: 900 * time.Millisecond}}}, Now: clock},
+			model.VerdictFail,
+			declaredAs("http:inventory-service/GET /ready", "latency_p50_ms", 300)},
+		{"every request refused with 401", "probe.http.latency", componentTarget,
+			map[string]any{"url": "http://inventory.internal/ready"},
+			Deps{HTTP: &fakeTimer{timings: []Timing{{Status: 401, Total: time.Millisecond}}}, Now: clock},
+			model.VerdictInconclusive,
+			declaredAs("http:inventory-service/GET /ready", "latency_p50_ms", 300)},
+		{"no budget declared, nothing sent", "probe.http.latency", componentTarget,
+			map[string]any{"url": "http://inventory.internal/ready"},
+			Deps{HTTP: &fakeTimer{timings: []Timing{{Status: 200}}}, Now: clock},
+			model.VerdictInconclusive, nil},
 		{"too little history to say", "probe.edge.impedance", connectionTarget,
 			map[string]any{},
 			Deps{Metrics: fakeMetrics{found: true, sample: ImpedanceSample{
@@ -398,7 +419,7 @@ func TestBuiltInCatalogueRegistersEveryCoreProbe(t *testing.T) {
 	want := []string{
 		"probe.auth.propagation", "probe.auth.token_shape", "probe.config.present",
 		"probe.db.connect", "probe.db.schema_conformance", "probe.dep.version",
-		"probe.edge.impedance", "probe.http.reachable",
+		"probe.edge.impedance", "probe.http.latency", "probe.http.reachable",
 		"probe.http.route_conformance", "probe.http.schema_conformance",
 		"probe.net.dns_resolve", "probe.net.tcp_connect", "probe.net.tls_validity",
 	}

@@ -96,9 +96,16 @@ func Run(ctx context.Context, options Options) (Report, error) {
 		return report, err
 	}
 	bundle.Facts = append(bundle.Facts, invariants...)
+	budgets, err := extract.BudgetFacts(
+		manifest, filepath.Base(options.ManifestPath), now, bundle.CaptureID)
+	if err != nil {
+		return report, err
+	}
+	bundle.Facts = append(bundle.Facts, budgets...)
 	report.Bundle = bundle
 
 	report.Result = diverge.Compare(bundle, diverge.Options{Now: now})
+	report.Result.Budgets = diverge.Budgets(bundle.Facts, len(manifest.Budgets) > 0)
 	severity.NewClassifier(manifest, bundle).Apply(report.Result.Divergences)
 	report.Suppressed = manifest.ApplySuppressions(report.Result.Divergences, now)
 	return report, nil

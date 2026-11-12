@@ -2457,3 +2457,102 @@ off says "not narrated yet" for ever. Turning narration off does not hide
 what was already narrated: a stored narration is still shown, and "off" is
 said only for an investigation with none.
 
+
+## Latency budgets
+
+Phase 36 part 1. A latency is a finding only against a declared budget
+(`budgets:` in `culprit.yaml`, or `x-culprit-budget` on an OpenAPI
+operation), measured by `probe.http.latency` (`docs/PROBES.md`). The walk
+does not use budgets yet: `culprit diagnose` and `culprit verify` are
+unchanged until part 2, and the fault library's latency fault still
+verifies `inconclusive`.
+
+### Only GET routes, and only ones that need no credential
+
+The probe sends `GET` and nothing else. A budget on a `POST`, `PUT` or any
+other route is `inconclusive`, with nothing sent: an `OPTIONS` request is
+answered by CORS middleware before any handler runs, so its time says
+nothing about the route. No probe presents a credential, so a route that
+needs a token answers 401, which is not a sample, and its budget is
+`inconclusive` too. The demo's `GET /stock` is such a route, which is why
+its budget is on `GET /ready`.
+
+### 90% confidence, and what it costs a p95
+
+Each verdict holds at 90% confidence on each side (`CONFIDENCE` in
+`culprit_model/latency.py`, `LatencyConfidence` in Go). At 90%, a p95 can
+be shown within budget only from 45 samples, so a p95 budget **passes only
+when the slowest of its 50 samples is within it**. One slow request or one
+timeout leaves it `inconclusive`, not failed. A p50 is judged from 20
+samples, between the 7th and 14th slowest. There is no separate limit on
+how wide the interval may be: any such limit would be a number Culprit
+chose.
+
+### A fixed, small number of requests
+
+50 requests for a p95 budget, 20 for a p50, one at a time, at least 50 ms
+apart. Nothing configures the count or the spacing — no input, no
+`probes:` setting — and 50 is a hard cap in the probe. Naming the probe
+twice (`-p probe.http.latency -p probe.http.latency`, or twice in
+`culprit_probe`'s list) runs it once, and two latency runs in one process
+take turns, the 50 ms holding between them as within one. Two `culprit`
+processes started at once do not know of each other: their requests can
+interleave. Each request's
+timeout is twice the budget plus 500 ms, cut to what is left of the
+probe's own 120 s run; when what is left is no longer than the budget, the
+run stops with the samples it has. A route that slow is `inconclusive`
+for want of samples, and one that could not be sent a single request says
+so. `culprit probe <target>` with no `-p` runs every probe, this one
+included, so against a route with a budget it sends those requests.
+
+### A budget is 1 ms to 60 s
+
+A budget is a whole number of milliseconds, 1 to 60 000; a float with no
+fraction (`300.0`) is accepted. A larger one is refused at load — in
+`culprit check` and `apply-model` alike — because no request in a 120 s run
+could be given a timeout long enough to show it was slower. One subject
+and predicate may have one budget in a file: two are refused at load, not
+one measured and the other dropped. Write the number in plain decimal: the
+binary's YAML reader and the API's read `1e3` and `0o454` differently
+(`culprit check` takes them, `apply-model` refuses them).
+
+### What a sample is
+
+A sample is a `2xx` answer or a timeout. A timeout counts as slower than
+the budget — dropping it would report a service that has stopped
+answering as fast. Any other answer (a 401, a 500, a redirect) or a
+connection that fails outright is not a sample; enough of them leave too
+few samples, and the verdict is `inconclusive`. Each request is on a new
+connection, timed from dialling to the last byte, so it includes name
+resolution, the TCP handshake and any TLS handshake (recorded separately as
+`connect_us`). A client that keeps connections open will see less. A
+response larger than 1 MiB is timed to its first 1 MiB, the read cap every
+probe has, not to its last byte.
+
+### One budget, every environment
+
+A budget is INTENT, so a CI runner on a shared machine is held to the same
+number as production. Measure where the number means something.
+
+### When a route has both budgets
+
+Only the p95 is measured. A reading carries one verdict, and the stricter
+budget is the one asked about.
+
+### What `culprit check` reports about budgets
+
+A budget whose subject no other INTENT source declares is listed under
+"Budgets that name nothing declared" — a renamed or mistyped route would
+otherwise never be measured. The unbudgeted surface (routes declared with
+`exists` and no budget) is listed only when the manifest declares
+`budgets:` at all. An `x-culprit-budget` entry that is not a budget (an
+unknown predicate, a value that is not a whole, positive number of
+milliseconds) is reported as a gap under `budgets`, not dropped. A budget
+does not count as a second source for the unverifiable surface.
+
+### The probe's URL must be the budgeted route
+
+The budget's own subject fixes the route: a `url` or `base_url` input
+whose path is not that route's (a declared template such as `/items/{}`
+matches `/items/42`), or a budget on a route that is not `GET`, sends
+nothing and is `inconclusive`.
