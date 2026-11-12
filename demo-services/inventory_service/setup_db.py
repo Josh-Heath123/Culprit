@@ -12,8 +12,11 @@ never by Culprit:
 2. As the database's owner (INVENTORY_DATABASE_URL): apply the service's
    own Alembic migrations, which create and seed `products`.
 
-Idempotent: a second run changes nothing. Culprit's own database is never
-touched — a separate database, with its own role.
+Idempotent: a second run changes nothing. The role's password is set on
+every run to the one INVENTORY_DATABASE_URL carries, which the quickstart
+generates (infra/.env.prod): a Postgres volume from before the password
+was generated still works. Culprit's own database is never touched — a
+separate database, with its own role.
 
     python -m inventory_service.setup_db
 """
@@ -43,17 +46,26 @@ def main() -> None:
     owner = urlsplit(os.environ["INVENTORY_DATABASE_URL"])
     role, password = owner.username or "inventory", owner.password or ""
     database = owner.path.lstrip("/") or "inventory"
+    if not password:
+        # The compose file passes an empty password when infra/.env.prod
+        # predates INVENTORY_DB_PASSWORD; `just quickstart` adds one.
+        raise SystemExit(
+            "INVENTORY_DATABASE_URL carries no password: infra/.env.prod has no "
+            "INVENTORY_DB_PASSWORD. Run `just quickstart`, which generates one."
+        )
 
     with _connect_as_admin() as connection:
-        if (
+        exists = (
             connection.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
-            is None
-        ):
-            connection.execute(
-                sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
-                    sql.Identifier(role), sql.Literal(password)
-                )
+            is not None
+        )
+        connection.execute(
+            sql.SQL("{} ROLE {} LOGIN PASSWORD {}").format(
+                sql.SQL("ALTER" if exists else "CREATE"),
+                sql.Identifier(role),
+                sql.Literal(password),
             )
+        )
         if (
             connection.execute(
                 "SELECT 1 FROM pg_database WHERE datname = %s", (database,)

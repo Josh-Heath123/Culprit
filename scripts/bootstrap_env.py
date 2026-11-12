@@ -64,6 +64,7 @@ GENERATED_SECRETS: list[tuple[str, str]] = [
     ("VERIFICATION_WRITER_DB_PASSWORD", "verification-writer role (Phase 34)"),
     ("NARRATOR_DB_PASSWORD", "narrator role (Phase 35)"),
     ("CULPRIT_PROJECT_TOKEN", "capture upload token (Phase 28)"),
+    ("INVENTORY_DB_PASSWORD", "the demo inventory-service database's role (Phase 37)"),
 ]
 
 #: DB name/user for a fresh install. Deliberately "culprit", not
@@ -286,6 +287,11 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     # unattended CLI run, deliberately not a user JWT, because the caller
     # is CI and has no session to log in with.
     env["CULPRIT_PROJECT_TOKEN"] = passwords["CULPRIT_PROJECT_TOKEN"]
+    # The demo's own database (Phase 37 part 1 close-out): generated like
+    # every other password, never a fixed one in the repository. The
+    # quickstart compose file reads it; inventory-db-setup sets the role's
+    # password to it on every run.
+    env["INVENTORY_DB_PASSWORD"] = passwords["INVENTORY_DB_PASSWORD"]
 
     env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = ""
 

@@ -1,4 +1,4 @@
-package capture
+package dbsession
 
 import (
 	"context"
@@ -102,13 +102,13 @@ func pgxImporters(t *testing.T, root string) []string {
 // TestOnlyThisFileImportsPgx: across the whole module, database.go is the
 // one non-test file that can open a database connection.
 func TestOnlyThisFileImportsPgx(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	found := pgxImporters(t, root)
-	if len(found) != 1 || found[0] != "internal/capture/database.go" {
-		t.Fatalf("pgx is imported by %v; only internal/capture/database.go may", found)
+	if len(found) != 1 || found[0] != "internal/capture/dbsession/session.go" {
+		t.Fatalf("pgx is imported by %v; only internal/capture/dbsession/session.go may", found)
 	}
 }
 
@@ -164,14 +164,14 @@ func driverCallsOutsideSend(t *testing.T, path string) []string {
 }
 
 func TestOnlySendTalksToTheDriver(t *testing.T) {
-	if found := driverCallsOutsideSend(t, "database.go"); len(found) > 0 {
+	if found := driverCallsOutsideSend(t, "session.go"); len(found) > 0 {
 		t.Fatalf("a statement reaches the driver other than through send: %v", found)
 	}
 }
 
 // TestAStatementSentAroundSendIsFound is that rule's red state.
 func TestAStatementSentAroundSendIsFound(t *testing.T) {
-	source, err := os.ReadFile("database.go")
+	source, err := os.ReadFile("session.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestAStatementSentAroundSendIsFound(t *testing.T) {
 		"the raw conn":   "func smuggle(conn *pgx.Conn) { _ = conn.PgConn() }",
 	} {
 		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "database.go")
+			path := filepath.Join(t.TempDir(), "session.go")
 			if err := os.WriteFile(path, append(append([]byte{}, source...), []byte("\n"+code+"\n")...), 0o644); err != nil {
 				t.Fatal(err)
 			}

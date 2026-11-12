@@ -224,3 +224,28 @@ def test_isolation_and_probes_load_and_round_trip() -> None:
 def test_isolation_and_probes_are_refused_as_the_go_loader_refuses_them(broken: str) -> None:
     with pytest.raises(ManifestError):
         load_manifest(broken)
+
+
+SCALARS = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "manifest_scalar_conformance.json").read_text(
+        encoding="utf-8"
+    )
+)["cases"]
+
+
+@pytest.mark.parametrize("case", SCALARS, ids=lambda case: case["why"])
+def test_the_api_reads_culprit_yaml_as_the_go_loader_does(case: dict) -> None:
+    """Phase 37 part 1 close-out: one schema for both readers, from the
+    fixture the Go loader is held to too."""
+    if "refused" in case:
+        with pytest.raises(ManifestError) as refused:
+            load_manifest(case["manifest"])
+        if case["refused"]:
+            assert case["refused"] in str(refused.value)
+        return
+    manifest = load_manifest(case["manifest"])
+    if "budget_why" in case:
+        assert manifest.budgets[0].why == case["budget_why"]
+    if "max_probes" in case:
+        assert manifest.isolation is not None
+        assert manifest.isolation.max_probes == case["max_probes"]

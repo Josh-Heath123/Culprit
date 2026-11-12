@@ -75,23 +75,6 @@ type Network interface {
 	InspectTLS(ctx context.Context, host string, port int, now time.Time) (TLSStatus, error)
 }
 
-// HTTPResponse is as much of a response as a probe is allowed to keep.
-//
-// No body. Route and schema conformance need the status, the content type
-// and the shape of what came back — never its contents, which on a real
-// system are user data. A probe that returned bodies would be a probe
-// that turns a capture file into a data breach.
-type HTTPResponse struct {
-	Status      int
-	ContentType string
-	// BodyKeys are the top-level field names of a JSON object response,
-	// sorted. Names only, never values — the same rule config keys follow.
-	BodyKeys []string
-	// BodyKind is "object", "array", "empty" or "other".
-	BodyKind string
-	Elapsed  time.Duration
-}
-
 // HTTPClient is the only way a probe makes an application request, and it
 // is gated on `net.http.outbound`.
 //

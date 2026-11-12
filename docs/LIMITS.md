@@ -1017,22 +1017,39 @@ Phase 37 part 2.
 
 ### What Culprit sends a database, and what holds it
 
-One file in the binary imports the database driver, and the statements it
-sends are a closed set written into it — four today, all catalogue reads —
-checked by a `switch` no other code can add to. Anything else, an
-`EXPLAIN ANALYZE` included, is refused before it leaves, and a test counts
-what reaches the driver. Every session is opened with
-`default_transaction_read_only = on` and a ten-second `statement_timeout`,
-so Postgres itself refuses a write.
+Four layers, each holding something different (Q27, ruled 2026-11-12):
 
-**What this does not hold (open, Q27).** "One file" is a property of
-imports, and in Go a file need not import a package to call methods on a
-value of its type. Another file in the same package (`internal/capture`)
-can take the session that file opens and send it any statement — and
-read-only mode does not stop an `EXPLAIN ANALYZE SELECT …` or a call to
-`pg_stat_statements_reset()`. The Phase 37 part 1 audit did exactly that.
-Today nothing does it, and review of `internal/capture` is what stops it;
-whether to move the session into a package of its own is for the review.
+- **The package.** The session lives in `internal/capture/dbsession`, a
+  package with one non-test file, the only one in the binary that imports
+  the database driver. Its exported surface — a reader, the schema it
+  returns, a classified error — names no driver or network type, so no
+  code outside it can hold a connection to send something through. Go's
+  visibility is per package, not per file: Phase 37 part 1 held this with
+  "one file imports the driver", and its audit sent `EXPLAIN ANALYZE` from
+  a sibling file with no import at all. That file, planted in
+  `internal/capture` today, does not compile, and a test plants it to show
+  so. What the package does *not* hold is a change to the package itself:
+  code added to `dbsession` can do anything the driver can, which is why it
+  is one file and a test fails if a second appears.
+- **The templates.** Inside the package, the statements it can send are a
+  closed set — four today: three catalogue reads and the Alembic version
+  row — checked by a `switch` that must list exactly the template
+  constants (a test fails on a constant the switch does not list, or on a
+  map of statements another file could extend). Anything else, an
+  `EXPLAIN ANALYZE` included, is refused before it leaves, and a test
+  counts what reaches the driver.
+- **The read-only session.** Every session is opened with
+  `default_transaction_read_only = on` and a ten-second
+  `statement_timeout`, so Postgres itself refuses a write (a test against a
+  real Postgres sends one). It does not refuse what is not a write: an
+  `EXPLAIN ANALYZE SELECT …` runs the query, and `pg_stat_statements_reset()`
+  is a function call. The two layers above are what keep those from being
+  sent.
+- **The role.** What the server lets the role do is the last bound, and the
+  one a stolen credential carries (docs/PERMISSIONS.md, "The recommended
+  database role"). The recommended role holds no `EXECUTE` on
+  `pg_stat_statements_reset`, which is how Postgres ships it.
+
 Culprit never resets `pg_stat_statements`.
 
 ## Installed versions are compared between environments, not against what you declared
@@ -1559,9 +1576,11 @@ its own VM, which is empty. The secrets step then fails with
 Since Phase 37 part 1, `just quickstart` gives inventory-service a database
 of its own (`inventory`, in the same Postgres, owned by an `inventory`
 role) and fills a table with a million generated products, which adds
-roughly ten to thirty seconds. Its password is a fixed, synthetic one
-(`inventory-demo-not-a-secret`): the quickstart's Postgres publishes no
-port. The same Postgres now starts with `pg_stat_statements` preloaded —
+roughly ten to thirty seconds. Its role's password is generated into
+`infra/.env.prod` with the others (`INVENTORY_DB_PASSWORD`); a file made
+before Phase 37's close-out gets one added by the next `just quickstart`,
+and the setup job sets the role's password to it on every run. Until then
+the demo's database had a fixed password written in the compose file. The same Postgres now starts with `pg_stat_statements` preloaded —
 the recipe checks the running value and stops if it is not — which keeps
 statement statistics for every database on that server, Culprit's own
 included; nothing reads Culprit's.
@@ -2574,9 +2593,14 @@ request in a 120 s run could be given a timeout long enough to show it was
 slower. One subject and predicate may have one budget in a file: two are
 refused at load, not one measured and the other dropped.
 
-`culprit.yaml` is read by two YAML readers, the binary's (YAML 1.2) and the
-API's (YAML 1.1), and for `budgets:` the API's is held to the binary's rules
-(`shared/tests/latency_conformance.json`, `budget_manifests`):
+`culprit.yaml` is read by two YAML readers, the binary's and the API's, and
+since Phase 37 part 1's close-out they read one schema: the API resolves
+plain scalars as the binary's YAML 1.2 reader does (`yes` is a string, a date
+is left as written, `0o454` and `1e3` are numbers), both refuse a second
+document, and both refuse a top-level key the other does not know, naming it
+(`shared/tests/manifest_scalar_conformance.json`). For `budgets:` the API is
+also held to the binary's rules (`shared/tests/latency_conformance.json`,
+`budget_manifests`):
 
 - a key written twice in any mapping — `version:`, `budgets:`, a field of
   an entry, or two merge keys — is refused by both;
@@ -2585,33 +2609,25 @@ API's (YAML 1.1), and for `budgets:` the API's is held to the binary's rules
   read by neither, so its values are not checked;
 - a merge key inside a budget entry is refused by both.
 
-Splits that remain, each refused by the API and loaded by the binary:
-
-- a field of a budget entry that YAML 1.1 types and YAML 1.2 does not:
-  `why: yes`, `why: 300`, `why: 2026-11-12` are strings to the binary and a
-  boolean, a number and a date to the API, which refuses them. Quote a
-  `why:` that looks like one;
-- a second YAML document (`---`): the binary reads the first, the API
-  refuses the file;
-- any top-level key neither knows (`x-extra: 1`): the binary ignores it, on
-  purpose — a CLI that refuses a field a newer server added is useless in CI
-  — and the API, which writes to a database, refuses it;
-
-- a top-level key written as the *string* `"<<"`. The binary ignores every
-  top-level key it does not know, so a budget under it is dropped by
-  `culprit check` without a word;
-- a top-level key that is not a string (`!!binary`, `!!int`). The binary
-  reads a `!!binary` key that decodes to `budgets` as `budgets:`; the API
-  refuses any top-level key that is not a string.
+**A top-level key the binary does not know is now refused.** Until the
+close-out the binary ignored one, on purpose, so that a CLI older than its
+server would still run in CI; the cost was that a mistyped `budget:` was
+dropped without a word, and so was a key written as the string `"<<"` or as
+a `!!binary` that decodes to `budgets`. Both readers now take their
+top-level keys from one list (`shared/tests/manifest_keys.json`), so a key
+added to one is added to both; an older binary reading a newer manifest
+names the key it does not know and stops. Within a section, fields the
+binary does not read are still ignored. `why: 300` is still a number to
+both readers, and refused for not being text: quote a `why:` that looks
+like a number.
 
 In `culprit.yaml` the value is written as **plain decimal digits**,
 unquoted, with no sign and no leading zero: `300`. Every other form is
 refused by both readers, with the same reason — `300.0`, `+300`, `0454`,
 `0o454`, `0x12C`, `1e3`, `300_000`, `"300"`, a tag (`!!int 300`) or an
-alias. The binary's YAML reader (YAML 1.2) and the API's (YAML 1.1) read
-several of those as different numbers or as strings (`0454` is 454 to one
-and octal 300 to the other), and two readers of one declaration must not
-read two values. An `x-culprit-budget` in an OpenAPI document is read by the
+alias. The two readers now read those alike (`0454` is octal 300 to both,
+as Go reads it), but a budget written `0454` means 454 to most people who
+write one, so the form rule stays. An `x-culprit-budget` in an OpenAPI document is read by the
 binary alone, as a number.
 
 ### What a sample is
@@ -2678,10 +2694,15 @@ judged with another's times.
 Two structural facts hold it (Q26, ruled 2026-11-12), each with a test that
 shows it red:
 
-- **Only `http.go` and `timing.go` in `internal/probe` import `net/http`**
-  (or any package under it). No other file in the package can name a
-  request constructor or build a client.
-- **Every client those two files build comes from one constructor**, which
+- **The client is a package of its own** (Q27, ruled 2026-11-12):
+  `internal/probe/guardedhttp`, one non-test file, the only package under
+  `internal/probe` that imports `net/http`. Its exported surface names no
+  `net/http` or `net` type, so code outside it cannot hold a client, a
+  transport or a request — the Phase 37 part 1 audit's file, which reached
+  the guard's own transport through a client's fields from a sibling file
+  and sent a `DELETE`, no longer compiles in `internal/probe`, and a test
+  plants it to show so.
+- **Every client that file builds comes from one constructor**, which
   puts a guard under it. The guard refuses anything but a bodiless `GET` or
   `OPTIONS` as each request leaves, before anything is dialled — however
   the request was built, and whatever was done to it afterwards.
@@ -2693,14 +2714,11 @@ audits in a row found code shapes it did not know, and the third sent a
 **It is a guard against ordinary code, not a proof against deliberate
 code.** Raw bytes written to a socket that `net.tcp.connect` opened are
 outside it, as is a header such as `X-HTTP-Method-Override` that a server
-chooses to honour. And not naming a type does not stop a file using it: in
-Go, another file in `internal/probe` can reach the guard's own transport
-through a client's fields, with no import, and send a `DELETE` around the
-guard — the Phase 37 part 1 audit did. Nothing does today; whether to move
-the client into a package of its own, where no other file can reach its
-fields, is open (Q27). What bounds it meanwhile is where it can be written:
-the binary's network allowlist keeps every other package from linking a
-network package at all, and review covers `internal/probe`.
+chooses to honour. And the package holds against code outside it, not a
+change to it: code added to `guardedhttp` itself can do what `net/http`
+can, which is why it is one file and a test fails if a second appears. The
+binary's network allowlist names it and `internal/capture/dbsession`, and
+keeps every other package from linking a network package at all.
 
 ### Latency in the walk
 

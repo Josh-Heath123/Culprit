@@ -660,6 +660,93 @@ class Manifest(BaseModel):
         )
 
 
+class YAML12Loader(yaml.SafeLoader):
+    """PyYAML's safe loader, resolving plain scalars as the Go loader's
+    yaml.v3 does (Phase 37 part 1 close-out, PERFORMANCE_PLAN.md end of
+    Phase 37: "the two manifest readers read one schema").
+
+    PyYAML implements YAML 1.1: `yes`, `no`, `on`, `off` are booleans, a
+    date is a date, and `0o454` and `1e3` are strings. yaml.v3 reads YAML
+    1.2's core schema with Go's number parsing: only `true`/`false` (in
+    three cases) are booleans, dates are left as written, `0o454`, `0454`
+    and `0x1F` are integers (Go's base-0 rules, underscores allowed), and a
+    float with no fraction is an integer. Each case is in
+    shared/tests/manifest_scalar_conformance.json, which the Go loader is
+    held to as well. A SafeLoader subclass: it constructs nothing but plain
+    data, as safe_load does.
+    """
+
+    # Start from no implicit resolvers at all: none of YAML 1.1's survive.
+    yaml_implicit_resolvers: dict = {}  # noqa: RUF012 — PyYAML's own class attribute
+
+
+_YAML12_BOOL = re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$")
+_YAML12_NULL = re.compile(r"^(?:~|null|Null|NULL|)$")
+#: Anything Go's ParseInt (base 0, underscores removed) or ParseFloat
+#: might read; the constructor decides which, as yaml.v3 does.
+_YAML12_NUMBER = re.compile(
+    r"^[-+]?(?:0[bB][01_]+|0[oO][0-7_]+|0[xX][0-9a-fA-F_]+|[0-9][0-9_]*"
+    r"|(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|\.(?:inf|Inf|INF))$"
+    r"|^\.(?:nan|NaN|NAN)$"
+)
+
+YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:bool", _YAML12_BOOL, list("tTfF"))
+YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:null", _YAML12_NULL, ["~", "n", "N", ""])
+YAML12Loader.add_implicit_resolver(
+    "tag:yaml.org,2002:float", _YAML12_NUMBER, list("-+0123456789.")
+)
+YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:merge", re.compile(r"^(?:<<)$"), ["<"])
+
+
+def _go_parse_int(text: str) -> int | None:
+    """Go's strconv.ParseInt(text, 0, 64) after yaml.v3 removes
+    underscores: a sign, then 0b/0o/0x, a leading-zero octal, or decimal."""
+    digits = text.replace("_", "")
+    sign = -1 if digits.startswith("-") else 1
+    digits = digits.lstrip("+-")
+    try:
+        if digits[:2].lower() == "0b":
+            value = int(digits[2:], 2)
+        elif digits[:2].lower() == "0o":
+            value = int(digits[2:], 8)
+        elif digits[:2].lower() == "0x":
+            value = int(digits[2:], 16)
+        elif len(digits) > 1 and digits.startswith("0"):
+            value = int(digits[1:], 8)
+        else:
+            value = int(digits, 10)
+    except ValueError:
+        return None
+    value *= sign
+    return value if -(2**63) <= value < 2**63 else None
+
+
+def _construct_yaml12_number(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> int | float:
+    text = str(loader.construct_scalar(node))
+    as_int = _go_parse_int(text)
+    if as_int is not None:
+        return as_int
+    lowered = text.lower()
+    if lowered in (".inf", "+.inf"):
+        return float("inf")
+    if lowered == "-.inf":
+        return float("-inf")
+    if lowered == ".nan":
+        return float("nan")
+    value = float(text.replace("_", ""))
+    # yaml.v3 gives a whole float, decoded into an interface, as an integer.
+    return int(value) if value.is_integer() and abs(value) < 2**63 else value
+
+
+def _construct_yaml12_bool(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> bool:
+    return str(loader.construct_scalar(node)).lower() == "true"
+
+
+YAML12Loader.add_constructor("tag:yaml.org,2002:float", _construct_yaml12_number)
+YAML12Loader.add_constructor("tag:yaml.org,2002:int", _construct_yaml12_number)
+YAML12Loader.add_constructor("tag:yaml.org,2002:bool", _construct_yaml12_bool)
+
+
 def _reject_budget_literals(text: str, source: str) -> None:
     """Refuses a `budgets:` value not written as plain decimal digits
     (Phase 36 part 2), reading the YAML as the Go loader (yaml.v3) reads it,
@@ -679,7 +766,7 @@ def _reject_budget_literals(text: str, source: str) -> None:
     reads 454 and a string, so the form is what is checked — by
     `culprit_model.latency.budget_literal_problem`, which the Go loader's
     twin is held to with it."""
-    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    root = yaml.compose(text, Loader=YAML12Loader)
     if not isinstance(root, yaml.MappingNode):
         return
     _reject_repeated_keys(root, source)
@@ -772,7 +859,10 @@ def _tagged(text: str, node: yaml.ScalarNode) -> bool:
 def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     """Parses and validates a manifest. Pure — no filesystem access."""
     try:
-        raw = yaml.safe_load(text)
+        # As the Go loader (yaml.v3) reads it, not as PyYAML's YAML 1.1:
+        # `yes` is a string, `0o454` a number (YAML12Loader).
+        # YAML12Loader subclasses SafeLoader: it constructs plain data only.
+        raw = yaml.load(text, Loader=YAML12Loader)
     except yaml.YAMLError as exc:
         raise ManifestError(f"{source}: not valid YAML:\n{exc}") from exc
 

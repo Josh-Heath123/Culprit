@@ -1,4 +1,4 @@
-package capture
+package dbsession
 
 import (
 	"context"

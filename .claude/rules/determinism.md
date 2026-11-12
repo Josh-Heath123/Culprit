@@ -43,7 +43,11 @@ model" is always the shortest path and always looks fine in a demo.
   31.1 (D8, amended) it is an **allowlist** (`cli/cmd/culprit/check_test.go`,
   `TestTheNetworkBoundaryIsAnAllowlist`): only `internal/probe` and, since
   Phase 33, `internal/transport` may link `net/http`; only those two and
-  `internal/capture` may link `net` or `crypto/tls`; every other package
+  `internal/capture` may link `net` or `crypto/tls`. Since Q27 (Phase 37
+  part 1 close-out) the request and the database session themselves live
+  in `internal/probe/guardedhttp` and `internal/capture/dbsession`, one
+  file each, whose exported surface names no network or driver type; the
+  allowlist names both. Every other package
   `go list ./internal/...` finds may link none of them, so a package
   created tomorrow is covered the day it exists. `internal/transport` is
   the agent's connection to its control plane: it dials only the

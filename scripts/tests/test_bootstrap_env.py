@@ -96,6 +96,7 @@ def test_the_generated_registry_matches_the_compose_default() -> None:
         "VERIFICATION_WRITER_DB_PASSWORD",
         "NARRATOR_DB_PASSWORD",
         "MCP_READER_DB_PASSWORD",
+        "INVENTORY_DB_PASSWORD",
     ],
 )
 def test_every_role_password_is_generated(variable: str) -> None:
@@ -200,3 +201,14 @@ def test_env_prod_never_exists_with_wider_permissions(
     leftover = [p.name for p in watched_dir.iterdir()]
     assert leftover == [".env.prod"], f"a temporary file was left behind: {leftover}"
     assert "JWT_SECRET_KEY=" in target.read_text()
+
+
+def test_the_demo_database_password_is_generated_not_written() -> None:
+    """Phase 37 part 1 close-out: the demo's own database had a fixed
+    password in the compose file. Every use now reads the generated one."""
+    compose = (ROOT / "infra" / "docker-compose.quickstart.yml").read_text(encoding="utf-8")
+    urls = [line for line in compose.splitlines() if "INVENTORY_DATABASE_URL:" in line]
+    assert len(urls) == 2
+    for line in urls:
+        assert "postgresql://inventory:${INVENTORY_DB_PASSWORD:-}@" in line, line
+    assert "not-a-secret@" not in compose

@@ -1,0 +1,83 @@
+{
+  "why": [
+    "culprit.yaml as both readers read it: the Go loader (yaml.v3, YAML 1.2's core schema with Go's number parsing) and the API's (PyYAML, with resolvers that match it, api/app/model/manifest.py YAML12Loader). Each case either loads in both with the value given, or is refused by both — naming the key, where `refused` gives one.",
+    "Phase 37 part 1 close-out (PERFORMANCE_PLAN.md end of Phase 37): three times a split between the two readers surfaced one case at a time; this is the one schema instead."
+  ],
+  "cases": [
+    {
+      "why": "yes: a string in YAML 1.2, a boolean in YAML 1.1",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: yes\n",
+      "budget_why": "yes"
+    },
+    {
+      "why": "no: a string in YAML 1.2, a boolean in YAML 1.1",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: no\n",
+      "budget_why": "no"
+    },
+    {
+      "why": "on: a string in YAML 1.2, a boolean in YAML 1.1",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: on\n",
+      "budget_why": "on"
+    },
+    {
+      "why": "off: a string in YAML 1.2, a boolean in YAML 1.1",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: off\n",
+      "budget_why": "off"
+    },
+    {
+      "why": "a date: left as written",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: 2026-11-12\n",
+      "budget_why": "2026-11-12"
+    },
+    {
+      "why": "plain text, the control",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: the listing page waits on it\n",
+      "budget_why": "the listing page waits on it"
+    },
+    {
+      "why": "0454: a leading-zero octal to yaml.v3, 300",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nisolation:\n  max_probes: 0454\n",
+      "max_probes": 300
+    },
+    {
+      "why": "0o454: YAML 1.2 octal, 300; a string to YAML 1.1",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nisolation:\n  max_probes: 0o454\n",
+      "max_probes": 300
+    },
+    {
+      "why": "1e3: a number, 1000; a string to YAML 1.1",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nisolation:\n  max_probes: 1e3\n",
+      "max_probes": 1000
+    },
+    {
+      "why": "~: null, so a budget with no why",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: ~\n",
+      "refused": null
+    },
+    {
+      "why": "a second document",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    why: w\n---\nversion: 1\n",
+      "refused": null
+    },
+    {
+      "why": "an unknown top-level key, named",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nx-extra: 1\n",
+      "refused": "x-extra"
+    },
+    {
+      "why": "a mistyped section, named",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudget:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}\n",
+      "refused": "budget"
+    },
+    {
+      "why": "the string \"<<\", which is a key, not a merge",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n\"<<\": {budgets: []}\n",
+      "refused": "<<"
+    },
+    {
+      "why": "a !!binary key that decodes to budgets: not a string key, so refused",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n!!binary YnVkZ2V0cw==:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}\n",
+      "refused": null
+    }
+  ]
+}
