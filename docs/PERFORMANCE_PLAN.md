@@ -425,6 +425,17 @@ Phase 35's close-out lands first. Part 1's step 0 confirms it.
 - No threshold that Culprit chooses. The demo's budget is the demo's own
   declaration, with its `why`.
 
+**Added 2026-11-12, at the review of Phase 35's close-out.**
+- **Step 0 is met.** `main`'s push run 43167772415 on `08f7d65` (PR #36's
+  merge) passed every job, including both `e2e` legs and `narration-parity`.
+  Record it; nothing needs re-running.
+- **One item joins the work order after step 0 (Q25).** Add a test that only
+  `probe.BuiltIn` calls `Catalogue.Register`, and show it red by adding a
+  registration elsewhere. `culprit mcp` binds the address inputs it knows by
+  name. The test holds that every probe an agent can run is one whose inputs are
+  classified. `probe.http.latency` joins the catalogue through `BuiltIn`, like
+  every other probe.
+
 ---
 
 ### Phase 37 — The database: statements, plans and indexes
@@ -502,6 +513,13 @@ the database, and LIMITS.
 
 **17. Do NOT implement yet.** No `EXPLAIN ANALYZE`. No index created, and no
 query rewritten, by Culprit: it names the column and the evidence. No row read.
+
+**Carried in (2026-11-12, at the review of Phase 35's close-out).** This comes
+before anything reads statement text. `redact_credentials` misses
+`password=…`, Slack tokens and `user:pass@host` (Phase 35 close-out, F2). Widen
+it at the choke point, in Go and in Python, with a conformance case for each.
+P4 sends normalised statement text through this function, and a connection
+string or a password literal in a statement is exactly what it must catch.
 
 ---
 

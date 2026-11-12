@@ -3586,6 +3586,57 @@ stage `shared/uv.lock`.
 the role or the providers beyond the token bound. No new narration feature.
 Nothing for Phase 36.
 
+**Architecture review of the close-out, 2026-11-12 — signed off. Phase 35 is
+complete, and with it this plan.** PR #36 merged as `08f7d65`. Read from
+GitHub's API, `main`'s push run 43167772415 on that commit passed every job:
+`e2e (none)`, `e2e (stub)`, `narration-parity`, the fault library and CodeQL
+included. The pull request's run 43162985716 on `d89f37c` passed every check.
+Criteria 1–5 were executed, and each was shown red on the code before the
+change. Before it, an insert the database refused led to two provider calls;
+after it, one. The three look-alike underscores and the Cyrillic letter passed
+`ec05453`'s rule.
+
+- **Q25 — work item 4 and criterion 6 are withdrawn; the brief was wrong.** No
+  plugin probe exists. `culprit mcp`'s catalogue is `probe.BuiltIn()`, and only
+  `BuiltIn` calls `Catalogue.Register`. `--no-plugins` governs extractor
+  plugins, which read INTENT. The decision rested on a LIMITS sentence that
+  described something the code does not do, and the architecture session took
+  it from LIMITS without reading the code. The run corrected the sentence.
+  - **What replaces it.** The phase-auditor's suggestion, carried into Phase 36
+    part 1: a test that only `BuiltIn` registers a probe, shown red by a
+    registration elsewhere. The Q23 binding assumes that every probe an agent
+    can run has classified inputs, and the test makes that assumption a gate.
+  - **Extractor plugins are not gated under `culprit mcp`.** Which ones run,
+    and from where, is set by the server's flags and the pinned
+    `culprit.yaml`. A tool's caller can set neither.
+- **The token bound's wording is corrected (accepted).** A token is several
+  characters, so a limit of `MAX_PROSE` tokens caps a reply's cost at a few
+  times `MAX_PROSE` characters, not at `MAX_PROSE` itself. The part that
+  mattered still holds: nothing short enough to pass is cut off. The bound
+  stays.
+- **Accepted as taken:**
+  - An Ollama reply cut off at `num_predict` fails, as Anthropic's already did.
+    Otherwise a truncated reply would be stored as complete.
+  - The labels "a credential" and "a name that cannot be shown".
+  - The name rules read a joining en or em dash as a hyphen.
+  - The branch's upstream was left unset, so nothing could reach the merged
+    branch.
+  - Rows stored before the close-out are re-served under the new rules, so
+    prose with characters outside the allowlist is now refused. That is the safe
+    failure, and no data changes.
+- **`shown()`'s "no credential" is only as good as `redact_credentials` (F2),
+  and that has gaps:** `password=…`, Slack tokens and `user:pass@host` pass.
+  Redaction happens at one choke point (standing invariant 11), so the fix
+  belongs there, in Go and Python with conformance cases, not in `shown()`.
+  This is carried to Phase 37 part 1 as its first item. Phase 37 sends
+  `pg_stat_statements`' statement text through the same function, and that is
+  where these strings are most likely to appear.
+- **F5 accepted:** the retry interval compares the worker's clock with
+  Postgres's `now()`, which is harmless on one host.
+
+The definition of done's recorded demonstration is Malcolm's and still
+outstanding. The plan of record is now `docs/PERFORMANCE_PLAN.md`.
+
 ---
 
 ## §4. Explicitly out of scope for this entire plan
