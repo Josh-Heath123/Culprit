@@ -2346,6 +2346,8 @@ dashes, an ellipsis, the two arrows, the signs for times, almost equal, at
 most, at least, plus-minus, degree and micro, and the no-break space —
 nothing else (`PLAIN_CHARACTERS`, close-out of Phase 35). Any other
 character refuses the narration, named "a character outside plain text".
+An en or em dash between two letters or digits is read as a hyphen, so
+`payment–service` is held to the component rule as `payment-service` is.
 This is an allowlist because a list of what to refuse is never finished: a
 zero-width character, a combining mark, a blank filler or a look-alike
 underscore (U+FF3F, U+02CD, U+2017) can each make `not_resolved` appear on
@@ -2370,7 +2372,10 @@ token with no whitespace, in plain characters, or a fixed label ("a URL",
 the same rule again to every refused row it serves, so a row the table's
 owner inserts naming a sentence, a URL or a key is shown as labels. A
 token can still be up to 80 characters of the model's own text joined by
-underscores or hyphens.
+underscores or hyphens. "No credential" means nothing the shared credential
+pattern (`redact_credentials`, and its Go twin) recognises: a key of a
+shape it does not know — `password=hunter2`, a Slack token, `user:pass@host`
+with no scheme — is served as a token like any other word.
 For a name written in backticks only its first unknown word is named, so
 a sentence in code form is never shown. At most 20 are kept.
 
@@ -2422,9 +2427,10 @@ read, so a useful detail in it is lost along with any secret.
 Each attempt is one request: no tools, no streaming, no second call to ask
 for more. A reply may be at most 4000 tokens — `max_tokens` with
 `anthropic`, `num_predict` with `ollama` — the same number as the 4000
-characters a narration may hold, so no call pays for a reply that could
-not be kept. English runs well under one token per character, so a reply
-short enough to keep is not cut off. One cut off at the limit (or, with
+characters a narration may hold. A token is usually several characters,
+so a reply can still run past 4000 characters and be paid for; the bound
+keeps that within a few times what could be kept. English short enough to
+keep is not cut off. One cut off at the limit (or, with
 `anthropic`, declined) is a failure. A reply longer than 4000 characters is
 a failure too, not truncated.
 

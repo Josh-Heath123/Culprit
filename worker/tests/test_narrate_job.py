@@ -20,6 +20,7 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
 import urllib.request
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
@@ -326,6 +327,37 @@ async def test_an_attempt_whose_row_is_refused_is_stored_failed_and_counted(
     assert row["status"] == "failed"
     assert row["reason"] == "the narration could not be stored"
     assert row["prose"] is None and row["named"] is None
+
+
+async def test_when_no_row_can_be_stored_the_error_carries_none_of_the_row(
+    engine: AsyncEngine,
+) -> None:
+    """Both the attempt's row and its failed row refused: the error raised
+    names a constraint, and chains nothing that renders the failing row."""
+    from app.narrate.job import NarrationNotStored
+
+    investigation = await store(engine, recorded(), datetime.now(UTC))
+    prose = "The order service's token carries the wrong audience [2]. Fix it [3]."
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("ALTER TABLE narrations ADD CONSTRAINT ck_test_nothing CHECK (attempt > 99)")
+        )
+    try:
+        with pytest.raises(NarrationNotStored) as raised:
+            await narrate_one(engine, Scripted(prose), investigation.id, 1.0)
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE narrations DROP CONSTRAINT ck_test_nothing"))
+
+    assert str(raised.value) == "ck_test_nothing"
+    assert raised.value.__cause__ is None and raised.value.__suppress_context__
+    shown = "".join(traceback.format_exception(raised.value))
+    assert "wrong audience" not in shown and "Failing row" not in shown
+    async with engine.connect() as conn:
+        held = (
+            await conn.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'"))
+        ).scalar_one()
+    assert held == 0
 
 
 async def test_ticks_that_read_due_before_either_claims_make_one_attempt(

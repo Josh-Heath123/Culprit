@@ -333,6 +333,22 @@
       ]
     },
     {
+      "rule": "components_are_the_investigations",
+      "why": "an en dash standing for a component name's hyphen",
+      "prose": "r2 ruled out payment–service itself [14].",
+      "named": [
+        "payment-service"
+      ]
+    },
+    {
+      "rule": "components_are_the_investigations",
+      "why": "an em dash standing for a component name's hyphen",
+      "prose": "r2 ruled out payment—service itself [14].",
+      "named": [
+        "payment-service"
+      ]
+    },
+    {
       "rule": "no_url",
       "why": "a host with a query and no path",
       "prose": "Look at evil.example?d=r3 for it [2].",

@@ -383,13 +383,23 @@ class Check:
     named: tuple[str, ...]
 
 
+#: An en or em dash joining two letters or digits. PLAIN_CHARACTERS admits
+#: both dashes as punctuation, so one inside a name (`payment` + U+2013 +
+#: `service`) is read as the hyphen it stands for: otherwise a component
+#: the investigation does not hold would reach the page past the rule that
+#: refuses `payment-service`.
+_JOINING_DASH = re.compile(r"(?<=[A-Za-z0-9])[\u2013\u2014](?=[A-Za-z0-9])")
+
+
 def check(investigation: Investigation, prose: str, rules: tuple[Rule, ...] = RULES) -> Check:
     """Whether `prose` stays inside `investigation`. Pure: the same prose
-    and investigation always give the same answer."""
+    and investigation always give the same answer. The rules read the prose
+    with a dash inside a name taken as a hyphen (`_JOINING_DASH`)."""
     ctx = context(investigation)
+    read = _JOINING_DASH.sub("-", prose)
     named: list[str] = []
     for rule in rules:
-        for found in rule(prose, ctx):
+        for found in rule(read, ctx):
             name = shown(found)
             if name not in named:
                 named.append(name)

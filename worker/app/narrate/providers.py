@@ -22,10 +22,11 @@ from app.narrate.config import NarratorConfig
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
-#: The most tokens a reply may be, for either provider: no more than the
-#: MAX_PROSE characters a narration may hold, so no call is paid for beyond
-#: what could be kept. English runs well under one token per character, so
-#: a reply short enough to pass is not cut off; one that is cut off fails.
+#: The most tokens a reply may be, for either provider: the same number as
+#: the MAX_PROSE characters a narration may hold. A token is usually several
+#: characters, so a reply can still run past MAX_PROSE (and is then a
+#: failure); the bound keeps what is paid for within a few times what could
+#: be kept. English prose short enough to pass is not cut off; one cut off fails.
 MAX_TOKENS = MAX_PROSE
 
 

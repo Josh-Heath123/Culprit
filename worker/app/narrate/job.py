@@ -201,6 +201,12 @@ def _claim_key(investigation_id: str) -> int:
 NOT_STORED = "the narration could not be stored"
 
 
+class NarrationNotStored(Exception):
+    """Neither the attempt's row nor its `failed` row could be stored. Its
+    text is a constraint's name or an error's class, never the database's
+    message, which renders the failing row."""
+
+
 async def narrate_one(
     engine: AsyncEngine,
     provider: Provider,
@@ -269,8 +275,16 @@ async def narrate_one(
                     constraint or type(exc.orig).__name__,
                 )
                 row.update(status="failed", prose=None, named=None, reason=NOT_STORED)
-                await conn.execute(insert(tables.narrations).values(**row))
-                await conn.commit()
+                try:
+                    await conn.execute(insert(tables.narrations).values(**row))
+                    await conn.commit()
+                except DBAPIError as again:
+                    # Raised afresh, with no chained context: the first
+                    # error's text can render the failing row (prose,
+                    # names), and a traceback or a span would carry it.
+                    raise NarrationNotStored(
+                        _constraint(again) or type(again.orig).__name__
+                    ) from None
         finally:
             # Roll back first: after a database error the transaction is
             # aborted and the unlock would fail, stranding the claim on a
