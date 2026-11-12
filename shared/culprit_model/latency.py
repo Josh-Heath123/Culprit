@@ -35,7 +35,7 @@ Deterministic and dependency-free (`.claude/rules/determinism.md`).
 from math import comb
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from culprit_model.subjects import SubjectError, SubjectKind
 from culprit_model.subjects import build as build_subject
@@ -51,6 +51,14 @@ CONFIDENCE = 90
 BUDGET_PREDICATES: dict[str, int] = {"latency_p50_ms": 50, "latency_p95_ms": 95}
 #: The most requests one latency reading may record — the probe's hard cap.
 MAX_REQUESTS = 50
+#: The largest budget, in milliseconds. Not a threshold Culprit judges by:
+#: a bound on what can be declared, because the probe's whole run is 120 s
+#: and a request must be able to take longer than the budget for a timeout
+#: to mean "slower than the budget". Go holds the same number.
+MAX_BUDGET_MS = 60_000
+#: The largest sample, in microseconds: no request is timed past the
+#: probe's 120 s run, so anything above this is not a measurement.
+MAX_SAMPLE_US = 1_000_000_000
 
 INCONCLUSIVE = "inconclusive"
 PASS = "pass"
@@ -70,10 +78,20 @@ class Budget(BaseModel):
 
     subject: str = Field(min_length=1)
     predicate: str
-    value: StrictInt = Field(gt=0)
+    #: Whole milliseconds, 1 to MAX_BUDGET_MS. A float with no fraction
+    #: (`300.0`) is accepted, as the Go loader accepts it.
+    value: int
     #: Required, as for an invariant: a budget nobody explained is one
     #: nobody can safely change.
     why: str = Field(min_length=1)
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _value_is_whole_milliseconds(cls, value: Any) -> int:
+        try:
+            return _int(value, "a budget", minimum=1, maximum=MAX_BUDGET_MS)
+        except LatencyShapeError as exc:
+            raise ValueError(f"{exc} (milliseconds)") from None
 
     @field_validator("predicate")
     @classmethod
@@ -100,7 +118,7 @@ class Budget(BaseModel):
 # ---- the rule ------------------------------------------------------------------
 
 
-def _int(value: Any, name: str, minimum: int = 0) -> int:
+def _int(value: Any, name: str, minimum: int = 0, maximum: int | None = None) -> int:
     # bool is an int in Python; a JSON true is not a count. A float with no
     # fraction is accepted, because JSON decoded in Go arrives as one.
     if isinstance(value, bool):
@@ -111,6 +129,8 @@ def _int(value: Any, name: str, minimum: int = 0) -> int:
         value = int(value)
     if not isinstance(value, int) or value < minimum:
         raise LatencyShapeError(f"{name} must be a whole number of at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise LatencyShapeError(f"{name} must be at most {maximum}")
     return value
 
 
@@ -161,7 +181,7 @@ def inputs(
     raw = measured.get("samples_us")
     if not isinstance(raw, list):
         raise LatencyShapeError("samples_us must be a list")
-    samples = [_int(item, "a sample") for item in raw]
+    samples = [_int(item, "a sample", maximum=MAX_SAMPLE_US) for item in raw]
     timeouts = _int(measured.get("timeouts"), "timeouts")
     if len(samples) + timeouts > requests:
         raise LatencyShapeError("more samples and timeouts than requests")
@@ -172,7 +192,7 @@ def inputs(
         raise LatencyShapeError("expected must name exactly one budget predicate")
     if BUDGET_PREDICATES[declared[0]] != percentile:
         raise LatencyShapeError(f"the budget is {declared[0]} but p{percentile} was measured")
-    budget = _int(expected[declared[0]], "the budget", minimum=1)
+    budget = _int(expected[declared[0]], "the budget", minimum=1, maximum=MAX_BUDGET_MS)
     return percentile, budget, requests, samples, timeouts
 
 

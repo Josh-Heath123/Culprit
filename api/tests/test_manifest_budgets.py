@@ -47,6 +47,20 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
     assert dump_manifest(again) == exported
 
 
+def test_a_whole_float_and_the_largest_budget_load_as_the_go_loader_loads_them() -> None:
+    assert load_manifest(_manifest("latency_p95_ms", "300.0")).budgets[0].value == 300
+    assert load_manifest(_manifest("latency_p95_ms", 60_000)).budgets[0].value == 60_000
+
+
+def test_two_budgets_for_one_route_and_predicate_are_refused() -> None:
+    twice = _manifest("latency_p95_ms", 300) + (
+        f"  - subject: {json.dumps(ITEMS)}\n    predicate: latency_p95_ms\n"
+        "    value: 900\n    why: the same route again\n"
+    )
+    with pytest.raises(ManifestError, match="repeats"):
+        load_manifest(twice)
+
+
 @pytest.mark.parametrize("predicate", ["latency_p50_ms", "latency_p95_ms"])
 def test_a_known_budget_predicate_loads(predicate: str) -> None:
     manifest = load_manifest(_manifest(predicate, 300))
@@ -61,6 +75,8 @@ def test_a_known_budget_predicate_loads(predicate: str) -> None:
         ("latency_p95_ms", 0),
         ("latency_p95_ms", 2.5),
         ("latency_p95_ms", '"fast"'),
+        ("latency_p95_ms", 60_001),
+        ("latency_p95_ms", 5_000_000_000_000),
     ],
 )
 def test_a_budget_the_rule_cannot_use_is_refused(predicate: str, value: object) -> None:

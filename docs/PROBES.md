@@ -150,11 +150,12 @@ What it sends, and nothing else:
   is `inconclusive` with nothing sent. A route that answers 401 measures
   the refusal, not the route, so its budget is `inconclusive`.
 - **A new connection per request,** timed from dialling to the last byte of
-  the response; the connection's setup (name resolution, TCP, TLS) is
+  the response (or its first 1 MiB); the connection's setup (name resolution, TCP, TLS) is
   recorded separately in `connect_us`. No redirect is followed.
 
 A **sample** is a `2xx` answer or a timeout. Each request's timeout is
-twice the budget plus 500 ms, and a timeout counts as slower than the
+twice the budget plus 500 ms (cut to what is left of the probe's 120 s run),
+and a timeout counts as slower than the
 budget. Anything else is not a sample (`not_samples` counts them).
 
 The verdict is a pure function of the reading, so the reading carries the

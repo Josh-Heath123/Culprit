@@ -57,16 +57,16 @@ func TestTheRanksAreTheBinomialsWorkedByHand(t *testing.T) {
 func TestMovingABoundOneRankTurnsTheFixtureRed(t *testing.T) {
 	fixture := readFixture[latencyFixture](t, "latency_conformance.json")
 	for _, shift := range []string{"lower", "upper"} {
-		lower, upper := LowerRank, UpperRank
+		lower, upper := lowerRank, upperRank
 		if shift == "lower" {
-			LowerRank = func(n, p int) int {
+			lowerRank = func(n, p int) int {
 				if rank := lower(n, p); rank > 0 && rank < n {
 					return rank + 1
 				}
 				return lower(n, p)
 			}
 		} else {
-			UpperRank = func(n, p int) int {
+			upperRank = func(n, p int) int {
 				if rank := upper(n, p); rank > 1 {
 					return rank - 1
 				}
@@ -80,7 +80,7 @@ func TestMovingABoundOneRankTurnsTheFixtureRed(t *testing.T) {
 				differing++
 			}
 		}
-		LowerRank, UpperRank = lower, upper
+		lowerRank, upperRank = lower, upper
 		if differing == 0 {
 			t.Errorf("moving the %s bound one rank changed no case", shift)
 		}

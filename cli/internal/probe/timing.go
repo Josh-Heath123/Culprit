@@ -20,8 +20,9 @@ import (
 //
 // GET only, no header, no body, and no redirect followed: a redirect is an
 // answer other than 2xx, so it is not a sample. The response body is read
-// to its last byte, under the same size cap as every other request, and
-// discarded unread.
+// to its last byte or to the same 1 MiB cap every other request has,
+// whichever comes first, and discarded unread: past the cap, the time is
+// to the cap, not to the last byte (LIMITS).
 
 // Timing is one timed request.
 type Timing struct {
@@ -30,7 +31,7 @@ type Timing struct {
 	// ready to send on.
 	Connect time.Duration
 	// Total is from the start of the request to the last byte of the
-	// response.
+	// response, or to MaxBodyBytes of it.
 	Total time.Duration
 	// TimedOut says the request did not complete within its timeout. A
 	// timeout is a sample slower than any answer, not an error.

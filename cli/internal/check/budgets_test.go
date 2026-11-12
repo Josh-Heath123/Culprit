@@ -141,6 +141,14 @@ func TestAnXCulpritBudgetThatIsNotABudgetIsASkipNotAFact(t *testing.T) {
 	}
 }
 
+func TestAWholeFloatBudgetLoadsAsTheAPIsModelLoadsIt(t *testing.T) {
+	budgets := "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300.0, why: w}\n" +
+		"  - {subject: \"http:shop/GET /items\", predicate: latency_p50_ms, value: 60000, why: w}\n"
+	if _, err := extract.LoadManifest(writeBudgetProject(t, budgets)); err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+}
+
 func TestABudgetIsRefusedAtLoadUnlessItIsWellFormed(t *testing.T) {
 	cases := map[string]string{
 		"unknown predicate": "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p99_ms, value: 300, why: w}\n",
@@ -150,6 +158,10 @@ func TestABudgetIsRefusedAtLoadUnlessItIsWellFormed(t *testing.T) {
 		"text":              "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: fast, why: w}\n",
 		"pattern":           "budgets:\n  - {subject: \"http:shop/*\", predicate: latency_p95_ms, value: 300, why: w}\n",
 		"not canonical":     "budgets:\n  - {subject: \"http:Shop/get /items\", predicate: latency_p95_ms, value: 300, why: w}\n",
+		"over the bound":    "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 60001, why: w}\n",
+		"huge":              "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 5000000000000, why: w}\n",
+		"repeated": "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}\n" +
+			"  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 900, why: w}\n",
 	}
 	for name, budgets := range cases {
 		if _, err := extract.LoadManifest(writeBudgetProject(t, budgets)); err == nil {

@@ -436,6 +436,22 @@ class Manifest(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _check_budgets_are_not_repeated(self) -> "Manifest":
+        """One budget per subject and predicate in a file, as the Go loader
+        holds: two would be one source saying two things, and one of them
+        would be measured and the other dropped without a word."""
+        seen: set[tuple[str, str]] = set()
+        for index, budget in enumerate(self.budgets):
+            key = (budget.subject, budget.predicate)
+            if key in seen:
+                raise ValueError(
+                    f"budgets[{index}] repeats an earlier budget: one subject and "
+                    "predicate may have one budget in a file"
+                )
+            seen.add(key)
+        return self
+
+    @model_validator(mode="after")
     def _check_version(self) -> "Manifest":
         if self.version != MANIFEST_VERSION:
             raise ValueError(

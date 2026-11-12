@@ -214,7 +214,7 @@ sends a fixed number of plain `GET` requests to the one route a declared
 budget names: 50 for a p95 budget, 20 for a p50, one at a time, at least
 50 ms apart, each on a new connection, with no header beyond the
 defaults, no body and no credential. It follows no redirect, reads each
-response to its last byte under the same 1 MiB cap, and keeps only the
+response to its last byte or the same 1 MiB cap, whichever comes first, and keeps only the
 status class, the time each took and the connection setup time — never a
 header value or a byte of the body. No setting raises the count. That is
 more requests than any other probe makes, which is why its manifest says

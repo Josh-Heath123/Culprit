@@ -222,7 +222,17 @@ func runProbe(ctx context.Context, in probeInput) ([]model.Reading, *capability.
 		factSets = append(factSets, verified.Bundle.Facts)
 	}
 
-	selected := in.ProbeIDs
+	// Each probe once. Naming one twice — `-p x -p x`, or a list over
+	// culprit_probe — ran it twice, concurrently: for probe.http.latency
+	// that is twice its request cap in one run (Phase 36 phase audit).
+	var selected []string
+	seen := map[string]bool{}
+	for _, id := range in.ProbeIDs {
+		if !seen[id] {
+			seen[id] = true
+			selected = append(selected, id)
+		}
+	}
 	if len(selected) == 0 {
 		selected = catalogue.IDs()
 	}

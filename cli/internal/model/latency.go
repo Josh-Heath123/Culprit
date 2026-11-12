@@ -33,6 +33,16 @@ const LatencyConfidence = 90
 // the probe's hard cap.
 const LatencyMaxRequests = 50
 
+// MaxBudgetMS is the largest budget, in milliseconds: a bound on what can
+// be declared, not a threshold anything is judged by. The probe's whole
+// run is 120 s, and a request must be able to take longer than the budget
+// for a timeout to mean "slower than the budget". Python holds the same.
+const MaxBudgetMS = 60_000
+
+// MaxSampleUS is the largest sample, in microseconds: no request is timed
+// past the probe's run, so anything above this is not a measurement.
+const MaxSampleUS = 1_000_000_000
+
 // BudgetPredicates are the predicates a budget may name, with the
 // percentile each declares. A closed set, grown one phase at a time (P1).
 var BudgetPredicates = map[string]int{
@@ -52,15 +62,28 @@ func shapeError(format string, args ...any) error {
 // wholeNumber accepts what a measurement map can hold for a count: an int
 // from a probe, or a float64 with no fraction from decoded JSON.
 func wholeNumber(value any, name string, minimum int) (int, error) {
+	return boundedNumber(value, name, minimum, math.MaxInt32)
+}
+
+// boundedNumber is wholeNumber with a largest value. Bounded at most at
+// MaxInt32, so a float decoded from JSON converts exactly and Python, whose
+// ints are unbounded, is held to the same numbers.
+func boundedNumber(value any, name string, minimum, maximum int) (int, error) {
 	var number int
 	switch typed := value.(type) {
 	case int:
 		number = typed
 	case int64:
+		if typed > math.MaxInt32 || typed < math.MinInt32 {
+			return 0, shapeError("%s must be at most %d", name, maximum)
+		}
 		number = int(typed)
 	case float64:
-		if typed != math.Trunc(typed) || math.IsInf(typed, 0) || math.Abs(typed) > 1e15 {
+		if typed != math.Trunc(typed) || math.IsInf(typed, 0) || math.IsNaN(typed) {
 			return 0, shapeError("%s must be a whole number", name)
+		}
+		if math.Abs(typed) > math.MaxInt32 {
+			return 0, shapeError("%s must be at most %d", name, maximum)
 		}
 		number = int(typed)
 	case json.Number:
@@ -74,6 +97,9 @@ func wholeNumber(value any, name string, minimum int) (int, error) {
 	}
 	if number < minimum {
 		return 0, shapeError("%s must be a whole number of at least %d", name, minimum)
+	}
+	if number > maximum {
+		return 0, shapeError("%s must be at most %d", name, maximum)
 	}
 	return number, nil
 }
@@ -121,7 +147,7 @@ func ParseLatencyInputs(measured, expected map[string]any) (LatencyInputs, error
 	}
 	in.SamplesUS = make([]int, 0, len(raw))
 	for _, item := range raw {
-		sample, err := wholeNumber(item, "a sample", 0)
+		sample, err := boundedNumber(item, "a sample", 0, MaxSampleUS)
 		if err != nil {
 			return in, err
 		}
@@ -148,7 +174,7 @@ func ParseLatencyInputs(measured, expected map[string]any) (LatencyInputs, error
 	if BudgetPredicates[declared[0]] != in.Percentile {
 		return in, shapeError("the budget is %s but p%d was measured", declared[0], in.Percentile)
 	}
-	if in.BudgetMS, err = wholeNumber(expected[declared[0]], "the budget", 1); err != nil {
+	if in.BudgetMS, err = boundedNumber(expected[declared[0]], "the budget", 1, MaxBudgetMS); err != nil {
 		return in, err
 	}
 	return in, nil
@@ -179,7 +205,16 @@ func atConfidence(sum, total *big.Int) bool {
 
 // LowerRank is the largest rank l with P(Binomial(n, p) >= l) at
 // LatencyConfidence, or 0 when there is none.
-var LowerRank = func(n, percentile int) int {
+func LowerRank(n, percentile int) int { return lowerRank(n, percentile) }
+
+// UpperRank is the smallest rank u with P(Binomial(n, p) <= u-1) at
+// LatencyConfidence, or 0 when there is none.
+func UpperRank(n, percentile int) int { return upperRank(n, percentile) }
+
+// lowerRank and upperRank are variables only so this package's own test
+// can move a bound one rank and watch the fixture turn red. Unexported: no
+// other package can swap the rule a reading is validated by.
+var lowerRank = func(n, percentile int) int {
 	terms, total := binomialTerms(n, percentile)
 	tail := new(big.Int)
 	for rank := n; rank >= 1; rank-- {
@@ -191,9 +226,7 @@ var LowerRank = func(n, percentile int) int {
 	return 0
 }
 
-// UpperRank is the smallest rank u with P(Binomial(n, p) <= u-1) at
-// LatencyConfidence, or 0 when there is none.
-var UpperRank = func(n, percentile int) int {
+var upperRank = func(n, percentile int) int {
 	terms, total := binomialTerms(n, percentile)
 	head := new(big.Int)
 	for rank := 1; rank <= n; rank++ {
@@ -238,8 +271,8 @@ func JudgeLatency(measured, expected map[string]any) (Verdict, string, error) {
 	}
 	over := func(value int) bool { return value == timeoutSample || value > limit }
 
-	lower := LowerRank(n, p)
-	upper := UpperRank(n, p)
+	lower := lowerRank(n, p)
+	upper := upperRank(n, p)
 	if lower > 0 && over(ordered[lower-1]) {
 		return VerdictFail, fmt.Sprintf(
 			"p%d is over the %d ms budget: at %d%% confidence it is at least %s (sample %d of %d)",

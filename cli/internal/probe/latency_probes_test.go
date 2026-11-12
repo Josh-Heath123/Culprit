@@ -255,3 +255,80 @@ func TestTheLatencyProbeIsTheOneTheRuleJudges(t *testing.T) {
 		t.Fatalf("the latency probe is %q, but readings are judged for %q", id, model.LatencyProbeID)
 	}
 }
+
+// TestAPostBudgetSendsNothingWhateverTheInputsSay: the method comes from
+// the budget's subject, so a url input with no method, method=GET, or a
+// base_url cannot turn a POST route's budget into timed GETs (Phase 36
+// phase audit, finding B).
+func TestAPostBudgetSendsNothingWhateverTheInputsSay(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	budget := declaredAs("http:inventory-service/POST /orders", "latency_p50_ms", 300)
+	for name, request := range map[string]Request{
+		"a url input":          {Target: "component:inventory-service", Inputs: map[string]any{"url": server.URL + "/orders"}},
+		"url and method=GET":   {Target: "component:inventory-service", Inputs: map[string]any{"url": server.URL + "/orders", "method": "GET"}},
+		"the http: POST route": {Target: "http:inventory-service/POST /orders", Inputs: map[string]any{"url": server.URL + "/orders"}},
+		"base_url and method":  {Target: "http:inventory-service/POST /orders", Inputs: map[string]any{"base_url": server.URL, "method": "get"}},
+	} {
+		request.ProbeID, request.Environment, request.Expectation = model.LatencyProbeID, "local", budget
+		readings := NewRunner(Options{
+			Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+		}).Run(context.Background(), []Request{request})
+		if readings[0].Verdict != model.VerdictInconclusive {
+			t.Errorf("%s: %s: %s", name, readings[0].Verdict, readings[0].Reason)
+		}
+	}
+	if got := server.count(); got != 0 {
+		t.Errorf("%d requests were sent for a POST route's budget", got)
+	}
+}
+
+// TestTwoLatencyRunsAtOnceDoNotInterleave: the runner runs requests
+// concurrently, and two latency runs in one process take turns, so no two
+// requests are closer than the spacing (finding A).
+func TestTwoLatencyRunsAtOnceDoNotInterleave(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	request := Request{
+		ProbeID: model.LatencyProbeID, Target: "component:inventory-service", Environment: "local",
+		Inputs: map[string]any{"url": server.URL + "/ready"}, Expectation: p50(300),
+	}
+	readings := NewRunner(Options{
+		Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+		Concurrency: 4,
+	}).Run(context.Background(), []Request{request, request})
+	for _, reading := range readings {
+		if reading.Measured["requests"] != 20 {
+			t.Errorf("a run sent %v requests, want 20", reading.Measured["requests"])
+		}
+	}
+	if gap := server.closestGap(); gap < LatencySpacing {
+		t.Errorf("two requests %s apart, want at least %s", gap, LatencySpacing)
+	}
+}
+
+// TestABudgetOutsideItsBoundsSendsNothing: an integer budget past
+// model.MaxBudgetMS overflowed the request timeout to a negative duration
+// and failed with nothing sent (finding E).
+func TestABudgetOutsideItsBoundsSendsNothing(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	for _, value := range []any{5_000_000_000_000, int64(5_000_000_000_000), model.MaxBudgetMS + 1, 0, -1, 1.5} {
+		reading := measureLatency(t, server,
+			declaredAs("http:inventory-service/GET /ready", "latency_p50_ms", value), nil, nil)
+		if reading.Verdict != model.VerdictInconclusive {
+			t.Errorf("budget %v: %s: %s", value, reading.Verdict, reading.Reason)
+		}
+	}
+	if got := server.count(); got != 0 {
+		t.Errorf("%d requests were sent for budgets out of bounds", got)
+	}
+}
+
+// TestTheLargestBudgetIsStillMeasured: a request's timeout is cut to what
+// the run has left rather than the run stopping, so a 60 s budget against
+// a fast route still takes its twenty samples (finding F).
+func TestTheLargestBudgetIsStillMeasured(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	reading := measureLatency(t, server, p50(model.MaxBudgetMS), nil, nil)
+	if reading.Verdict != model.VerdictPass || server.count() != 20 {
+		t.Errorf("%s after %d requests: %s", reading.Verdict, server.count(), reading.Reason)
+	}
+}

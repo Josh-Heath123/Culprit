@@ -122,26 +122,29 @@ func registrationsOutsideBuiltIn(t *testing.T, root string) []string {
 			t.Fatalf("could not type-check %s: %v", directory, err)
 		}
 		for _, file := range files {
+			// Every declaration, not only function bodies: a package-level
+			// initializer can register as well as a function can (Phase 36
+			// phase audit).
 			for _, declaration := range file.Decls {
-				function, ok := declaration.(*ast.FuncDecl)
-				if !ok || function.Body == nil {
-					continue
+				where, inBuiltIn := "package level", false
+				if function, ok := declaration.(*ast.FuncDecl); ok {
+					where = function.Name.Name
+					inBuiltIn = function.Recv == nil && function.Name.Name == "BuiltIn" &&
+						pkg.Path() == modulePath+"/internal/probe"
 				}
-				ast.Inspect(function.Body, func(node ast.Node) bool {
+				ast.Inspect(declaration, func(node ast.Node) bool {
 					selector, ok := node.(*ast.SelectorExpr)
 					if !ok || selector.Sel.Name != "Register" {
 						return true
 					}
 					selection := info.Selections[selector]
-					if selection == nil || !isCatalogueRegister(selection.Obj()) {
+					if selection == nil || !registersAProbe(selection.Obj()) {
 						return true
 					}
-					inBuiltIn := function.Recv == nil && function.Name.Name == "BuiltIn" &&
-						pkg.Path() == modulePath+"/internal/probe"
 					if !inBuiltIn {
 						position := fset.Position(selector.Pos())
 						relative, _ := filepath.Rel(root, position.Filename)
-						found = append(found, filepath.ToSlash(relative)+": "+function.Name.Name)
+						found = append(found, filepath.ToSlash(relative)+": "+where)
 					}
 					return true
 				})
@@ -150,6 +153,28 @@ func registrationsOutsideBuiltIn(t *testing.T, root string) []string {
 	}
 	sort.Strings(found)
 	return found
+}
+
+// registersAProbe reports whether a method could register a probe:
+// Catalogue's own Register, or any Register that takes a probe.Probe — an
+// interface method a Catalogue satisfies is a way to call it that names no
+// Catalogue (Phase 36 phase audit).
+func registersAProbe(object types.Object) bool {
+	if isCatalogueRegister(object) {
+		return true
+	}
+	signature, ok := object.Type().(*types.Signature)
+	if !ok {
+		return false
+	}
+	for index := 0; index < signature.Params().Len(); index++ {
+		if named, ok := signature.Params().At(index).Type().(*types.Named); ok &&
+			named.Obj().Name() == "Probe" && named.Obj().Pkg() != nil &&
+			strings.HasSuffix(named.Obj().Pkg().Path(), "internal/probe") {
+			return true
+		}
+	}
+	return false
 }
 
 // isCatalogueRegister reports whether a method object is Catalogue's
@@ -231,8 +256,25 @@ func TestARegistrationElsewhereIsFound(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(stray, "stray.go"), []byte(code), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The two ways around the first version of this test: a package-level
+	// initializer, and a call through an interface naming no Catalogue.
+	evasions := "package stray\n\nimport \"github.com/josh-heath123/culprit/cli/internal/probe\"\n\n" +
+		"var extra probe.Probe\n\n" +
+		"// Cat registers at package level.\nvar Cat = func() *probe.Catalogue {\n" +
+		"\tc := probe.BuiltIn()\n\t_ = c.Register(extra)\n\treturn c\n}()\n\n" +
+		"type registrar interface{ Register(probe.Probe) error }\n\n" +
+		"// Through registers through an interface.\nfunc Through(p probe.Probe) error {\n" +
+		"\tvar r registrar = probe.BuiltIn()\n\treturn r.Register(p)\n}\n"
+	if err := os.WriteFile(filepath.Join(stray, "evasions.go"), []byte(evasions), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	found := registrationsOutsideBuiltIn(t, root)
-	if len(found) != 1 || found[0] != "internal/stray/stray.go: Smuggle" {
-		t.Fatalf("a registration outside BuiltIn was not found: %v", found)
+	want := []string{
+		"internal/stray/evasions.go: Through",
+		"internal/stray/evasions.go: package level",
+		"internal/stray/stray.go: Smuggle",
+	}
+	if strings.Join(found, " | ") != strings.Join(want, " | ") {
+		t.Fatalf("registrations outside BuiltIn found: %v, want %v", found, want)
 	}
 }

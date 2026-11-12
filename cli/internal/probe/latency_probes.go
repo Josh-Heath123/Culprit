@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/model"
@@ -43,9 +44,26 @@ var latencyRequests = map[int]int{50: 20, 95: model.LatencyMaxRequests}
 
 // latencyTimeout is one request's timeout: above the budget, so a timeout
 // is always slower than it. The probe's own timeout bounds the whole run.
+// budgetMS is at most model.MaxBudgetMS, so this cannot overflow.
 func latencyTimeout(budgetMS int) time.Duration {
 	return time.Duration(2*budgetMS)*time.Millisecond + 500*time.Millisecond
 }
+
+// latencyRuns lets one latency run at a time send requests from this
+// process. The runner runs probes concurrently, and the same probe named
+// twice (`-p probe.http.latency -p probe.http.latency`, or a list over
+// culprit_probe) would otherwise send two runs' requests interleaved, a
+// fraction of a millisecond apart (found by the Phase 36 phase audit).
+var latencyRuns sync.Mutex
+
+// latencyLastEnded is when this process's last latency request ended,
+// guarded by latencyRuns: the spacing holds between runs as well as within
+// one.
+var latencyLastEnded time.Time
+
+// runMargin is kept clear of the run's deadline, so no request is cut off
+// by it: one cut off measured nothing.
+const runMargin = 100 * time.Millisecond
 
 type httpLatency struct{}
 
@@ -95,6 +113,17 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 	if request.Expectation == nil {
 		return withoutExpectation(request, nil, "no request was sent")
 	}
+	// The budget's own subject says which route it is on, whatever the
+	// inputs say: a `url` input with no `method`, or `method=GET`, against
+	// a POST route's budget would otherwise time GETs and judge them
+	// against it (found by the Phase 36 phase audit).
+	if kind, parts, err := model.ParseSubject(request.Expectation.Subject); err != nil || kind != model.KindHTTP {
+		return inconclusive("the budget is not on an http: route, so there is no route to time")
+	} else if !strings.EqualFold(parts["method"], "GET") {
+		return inconclusive(fmt.Sprintf(
+			"the budget is on %s %s, which is not a GET route, and this probe sends GET only: "+
+				"nothing was sent, so its latency cannot be measured", parts["method"], parts["path"]))
+	}
 	predicate := request.Expectation.Predicate
 	percentile, known := model.BudgetPredicates[predicate]
 	budget, valid := wholeMilliseconds(request.Expectation.Value)
@@ -107,24 +136,37 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 		return inconclusive("no HTTP client that can time a request is available to this agent")
 	}
 
+	latencyRuns.Lock()
+	defer latencyRuns.Unlock()
+
 	count := latencyRequests[percentile]
 	if count > model.LatencyMaxRequests {
 		count = model.LatencyMaxRequests
 	}
-	timeout := latencyTimeout(budget)
+	limit := time.Duration(budget) * time.Millisecond
 	samples := make([]int, 0, count)
 	connects := make([]int, 0, count)
 	requests, timeouts, refused := 0, 0, 0
 	for requests < count {
-		if requests > 0 && !pause(ctx, LatencySpacing) {
+		if wait := LatencySpacing - time.Since(latencyLastEnded); wait > 0 && !pause(ctx, wait) {
 			break
 		}
-		// Stop rather than overrun the probe's own timeout: a request cut
-		// off by the run's deadline measured nothing.
-		if deadline, bounded := ctx.Deadline(); bounded && time.Until(deadline) < timeout+LatencySpacing {
+		// A request's timeout is cut to what the run has left, never past
+		// the run's deadline: a request cut off by the deadline measured
+		// nothing. It must still be longer than the budget, or a timeout
+		// would not mean "slower than the budget" — when it cannot be, the
+		// run stops.
+		timeout := latencyTimeout(budget)
+		if deadline, bounded := ctx.Deadline(); bounded {
+			if left := time.Until(deadline) - runMargin; left < timeout {
+				timeout = left
+			}
+		}
+		if timeout <= limit {
 			break
 		}
 		timing, err := timer.TimeGet(ctx, url, timeout)
+		latencyLastEnded = time.Now()
 		if ctx.Err() != nil {
 			break
 		}
@@ -140,6 +182,12 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 		default:
 			refused++
 		}
+	}
+
+	if requests == 0 {
+		return inconclusive(fmt.Sprintf(
+			"no request was sent: the probe's run could not give one request longer than the "+
+				"%d ms budget before its own deadline", budget))
 	}
 
 	measured := map[string]any{
@@ -175,16 +223,25 @@ func pause(ctx context.Context, wait time.Duration) bool {
 	}
 }
 
-// wholeMilliseconds reads a budget fact's value.
+// wholeMilliseconds reads a budget fact's value: a whole number of
+// milliseconds, 1 to model.MaxBudgetMS, as every loader holds it.
 func wholeMilliseconds(value any) (int, bool) {
+	var whole int
 	switch typed := value.(type) {
 	case int:
-		return typed, typed > 0
+		whole = typed
 	case int64:
-		return int(typed), typed > 0
+		if typed < 1 || typed > model.MaxBudgetMS {
+			return 0, false
+		}
+		whole = int(typed)
 	case float64:
-		whole := int(typed)
-		return whole, typed > 0 && float64(whole) == typed && typed < 1<<31
+		if typed < 1 || typed > model.MaxBudgetMS || typed != float64(int(typed)) {
+			return 0, false
+		}
+		whole = int(typed)
+	default:
+		return 0, false
 	}
-	return 0, false
+	return whole, whole >= 1 && whole <= model.MaxBudgetMS
 }

@@ -47,28 +47,53 @@ const BudgetExtractor = "culprit.yaml budgets"
 // says that want was not extracted, and the routes were.
 const BudgetSkipWant = "budgets"
 
-// budgetValue is a budget's whole, positive number of milliseconds.
+// budgetValue is a budget's whole number of milliseconds, 1 to
+// model.MaxBudgetMS — the same bounds culprit_model.latency.Budget holds,
+// so a manifest `culprit check` accepts is one `apply-model` accepts.
 func budgetValue(value any) (int, bool) {
+	var whole int
 	switch typed := value.(type) {
 	case int:
-		return typed, typed > 0
+		whole = typed
 	case int64:
-		return int(typed), typed > 0
+		if typed > model.MaxBudgetMS || typed < 1 {
+			return 0, false
+		}
+		whole = int(typed)
 	case uint64:
-		return int(typed), typed > 0 && typed < 1<<31
+		if typed > model.MaxBudgetMS {
+			return 0, false
+		}
+		whole = int(typed)
 	case float64:
-		whole := int(typed)
-		return whole, typed > 0 && float64(whole) == typed && typed < 1<<31
+		if typed < 1 || typed > model.MaxBudgetMS || typed != float64(int(typed)) {
+			return 0, false
+		}
+		whole = int(typed)
+	default:
+		return 0, false
 	}
-	return 0, false
+	return whole, whole >= 1 && whole <= model.MaxBudgetMS
 }
 
 // validateBudgets refuses a `budgets:` entry that cannot be measured
 // against. Refused rather than warned, like every other check-time section:
 // a budget that half-loads is a route silently never held to it.
 func (m *Manifest) validateBudgets() error {
+	first := map[string]int{}
 	for index, budget := range m.Budgets {
 		where := fmt.Sprintf("budgets[%d]", index)
+		// Two entries for one subject and predicate in one file are one
+		// source saying two things: the comparator sees one extractor and
+		// no conflict, and the probe would measure one and drop the other
+		// without a word (Phase 36 phase audit).
+		key := budget.Subject + "\x00" + budget.Predicate
+		if earlier, repeated := first[key]; repeated {
+			return &PolicyError{Message: fmt.Sprintf(
+				"%s repeats budgets[%d]: one subject and predicate may have one budget in a file",
+				where, earlier)}
+		}
+		first[key] = index
 		if strings.TrimSpace(budget.Why) == "" {
 			return &PolicyError{Message: where +
 				": `why` is required. A budget nobody explained is one nobody can safely change."}
@@ -80,7 +105,7 @@ func (m *Manifest) validateBudgets() error {
 		}
 		if _, ok := budgetValue(budget.Value); !ok {
 			return &PolicyError{Message: where +
-				": `value` must be a whole, positive number of milliseconds"}
+				fmt.Sprintf(": `value` must be a whole number of milliseconds, 1 to %d", model.MaxBudgetMS)}
 		}
 		if strings.HasSuffix(budget.Subject, "*") {
 			return &PolicyError{Message: where +

@@ -2492,12 +2492,25 @@ chose.
 
 50 requests for a p95 budget, 20 for a p50, one at a time, at least 50 ms
 apart. Nothing configures the count or the spacing — no input, no
-`probes:` setting — and 50 is a hard cap in the probe. Each request's
-timeout is twice the budget plus 500 ms, and the whole run is bounded by
-the probe's own 120 s: a route slow enough to reach that stops early, with
-fewer samples. `culprit probe <target>` with no `-p` runs every probe,
-this one included, so against a route with a budget it sends those
-requests.
+`probes:` setting — and 50 is a hard cap in the probe. Naming the probe
+twice (`-p probe.http.latency -p probe.http.latency`, or twice in
+`culprit_probe`'s list) runs it once, and two latency runs in one process
+take turns, the 50 ms holding between them as within one. Each request's
+timeout is twice the budget plus 500 ms, cut to what is left of the
+probe's own 120 s run; when what is left is no longer than the budget, the
+run stops with the samples it has. A route that slow is `inconclusive`
+for want of samples, and one that could not be sent a single request says
+so. `culprit probe <target>` with no `-p` runs every probe, this one
+included, so against a route with a budget it sends those requests.
+
+### A budget is 1 ms to 60 s
+
+A budget is a whole number of milliseconds, 1 to 60 000; a float with no
+fraction (`300.0`) is accepted. A larger one is refused at load — in
+`culprit check` and `apply-model` alike — because no request in a 120 s run
+could be given a timeout long enough to show it was slower. One subject
+and predicate may have one budget in a file: two are refused at load, not
+one measured and the other dropped.
 
 ### What a sample is
 
@@ -2508,7 +2521,9 @@ connection that fails outright is not a sample; enough of them leave too
 few samples, and the verdict is `inconclusive`. Each request is on a new
 connection, timed from dialling to the last byte, so it includes name
 resolution, the TCP handshake and any TLS handshake (recorded separately as
-`connect_us`). A client that keeps connections open will see less.
+`connect_us`). A client that keeps connections open will see less. A
+response larger than 1 MiB is timed to its first 1 MiB, the read cap every
+probe has, not to its last byte.
 
 ### One budget, every environment
 
