@@ -639,6 +639,86 @@ Part 2's step 0 confirms it.
 - No change to how errors are walked.
 - Nothing for Phase 37.
 
+**Architecture review of part 2, 2026-11-12 — signed off. Phase 36 is
+complete once `main`'s push run is green.** PR #38 was merged as `d785af4`. I
+read the checks from GitHub's API. Two pull-request runs passed every job:
+43235902449 on `4c7bc6e` and 43238653732 on `a7c6ca3`. Both included the fault
+library, both `e2e` legs and `narration-parity`.
+
+The library's latency fault now ends where the plan wanted it to. It roots at
+`component:inventory-service` and verifies after its fix. A wrong fix gives
+`not_resolved`. Without budgets it stays `inconclusive`, saying none was
+judged. Q21, open since Phase 34, is closed.
+
+The README's step 4 was run for real on Malcolm's machine:
+- `diagnose` rooted at `api` with a reproduced p95 of at least 402 ms;
+- `verify` said `verified` once the sleep came out.
+
+Three audit rounds found real defects, and all are fixed with red cases:
+- a `url` that escaped its route (`/ready%3F/../../admin`, userinfo sent as
+  Basic auth);
+- YAML merge keys getting past the literal rule;
+- a `DELETE` that left the binary with the method scan green.
+
+Decisions:
+
+- **Q26 — two structural facts replace the method scan.** A syntactic scan
+  holds only against the forms it knows. Three audits in a row found new ones,
+  and the third got a `DELETE` out. That is the denylist pattern again. What
+  holds instead is this:
+  - **Only `http.go` and `timing.go` in `internal/probe` import `net/http`.**
+    This is already true. A test holds it as an allowlist, the way
+    `TestTheNetworkBoundaryIsAnAllowlist` holds its allowlist, and an import in
+    a third file shows it red. No other file in the package can then name a
+    client, a transport or a request constructor.
+  - **Every client those two files build comes from one constructor**, and
+    that constructor installs `methodGuard`. The guard refuses anything but a
+    bodiless `GET` as the request leaves, which is shown red. A request whose
+    method is changed after construction still leaves through the guard.
+
+  With both facts held, the 26-form scan is retired; it would need a new case
+  for every new syntax, and the facts do not. LIMITS keeps "a guard against
+  ordinary code, not a proof against deliberate code". Raw bytes on a socket
+  that `net.tcp.connect` opened are outside it. This is carried into Phase 37
+  part 1.
+- **`planned` becomes required (F).** It is a rule input, and a reading without
+  it is judged on its samples alone. It becomes required in Go, Python and the
+  API, and the probe goes to version 2. Culprit is unpublished, so no reading
+  without `planned` exists outside a developer's database. If one arrives it is
+  refused, not re-judged where it is stored. Carried into Phase 37 part 1.
+- **The two manifest readers must know the same keys.** The run did not add
+  `isolation:` to the demo because the API's manifest model does not know it.
+  A user who sets `isolation:`, which the Go loader reads, would therefore break
+  the API path: the fresh-clone pattern again, and two readers of one file
+  disagreeing. The API's model accepts every top-level key the Go loader does,
+  held by a shared list both read, starting with `isolation:`. Carried into
+  Phase 37 part 1.
+- **`4c7bc6e` was not re-audited.** Q26 retires its method-scan cases. Phase
+  37 part 1's phase-auditor re-audits its manifest and fixture changes first.
+- **The fault-library job now takes about 11 minutes (it took 3.5).** Accepted.
+  When it passes 15 minutes, split it into shards. Before that, a test must
+  prove that the shards together cover every case in `expected.json` exactly
+  once, because a filter that can skip a case looks like a gate and isn't.
+- **Accepted as taken:**
+  - the second pass runs only when the error pass found no root and nothing
+    failing below the entry;
+  - the hypothesis's subject is the component, and each budgeted route is asked
+    as its own target;
+  - the root rule reads everything below the component, not only its callees;
+    this is the plan's own criterion, said properly;
+  - two slow branches: the first found depth-first is the root, the other is
+    listed, and the diagnosis is partial;
+  - a database below a slow root makes the diagnosis partial until Phase 37
+    gives databases budgets;
+  - how unbudgeted components are named;
+  - the hop root's ruling-out by the same reading;
+  - `same_run_as` in the verify record;
+  - verify's "no latency budget was judged";
+  - the demo's default wall clock, which the library's two runs of about 45 s
+    fit inside.
+- **Plan corrections (accepted):** criterion 5 (Q26 above), and the root rule's
+  wording.
+
 ---
 
 ### Phase 37 — The database: statements, plans and indexes
@@ -723,6 +803,180 @@ before anything reads statement text. `redact_credentials` misses
 it at the choke point, in Go and in Python, with a conformance case for each.
 P4 sends normalised statement text through this function, and a connection
 string or a password literal in a statement is exactly what it must catch.
+
+**How Phase 37 is run — decided 2026-11-12.** Where this block and the fields
+above differ, this block wins.
+
+**Three parts, three `/next` runs, an architecture review after each.**
+- **Part 1 — reading the database safely.** It covers:
+  - the carried-in items;
+  - the two capabilities;
+  - the boundary, with read-only sessions;
+  - `pg_stat_statements` in the quickstart;
+  - the demo's own database (P8);
+  - index facts, live and declared.
+
+  `culprit check` and capture see indexes. Nothing is timed or planned yet.
+- **Part 2 — statements and plans.** `query_mean_ms_max`,
+  `probe.db.statement_budget` and `probe.db.plan`, with their readings and
+  validation. Its criteria are written at part 1's review.
+- **Part 3 — the walk.** `statement_budget_exceeded` and `missing_index`, the
+  join across the planes (P5), and the library's fault and its verification.
+  Its criteria are written at part 2's review.
+
+Phase 36's last check, `main`'s push run on `d785af4`, is part 1's step 0.
+
+**Decisions — where the fields predate the build.**
+- **The boundary is structural, three times over.**
+  - **One file opens database connections.** Today
+    `internal/capture/database.go` is the only non-test file that imports
+    `pgx`. The database probes reach the database through it, or through a
+    sibling the allowlist names. An allowlist test holds this, and an import in
+    another file shows it red.
+  - **That file sends only templates.** A template is an unexported type whose
+    values are constants in that file. The only function that reaches `pgx`
+    takes a template, never a string. Values travel as bind parameters and are
+    never spliced into the text.
+  - **Every session is read-only and bounded at the server.**
+    `default_transaction_read_only = on` and a `statement_timeout` are set as
+    connection parameters. Even if the first two layers failed, Postgres itself
+    would refuse a write.
+
+  Field 12's test, which sends an arbitrary statement and an `EXPLAIN ANALYZE`
+  and expects both refused before they leave, holds the first two layers. A
+  third test sends a write through a deliberately weakened path and sees
+  Postgres refuse it.
+- **Only one non-constant text is ever sent, and it is part 2's.** It is a
+  statement read back from `pg_stat_statements`, in the same session, and sent
+  inside `EXPLAIN (GENERIC_PLAN, FORMAT JSON)`:
+  - it is chosen by `queryid`, never by an input, a tool argument or a reading;
+  - it must be a single statement whose text begins with `SELECT` or `WITH`;
+  - it goes through the extended protocol, which cannot carry a second
+    statement;
+  - `EXPLAIN` without `ANALYZE` executes nothing, and the session is read-only.
+
+  Part 1 builds the boundary that statement will pass through.
+- **Nothing an agent says reaches SQL.** Under `culprit mcp`, no tool argument
+  names a statement, a table, a column or a query id. The database probes take
+  their target from the database endpoint declared in `culprit.yaml`, as Q23
+  binds addresses, and the classification test covers every new input.
+- **`pg_stat_statements` is never reset**, because resetting is a write.
+  Timings are deltas between two snapshots taken in one session (P5). Part 1
+  confirms whether the quickstart's image preloads the extension (`SHOW
+  shared_preload_libraries`, recorded in the report). If it does not, part 1
+  turns it on for the quickstart. Creating the extension in the demo's database
+  is the demo's own setup, done by its migrations as their owner, never by
+  Culprit.
+- **The demo's database (P8).**
+  - **Where it lives.** It is a separate database in the quickstart's Postgres,
+    owned by its own role.
+  - **Its schema.** The schema comes from the demo's own Alembic migrations, so
+    the migration reader has real migrations to read.
+  - **The seeded table.** It is large enough that a sequential scan and an index
+    scan differ by more than any budget part 3 will declare. The run report says
+    how large, and why.
+  - **The route that reads it.** A new list route on inventory-service reads
+    from it. The existing routes and the fault library's existing cases do not
+    change.
+  - **Dependencies.** The demo may add SQLAlchemy and Alembic to its own
+    dependencies; the product gains none.
+  - **Culprit's own database** is never the demo's.
+- **Index facts use the existing `schema:` subject** (`database`, `table`,
+  `column`), so there is no new subject kind:
+  - CONFIGURED facts come from the live catalogue, in capture;
+  - INTENT facts come from the migration reader, which learns `create_index`
+    and `drop_index`.
+
+  What P5 needs is whether a column leads an index, because an index on (a, b)
+  serves a filter on a but not on b. That is the predicate. Declared against
+  live goes through the existing comparator, so an index the migrations declare
+  and the database lacks, or the reverse, is a divergence like any other.
+- **The recommended database role holds `pg_read_all_stats`, and `SELECT` on
+  the tables it must plan.** Postgres plans only what the role could run, so
+  that role *can* read rows, whatever Culprit chooses to send. PERMISSIONS says
+  so plainly, as it does for Kubernetes Secrets. `db.rows.read` stays separate
+  and is implied by nothing.
+- **Redaction comes first.** The widened `redact_credentials` lands before any
+  statement text is read, in both languages.
+
+**Part 1 — reading the database safely. Brief and criteria, 2026-11-12.**
+
+**Work order.**
+0. Confirm `main`'s push run on `d785af4` is green: the fault library, both
+   `e2e` legs and `narration-parity`. If a job failed on the runners' network,
+   re-run it; if a test failed, stop and escalate. Then have the phase-auditor
+   re-audit `4c7bc6e`.
+1. The carried-in items:
+   - `redact_credentials` widened, in Go and Python, with conformance cases:
+     `password=…`, Slack tokens, `user:pass@host`;
+   - Q26's two facts, and the method scan retired;
+   - `planned` required, with `probe.http.latency` at version 2;
+   - the manifest keys shared by the Go loader and the API's model, starting
+     with `isolation:`.
+2. `db.stats.read` and `db.plan.read`:
+   - in the model, in Go and Python (`capability_conformance.json`);
+   - in the catalogue;
+   - in the agent's configuration parser;
+   - in the control plane's allowance;
+   - in PERMISSIONS.
+
+   No capability implies another, and a test holds that.
+3. The boundary: one file opens connections, it sends only templates, and every
+   session is read-only and bounded. Today's capture and database probes move
+   behind it with their behaviour unchanged.
+4. `pg_stat_statements`: confirm it is loaded in the quickstart, or turn it on
+   (owned by the demo).
+5. The demo's database: its role, migrations, seeded table and the list route
+   that reads it. `demo-services/culprit.yaml` declares it as a database
+   component.
+6. Index facts: live from capture, declared from the migration reader.
+7. The documents:
+   - PERMISSIONS: the capabilities, the recommended role, and what its grants
+     reveal;
+   - LIMITS;
+   - the README's `culprit.yaml` reference.
+
+**Acceptance criteria (part 1).**
+- Nothing outside the template set reaches the database. An arbitrary
+  statement and an `EXPLAIN ANALYZE` are refused before they leave, and a test
+  counts what reaches the driver. The allowlist test fails on a `pgx` import in
+  a second file.
+- In CI, against the real database, a write sent through a deliberately
+  weakened path is refused by Postgres as read-only. `statement_timeout` is set
+  on every session.
+- The two capabilities validate in Go and Python from the shared fixture, and
+  an allowance can narrow them. Neither implies `db.rows.read`, and no
+  capability implies another.
+- On the demo's database, capture yields the seeded table's index facts and the
+  migration reader yields the declared ones. In a test database:
+  - an index dropped by hand is reported as declared but missing;
+  - an index created by hand is reported as live but undeclared.
+- `redact_credentials` removes `password=…`, a Slack token and the password of
+  `user:pass@host` in Go and Python, from shared cases, each red without the
+  change.
+- Q26:
+  - a third file that imports `net/http` fails the allowlist test;
+  - a client built other than by the guarded constructor fails;
+  - the guard refuses a non-`GET` and a body as each leaves.
+
+  Each is shown red.
+- A latency reading without `planned` is refused by Go, by Python and by the
+  API.
+- `isolation:` in `culprit.yaml` is accepted by the Go loader and by the API's
+  model. A key the Go loader knows and the API's model does not fails a test.
+- From a fresh `git clone`, the quickstart starts with the demo's database,
+  its migrations applied and its table seeded.
+- The fault library's existing cases are unchanged and green. `LLM_PROVIDER=none`
+  changes nothing. Every pull-request check is green.
+
+**Do NOT implement in part 1.**
+- No statement timing, no plan, and no budget on a statement: that is part 2.
+- No walk change: that is part 3.
+- No `EXPLAIN` of any kind sent.
+- No row read by Culprit.
+- No reset of `pg_stat_statements`.
+- No index created or dropped by Culprit.
+- No change to Culprit's own database for the demo.
 
 ---
 
