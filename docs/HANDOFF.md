@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **37, part 1 — Reading the database safely** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37: "How Phase 37 is run", then "Part 1". Step 0: `main`'s push run on `d785af4` green; then the phase-auditor re-audits `4c7bc6e`. |
-| Previous phase | **36, part 2 — The walk sees slow: signed off 2026-11-12** by the architecture session. **Phase 36 is complete** once `main`'s push run on `d785af4` is green. PR #38 was merged as `d785af4`; the pull request's runs 43235902449 and 43238653732 were green on every job, read from GitHub. Q26 is ruled. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
+| Current phase | **37, part 1 — Reading the database safely** — **`awaiting decision`** (Q27, blocking). Built; CI green on `fcd0b0a` (run 43263355094); PR #39. The phase-auditor found criterion 1 NOT MET and Q26's premise false, for one reason (Q27). Report in §5. |
+| Previous phase | **36, part 2 — The walk sees slow: signed off 2026-11-12.** **Phase 36 is complete:** `main`'s push run 43250669431 on `d785af4` green on every job. PR #38 was merged as `d785af4`; the pull request's runs 43235902449 and 43238653732 were green on every job, read from GitHub. Q26 is ruled. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-37-database`, to be cut from `origin/main` = `d785af4`. Its first commit is the Phase 36 sign-off, already in the working tree (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`; message `../phase-36-2-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
-| Blocking questions | None. Q26 is open, not blocking. |
+| Branch | `phase-37-database`, from `origin/main` = `d785af4`; PR #39. |
+| Blocking questions | **Q27** blocks part 1's completion. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q26 was ruled on 2026-11-12 (`PERFORMANCE_PLAN.md`, end of Phase 36): the method scan is replaced by two structural facts, a `net/http` import allowlist of two files and one guarded client constructor. This is carried into Phase 37 part 1. | | |
+| Q27 | **"One file" is a property of imports, not of use.** Q26 (only `http.go` and `timing.go` import `net/http`; every client from the guarded constructor) and Phase 37's boundary (only `database.go` imports pgx; it sends only templates) both assume a file that cannot *name* a type cannot *use* it. In Go it can: a method call or field access on a value needs no import. The phase-auditor added a file to `internal/probe`, importing nothing, that reached the guard's own transport through a client's fields and sent a `DELETE` (the server received it); and a file to `internal/capture` that took `openSession`'s connection and sent `EXPLAIN ANALYZE DELETE …` — which a read-only session does not stop for `EXPLAIN ANALYZE SELECT` or `pg_stat_statements_reset()`. Every test stayed green. **The structural fix** is package isolation: the guarded client (`newProbeRequest`, `methodGuard`, `newGuardedClient`, `RealHTTPClient`) and the database session (`openSession`, `send`, the templates, `PostgresReader`) each in a package of its own with one non-test file, where no other file can reach unexported fields — held by a test that the package has one file. Both new packages link `net`, so `TestTheNetworkBoundaryIsAnAllowlist` would have to name them: widening that allowlist is an escalation (§6), and the premise of a ruled decision is wrong. Decide: package isolation (and the allowlist naming the two packages), or accept "review covers the package" as the bound (LIMITS now says that), or another way. | 2026-11-12, Phase 37 part 1 run | **Blocking:** part 1's criterion 1, and Q26's ruling |
 
 ---
 
@@ -115,7 +115,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 35, close-out | Land the re-audit's fixes; the review's corrections | **complete** (PR #36 merged, `08f7d65`) | **Signed off 2026-11-12** (architecture session): `main`'s push run 43167772415 green on every job; criteria 1–5 executed, each shown red before the change. Q25 ruled: item 4 and criterion 6 are withdrawn, because the brief rested on a wrong LIMITS sentence. The first run under the draft pull request rule, and it held. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | 36, part 1 | Budgets and the measurement | **complete when `main`'s push run on `716205f` is green** (PR #37 merged) | **Signed off 2026-11-12** (architecture session): every check on the pull request green, read from GitHub. The phase-auditor recomputed every rank with exact fractions and fuzzed Go against Python on 40,000 inputs; its two NOT MET findings were fixed and counted at the server. Three corrections are carried into part 2. Decisions at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
 | 36, part 2 | The walk sees slow | **complete when `main`'s push run on `d785af4` is green** (PR #38 merged) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The library's latency fault roots at inventory-service and verifies; a wrong fix gives `not_resolved`; without budgets it is `inconclusive`. Q21 is closed. Q26 is ruled. Three audit rounds' findings were fixed. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
-| 37, part 1 | Reading the database safely | not started | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37: "How Phase 37 is run", then "Part 1" at the end of the section. Step 0: `main`'s push run on `d785af4` green, then the phase-auditor re-audits `4c7bc6e`. Branch `phase-37-database` from `origin/main` = `d785af4`; its first commit is the Phase 36 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 37, part 1 | Reading the database safely | **awaiting decision** (Q27; PR #39, CI green on `fcd0b0a`) | Criteria 2–10 met (CI where marked); criterion 1 NOT MET, Q26's premise false — both Q27. **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37: "How Phase 37 is run", then "Part 1" at the end of the section. Step 0: `main`'s push run on `d785af4` green, then the phase-auditor re-audits `4c7bc6e`. Branch `phase-37-database` from `origin/main` = `d785af4`; its first commit is the Phase 36 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 37, part 2 | Statements and plans | not started | `docs/PERFORMANCE_PLAN.md` Phase 37, "How Phase 37 is run". The brief and criteria are written at part 1's review. |
 | 37, part 3 | The database in the walk | not started | `docs/PERFORMANCE_PLAN.md` Phase 37, "How Phase 37 is run". The brief and criteria are written at part 2's review. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
@@ -151,224 +151,213 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        36, part 2 — the walk sees slow
-Branch:       phase-36-walk, from origin/main = 716205f (PR #37's merge);
-              3da4cd4 the part 1 sign-off, 0a3c743 the work, f3997f0 the
-              audits' findings, 3ceb0ee the re-audit's, 4c7bc6e the
-              focused re-audit's. PR #38 (draft until this report).
+Phase:        37, part 1 — reading the database safely
+Branch:       phase-37-database, from origin/main = d785af4 (PR #38's merge);
+              b20dfc5 the Phase 36 sign-off, 155c7eb the carried-in items,
+              fcd0b0a the database work, then the audits' fixes and this
+              report. PR #39.
 Run:          2026-11-12, /next.
-Status:       IMPLEMENTED; every local gate green; CI green on every
-              commit (runs below); the audits' findings fixed, the last
-              round (4c7bc6e) not re-audited. One question for review,
-              not blocking: Q26 (criterion 5). Awaiting review.
+Status:       AWAITING DECISION (Q27, blocking). Built; every local gate
+              green; CI green on fcd0b0a (run 43263355094, every job). The
+              phase-auditor: PHASE NOT COMPLETE — criterion 1 NOT MET, and
+              Q26's premise is false, for one reason: in Go, another file
+              in the same package can use a value without importing its
+              type. Fixing it means new packages that link the network,
+              so the network allowlist test would have to name them: an
+              escalation (§6), not mine to decide.
 
 STEP 0
-  main's push run 43218642206 on 716205f: every job success, e2e (none),
-  e2e (stub) and narration-parity included; deploy skipped.
-  The phase-auditor re-audited 3be789e. Criteria 3 and 4 of part 1 CLOSED.
-  Two OPEN, fixed here before anything was built on them:
-  - urlIsOnRoute compared a canonical path and sent the raw URL: /ready/,
-    //ready, /ready%3F/../../admin, /items/.., and a userinfo URL (sent
-    as Basic auth) were timed against GET /ready's budget. Now urlOffRoute
-    compares the escaped path as sent, segment by segment, and refuses a
-    query, fragment or userinfo; red on part 1's check (14 cases, 280
-    requests). Under culprit mcp a latency probe's address must be the
-    endpoint of the budget's own component (and its scheme).
-  - the Q25 scan missed Register reached through an alias of Probe and a
-    generic interface. Catalogue.Register is unexported (register);
-    TestCatalogueExportsNoRegistration, red on an exported one.
+  main's push run 43250669431 on d785af4: every job success (fault library,
+  e2e (none), e2e (stub), narration-parity); deploy skipped.
+  The phase-auditor re-audited 4c7bc6e's manifest and fixture changes:
+  OPEN — the API's reader counted merged budgets: sections as "written
+  twice" (it refused three files the Go loader loads), and an anchored
+  value (`&v 300`) was plain to Go only; LIMITS' "one split remains" was
+  false. Fixed in 155c7eb: the API reads budgets: as yaml.v3 does (a key
+  written twice in any mapping refused; the root's own budgets: before a
+  merged one, the first merge before a later; only that section
+  form-checked; a non-string top-level key refused); Go treats an anchor as
+  not plain; budget_manifests holds both readers to every case with what
+  loads (red on the old reader: 5 cases; Go: the anchor).
 
-WHAT WAS BUILT (work order 1-6)
-  1 Narration parity: _ms/_us/_seconds/elapsed are volatile only inside a
-    reading's measured; ids and _at everywhere. A budget that differs
-    between the legs is a difference (red before), samples are not.
-  2 Part 1's corrections:
-    - both budgets on a route judged from one run: Resolution.Also,
-      Request.AlsoExpected, Outcome.Also; probe.Runner.RunOne returns one
-      reading per budget. 50 requests counted at the server, two readings,
-      each validating (red under part 1's resolution: one reading).
-    - one method check: newProbeRequest builds every request, checkMethod
-      is the rule, and methodGuard, a transport under every client,
-      applies it again (and refuses a body) as a request leaves. A source
-      scan of internal/probe fails on 26 ways to go around them (see Q26).
-    - budget literals: model.BudgetLiteralProblem and
-      culprit_model.latency.budget_literal_problem, from
-      latency_conformance.json's budget_literals (1e3, 0o454, 0454,
-      300_000, 300.0, +300, 0x12C, quoted, tagged, aliased ...). The Go
-      loader reads the YAML node (Budget.UnmarshalYAML); the API composes
-      the YAML, after its credential scan. Both refuse a merge key in an
-      entry (budget_entries), budgets: through a top-level merge, and a key
-      written twice (budget_manifests). Red without each check, in both.
-  3 probe.http.latency discriminates latency_budget_exceeded; a timed-out
-    request's setup is recorded (timeout_connect_us); planned joins the
-    rule in Go and Python: a run cut short is inconclusive.
-  4 internal/isolate/latency.go: the second pass runs only when the error
-    pass found no root and nothing failing below the entry. Each component
-    on the request path with a GET budget gets the hypothesis, tested on
-    each budgeted route in subject order (supported on a fail, ruled out
-    when all pass, unexplored otherwise). A pass rules out that component
-    alone, so the pass descends the whole tree. The root is the deepest
-    slow component with nothing slow below it; above it, propagation.
-    model.SplitLatency judges setup alone and server time (total - setup)
-    against the same budget: setup over with --from the caller roots at
-    the connection (the component's hypothesis ruled out when its time
-    passed); server over roots at the component; otherwise partial,
-    naming both or "reaching X from this agent". The walk's remaining wall
-    clock is each latency run's deadline. The rubric reruns the latency
-    request and compares the same budget's reading. Verification runs a
-    shared run once a round (same_run_as in the record; probe, target,
-    environment and inputs must match). Placement places the probe on the
-    component's endpoint (base_url) from wherever the binary runs.
-  5 Fault library: latency diagnoses at component:inventory-service
-    (root_kind latency_budget_exceeded, complete) and verifies; new
-    latency-unbudgeted (the demo's manifest less budgets:) stays
-    inconclusive, "no latency budget was judged"; new scenario
-    latency-wrong-fix (600 ms) is not_resolved. results.json derived from
-    expected.json (Docker is down here) and reproduced by CI's run, whose
-    `git diff --exit-code` on it passed; README: 6 of 6 of 8 planted.
-  6 LIMITS: "Added latency is isolated only against a declared budget"
-    (replacing "is not isolated"), "Latency in the walk" (after errors;
-    one vantage; a pass rules out one component; hop or component; what an
-    unbudgeted component leaves unknown; a database below makes it
-    partial; two slow branches; time and the wall clock), "What holds the
-    GET-only rule, and what cannot", the URL rule, both budgets, the
-    literal and YAML rules. PROBES ("In the walk"), PERMISSIONS (what the
-    walk sends under net.http.outbound). README tour step 4: a budget, a
-    slow /health, `culprit diagnose web --from web` roots at api — run for
-    real on this machine (complete, reproduced, r3 p95 >= 402.443 ms) and
-    `culprit verify` said verified after the sleep came out. CLAUDE.md.
+WHAT WAS BUILT (work order 1-7)
+  1 Carried in (155c7eb):
+    - redact_credentials, Go and Python, from shared/tests/
+      redaction_conformance.json: password=… outside a URL, Slack tokens,
+      user:pass@host, and (after the audit) SQL's PASSWORD '…'. Python now
+      removes a whole private-key block, as Go did. Red without: Go 14
+      mismatches, Python 9.
+    - Q26: the 26-form method scan is retired. Only http.go and timing.go
+      may import net/http (allowlist test, red with a third file, aliased,
+      or a package under net/http); every client comes from
+      newGuardedClient, which installs methodGuard (red for a literal, new,
+      a value, the default client, an embedding, a replaced transport, a
+      transport through a pointer, a direct or stored RoundTrip, an aliased
+      import); the guard refuses a non-GET or a body as it leaves; a
+      request changed after it was built (method, pointer to the method,
+      body) is refused at a real server, counted 0.
+    - planned required by the rule in Go and Python, so by the API;
+      probe.http.latency version 2; a fixture case without it.
+    - shared/tests/manifest_keys.json: both readers know the same top-level
+      keys; the API's model gains probes: and isolation:, validated as Go
+      validates them and exported whole.
+  2 db.stats.read, db.plan.read: Go, Python, the shared fixture, the
+    frontend's plain words; the agent's parser and the allowance take them
+    by name. TestNoCapabilityImpliesAnother (every pair);
+    TestAnAllowanceNarrowsTheDatabaseCapabilities. No probe declares them
+    until part 2, so the probe catalogue is unchanged by them.
+  3 The boundary (internal/capture/database.go): the only non-test pgx
+    importer (allowlist test, red with a second); statements are an
+    unexported type of constants, checked by a switch (after the audit:
+    it was a map an init() could extend); send is the only driver call in
+    the file and refuses anything else first (counted at a fake driver: an
+    arbitrary statement, EXPLAIN ANALYZE, a reset, a second statement
+    appended — 0 reached it); openSession sets read-only, a 10 s
+    statement timeout and application_name as connection parameters.
+    Capture and the database probes run through it unchanged.
+  4 pg_stat_statements: the quickstart's Postgres starts with
+    shared_preload_libraries=timescaledb,pg_stat_statements, set
+    explicitly; the recipe reads the running value and stops if it is
+    missing. CI e2e: "shared_preload_libraries: timescaledb,
+    pg_stat_statements". The image's own default was NOT observed: the
+    list is set rather than measured, and it replaces the default
+    (Culprit's database needs only timescaledb; LIMITS and the compose
+    comment say so).
+  5 The demo's database (P8): inventory-service's own Alembic migrations
+    (products: id primary key, sku unique index, category not indexed) and
+    a seed migration of 1,000,000 rows in 200 categories, generated in the
+    database. Why that size: a sequential scan of one category reads the
+    whole ~80 MB table (tens to hundreds of ms), an index on category would
+    read 5,000 rows (well under 1 ms) — a gap wider than any statement
+    budget part 3 should declare, on a laptop or a runner. Set up by
+    inventory_service/setup_db.py, run by `just quickstart` as a one-shot
+    service: as the server's superuser it creates the inventory role and
+    database and pg_stat_statements there (not a trusted extension, so the
+    owner cannot — a deviation from "done by its migrations as their
+    owner"), then applies the migrations as the inventory role. GET
+    /products?category=…; 503 without a database (the fault stack).
+    culprit.yaml declares inventory-db, its edge `background`: POST
+    /orders never reads it, and on the request path it would change every
+    walk the fault library checks. CI e2e: "inventory's products: 1000000
+    rows".
+  6 Index facts: leads_index on the column-level schema: subject, true or
+    false for every column. CONFIGURED from capture (a fourth template:
+    valid, non-partial, non-expression indexes' first column); INTENT from
+    the migration reader (create_index, drop_index, constraints, column
+    flags, renames, drops). The generic comparator compares them; absence
+    is not judged for it, so a missing table adds no index finding.
+  7 PERMISSIONS (db.metadata.read's four statements, the two capabilities,
+    the recommended role and that it can read rows), LIMITS (indexes, the
+    boundary and what it does not hold, the GET-only rule, the readers'
+    splits, redaction, the quickstart's database), README (Databases),
+    CLAUDE.md.
 
-CRITERIA (part 2)
-  1 synthetic A->B->C, C slowed: root C; A->B, B->C propagation; no latency
-    reading before the error pass found nothing; B fast & C slow -> C
-                                                              PASS.
-      isolate/latency_test.go (TestASlowCalleeIsTheRoot..., TestAFastCaller-
-      RulesOutOnlyItself, TestLatencyIsNotAskedWhenTheErrorsExplain,
-      TestASlowComponentAboveFastOnesIsTheRoot). The first build's
-      children-only root rule was red on the B-fast case. Phase-auditor:
-      mutations of the root rule and of the gate turn them red.
-  2 from the same samples: hop / component / neither / outside  PASS.
-      TestHopOrComponentFromTheSameSamples, recorded timings, no network.
-  3 CI fault library: latency root inventory-service, verified after the
-    fix, not_resolved after a wrong one; unbudgeted inconclusive saying
-    no budget is declared                                     PASS in CI.
-      runs 43228627279 (0a3c743) and 43231557369 (f3997f0): latency
-      PASS (235 s), latency-unbudgeted PASS, verify/latency-wrong-fix
-      PASS (312 s). The job is now ~11 min (was 3.5).
-  4 both budgets: one run of 50 counted, two readings validated  PASS.
-      TestARouteWithBothBudgetsIsMeasuredOnceAndJudgedTwice; through the
-      commands, TestDiagnoseFindsASlowComponentAndVerifyJudgesItsFix
-      (record same_run_as, verify 2 rounds x 2 runs x 50 + 2 requests).
-  5 a non-GET built anywhere in internal/probe refused at one place,
-    shown red                                  PASS for every form found;
-                                                see Q26.
-      TestEveryRequestIsBuiltInOnePlace, TestARequestBuiltAroundTheCheck-
-      IsFound (26 ways), TestTheGuardRefusesAWriteAsItLeaves. Red on part
-      1's TimeGet. Three audits each found syntax the scan missed (0a3c743:
-      3; f3997f0: 9; 3ceb0ee: 6 incl. one that sent a DELETE); all are
-      red cases now. 4c7bc6e was not re-audited.
-  6 1e3, 0o454, 0454, 300_000 refused by the Go loader, the Python model
-    and the API, from the shared fixture                      PASS.
-      check/budgets_test.go, shared test_latency.py, api
-      test_manifest_budgets.py; red without each check. NOT MET at 0a3c743
-      (a merge key) and at f3997f0 (a top-level merge); CLOSED at 3ceb0ee
-      by the focused re-audit.
-  7 narration parity: a differing budget is red, samples are not  PASS.
-      scripts/tests/test_narration_parity.py; red with 716205f's script.
-  8 a latency probe near the walk's end stops at its deadline; the
-    hypothesis is unexplored                                  PASS.
-      TestALatencyProbeStopsAtTheWalksDeadline; the phase-auditor ran the
-      real probe with a 1.5 s context: 22 of 50 sent, inconclusive "cut
-      short", the reading validates.
-  9 every PR check green, both e2e legs and narration-parity;
-    LLM_PROVIDER=none changes nothing                          PASS.
-      run 43235902449 and PR #38's checks (below).
+CRITERIA (part 1)
+  1 nothing outside the template set reaches the database; an arbitrary
+    statement and EXPLAIN ANALYZE refused before they leave, counted; the
+    allowlist fails on a second pgx importer           NOT MET (Q27).
+      The tests as written pass and are red where they should be. The
+      phase-auditor added a file to internal/capture with no pgx import
+      that called openSession(...).Exec("EXPLAIN ANALYZE DELETE …") and
+      added a template from an init(); every test stayed green. The second
+      half is fixed (a switch). The first is the package boundary, Q27.
+  2 in CI, a write through a weakened path refused as read-only;
+    statement_timeout on every session                  PASS in CI.
+      TestASessionIsReadOnlyAtTheServer (cli job, run 43263355094): CREATE
+      TABLE and CREATE ROLE refused, 25006; SHOW gives on, 10s,
+      culprit-capture.
+  3 the two capabilities from the shared fixture; an allowance narrows
+    them; neither implies db.rows.read; none implies another   PASS.
+      Red: making db.plan.read hold db.rows.read fails the Go test
+      (phase-auditor). The Python test is weak: Python has no implication
+      mechanism to test.
+  4 demo database: capture yields the seeded table's index facts, the
+    reader the declared ones; dropped by hand -> declared but missing;
+    created by hand -> live but undeclared              PASS (live in CI).
+      TestTheDemoDatabase (CI): live leading id, sku; head
+      0002_seed_products; setup run twice. test_the_demo_migrations_
+      declare_their_indexes: id, sku true; category, name, price false.
+      TestIndexesDeclaredAndLive (CI): none at baseline, items.sku after
+      DROP, items.category after CREATE, each intent_vs_configured.
+  5 redaction of password=…, a Slack token, user:pass@host in Go and
+    Python from shared cases, red without              PASS.
+  6 Q26: a third net/http importer red; a client built another way red;
+    the guard refuses a non-GET and a body, each red    PASS as written;
+                                                         premise false (Q27).
+      The phase-auditor added a file to internal/probe with no net/http
+      import that took a client's transport through its fields
+      (c.client.Transport.(methodGuard).next) and sent a DELETE: the
+      server received it. Not naming a type does not stop a file using it.
+  7 a latency reading without planned refused by Go, Python, the API PASS.
+      Go and Python here, red on the old rule; the API test in CI's test
+      job.
+  8 isolation: accepted by both; a key one knows and the other does not
+    fails a test                                       PASS.
+      Red both ways (phase-auditor). Left, in LIMITS: an unknown top-level
+      key is ignored by Go on purpose and refused by the API.
+  9 from a fresh clone the quickstart starts with the demo's database,
+    migrated and seeded                                PASS in CI (e2e).
+  10 fault library unchanged and green; LLM_PROVIDER=none changes nothing;
+    every PR check green                               PASS (fcd0b0a).
 
-DELIBERATELY NOT BUILT (part 2's list)
-  No credential sent by any probe. No second vantage, no probe dispatched
-  elsewhere. No latency from telemetry or a baseline. No early stopping
-  inside a run (a run cut short at the walk's deadline is inconclusive,
-  never judged on fewer requests than planned). No percentile but p50/p95.
-  No change to how errors are walked (the second pass runs after them;
-  existing isolate tests unchanged). Nothing for Phase 37.
+DELIBERATELY NOT BUILT (part 1's list)
+  No statement timing, plan or statement budget. No walk change. No EXPLAIN
+  of any kind sent. No row read by Culprit (alembic_version as before). No
+  pg_stat_statements reset. No index created or dropped by Culprit. No
+  change to Culprit's own database (the server-wide preload list aside,
+  which LIMITS states).
 
-GATES (local, Windows, Docker NOT running), on 4c7bc6e
+GATES (local, Windows, Docker NOT running)
   lint, typecheck, lint-imports (6 kept), check-schema-drift,
   check-no-llm-imports, check-invariants, check-scan-coverage, cli-lint,
   check_security_doc (75), check_coupled_files --base origin/main   PASS
   go test ./... (cli)                                                 PASS
-  pytest without a database: api+scripts+shared 1228 passed earlier in
-    the run; the latency, manifest, shared and scripts tests 1145 passed
-    on 4c7bc6e; worker 65, mcp_server 4; extractors 31 + 22; frontend 19
-  culprit check --fail-on=breaks_request_path; LLM_PROVIDER=none   exit 0
-  NOT RUN locally: every database-backed test (api 321, worker 28,
-  mcp_server 17 — Docker down), the fault library, e2e, quickstart,
-  migration round trip (no migration). CI ran all of them.
+  pytest without a database: shared, scripts, manifests 1188 passed;
+  extractors/python 37; frontend 19
+  NOT RUN locally: every database-backed test, the Docker tests, the
+  quickstart, e2e, the fault library. CI ran them all.
 
 AUDITS
-  invariant-auditor (0a3c743): 1 violation, invariant 7 — a budget value
-    that was not plain digits was echoed in the refusal, and the API ran
-    the budget check before its credential scan, so a credential pasted as
-    a budget reached stderr and the 400. Fixed in f3997f0 (no literal in
-    either refusal; credentials first); tests in Go and the API. Risks
-    taken up: same_run_as inputs, the mcp scheme. Left: AlsoExpected is
-    filled only when the caller sets no Expectation (no caller does);
-    a walk sends up to 50 GETs per budgeted component plus one rerun,
-    under the existing grant (PERMISSIONS says so).
-  phase-auditor: NOT COMPLETE at 0a3c743 (criteria 5, 6; findings A-G),
-    NOT COMPLETE at f3997f0 (5, 6; E untested), focused re-audit at
-    3ceb0ee: 6 and E CLOSED, 5 OPEN. Fixed in 4c7bc6e; not re-audited.
-    Left: F — `planned` is optional in the rule, so a part 1 reading with
-    no planned is judged on its samples (the probe always writes it).
+  invariant-auditor (fcd0b0a): CLEAN, 0 violations. Risks taken up: a
+    RoundTrip or an aliased net/http in the two files (now red cases); the
+    compose comment overstated what stays unchanged (corrected). Left: the
+    synthetic demo password in the compose file; the user:pass@ pattern
+    over-redacts; PERMISSIONS' role can read rows (documented).
+  phase-auditor (fcd0b0a): NOT COMPLETE — criterion 1 NOT MET, Q26's
+    premise false (both Q27); templates mutable (fixed); redaction missed
+    SQL PASSWORD '…' (fixed); LIMITS overclaimed in two places (rewritten);
+    CLAUDE.md stale (fixed). Left, in LIMITS: why: yes / 300 / a date is a
+    string to Go and refused by the API; a second YAML document; an
+    unknown top-level key. The fixes after fcd0b0a were not re-audited.
 
 DECISIONS TAKEN HERE (for review)
-  - The second pass runs when the error pass found no root and nothing
-    failing below the entry (partial reasons from the first pass kept).
-  - The latency hypothesis's subject is the component; the walk asks each
-    budgeted route as its own request target (the route subject).
-  - The root rule looks at everything below, not only direct callees.
-  - Two slow roots on different branches: the first depth-first is the
-    root, the other listed, the diagnosis partial.
-  - A database below the slow root makes it partial (no DB budgets yet).
-  - Unbudgeted components not below the root are named in the statement
-    without making it partial; with no root they make it partial.
-  - Hop root: the component's hypothesis is ruled out by the same reading
-    only when its server time passed; statements say "within" only for a
-    side that passed.
-  - same_run_as in the verify record (additive, version unchanged).
-  - planned in the rule's inputs (optional; required for cut-short).
-  - Verify's no-failing-reading reason adds "no latency budget was judged"
-    when the investigation asked nothing about latency.
-  - The demo's isolation wall clock was left at the default 2 min: the
-    library's two ~45 s latency runs fit (CI: latency 235 s for the whole
-    case, two diagnoses included). No isolation: field was added, because
-    the API's manifest model does not know one.
+  - leads_index (column-level, true and false) as the index predicate.
+  - inventory-db's edge is background, so the order walk is unchanged.
+  - The seed is 1,000,000 rows, 200 categories (reasons above).
+  - pg_stat_statements is created by the demo's setup as superuser, not by
+    its migrations as owner: the extension is not trusted.
+  - The preload list is set explicitly and replaces the image's default.
+  - A fixed synthetic password for the demo's database role.
 
 IN THE PLAN, FOR CORRECTION
-  - Criterion 5 asks a source property ("refused at one place, shown red
-    by building one around it") that a syntactic scan can hold only
-    against forms it knows: Q26.
-  - "With B fast and C slow, the root is still C" implies the root rule
-    reads everything below, not only callees; written that way here.
+  - "One file opens database connections" and Q26's "no other file can
+    name a client, a transport" are true of imports and not of use: Q27.
+  - "Creating the extension ... by its migrations as their owner" cannot
+    hold for pg_stat_statements, which only a superuser may create.
 
 /CI
-  run 43228627279 on 0a3c743 — SUCCESS, every job (fault-library incl.)
-  run 43231557369 on f3997f0 — SUCCESS, every job
-  run 43233833896 on 3ceb0ee — SUCCESS, every job
-  run 43235902449 on 4c7bc6e (pull_request) — SUCCESS, every job:
-           lint, typecheck, cli, test, migration-round-trip, self-check,
+  run 43263355094 on fcd0b0a (pull_request) — SUCCESS, every job:
+           lint, typecheck, cli (with the new database step: the three
+           Docker tests PASS), test, migration-round-trip, self-check,
            kind-capture, fault-library, e2e (none), e2e (stub),
            narration-parity, build x5; publish, deploy skipped
-  checks   gh pr checks 38: 22 pass, 2 skipping (publish, deploy), CodeQL
-           and the four Analyze checks included
-  alerts   none open (pr=38, refs/pull/38/merge, refs/pull/38/head)
-  merge    origin/main = 716205f is an ancestor of the branch: the branch
+  run on the report commit — see the PR's checks
+  merge    origin/main = d785af4 is an ancestor of the branch: the branch
            is the merge result
 
 LEFT OPEN
-  - Q26 (criterion 5), for review.
-  - F: whether `planned` should become required on new latency readings.
-  - The fault-library job's length (~11 min) as more latency cases land.
+  - Q27 (blocking part 1's completion).
+  - The readers' remaining splits (LIMITS).
 ```
 
 ## §6. Escalate to the architecture session when
