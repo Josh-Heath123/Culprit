@@ -148,3 +148,24 @@ func TestABudgetIsWrittenAsPlainDecimalDigits(t *testing.T) {
 		}
 	}
 }
+
+// TestALatencyReadingWithoutPlannedIsRefused: planned is required since
+// Phase 37 part 1, so Reading.Validate refuses a latency reading that does
+// not say how many requests it set out to send, whatever its verdict.
+func TestALatencyReadingWithoutPlannedIsRefused(t *testing.T) {
+	samples := make([]any, 20)
+	for index := range samples {
+		samples[index] = 1000
+	}
+	for _, verdict := range []Verdict{VerdictPass, VerdictFail, VerdictInconclusive} {
+		reading := Reading{
+			ProbeID: LatencyProbeID, ProbeVersion: 2, Target: "http:inventory-service/GET /ready",
+			Environment: "local", Verdict: verdict, Reason: "r", AgentID: "culprit-cli", TakenAt: time.Now(),
+			Measured: map[string]any{"percentile": 50, "requests": 20, "samples_us": samples, "timeouts": 0},
+			Expected: map[string]any{"latency_p50_ms": 300},
+		}
+		if err := reading.Validate(); err == nil || !strings.Contains(err.Error(), "planned") {
+			t.Errorf("%s without planned: %v, want refused", verdict, err)
+		}
+	}
+}

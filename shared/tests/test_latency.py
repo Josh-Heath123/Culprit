@@ -176,3 +176,13 @@ def test_a_budget_is_written_as_plain_decimal_digits(case: dict) -> None:
 
 def test_the_merge_refusal_is_the_fixtures() -> None:
     assert {case["reason"] for case in FIXTURE["budget_entries"]} == {latency.BUDGET_MERGE_PROBLEM}
+
+
+def test_a_latency_reading_without_planned_is_refused() -> None:
+    """Phase 37 part 1: `planned` is required, so a reading that does not
+    say how many requests it set out to send is refused whatever its
+    verdict, rather than judged on its samples alone."""
+    measured = {"percentile": 50, "requests": 20, "samples_us": [1_000] * 20, "timeouts": 0}
+    for verdict in ("pass", "fail", "inconclusive"):
+        with pytest.raises(ValidationError, match="planned"):
+            Reading.model_validate(_reading(verdict, measured, {"latency_p50_ms": 300}))

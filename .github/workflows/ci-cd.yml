@@ -209,6 +209,17 @@ jobs:
       - name: Compose end-to-end (culprit diff against real containers)
         run: cd cli && CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run TestEnvironmentDiffAgainstRealContainers -v
 
+      # Phase 37 part 1, against real Postgres containers: a write sent
+      # around the template set is refused by Postgres as read-only, and the
+      # statement timeout is set; index facts, declared and live, compared
+      # end to end; the demo's own database set up as the quickstart sets it
+      # up, and read by capture.
+      - name: The database boundary and index facts (real Postgres)
+        run: |
+          cd cli
+          CULPRIT_DOCKER_TESTS=1 go test ./internal/capture -run TestASessionIsReadOnlyAtTheServer -v
+          CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run 'TestIndexesDeclaredAndLive|TestTheDemoDatabase' -v
+
       # Every released platform, built here rather than only at tag time,
       # so a change that breaks the darwin/arm64 build is caught on the
       # PR that makes it instead of on release day.

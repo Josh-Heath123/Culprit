@@ -64,18 +64,28 @@ func NewRealHTTPClient(timeout time.Duration) *RealHTTPClient {
 		timeout = 10 * time.Second
 	}
 	return &RealHTTPClient{
-		client: &http.Client{
-			Transport: methodGuard{next: http.DefaultTransport},
-			Timeout:   timeout,
-			CheckRedirect: func(request *http.Request, via []*http.Request) error {
+		client: newGuardedClient(http.DefaultTransport, timeout,
+			func(request *http.Request, via []*http.Request) error {
 				if len(via) >= MaxRedirects {
 					return fmt.Errorf("stopped after %d redirects", MaxRedirects)
 				}
 				return nil
-			},
-		},
+			}),
 		MaxBodyBytes: DefaultMaxBodyBytes,
 	}
+}
+
+// newGuardedClient is the one way this package builds an HTTP client
+// (Q26, ruled 2026-11-12): every client sends through methodGuard, which
+// refuses anything but a bodiless GET or OPTIONS as the request leaves —
+// whatever built the request, and whatever was done to it after.
+// TestEveryClientComesFromTheGuardedConstructor holds that http.go and
+// timing.go, the only files here that may import net/http, build no
+// client any other way.
+func newGuardedClient(next http.RoundTripper, timeout time.Duration,
+	redirect func(*http.Request, []*http.Request) error,
+) *http.Client {
+	return &http.Client{Transport: methodGuard{next: next}, Timeout: timeout, CheckRedirect: redirect}
 }
 
 // NewRealHTTPClientWithin is NewRealHTTPClient whose redirects are
@@ -121,12 +131,11 @@ func (c *RealHTTPClient) Options(
 	return c.do(ctx, http.MethodOptions, url, headers)
 }
 
-// newProbeRequest is the one place in this package an HTTP request is
-// built, and so the one place its method is checked: GET or OPTIONS, with
-// no body. TestEveryRequestIsBuiltInOnePlace holds that nothing else in
-// internal/probe builds one — not http.NewRequest, not a literal
-// http.Request — so no request can be built around the check (Phase 36
-// part 2: TimeGet built its own).
+// newProbeRequest builds every request this package sends, refusing any
+// method but GET or OPTIONS before the request exists. It is not what
+// holds the rule — methodGuard is, as each request leaves — but it keeps
+// a write from being built by accident (Phase 36 part 2: TimeGet built
+// its own).
 func newProbeRequest(ctx context.Context, method, url string) (*http.Request, error) {
 	if err := checkMethod(method); err != nil {
 		return nil, err
@@ -137,9 +146,8 @@ func newProbeRequest(ctx context.Context, method, url string) (*http.Request, er
 // checkMethod is the method check: GET or OPTIONS, nothing else. This is
 // the line that would have to change for a probe to be able to write, and
 // it should be loud. newProbeRequest asks it before a request exists, and
-// methodGuard asks it again as any request leaves, so a request built
-// around newProbeRequest is still refused (the Phase 36 part 2 audit found
-// three ways to build one that the source scan missed).
+// methodGuard asks it again as any request leaves, so a request built, or
+// changed, around newProbeRequest is still refused.
 func checkMethod(method string) error {
 	if method != http.MethodGet && method != http.MethodOptions {
 		return fmt.Errorf("probes issue only GET and OPTIONS; %s would be a write", method)
@@ -147,10 +155,9 @@ func checkMethod(method string) error {
 	return nil
 }
 
-// methodGuard is the transport under every client this package builds:
-// it refuses, before anything is dialled, a request checkMethod refuses,
-// or one that carries a body. TestEveryRequestIsBuiltInOnePlace holds that
-// every http.Client literal here has one.
+// methodGuard is the transport under every client this package builds
+// (newGuardedClient): it refuses, before anything is dialled, a request
+// checkMethod refuses, or one that carries a body.
 type methodGuard struct{ next http.RoundTripper }
 
 func (g methodGuard) RoundTrip(request *http.Request) (*http.Response, error) {

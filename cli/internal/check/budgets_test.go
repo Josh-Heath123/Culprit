@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -262,9 +264,9 @@ func TestABudgetEntryWithAMergeKeyIsRefused(t *testing.T) {
 	}
 }
 
-// TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm: the shared
+// TestTheTwoReadersReadBudgetManifestsAlike: the shared
 // fixture's budget_manifests, which the API's reader is held to too.
-func TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm(t *testing.T) {
+func TestTheTwoReadersReadBudgetManifestsAlike(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "latency_conformance.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -274,6 +276,7 @@ func TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm(t *testing.T) {
 			Why      string `json:"why"`
 			Manifest string `json:"manifest"`
 			Reason   string `json:"reason"`
+			Loads    *int   `json:"loads"`
 		} `json:"budget_manifests"`
 	}
 	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Manifests) == 0 {
@@ -284,9 +287,45 @@ func TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm(t *testing.T) {
 		if err := os.WriteFile(path, []byte(c.Manifest), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		_, err := extract.LoadManifest(path)
+		manifest, err := extract.LoadManifest(path)
+		if c.Loads != nil {
+			if err != nil || len(manifest.Budgets) == 0 || manifest.Budgets[0].Value != *c.Loads {
+				t.Errorf("%s: %v, want it to load %d", c.Why, err, *c.Loads)
+			}
+			continue
+		}
 		if err == nil || !strings.Contains(err.Error(), c.Reason) {
 			t.Errorf("%s: %v, want refused with %q", c.Why, err, c.Reason)
 		}
+	}
+}
+
+// TestTheGoLoaderKnowsEveryTopLevelKeyTheAPIDoes: extract.Manifest's yaml
+// tags are shared/tests/manifest_keys.json exactly, which the API's model
+// is held to as well (Phase 37 part 1).
+func TestTheGoLoaderKnowsEveryTopLevelKeyTheAPIDoes(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "manifest_keys.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Keys []string `json:"keys"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Keys) == 0 {
+		t.Fatalf("manifest_keys.json: %v", err)
+	}
+	manifest := reflect.TypeOf(extract.Manifest{})
+	var tags []string
+	for index := 0; index < manifest.NumField(); index++ {
+		tag, _, _ := strings.Cut(manifest.Field(index).Tag.Get("yaml"), ",")
+		if tag != "" && tag != "-" {
+			tags = append(tags, tag)
+		}
+	}
+	sort.Strings(tags)
+	want := append([]string(nil), fixture.Keys...)
+	sort.Strings(want)
+	if strings.Join(tags, ",") != strings.Join(want, ",") {
+		t.Fatalf("the Go loader's top-level keys are %v; manifest_keys.json says %v", tags, want)
 	}
 }

@@ -59,9 +59,22 @@ components:
     display_name: Inventory Service
     monitored_metrics: []
     connections:
+      # Phase 37 part 1: inventory-service's own database (P8). Only the
+      # list route (GET /products) reads it; POST /orders — the fault
+      # library's symptom — never does, so the edge is not on that request
+      # path, and the walk from an order is unchanged. Phase 37 part 3
+      # walks from the list route. (Listed first: `apply-model --export`
+      # writes connections in name order.)
+      - to: inventory-db
+        kind: sql
+        criticality: background
       - to: order-service
         kind: http
         criticality: on_request_path
+
+  - name: inventory-db
+    kind: database
+    display_name: Inventory database
 
   - name: payments-service
     kind: service

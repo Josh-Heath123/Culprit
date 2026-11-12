@@ -24,6 +24,17 @@ services:
   postgres:
     image: timescale/timescaledb-ha:pg16
     restart: unless-stopped
+    # Phase 37 part 1: pg_stat_statements is preloaded, said here rather
+    # than left to the image's defaults, so the demo's database can be read
+    # for statement statistics (PERFORMANCE_PLAN.md P4). timescaledb is
+    # Culprit's own and must stay in the list; the list replaces the
+    # image's own default, so anything else the image preloads is no longer
+    # loaded (Culprit's database needs only timescaledb). `just quickstart`
+    # checks the running value. This is a setting of the whole server, so
+    # statistics are now kept for Culprit's own database too; the extension
+    # itself is created only in the demo's database, by the demo, and
+    # nothing reads Culprit's.
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb,pg_stat_statements"]
     env_file: .env.prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -259,6 +270,11 @@ services:
     restart: unless-stopped
     env_file: ../demo-services/.env
     environment:
+      # Phase 37 part 1: inventory-service's own database (P8), a separate
+      # database in this Postgres with its own role, set up by
+      # inventory-db-setup below. The password is synthetic: Postgres
+      # publishes no port to the host.
+      INVENTORY_DATABASE_URL: postgresql://inventory:inventory-demo-not-a-secret@postgres:5432/inventory
       # Both empty (a bare `docker compose up`) turns the check off; the
       # recipe sets both, per run.
       EXPECTED_AUDIENCE: ${DEMO_TOKEN_SECRET:+inventory-service}
@@ -268,6 +284,28 @@ services:
       OTEL_METRIC_EXPORT_INTERVAL_MS: "2000"
     depends_on:
       - ingest-gateway
+    profiles: ["demo"]
+
+  # Phase 37 part 1: the demo's own database (P8). A one-shot job, run by
+  # `just quickstart` before the demo services start: as Postgres's
+  # superuser it creates the `inventory` role and database (and the
+  # pg_stat_statements extension there, which only a superuser may create);
+  # as that role it applies inventory-service's own migrations, which create
+  # and seed `products`. Idempotent. Culprit's own database is not touched.
+  inventory-db-setup:
+    build:
+      context: ..
+      dockerfile: demo-services/Dockerfile
+    command: python -m inventory_service.setup_db
+    environment:
+      INVENTORY_ADMIN_HOST: postgres
+      INVENTORY_ADMIN_USER: ${POSTGRES_USER}
+      INVENTORY_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
+      INVENTORY_ADMIN_DB: ${POSTGRES_DB}
+      INVENTORY_DATABASE_URL: postgresql://inventory:inventory-demo-not-a-secret@postgres:5432/inventory
+    depends_on:
+      postgres:
+        condition: service_healthy
     profiles: ["demo"]
 
   payments-service:

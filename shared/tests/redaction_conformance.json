@@ -1,0 +1,122 @@
+{
+  "why": [
+    "One function decides what looks like a credential, in Go (cli/internal/model/redact.go) and Python (shared/culprit_model/redaction.py). Both are held to these cases: the exact text each must give back, and whether looks_like_credential is true.",
+    "Phase 37 part 1 widens it before any statement text is read (PERFORMANCE_PLAN.md, Phase 37, carried in from the Phase 35 close-out, F2): password=… outside a URL, Slack tokens, and user:pass@host with no scheme. A connection string or a password literal in a normalised statement is exactly what it must catch."
+  ],
+  "cases": [
+    {
+      "why": "user:pass@ in a URL, the host kept",
+      "text": "postgresql://app:hunter2@db.internal:5432/orders",
+      "redacted": "[redacted]db.internal:5432/orders",
+      "credential": true
+    },
+    {
+      "why": "a password in a URL's query",
+      "text": "see https://api.example.com/v1?user=a&password=hunter2&x=1",
+      "redacted": "see [redacted]&x=1",
+      "credential": true
+    },
+    {
+      "why": "a private key, the whole block",
+      "text": "key: -----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n-----END RSA PRIVATE KEY----- end",
+      "redacted": "key: [redacted] end",
+      "credential": true
+    },
+    {
+      "why": "a private key with no end, to the end of the text",
+      "text": "-----BEGIN PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n",
+      "redacted": "[redacted]",
+      "credential": true
+    },
+    {
+      "why": "an AWS access key id",
+      "text": "id AKIAABCDEFGHIJKLMNOP here",
+      "redacted": "id [redacted] here",
+      "credential": true
+    },
+    {
+      "why": "a GitHub token",
+      "text": "token ghp_0123456789abcdefghijklmnopqrstuvwxyzAB",
+      "redacted": "token [redacted]",
+      "credential": true
+    },
+    {
+      "why": "an Anthropic key",
+      "text": "sk-ant-api03-QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ",
+      "redacted": "[redacted]",
+      "credential": true
+    },
+    {
+      "why": "a JWT",
+      "text": "bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJ4In0.sig",
+      "redacted": "bearer [redacted]sig",
+      "credential": true
+    },
+    {
+      "why": "new: password= in libpq keyword form",
+      "text": "host=db.internal user=app password=hunter2 dbname=orders",
+      "redacted": "host=db.internal user=app [redacted] dbname=orders",
+      "credential": true
+    },
+    {
+      "why": "new: a password literal in a statement, quoted, spaces around =",
+      "text": "SELECT id FROM users WHERE password = 'hunter2' AND active",
+      "redacted": "SELECT id FROM users WHERE [redacted] AND active",
+      "credential": true
+    },
+    {
+      "why": "new: passwd= and pwd= too",
+      "text": "passwd=abc pwd=\"x y\"",
+      "redacted": "[redacted] [redacted]",
+      "credential": true
+    },
+    {
+      "why": "new: a Slack bot token",
+      "text": "slack xoxb-EXAMPLE-not-a-real-bot-token done",
+      "redacted": "slack [redacted] done",
+      "credential": true
+    },
+    {
+      "why": "new: a Slack user token",
+      "text": "xoxp-EXAMPLE-not-a-real-user-token",
+      "redacted": "[redacted]",
+      "credential": true
+    },
+    {
+      "why": "new: a Slack app-level token",
+      "text": "xapp-1-EXAMPLE-not-a-real-app-token",
+      "redacted": "[redacted]",
+      "credential": true
+    },
+    {
+      "why": "new: user:pass@host with no scheme, the host kept",
+      "text": "connect to app:hunter2@db.internal:5432 failed",
+      "redacted": "connect to [redacted]db.internal:5432 failed",
+      "credential": true
+    },
+    {
+      "why": "new: a role's password in SQL, which pg_stat_statements keeps verbatim",
+      "text": "CREATE ROLE app LOGIN PASSWORD 'hunter2secret'",
+      "redacted": "CREATE ROLE app LOGIN [redacted]",
+      "credential": true
+    },
+    {
+      "why": "new: ALTER USER ... WITH PASSWORD",
+      "text": "ALTER USER app WITH PASSWORD 'hunter2secret';",
+      "redacted": "ALTER USER app WITH [redacted];",
+      "credential": true
+    },
+    {
+      "why": "not a credential: a route, a time, an email address",
+      "text": "GET /orders at 10:30, mail ops@example.com",
+      "redacted": "GET /orders at 10:30, mail ops@example.com",
+      "credential": false
+    },
+    {
+      "why": "not a credential: words about one",
+      "text": "no token variable is named; the password grant is withheld",
+      "redacted": "no token variable is named; the password grant is withheld",
+      "credential": false
+    }
+  ]
+}

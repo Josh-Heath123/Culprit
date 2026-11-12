@@ -457,6 +457,10 @@ func (r *runState) database(ctx context.Context, component string, settings extr
 			}
 			r.facts = append(r.facts, r.plainFact(columnSubject, model.PredicateNullable,
 				table.Columns[column], capability.DBMetadataRead, provenance))
+			// Phase 37 part 1: whether an index is led by this column, true
+			// or false, as the migration reader declares it.
+			r.facts = append(r.facts, r.plainFact(columnSubject, model.PredicateLeadsIndex,
+				table.Leading[column], capability.DBMetadataRead, provenance))
 		}
 	}
 

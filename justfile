@@ -503,7 +503,23 @@ quickstart:
     # Python on the host.
     DEMO_TOKEN_SECRET=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
     export DEMO_TOKEN_SECRET
-    "${COMPOSE[@]}" --profile demo build order-service inventory-service payments-service load-generator
+    "${COMPOSE[@]}" --profile demo build order-service inventory-service payments-service load-generator inventory-db-setup
+    # Phase 37 part 1: the demo's own database (P8), before the services
+    # start. pg_stat_statements must be preloaded (the compose file says so;
+    # the running value is checked, not assumed), then inventory-db-setup
+    # creates the database and applies inventory-service's migrations, and
+    # the seeded table is counted.
+    echo "==> Setting up inventory-service's own database"
+    preload=$("${COMPOSE[@]}" exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -tA -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SHOW shared_preload_libraries"')
+    echo "shared_preload_libraries: $preload"
+    case ",$(echo "$preload" | tr -d ' ')," in
+        *,pg_stat_statements,*) ;;
+        *) echo "pg_stat_statements is not preloaded in the quickstart's Postgres" >&2; exit 1 ;;
+    esac
+    "${COMPOSE[@]}" --profile demo run --rm -T inventory-db-setup
+    products=$("${COMPOSE[@]}" exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -tA -h 127.0.0.1 -U "$POSTGRES_USER" -d inventory -c "SELECT count(*) FROM products"')
+    echo "inventory's products: $products rows"
+    [ "$products" -gt 0 ] || { echo "inventory's products table is empty" >&2; exit 1; }
     mint() {
         "${COMPOSE[@]}" --profile demo run --rm --no-deps -T -e DEMO_TOKEN_SECRET \
             order-service python -m shared.demo_auth "$1"

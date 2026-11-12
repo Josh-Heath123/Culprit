@@ -75,7 +75,8 @@ func (b *Budget) UnmarshalYAML(node *yaml.Node) error {
 		// Style 0 is plain: not quoted, not a block scalar, and with no
 		// explicit tag (yaml.TaggedStyle is a style bit). An alias is not
 		// a scalar.
-		plain := value.Kind == yaml.ScalarNode && value.Style == 0
+		// An anchor (`&v 300`) is not plain either: Python reads it so.
+		plain := value.Kind == yaml.ScalarNode && value.Style == 0 && value.Anchor == ""
 		b.literalProblem = model.BudgetLiteralProblem(value.Value, plain)
 	}
 	return nil

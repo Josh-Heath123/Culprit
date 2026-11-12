@@ -211,7 +211,7 @@
   },
   {
     "id": "probe.http.latency",
-    "version": 1,
+    "version": 2,
     "effect": "interrogate",
     "capabilities": [
       "net.http.outbound"

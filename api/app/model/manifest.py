@@ -65,6 +65,7 @@ from pydantic import (
     Field,
     StringConstraints,
     ValidationError,
+    field_validator,
     model_validator,
 )
 
@@ -388,6 +389,62 @@ class SeverityOverrideSpec(BaseModel):
     reason: str = Field(min_length=1)
 
 
+#: A Go duration (`time.ParseDuration`): one or more numbers, each with a
+#: unit. The Go loader also refuses zero, which `_positive_duration` checks.
+_GO_DURATION = re.compile(r"(?:(?:\d+(?:\.\d*)?|\.\d+)(?:ns|us|µs|μs|ms|s|m|h))+")
+
+
+def _positive_duration(text: str) -> bool:
+    if _GO_DURATION.fullmatch(text) is None:
+        return False
+    return any(ch in "123456789" for ch in text)
+
+
+class ProbeSpec(BaseModel):
+    """One entry of `probes:` (Phase 31), as cli/internal/extract/probes.go
+    reads and refuses it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool | None = None
+    reason: str = ""
+    timeout_ms: int = Field(default=0, ge=0, le=300_000)
+    environments: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _a_disabled_probe_says_why(self) -> "ProbeSpec":
+        if self.enabled is False and not self.reason.strip():
+            raise ValueError(
+                "a probe that is disabled gives a reason: a check switched off without one "
+                "is indistinguishable from one nobody noticed was off"
+            )
+        return self
+
+
+class IsolationEnvironmentSpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    max_probes: int = Field(default=0, ge=0)
+
+
+class IsolationSpec(BaseModel):
+    """`isolation:` (Phase 32 field 10), as cli/internal/extract/isolation.go
+    reads and refuses it: bounds on `culprit diagnose`."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    max_probes: int = Field(default=0, ge=0)
+    max_wall_clock: str = ""
+    environments: dict[str, IsolationEnvironmentSpec] = Field(default_factory=dict)
+
+    @field_validator("max_wall_clock")
+    @classmethod
+    def _a_duration(cls, value: str) -> str:
+        if value and not _positive_duration(value):
+            raise ValueError("isolation.max_wall_clock: a duration such as 2m or 90s")
+        return value
+
+
 class Manifest(BaseModel):
     """A whole `culprit.yaml`, validated.
 
@@ -417,6 +474,34 @@ class Manifest(BaseModel):
     #: `invariants`, accepted and round-tripped, not acted on here; until it
     #: was added, `apply-model` refused any manifest carrying one.
     budgets: tuple[Budget, ...] = ()
+    #: Phase 31 and Phase 32, read by the Go loader since then and missing
+    #: here until Phase 37 part 1: a user who set either broke `apply-model`.
+    #: Validated as the Go loader validates them, carried through load and
+    #: export, never acted on here. `shared/tests/manifest_keys.json` holds
+    #: the two readers to one list of top-level keys.
+    probes: dict[str, ProbeSpec] | None = None
+    isolation: IsolationSpec | None = None
+
+    @model_validator(mode="after")
+    def _check_probes_and_isolation(self) -> "Manifest":
+        """The cross-references the Go loader checks (probes.go,
+        isolation.go): an environment named in either must be declared."""
+        declared = set(self.environments or {})
+        for probe_id, spec in (self.probes or {}).items():
+            for environment in spec.environments:
+                if environment not in declared:
+                    raise ValueError(
+                        f"probes.{probe_id} names environment {environment!r}, "
+                        "which is not declared under environments:"
+                    )
+        if self.isolation is not None:
+            for environment in self.isolation.environments:
+                if environment not in declared:
+                    raise ValueError(
+                        f"isolation.environments.{environment}: not an environment "
+                        "declared under environments:"
+                    )
+        return self
 
     @model_validator(mode="after")
     def _check_environment_components(self) -> "Manifest":
@@ -577,71 +662,103 @@ class Manifest(BaseModel):
 
 def _reject_budget_literals(text: str, source: str) -> None:
     """Refuses a `budgets:` value not written as plain decimal digits
-    (Phase 36 part 2). Read from the YAML node, not the parsed value: this
-    reader (YAML 1.1) takes `0454` for octal 300 and `300_000` for 300000,
-    where the Go loader (YAML 1.2) reads 454 and a string, so the form is
-    what is checked — by `culprit_model.latency.budget_literal_problem`,
-    which the Go loader's twin is held to with it."""
+    (Phase 36 part 2), reading the YAML as the Go loader (yaml.v3) reads it,
+    so the two readers of one file never read two values or one load what
+    the other refuses (Phase 37 part 1, the re-audit of 4c7bc6e):
+
+    - a key written twice in any mapping — `<<` included, compared by tag
+      and value — is refused, as yaml.v3 refuses it, where PyYAML would keep
+      the last;
+    - the form is checked on the `budgets:` section the Go loader reads: the
+      root's own key when it has one, otherwise the first a merge brings in,
+      in merge order. A section a direct key overrides is never read by
+      either, so it is not checked.
+
+    Read from the YAML node, not the parsed value: this reader (YAML 1.1)
+    takes `0454` for octal 300 and `300_000` for 300000, where the Go loader
+    reads 454 and a string, so the form is what is checked — by
+    `culprit_model.latency.budget_literal_problem`, which the Go loader's
+    twin is held to with it."""
     root = yaml.compose(text, Loader=yaml.SafeLoader)
     if not isinstance(root, yaml.MappingNode):
         return
-    pairs = _top_level_pairs(root)
-    # PyYAML keeps the last of two equal keys; the Go loader refuses the
-    # file. One reader loading what the other refuses is what this check
-    # exists to stop (the focused re-audit of Phase 36 part 2).
-    if sum(1 for key, _ in pairs if key.value == "budgets") > 1:
-        raise ManifestError(f"{source}: budgets: is declared twice")
-    for key, section in pairs:
-        if key.value != "budgets" or not isinstance(section, yaml.SequenceNode):
+    _reject_repeated_keys(root, source)
+    section = _budgets_section(root)
+    if not isinstance(section, yaml.SequenceNode):
+        return
+    for index, entry in enumerate(section.value):
+        if not isinstance(entry, yaml.MappingNode):
             continue
-        for index, entry in enumerate(section.value):
-            if not isinstance(entry, yaml.MappingNode):
+        for field, value in entry.value:
+            if field.tag == "tag:yaml.org,2002:merge" or field.value == "<<":
+                # The fields a merge brings in are not checked for their
+                # form; the Go loader refuses it too.
+                raise ManifestError(f"{source}: budgets[{index}]: {BUDGET_MERGE_PROBLEM}")
+            if field.value != "value":
                 continue
-            names = [field.value for field, _ in entry.value]
-            if len(names) != len(set(names)):
-                raise ManifestError(f"{source}: budgets[{index}]: a key is written twice")
-            for field, value in entry.value:
-                if field.tag == "tag:yaml.org,2002:merge" or field.value == "<<":
-                    # The fields a merge brings in are not checked for their
-                    # form; the Go loader refuses it too.
-                    raise ManifestError(f"{source}: budgets[{index}]: {BUDGET_MERGE_PROBLEM}")
-                if field.value != "value":
-                    continue
-                # Plain: an unquoted scalar with no explicit tag. An alias
-                # composes to the node it names, so it is caught by the
-                # anchor PyYAML leaves on it.
-                plain = (
-                    isinstance(value, yaml.ScalarNode)
-                    and value.style is None
-                    and not _tagged(text, value)
-                )
-                literal = value.value if isinstance(value, yaml.ScalarNode) else ""
-                problem = budget_literal_problem(literal, plain)
-                if problem is not None:
-                    raise ManifestError(f"{source}: budgets[{index}]: value: {problem}")
+            # Plain: an unquoted scalar with no explicit tag, anchor or
+            # alias. An alias composes to the node it names, so it is caught
+            # by the anchor PyYAML leaves on that node.
+            plain = (
+                isinstance(value, yaml.ScalarNode)
+                and value.style is None
+                and not _tagged(text, value)
+            )
+            literal = value.value if isinstance(value, yaml.ScalarNode) else ""
+            problem = budget_literal_problem(literal, plain)
+            if problem is not None:
+                raise ManifestError(f"{source}: budgets[{index}]: value: {problem}")
 
 
-def _top_level_pairs(root: yaml.MappingNode) -> list[tuple[yaml.Node, yaml.Node]]:
-    """The manifest's top-level keys and values, including any a merge key
-    brings in (`<<: {budgets: [...]}`), so a `budgets:` section that
-    arrives through a merge is checked for its form like any other (the
-    re-audit of Phase 36 part 2: it was not, and this reader loaded 300
-    where the Go loader refused)."""
-    pairs: list[tuple[yaml.Node, yaml.Node]] = []
-    pending: list[yaml.MappingNode] = [root]
+def _is_merge(key: yaml.Node) -> bool:
+    return key.tag == "tag:yaml.org,2002:merge" or (
+        isinstance(key, yaml.ScalarNode) and key.value == "<<" and key.style is None
+    )
+
+
+def _reject_repeated_keys(root: yaml.Node, source: str) -> None:
+    """yaml.v3's rule, which PyYAML does not keep: no mapping holds the same
+    scalar key twice, compared by its resolved tag and its value. Every
+    mapping in the document, the merge key included."""
+    pending: list[yaml.Node] = [root]
     seen: set[int] = set()
     while pending:
-        mapping = pending.pop()
-        if id(mapping) in seen:
+        node = pending.pop()
+        if id(node) in seen:
             continue
-        seen.add(id(mapping))
-        for key, value in mapping.value:
-            if key.tag == "tag:yaml.org,2002:merge" or key.value == "<<":
-                merged = value.value if isinstance(value, yaml.SequenceNode) else [value]
-                pending.extend(node for node in merged if isinstance(node, yaml.MappingNode))
-                continue
-            pairs.append((key, value))
-    return pairs
+        seen.add(id(node))
+        if isinstance(node, yaml.MappingNode):
+            keys: set[tuple[str, str]] = set()
+            for key, value in node.value:
+                if isinstance(key, yaml.ScalarNode):
+                    identity = (key.tag, key.value)
+                    if identity in keys:
+                        raise ManifestError(
+                            f"{source}: the key {key.value!r} is written twice in one mapping"
+                        )
+                    keys.add(identity)
+                pending.extend((key, value))
+        elif isinstance(node, yaml.SequenceNode):
+            pending.extend(node.value)
+
+
+def _budgets_section(mapping: yaml.MappingNode) -> yaml.Node | None:
+    """The `budgets:` section the Go loader reads from this mapping: its own
+    key, or else the first one a merge brings in, in merge order (an
+    earlier mapping in `<<: [a, b]` wins over a later one)."""
+    for key, value in mapping.value:
+        if not _is_merge(key) and key.value == "budgets":
+            return value
+    for key, value in mapping.value:
+        if not _is_merge(key):
+            continue
+        merged = value.value if isinstance(value, yaml.SequenceNode) else [value]
+        for node in merged:
+            if isinstance(node, yaml.MappingNode):
+                found = _budgets_section(node)
+                if found is not None:
+                    return found
+    return None
 
 
 def _tagged(text: str, node: yaml.ScalarNode) -> bool:
@@ -663,6 +780,11 @@ def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
         raise ManifestError(f"{source}: empty")
     if not isinstance(raw, dict):
         raise ManifestError(f"{source}: expected a mapping at the top level")
+
+    # A key yaml.v3 reads and Python cannot name a field by (a !!binary or
+    # !!int key) is refused here, not left to fail as a TypeError below.
+    if any(not isinstance(key, str) for key in raw):
+        raise ManifestError(f"{source}: every top-level key must be a string")
 
     # Before validation, not after: a credential in a field the schema
     # would reject anyway must still be reported as a credential, and a
@@ -766,6 +888,17 @@ def dump_manifest(manifest: Manifest) -> str:
             document[section] = [
                 entry.model_dump(mode="json", exclude_defaults=True) for entry in entries
             ]
+    # Phase 37 part 1: carried whole for the same reason, now that this
+    # model knows them.
+    if manifest.probes is not None:
+        document["probes"] = {
+            probe_id: manifest.probes[probe_id].model_dump(
+                mode="json", exclude_defaults=True, exclude_none=True
+            )
+            for probe_id in sorted(manifest.probes)
+        }
+    if manifest.isolation is not None:
+        document["isolation"] = manifest.isolation.model_dump(mode="json", exclude_defaults=True)
 
     return yaml.safe_dump(
         document,

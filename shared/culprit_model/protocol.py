@@ -85,6 +85,11 @@ class Predicate(StrEnum):
     COLUMNS = "columns"
     COLUMN_TYPE = "column_type"
     NULLABLE = "nullable"
+    #: A column-level `schema:` subject: whether an index is *led* by this
+    #: column — its first key column, which is what a filter on it can use
+    #: (Phase 37 part 1, PERFORMANCE_PLAN.md P5). CONFIGURED from the live
+    #: catalogue, INTENT from the migration chain.
+    LEADS_INDEX = "leads_index"
     #: The Alembic/Django/Prisma revision the repository's migrations
     #: currently head at — an INTENT claim about what schema the code
     #: expects, not a reading of any database.

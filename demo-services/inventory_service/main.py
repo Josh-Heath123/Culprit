@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from shared.faults import FaultState, build_fault_router
 from shared.middleware import TelemetryFaultMiddleware
 from shared.otel import configure_otel
+from sqlalchemy import text
 
+from inventory_service.db import engine
 from shared import demo_auth
 
 SERVICE_NAME = "inventory-service"
@@ -76,6 +78,34 @@ def get_stock(sku: str = "", authorization: str | None = Header(default=None)) -
 
 
 app.add_api_route(STOCK_ROUTE, get_stock, methods=["GET"])
+
+
+@app.get("/products")
+def list_products(category: str, limit: int = 50) -> dict:
+    """The catalogue for one category, from the service's own database
+    (Phase 37 part 1, P8). It filters on `category`, which the migrations do
+    not index: Phase 37 part 3's missing-index fault. Not on the order path:
+    POST /orders never reads it, so the fault library's walks are unchanged.
+    """
+    database = engine()
+    if database is None:
+        raise HTTPException(status_code=503, detail="this inventory-service has no database")
+    limit = max(1, min(limit, 200))
+    with database.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT sku, name, price_cents FROM products "
+                "WHERE category = :category ORDER BY sku LIMIT :limit"
+            ),
+            {"category": category, "limit": limit},
+        ).all()
+    return {
+        "category": category,
+        "products": [
+            {"sku": sku, "name": name, "price_cents": price_cents}
+            for sku, name, price_cents in rows
+        ],
+    }
 
 
 @app.post("/reserve", status_code=201)

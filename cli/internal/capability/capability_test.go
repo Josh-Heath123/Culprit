@@ -160,3 +160,49 @@ func TestTheSetMatchesTheSharedFixture(t *testing.T) {
 		}
 	}
 }
+
+// TestNoCapabilityImpliesAnother: granted alone, every capability is the
+// only one held — db.plan.read implies no db.rows.read, db.stats.read no
+// db.metadata.read, and so on for every pair (Phase 37 part 1, P4).
+func TestNoCapabilityImpliesAnother(t *testing.T) {
+	for granted, allowlist := range known {
+		raw := Raw{Enabled: ptrTo(true)}
+		if allowlist {
+			raw = Raw{Items: []string{"an-item"}}
+		}
+		grants, err := Parse(map[string]Raw{string(granted): raw})
+		if err != nil {
+			t.Fatalf("%s alone: %v", granted, err)
+		}
+		ledger := NewLedger(grants)
+		for other := range known {
+			if other == granted {
+				continue
+			}
+			if grants.Has(other) || ledger.Holds(other) {
+				t.Errorf("granting %s alone also holds %s", granted, other)
+			}
+		}
+	}
+}
+
+// TestAnAllowanceNarrowsTheDatabaseCapabilities: an agent's allowance for a
+// task can withhold either of Phase 37's two capabilities, and adds neither.
+func TestAnAllowanceNarrowsTheDatabaseCapabilities(t *testing.T) {
+	grants, err := Parse(map[string]Raw{
+		string(DBStatsRead): {Enabled: ptrTo(true)}, string(DBPlanRead): {Enabled: ptrTo(true)},
+		string(DBMetadataRead): {Enabled: ptrTo(true)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	narrowed, ignored := grants.Narrow([]string{string(DBStatsRead), string(DBRowsRead)})
+	if !narrowed.Has(DBStatsRead) || narrowed.Has(DBPlanRead) || narrowed.Has(DBMetadataRead) || narrowed.Has(DBRowsRead) {
+		t.Fatalf("narrowed to %v", narrowed.Names())
+	}
+	if len(ignored) != 1 || ignored[0] != string(DBRowsRead) {
+		t.Fatalf("an allowance asking for db.rows.read, which was not held, was not ignored: %v", ignored)
+	}
+}
+
+func ptrTo(value bool) *bool { return &value }

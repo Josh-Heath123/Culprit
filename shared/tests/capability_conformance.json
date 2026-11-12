@@ -8,7 +8,11 @@
     "refused - or worse, accepted as free text - by the API.",
     "",
     "allowlist: true means the capability is granted per item, as a list, and",
-    "`true` is refused for it. No *.write capability exists."
+    "`true` is refused for it. No *.write capability exists.",
+    "",
+    "Phase 37 part 1 adds db.stats.read and db.plan.read (P4). No capability",
+    "implies another: a test in each language grants one alone and finds",
+    "every other withheld."
   ],
   "capabilities": [
     {"name": "model.read", "allowlist": false},
@@ -17,6 +21,8 @@
     {"name": "config.read.values", "allowlist": true},
     {"name": "config.inspect.values", "allowlist": true},
     {"name": "db.metadata.read", "allowlist": false},
+    {"name": "db.stats.read", "allowlist": false},
+    {"name": "db.plan.read", "allowlist": false},
     {"name": "db.rows.read", "allowlist": true},
     {"name": "net.dns.resolve", "allowlist": false},
     {"name": "net.tcp.connect", "allowlist": false},

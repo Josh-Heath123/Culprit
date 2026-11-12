@@ -10,6 +10,8 @@ export const GRANT_WORDS: Record<string, string> = {
   "config.read.values": "Read and store the value of the listed configuration keys",
   "config.inspect.values": "Inspect the listed keys' values in memory, to check a token's audience — never stored",
   "db.metadata.read": "Connect to databases read-only and read their schema — never a row",
+  "db.stats.read": "Read the database's own statistics: statement timings and table and index usage — never a row",
+  "db.plan.read": "Ask the planner how it would run a statement, without running it — never a row",
   "db.rows.read": "Read rows from the listed tables",
   "net.dns.resolve": "Resolve host names",
   "net.tcp.connect": "Open a TCP connection and close it, sending nothing",
