@@ -243,6 +243,10 @@ type located struct {
 	// every budget it measured was kept.
 	latency     string
 	latencyKept bool
+	// otherSideKept says the side the root is not on passed by itself: for
+	// a component root, connection setup alone was within the budget; for
+	// a hop, the component's own time was. Inconclusive is not kept.
+	otherSideKept bool
 }
 
 // Diagnose runs the walk from a symptom on entry. The Investigation it
@@ -835,11 +839,15 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 			"The walk stopped at %s: it is slower than the latency budget declared for it. It could "+
 				"not check every alternative: %s.", describe(root), strings.Join(found.partial, "; "))
 	case found.latency == "component":
+		setup := "connection setup alone is within the budget"
+		if !found.otherSideKept {
+			setup = "connection setup alone is not shown to be over the budget"
+		}
 		diagnosis.Statement = fmt.Sprintf(
 			"%s is slower than the latency budget declared for it, and every component it calls on "+
-				"the request path keeps its own budget. The time is %s's own: connection setup alone "+
-				"is within the budget.%s",
-			deepest, deepest, w.unbudgetedNote(found))
+				"the request path keeps its own budget. The time is %s's own: its own time alone is "+
+				"over the budget, and %s.%s",
+			deepest, deepest, setup, w.unbudgetedNote(found))
 		diagnosis.Remediation = fmt.Sprintf(
 			"Find what makes %s slower than its budget, or correct the budget if it is wrong; the "+
 				"reading cites the samples and the budget it was judged against.", deepest)
@@ -847,10 +855,14 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 	case found.latency == "hop":
 		_, parts, _ := model.ParseSubject(found.root)
 		hop := describe(found.root)
+		own := "is within it"
+		if !found.otherSideKept {
+			own = "is not shown to be over it"
+		}
 		diagnosis.Statement = fmt.Sprintf(
 			"%s is slower than the latency budget declared for %s: connection setup alone is over "+
-				"it, and %s's own time is within it.%s",
-			strings.ToUpper(hop[:1])+hop[1:], parts["to_component"], parts["to_component"],
+				"it, and %s's own time %s.%s",
+			strings.ToUpper(hop[:1])+hop[1:], parts["to_component"], parts["to_component"], own,
 			w.unbudgetedNote(found))
 		diagnosis.Remediation = fmt.Sprintf(
 			"Find what slows connections from %s to %s: name resolution, the network path or a TLS "+

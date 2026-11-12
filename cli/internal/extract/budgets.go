@@ -61,6 +61,13 @@ func (b *Budget) UnmarshalYAML(node *yaml.Node) error {
 		return nil
 	}
 	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Tag == "!!merge" || node.Content[index].Value == "<<" {
+			// A merge key carries fields from elsewhere, where the value's
+			// form cannot be checked (the Phase 36 part 2 audit: `<<:
+			// {value: 0454}` loaded 300). Python refuses it too.
+			b.literalProblem = model.BudgetMergeProblem
+			return nil
+		}
 		if node.Content[index].Value != "value" {
 			continue
 		}

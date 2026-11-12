@@ -21,6 +21,7 @@ package verify
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -92,9 +93,9 @@ func (r Record) Check(investigation model.Investigation) error {
 		}
 		first, ok := byID[request.SameRunAs]
 		if !ok || first.SameRunAs != "" || first.ProbeID != request.ProbeID || first.Target != request.Target ||
-			first.Environment != request.Environment {
+			first.Environment != request.Environment || !reflect.DeepEqual(first.Inputs, request.Inputs) {
 			return fmt.Errorf("the request for reading %s names %s as its run, which is not a run of the same probe, "+
-				"target and environment", request.ReadingID, request.SameRunAs)
+				"target, environment and inputs", request.ReadingID, request.SameRunAs)
 		}
 	}
 	if len(byID) != len(investigation.Readings) {

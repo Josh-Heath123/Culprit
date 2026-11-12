@@ -2620,6 +2620,15 @@ limits.
   in the statement as unbudgeted, without making the diagnosis partial.
   With no budget anywhere on the request path, the diagnosis says none is
   declared.
+- **A database below the slow component makes it partial.** A database can
+  declare no latency budget yet (statement budgets are Phase 37), so a slow
+  component that calls one on the request path is never a complete root:
+  the diagnosis names the database as unmeasured, because the time could be
+  spent there.
+- **Two slow branches at once.** When two components on different branches
+  are each slow with nothing slow below them, the first in depth-first
+  order (callees in name order) is named the root and the other is listed;
+  the diagnosis is partial, because one root does not explain both.
 - **It takes time, and the walk's clock bounds it.** Against a route 800 ms
   slow, one run is about 45 s, and the walk takes it twice (to find the
   root, and to see it fail again for the rubric). The walk's wall clock

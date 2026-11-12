@@ -58,7 +58,7 @@ func (c *RealHTTPClient) TimeGet(ctx context.Context, url string, timeout time.D
 	transport.DisableKeepAlives = true
 	defer transport.CloseIdleConnections()
 	client := &http.Client{
-		Transport: transport,
+		Transport: methodGuard{next: transport},
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

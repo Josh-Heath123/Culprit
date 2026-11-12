@@ -76,6 +76,12 @@ class LatencyShapeError(ValueError):
 _PLAIN_DECIMAL = re.compile(r"[1-9][0-9]*")
 
 
+#: The refusal of a budget entry with a merge key (`<<`): the fields it
+#: brings in are not checked for their form. Go holds the same sentence as
+#: model.BudgetMergeProblem.
+BUDGET_MERGE_PROBLEM = "a budget entry is written out in full: a merge key (<<) is not read"
+
+
 def budget_literal_problem(literal: str, plain: bool) -> str | None:
     """Why a budget's value, as written in YAML, is not a plain decimal
     integer — or None when it is. `plain` is whether the scalar was written
@@ -91,7 +97,9 @@ def budget_literal_problem(literal: str, plain: bool) -> str | None:
     if not plain:
         return "a budget is written as plain decimal digits, without quotes, a tag or an alias"
     if _PLAIN_DECIMAL.fullmatch(literal) is None:
-        return f"a budget is written as plain decimal digits, and {literal} is not"
+        # Never the literal itself: error text is output, and a value
+        # pasted in the wrong place can be a credential (invariant 7).
+        return "a budget is written as plain decimal digits, and this value is not"
     return None
 
 

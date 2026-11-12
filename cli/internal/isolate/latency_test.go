@@ -267,6 +267,11 @@ func TestHopOrComponentFromTheSameSamples(t *testing.T) {
 				if !found {
 					t.Errorf("the tree does not end at the connection: %v", edges(inv))
 				}
+				// The component's own time was within its budget, so its
+				// latency is ruled out by the same reading, not left supported.
+				if h := hypothesisOn(inv, KindLatencyBudgetExceeded, component("c2")); h == nil || h.Status != model.HypothesisRuledOut {
+					t.Errorf("c2's own latency is %+v, want ruled out", h)
+				}
 			}
 		})
 	}
@@ -319,5 +324,22 @@ func TestALatencyProbeStopsAtTheWalksDeadline(t *testing.T) {
 	h := hypothesisOn(inv, KindLatencyBudgetExceeded, component("c2"))
 	if h == nil || h.Status != model.HypothesisUnexplored || !strings.Contains(h.Reason, "cut short") {
 		t.Fatalf("the hypothesis is %+v, want unexplored, cut short", h)
+	}
+}
+
+// A slow component with only fast components below it is the root itself:
+// the rule is "nothing slow below", not "something below" (the Phase 36
+// part 2 audit found this case untested).
+func TestASlowComponentAboveFastOnesIsTheRoot(t *testing.T) {
+	world := &latencyWorld{timings: map[string]timing{
+		"c0": {setup: 1, server: 5}, "c1": {setup: 1, server: 800}, "c2": {setup: 1, server: 5},
+	}}
+	inv := latencyWalk(t, world, "", budgetsOn("c0", "c1", "c2"))
+	if inv.Diagnosis.RootSubject != component("c1") || !inv.Diagnosis.Complete {
+		t.Fatalf("root %s complete=%v, want c1, slow above a fast c2: %s",
+			inv.Diagnosis.RootSubject, inv.Diagnosis.Complete, inv.Diagnosis.Statement)
+	}
+	if h := hypothesisOn(inv, KindLatencyBudgetExceeded, component("c2")); h == nil || h.Status != model.HypothesisRuledOut {
+		t.Fatalf("c2's latency is %+v, want ruled out", h)
 	}
 }

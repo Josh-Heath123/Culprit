@@ -65,7 +65,8 @@ func NewRealHTTPClient(timeout time.Duration) *RealHTTPClient {
 	}
 	return &RealHTTPClient{
 		client: &http.Client{
-			Timeout: timeout,
+			Transport: methodGuard{next: http.DefaultTransport},
+			Timeout:   timeout,
 			CheckRedirect: func(request *http.Request, via []*http.Request) error {
 				if len(via) >= MaxRedirects {
 					return fmt.Errorf("stopped after %d redirects", MaxRedirects)
@@ -127,12 +128,39 @@ func (c *RealHTTPClient) Options(
 // http.Request — so no request can be built around the check (Phase 36
 // part 2: TimeGet built its own).
 func newProbeRequest(ctx context.Context, method, url string) (*http.Request, error) {
-	// This is the line that would have to change for a probe to be able
-	// to write, and it should be loud.
-	if method != http.MethodGet && method != http.MethodOptions {
-		return nil, fmt.Errorf("probes issue only GET and OPTIONS; %s would be a write", method)
+	if err := checkMethod(method); err != nil {
+		return nil, err
 	}
 	return http.NewRequestWithContext(ctx, method, url, nil)
+}
+
+// checkMethod is the method check: GET or OPTIONS, nothing else. This is
+// the line that would have to change for a probe to be able to write, and
+// it should be loud. newProbeRequest asks it before a request exists, and
+// methodGuard asks it again as any request leaves, so a request built
+// around newProbeRequest is still refused (the Phase 36 part 2 audit found
+// three ways to build one that the source scan missed).
+func checkMethod(method string) error {
+	if method != http.MethodGet && method != http.MethodOptions {
+		return fmt.Errorf("probes issue only GET and OPTIONS; %s would be a write", method)
+	}
+	return nil
+}
+
+// methodGuard is the transport under every client this package builds:
+// it refuses, before anything is dialled, a request checkMethod refuses,
+// or one that carries a body. TestEveryRequestIsBuiltInOnePlace holds that
+// every http.Client literal here has one.
+type methodGuard struct{ next http.RoundTripper }
+
+func (g methodGuard) RoundTrip(request *http.Request) (*http.Response, error) {
+	if err := checkMethod(request.Method); err != nil {
+		return nil, err
+	}
+	if request.Body != nil && request.Body != http.NoBody {
+		return nil, fmt.Errorf("probes send no body")
+	}
+	return g.next.RoundTrip(request)
 }
 
 func (c *RealHTTPClient) do(

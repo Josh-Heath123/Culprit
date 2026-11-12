@@ -5,7 +5,9 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -65,10 +67,15 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// The names net/http is imported under in this file.
+		// The names net/http is imported under in this file. httptest
+		// builds requests of its own; outside a test it has no business here.
 		httpNames := map[string]bool{}
 		for _, spec := range file.Imports {
 			path, _ := strconv.Unquote(spec.Path.Value)
+			if path == "net/http/httptest" {
+				position := fset.Position(spec.Pos())
+				found = append(found, filepath.Base(position.Filename)+":"+strconv.Itoa(position.Line)+" net/http/httptest")
+			}
 			if path != "net/http" {
 				continue
 			}
@@ -100,10 +107,17 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 					found = append(found, filepath.Base(position.Filename)+":"+strconv.Itoa(position.Line)+" "+what)
 				}
 				switch typed := node.(type) {
-				case *ast.CallExpr:
-					if name, ok := isHTTP(typed.Fun, constructorsOfNetHTTP); ok {
+				case *ast.SelectorExpr:
+					// Any reference, not only a call: `var build =
+					// http.NewRequest` is a constructor too (Phase 36 part 2
+					// audit). http.DefaultClient has no methodGuard under it.
+					if name, ok := isHTTP(typed, constructorsOfNetHTTP); ok {
 						where("http." + name)
-					} else if selector, ok := typed.Fun.(*ast.SelectorExpr); ok && sendingMethods[selector.Sel.Name] {
+					} else if name, ok := isHTTP(typed, nil); ok && name == "DefaultClient" {
+						where("http.DefaultClient")
+					}
+				case *ast.CallExpr:
+					if selector, ok := typed.Fun.(*ast.SelectorExpr); ok && sendingMethods[selector.Sel.Name] {
 						where("." + selector.Sel.Name + "()")
 					}
 					if ident, ok := typed.Fun.(*ast.Ident); ok && ident.Name == "new" && len(typed.Args) == 1 {
@@ -111,9 +125,21 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 							where("new(http.Request)")
 						}
 					}
+				case *ast.TypeSpec:
+					// A type made from http.Request — an alias or a defined
+					// type — is a way to write a literal the check below
+					// cannot see by name.
+					if name, ok := isHTTP(typed.Type, nil); ok && name == "Request" {
+						where("type " + typed.Name.Name + " from http.Request")
+					}
 				case *ast.CompositeLit:
 					if name, ok := isHTTP(typed.Type, nil); ok && name == "Request" {
 						where("http.Request{}")
+					}
+					// Every client this package builds sends through the
+					// guard that checks the method again as a request leaves.
+					if name, ok := isHTTP(typed.Type, nil); ok && name == "Client" && !guarded(typed) {
+						where("http.Client without methodGuard")
 					}
 				case *ast.AssignStmt:
 					for _, left := range typed.Lhs {
@@ -129,6 +155,63 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 	sort.Strings(found)
 	return found
 }
+
+// guarded reports whether an http.Client literal's Transport is a
+// methodGuard literal.
+func guarded(client *ast.CompositeLit) bool {
+	for _, element := range client.Elts {
+		field, ok := element.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		if key, ok := field.Key.(*ast.Ident); !ok || key.Name != "Transport" {
+			continue
+		}
+		value := field.Value
+		if unary, ok := value.(*ast.UnaryExpr); ok {
+			value = unary.X
+		}
+		literal, ok := value.(*ast.CompositeLit)
+		if !ok {
+			return false
+		}
+		ident, ok := literal.Type.(*ast.Ident)
+		return ok && ident.Name == "methodGuard"
+	}
+	return false
+}
+
+// TestTheGuardRefusesAWriteAsItLeaves: a request built by any route at all
+// is refused by the transport under every client before anything is
+// dialled.
+func TestTheGuardRefusesAWriteAsItLeaves(t *testing.T) {
+	dialled := false
+	guard := methodGuard{next: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		dialled = true
+		return nil, nil
+	})}
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodHead, "PATCH"} {
+		request := &http.Request{Method: method, URL: &url.URL{Scheme: "http", Host: "example.invalid", Path: "/"}}
+		if _, err := guard.RoundTrip(request); err == nil {
+			t.Errorf("the guard let a %s request through", method)
+		}
+	}
+	withBody := &http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "http", Host: "example.invalid"},
+		Body: io.NopCloser(strings.NewReader("x"))}
+	if _, err := guard.RoundTrip(withBody); err == nil {
+		t.Error("the guard let a GET with a body through")
+	}
+	if dialled {
+		t.Fatal("a refused request reached the transport")
+	}
+	if _, err := guard.RoundTrip(&http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "http", Host: "x"}}); err != nil || !dialled {
+		t.Fatalf("a plain GET did not pass the guard: %v", err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func TestEveryRequestIsBuiltInOnePlace(t *testing.T) {
 	if found := requestsBuiltElsewhere(t, "."); len(found) > 0 {
@@ -156,6 +239,16 @@ func TestARequestBuiltAroundTheCheckIsFound(t *testing.T) {
 }`,
 		"client":  `func smuggle(client *http.Client) { _, _ = client.Post("http://x", "text/plain", nil) }`,
 		"package": `func smuggle() { _, _ = http.Post("http://x", "text/plain", nil) }`,
+		// The Phase 36 part 2 audit's three, and a client with no guard.
+		"a type alias": "type aliasRequest = http.Request\n\n" +
+			`func smuggle() *http.Request { return &aliasRequest{Method: "POST"} }`,
+		"a defined type": "type ownRequest http.Request\n\n" +
+			`func smuggle() *http.Request { return (*http.Request)(&ownRequest{Method: "POST"}) }`,
+		"a constructor value": "var zzBuild = http.NewRequest\n\n" +
+			`func smuggle() (*http.Request, error) { return zzBuild("DELETE", "http://x", nil) }`,
+		"httptest":            `func smuggle() *http.Request { return httptest.NewRequest("POST", "http://x", nil) }`,
+		"an unguarded client": `func smuggle() *http.Client { return &http.Client{Transport: http.DefaultTransport} }`,
+		"the default client":  `func smuggle() *http.Client { return http.DefaultClient }`,
 	}
 	for name, code := range ways {
 		t.Run(name, func(t *testing.T) {
@@ -182,6 +275,9 @@ func TestARequestBuiltAroundTheCheckIsFound(t *testing.T) {
 			imports := "import (\n\t\"context\"\n\t\"net/http\"\n)\n\nvar _ context.Context\n\n"
 			if name == "aliased" {
 				imports = "import web \"net/http\"\n\n"
+			}
+			if name == "httptest" {
+				imports = "import (\n\t\"net/http\"\n\t\"net/http/httptest\"\n)\n\n"
 			}
 			source := "package probe\n\n" + imports + code + "\n"
 			if err := os.WriteFile(filepath.Join(root, "smuggled.go"), []byte(source), 0o644); err != nil {

@@ -58,7 +58,7 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
-from culprit_model.latency import Budget, budget_literal_problem
+from culprit_model.latency import BUDGET_MERGE_PROBLEM, Budget, budget_literal_problem
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -592,6 +592,10 @@ def _reject_budget_literals(text: str, source: str) -> None:
             if not isinstance(entry, yaml.MappingNode):
                 continue
             for field, value in entry.value:
+                if field.tag == "tag:yaml.org,2002:merge" or field.value == "<<":
+                    # The fields a merge brings in are not checked for their
+                    # form; the Go loader refuses it too.
+                    raise ManifestError(f"{source}: budgets[{index}]: {BUDGET_MERGE_PROBLEM}")
                 if field.value != "value":
                     continue
                 # Plain: an unquoted scalar with no explicit tag. An alias
@@ -628,13 +632,14 @@ def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     if not isinstance(raw, dict):
         raise ManifestError(f"{source}: expected a mapping at the top level")
 
-    _reject_budget_literals(text, source)
-
     # Before validation, not after: a credential in a field the schema
     # would reject anyway must still be reported as a credential, and a
     # credential in a field the schema accepts must never reach a model
     # instance that something might log.
     _reject_credentials(raw)
+    # After the credential scan: a credential pasted as a budget is reported
+    # as one, never as a malformed budget.
+    _reject_budget_literals(text, source)
 
     try:
         return Manifest(**raw)

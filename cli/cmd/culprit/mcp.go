@@ -641,7 +641,8 @@ func latencyOffComponent(spec extract.EnvironmentSpec, target string, inputs map
 		if endpoint == nil {
 			unbound = append(unbound, unboundInput{Input: name, Reason: fmt.Sprintf(
 				"%s declares no endpoint, so there is no address its latency budget can be measured at", component)})
-		} else if canonicalHost(parsed.Hostname()) != canonicalHost(endpoint.Host) || port != endpoint.Port {
+		} else if canonicalHost(parsed.Hostname()) != canonicalHost(endpoint.Host) || port != endpoint.Port ||
+			(parsed.Scheme == "https") != endpoint.TLS {
 			unbound = append(unbound, unboundInput{Input: name, Reason: fmt.Sprintf(
 				"%s:%d is not %s's endpoint, and probe.http.latency is judged against %s's budget",
 				parsed.Hostname(), port, component, component)})

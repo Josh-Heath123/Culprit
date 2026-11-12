@@ -190,10 +190,21 @@ func (w *Walk) latencyPass(ctx context.Context, entry string, found *located) {
 	}
 
 	hop, verdict := w.hopOrComponent(root, parent[root], evidence)
+	split, _ := model.SplitLatency(w.readingByID(evidence).Measured, w.readingByID(evidence).Expected)
 	switch verdict {
 	case "component":
 		found.latency = "component"
+		found.otherSideKept = split.Setup == model.VerdictPass
 	case "hop":
+		found.otherSideKept = split.Server == model.VerdictPass
+		if found.otherSideKept {
+			// The component's own time is within its budget: the time is
+			// the hop's, and the component's latency is ruled out by the
+			// same reading (Phase 36 part 2 audit: it stayed supported).
+			if h := w.hypothesis(KindLatencyBudgetExceeded, model.MustBuildSubject(model.KindComponent, model.Parts{"name": root})); h != nil {
+				h.Status, h.Reason = model.HypothesisRuledOut, ""
+			}
+		}
 		connection := model.MustBuildSubject(model.KindConnection, model.Parts{
 			"from_component": parent[root], "to_component": root})
 		w.addHypothesis(KindLatencyBudgetExceeded, connection)

@@ -397,3 +397,26 @@ func TestASameRunThatIsNotTheSameRequestIsRefused(t *testing.T) {
 		t.Fatal("a same_run_as naming a borrowed run was accepted")
 	}
 }
+
+// TestASameRunMustBeTheSameRequest: each way a reading could borrow a run
+// that is not its own is refused — another probe, target, environment or
+// inputs (the Phase 36 part 2 audit: only a missing and a chained run were
+// tested, and inputs were not compared).
+func TestASameRunMustBeTheSameRequest(t *testing.T) {
+	for name, change := range map[string]func(*Request){
+		"another probe":       func(r *Request) { r.ProbeID = "probe.http.reachable" },
+		"another target":      func(r *Request) { r.Target = "http:inventory-service/GET /health" },
+		"another environment": func(r *Request) { r.Environment = "elsewhere" },
+		"other inputs":        func(r *Request) { r.Inputs = map[string]any{"url": "http://elsewhere.invalid/ready"} },
+	} {
+		inv, record := latencyInvestigation()
+		change(&record.Requests[1])
+		// The reading must still match its request, so only same_run_as is wrong.
+		item := &inv.Readings[1].Reading
+		item.ProbeID, item.Target, item.Environment = record.Requests[1].ProbeID, record.Requests[1].Target, record.Requests[1].Environment
+		err := record.Check(inv)
+		if err == nil || !strings.Contains(err.Error(), "names r1 as its run") {
+			t.Errorf("%s: %v, want the borrowed run refused", name, err)
+		}
+	}
+}

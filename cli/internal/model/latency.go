@@ -70,10 +70,18 @@ func BudgetLiteralProblem(literal string, plain bool) string {
 		return "a budget is written as plain decimal digits, without quotes, a tag or an alias"
 	}
 	if !plainDecimal.MatchString(literal) {
-		return fmt.Sprintf("a budget is written as plain decimal digits, and %s is not", literal)
+		// Never the literal itself: error text is output, and a value
+		// pasted in the wrong place can be a credential (invariant 7).
+		return "a budget is written as plain decimal digits, and this value is not"
 	}
 	return ""
 }
+
+// BudgetMergeProblem is the refusal of a budget entry with a merge key
+// (`<<`): the fields it brings in are not checked for their form, so both
+// readers refuse it (latency_conformance.json's budget_entries). Python
+// holds the same sentence as BUDGET_MERGE_PROBLEM.
+const BudgetMergeProblem = "a budget entry is written out in full: a merge key (<<) is not read"
 
 // LatencyShapeError is a measurement that is not the rule's input.
 type LatencyShapeError struct{ Message string }

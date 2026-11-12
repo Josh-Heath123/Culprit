@@ -172,3 +172,7 @@ def test_a_budget_is_written_as_plain_decimal_digits(case: dict) -> None:
     model.BudgetLiteralProblem, from the one fixture."""
     problem = budget_literal_problem(case["literal"], case["plain"])
     assert problem == (case["reason"] if case["refused"] else None)
+
+
+def test_the_merge_refusal_is_the_fixtures() -> None:
+    assert {case["reason"] for case in FIXTURE["budget_entries"]} == {latency.BUDGET_MERGE_PROBLEM}

@@ -1162,72 +1162,72 @@
       "literal": "1e3",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 1e3 is not",
+      "reason": "a budget is written as plain decimal digits, and this value is not",
       "why": "YAML 1.2 reads 1000; YAML 1.1 a string"
     },
     {
       "literal": "0o454",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 0o454 is not",
+      "reason": "a budget is written as plain decimal digits, and this value is not",
       "why": "YAML 1.2 reads octal 300; YAML 1.1 a string"
     },
     {
       "literal": "0454",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 0454 is not",
-      "why": "YAML 1.1 reads octal 300; YAML 1.2 decimal 454"
+      "reason": "a budget is written as plain decimal digits, and this value is not",
+      "why": "a leading zero: YAML 1.1 (PyYAML) reads octal 300, and yaml.v3 reads it as octal 300 too, where strict YAML 1.2 reads decimal 454"
     },
     {
       "literal": "300_000",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 300_000 is not",
+      "reason": "a budget is written as plain decimal digits, and this value is not",
       "why": "YAML 1.1 reads 300000; YAML 1.2 a string"
     },
     {
       "literal": "0x12C",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 0x12C is not",
+      "reason": "a budget is written as plain decimal digits, and this value is not",
       "why": "hexadecimal 300 in both, and still not decimal digits"
     },
     {
       "literal": "300.0",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 300.0 is not"
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     },
     {
       "literal": "+300",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and +300 is not"
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     },
     {
       "literal": "-300",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and -300 is not"
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     },
     {
       "literal": "0",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 0 is not"
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     },
     {
       "literal": "3e2",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and 3e2 is not"
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     },
     {
       "literal": ".inf",
       "plain": true,
       "refused": true,
-      "reason": "a budget is written as plain decimal digits, and .inf is not"
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     },
     {
       "literal": "300",
@@ -1235,6 +1235,19 @@
       "refused": true,
       "reason": "a budget is written as plain decimal digits, without quotes, a tag or an alias",
       "why": "quoted: a string to both readers"
+    }
+  ],
+  "budget_entries_why": "A budget entry that the value check cannot see into: a merge key carries the value from elsewhere, so `0454` or `1e3` would reach each reader as a number again (the Phase 36 part 2 audit). Both readers refuse any merge key in a budget entry, with this reason.",
+  "budget_entries": [
+    {
+      "why": "the value through an inline merge",
+      "entry": "  - <<: {value: 0454}\n    subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    why: w\n",
+      "reason": "a budget entry is written out in full: a merge key (<<) is not read"
+    },
+    {
+      "why": "a whole entry through a merge, with a plain value",
+      "entry": "  - <<: {why: w}\n    subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n",
+      "reason": "a budget entry is written out in full: a merge key (<<) is not read"
     }
   ]
 }

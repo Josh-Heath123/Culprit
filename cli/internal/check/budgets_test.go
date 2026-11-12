@@ -214,3 +214,50 @@ func TestABudgetIsRefusedAtLoadUnlessItIsWellFormed(t *testing.T) {
 		}
 	}
 }
+
+// TestABudgetValueIsNeverEchoed: error text is output (invariant 7). A
+// value written where a budget goes is refused without the value in the
+// error, so a credential pasted there does not reach stderr (the Phase 36
+// part 2 invariant audit: it did).
+func TestABudgetValueIsNeverEchoed(t *testing.T) {
+	for _, secret := range []string{"postgres://u:hunter2@db/x", "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB", "0o454"} {
+		budgets := "budgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n" +
+			"    value: " + secret + "\n    why: w\n"
+		_, err := extract.LoadManifest(writeBudgetProject(t, budgets))
+		if err == nil {
+			t.Fatalf("value: %s loaded", secret)
+		}
+		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "hunter2") {
+			t.Errorf("the error echoes the value: %v", err)
+		}
+	}
+}
+
+// TestABudgetEntryWithAMergeKeyIsRefused: the shared fixture's
+// budget_entries. A merge key brought `value: 0454` in past the form check
+// and the Go loader read 300 (the Phase 36 part 2 audit).
+func TestABudgetEntryWithAMergeKeyIsRefused(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "latency_conformance.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Entries []struct {
+			Why    string `json:"why"`
+			Entry  string `json:"entry"`
+			Reason string `json:"reason"`
+		} `json:"budget_entries"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Entries) == 0 {
+		t.Fatalf("the fixture's budget_entries: %v", err)
+	}
+	for _, c := range fixture.Entries {
+		_, err := extract.LoadManifest(writeBudgetProject(t, "budgets:\n"+c.Entry))
+		if err == nil || !strings.Contains(err.Error(), c.Reason) {
+			t.Errorf("%s: %v, want refused with %q", c.Why, err, c.Reason)
+		}
+		if c.Reason != model.BudgetMergeProblem {
+			t.Errorf("%s: the fixture's reason is not model.BudgetMergeProblem", c.Why)
+		}
+	}
+}
