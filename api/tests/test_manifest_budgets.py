@@ -155,9 +155,72 @@ MANIFESTS = json.loads(
 
 
 @pytest.mark.parametrize("case", MANIFESTS, ids=lambda case: case["why"])
-def test_budgets_through_a_top_level_merge_are_checked_for_their_form(case: dict) -> None:
-    """The shared fixture's budget_manifests, which the Go loader reads too."""
+def test_the_two_readers_read_budget_manifests_alike(case: dict) -> None:
+    """The shared fixture's budget_manifests, which the Go loader reads too:
+    each is refused, or loads with the value the Go loader loads."""
+    if "loads" in case:
+        assert load_manifest(case["manifest"]).budgets[0].value == case["loads"]
+        return
     with pytest.raises(ManifestError) as refused:
         load_manifest(case["manifest"])
     if case["reason"] is not None:
         assert case["reason"] in str(refused.value)
+
+
+KEYS = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "manifest_keys.json").read_text(
+        encoding="utf-8"
+    )
+)["keys"]
+
+
+def test_the_api_knows_every_top_level_key_the_go_loader_does() -> None:
+    """Phase 37 part 1: shared/tests/manifest_keys.json is every top-level
+    key of culprit.yaml, and cli/internal/extract's test holds the Go loader
+    to it too. A key one reader knows and the other does not fails here."""
+    from app.model.manifest import Manifest
+
+    assert sorted(Manifest.model_fields) == sorted(KEYS)
+
+
+ISOLATION = """
+version: 1
+components:
+  - name: shop
+environments:
+  local: {adapter: process}
+isolation:
+  max_probes: 30
+  max_wall_clock: 4m
+  environments: {local: {max_probes: 10}}
+probes:
+  probe.http.latency: {timeout_ms: 90000, environments: [local]}
+  probe.net.dns_resolve: {enabled: false, reason: no resolver in this environment}
+"""
+
+
+def test_isolation_and_probes_load_and_round_trip() -> None:
+    manifest = load_manifest(ISOLATION)
+    assert manifest.isolation is not None and manifest.isolation.max_wall_clock == "4m"
+    assert manifest.probes is not None and manifest.probes["probe.http.latency"].timeout_ms == 90000
+    exported = dump_manifest(manifest)
+    assert load_manifest(exported) == manifest
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        ISOLATION.replace("4m", "four minutes"),
+        ISOLATION.replace("4m", "0s"),
+        ISOLATION.replace("max_probes: 30", "max_probes: -1"),
+        ISOLATION.replace("{local: {max_probes: 10}}", "{staging: {max_probes: 10}}"),
+        ISOLATION.replace("environments: [local]", "environments: [staging]"),
+        ISOLATION.replace(
+            "enabled: false, reason: no resolver in this environment", "enabled: false"
+        ),
+        ISOLATION.replace("timeout_ms: 90000", "timeout_ms: 300001"),
+    ],
+)
+def test_isolation_and_probes_are_refused_as_the_go_loader_refuses_them(broken: str) -> None:
+    with pytest.raises(ManifestError):
+        load_manifest(broken)

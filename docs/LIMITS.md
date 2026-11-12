@@ -2515,13 +2515,25 @@ request in a 120 s run could be given a timeout long enough to show it was
 slower. One subject and predicate may have one budget in a file: two are
 refused at load, not one measured and the other dropped.
 
-A merge key (`<<`) in a budget entry is refused by both readers, and a
-`budgets:` section that arrives through a top-level merge is checked like
-any other; a key written twice in a budget entry, or `budgets:` written
-twice, is refused by both. One split remains: a top-level key written as
-the *string* `"<<"` is ignored by the binary's loader, which ignores every
-top-level key it does not know, and refused by the API's; a budget written
-under it is then dropped by `culprit check` without a word.
+`culprit.yaml` is read by two YAML readers, the binary's (YAML 1.2) and the
+API's (YAML 1.1), and for `budgets:` the API's is held to the binary's rules
+(`shared/tests/latency_conformance.json`, `budget_manifests`):
+
+- a key written twice in any mapping — `version:`, `budgets:`, a field of
+  an entry, or two merge keys — is refused by both;
+- the root's own `budgets:` is read before one a merge (`<<`) brings in, and
+  the first merge before a later one; a `budgets:` that is overridden is
+  read by neither, so its values are not checked;
+- a merge key inside a budget entry is refused by both.
+
+Splits that remain, each refused by the API and loaded by the binary:
+
+- a top-level key written as the *string* `"<<"`. The binary ignores every
+  top-level key it does not know, so a budget under it is dropped by
+  `culprit check` without a word;
+- a top-level key that is not a string (`!!binary`, `!!int`). The binary
+  reads a `!!binary` key that decodes to `budgets` as `budgets:`; the API
+  refuses any top-level key that is not a string.
 
 In `culprit.yaml` the value is written as **plain decimal digits**,
 unquoted, with no sign and no leading zero: `300`. Every other form is
@@ -2594,26 +2606,27 @@ judged with another's times.
 
 ### What holds the GET-only rule, and what cannot
 
-Every probe request is built by one function that refuses any method but
-`GET` and `OPTIONS`, and every client in `internal/probe` sends through a
-transport that refuses the same again, and any body, before anything is
-dialled. A source scan of that package (`TestEveryRequestIsBuiltInOnePlace`)
-fails on each of the 26 ways three audits found to build or send a request
-around those two: a constructor named or taken as a value, a request value
-or literal (typed, or with its type left out inside a slice or map), a type
-made from `http.Request`, a method or transport written through a field or
-a pointer, a direct or stored `RoundTrip`, a client that is not a guarded
-literal, `http.DefaultClient`, a dot import of `net/http`, and `httptest`,
-`reflect` or `unsafe` imported.
+Two structural facts hold it (Q26, ruled 2026-11-12), each with a test that
+shows it red:
+
+- **Only `http.go` and `timing.go` in `internal/probe` import `net/http`**
+  (or any package under it). No other file in the package can name a
+  client, a transport or a request constructor.
+- **Every client those two files build comes from one constructor**, which
+  puts a guard under it. The guard refuses anything but a bodiless `GET` or
+  `OPTIONS` as each request leaves, before anything is dialled — however
+  the request was built, and whatever was done to it afterwards.
+
+Phase 36 part 2 held this with a scan of the package's syntax instead. Three
+audits in a row found code shapes it did not know, and the third sent a
+`DELETE`; the scan is retired.
 
 **It is a guard against ordinary code, not a proof against deliberate
-code.** It reads syntax, and each audit found new syntax that got past it
-until the scan was taught it; code written inside `internal/probe` to send
-a write — by a form not yet listed, by a header such as
-`X-HTTP-Method-Override`, or over a socket of its own — could still do so.
-What bounds that is where it can be written: the binary's network allowlist
-keeps every other package from linking a network package at all, so the
-one package that may is the one review has to read.
+code.** Raw bytes written to a socket that `net.tcp.connect` opened are
+outside it, as is a header such as `X-HTTP-Method-Override` that a server
+chooses to honour. What bounds that is where it can be written: the binary's
+network allowlist keeps every other package from linking a network package
+at all, and within `internal/probe` only two files can speak HTTP.
 
 ### Latency in the walk
 

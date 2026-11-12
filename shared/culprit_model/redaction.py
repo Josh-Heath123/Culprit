@@ -16,13 +16,22 @@ import re
 _CREDENTIAL = re.compile(
     r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@"
     r"|[a-z][a-z0-9+.-]*://\S*[?&](password|passwd|secret|token|api[_-]?key)=[^&\s]*"
-    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    # The whole block, to its end or the end of the text, as Go removes it.
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----(?s:.*?)(-----END [A-Z ]*PRIVATE KEY-----|\Z)"
     r"|\bAKIA[0-9A-Z]{16}\b"
     r"|\bgh[pousr]_[A-Za-z0-9]{20,}"
     r"|\bsk-[A-Za-z0-9]{20,}"
     # Anthropic's keys (sk-ant-api03-...): hyphens break the pattern above.
     r"|\bsk-ant-[A-Za-z0-9_-]{20,}"
-    r"|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.",
+    r"|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."
+    # Phase 37 part 1, before any statement text is read: a password outside
+    # a URL (libpq's keyword form, a literal in a statement), Slack tokens,
+    # and user:pass@host with no scheme. Each is a case in
+    # shared/tests/redaction_conformance.json.
+    r"""|\b(password|passwd|pwd)\s*=\s*('[^']*'|"[^"]*"|[^\s&;,'"]+)"""
+    r"|\bxox[abposr]-[A-Za-z0-9-]{10,}"
+    r"|\bxapp-[0-9]+-[A-Za-z0-9-]{10,}"
+    r"|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@",
     re.IGNORECASE,
 )
 

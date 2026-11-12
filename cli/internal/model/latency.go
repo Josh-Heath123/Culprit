@@ -144,10 +144,9 @@ type LatencyInputs struct {
 	Requests   int
 	SamplesUS  []int
 	Timeouts   int
-	// Planned is how many requests the run set out to send, or 0 when the
-	// reading does not say. A run cut short by its deadline is judged
-	// inconclusive (Phase 36 part 2): the count stays fixed, and nothing
-	// stops early.
+	// Planned is how many requests the run set out to send; required. A run
+	// cut short by its deadline is judged inconclusive (Phase 36 part 2):
+	// the count stays fixed, and nothing stops early.
 	Planned int
 }
 
@@ -172,13 +171,18 @@ func ParseLatencyInputs(measured, expected map[string]any) (LatencyInputs, error
 	if in.Requests > LatencyMaxRequests {
 		return in, shapeError("requests %d is over the cap of %d", in.Requests, LatencyMaxRequests)
 	}
-	if raw, stated := measured["planned"]; stated {
-		if in.Planned, err = boundedNumber(raw, "planned", 1, LatencyMaxRequests); err != nil {
-			return in, err
-		}
-		if in.Requests > in.Planned {
-			return in, shapeError("requests %d is more than the %d planned", in.Requests, in.Planned)
-		}
+	// Required since Phase 37 part 1 (probe version 2): a reading without
+	// it would be judged on its samples alone, so a run cut short could
+	// pass or fail on fewer requests than it set out to send.
+	planned, stated := measured["planned"]
+	if !stated {
+		return in, shapeError("planned must say how many requests the run set out to send")
+	}
+	if in.Planned, err = boundedNumber(planned, "planned", 1, LatencyMaxRequests); err != nil {
+		return in, err
+	}
+	if in.Requests > in.Planned {
+		return in, shapeError("requests %d is more than the %d planned", in.Requests, in.Planned)
 	}
 	raw, ok := measured["samples_us"].([]any)
 	if !ok {
@@ -310,7 +314,7 @@ func JudgeLatency(measured, expected map[string]any) (Verdict, string, error) {
 	n := len(ordered)
 	limit := in.BudgetMS * 1000
 	p := in.Percentile
-	if in.Planned > 0 && in.Requests < in.Planned {
+	if in.Requests < in.Planned {
 		return VerdictInconclusive, fmt.Sprintf(
 			"the run was cut short at its deadline: %d of %d requests were sent, so p%d is not "+
 				"judged against the %d ms budget", in.Requests, in.Planned, p, in.BudgetMS), nil
@@ -425,7 +429,7 @@ func SplitLatency(measured, expected map[string]any) (LatencySplit, error) {
 	}
 	series := func(samples []int, timeouts int) map[string]any {
 		return map[string]any{
-			"percentile": in.Percentile, "requests": in.Requests,
+			"percentile": in.Percentile, "requests": in.Requests, "planned": in.Planned,
 			"samples_us": append([]int(nil), samples...), "timeouts": timeouts,
 		}
 	}

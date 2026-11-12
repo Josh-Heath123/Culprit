@@ -36,3 +36,27 @@ func TestRedactCredentials(t *testing.T) {
 		}
 	}
 }
+
+// TestRedactionHoldsToTheSharedCases: the Go half of
+// shared/tests/redaction_conformance.json, which redaction.py reads too.
+func TestRedactionHoldsToTheSharedCases(t *testing.T) {
+	fixture := readFixture[struct {
+		Cases []struct {
+			Why        string `json:"why"`
+			Text       string `json:"text"`
+			Redacted   string `json:"redacted"`
+			Credential bool   `json:"credential"`
+		} `json:"cases"`
+	}](t, "redaction_conformance.json")
+	if len(fixture.Cases) == 0 {
+		t.Fatal("the redaction fixture is empty")
+	}
+	for _, c := range fixture.Cases {
+		if got := RedactCredentials(c.Text); got != c.Redacted {
+			t.Errorf("%s: %q, want %q", c.Why, got, c.Redacted)
+		}
+		if got := LooksLikeCredential(c.Text); got != c.Credential {
+			t.Errorf("%s: looks like a credential = %v, want %v", c.Why, got, c.Credential)
+		}
+	}
+}

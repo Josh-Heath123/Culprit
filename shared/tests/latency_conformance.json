@@ -61,7 +61,8 @@
           10000,
           10000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 50
       },
       "expected": {
         "latency_p95_ms": 300
@@ -126,7 +127,8 @@
           900000,
           900000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 50
       },
       "expected": {
         "latency_p95_ms": 300
@@ -161,7 +163,8 @@
           12345,
           12345
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -196,7 +199,8 @@
           700000,
           700000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -231,7 +235,8 @@
           500000,
           500000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -249,7 +254,8 @@
           10000,
           10000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 50
       },
       "expected": {
         "latency_p95_ms": 300
@@ -263,7 +269,8 @@
         "percentile": 95,
         "requests": 50,
         "samples_us": [],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 50
       },
       "expected": {
         "latency_p95_ms": 300
@@ -327,7 +334,8 @@
           10000,
           10000
         ],
-        "timeouts": 1
+        "timeouts": 1,
+        "planned": 50
       },
       "expected": {
         "latency_p95_ms": 300
@@ -391,7 +399,8 @@
           10000,
           10000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 49
       },
       "expected": {
         "latency_p95_ms": 300
@@ -412,7 +421,8 @@
           10000,
           10000
         ],
-        "timeouts": 14
+        "timeouts": 14,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -471,7 +481,8 @@
           10000,
           10000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 44
       },
       "expected": {
         "latency_p95_ms": 300
@@ -531,7 +542,8 @@
           10000,
           10000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 45
       },
       "expected": {
         "latency_p95_ms": 300
@@ -566,7 +578,8 @@
           300000,
           300000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -601,7 +614,8 @@
           300001,
           300001
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -636,7 +650,8 @@
           900000,
           1000
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -671,7 +686,8 @@
           10000.0,
           10000.0
         ],
-        "timeouts": 0.0
+        "timeouts": 0.0,
+        "planned": 20.0
       },
       "expected": {
         "latency_p50_ms": 300.0
@@ -759,7 +775,8 @@
           1,
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300
@@ -823,7 +840,8 @@
           1,
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 50
       },
       "expected": {
         "latency_p95_ms": 300
@@ -839,7 +857,8 @@
           1,
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 2
       },
       "expected": {
         "latency_p50_ms": 300
@@ -872,7 +891,8 @@
           1,
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p95_ms": 300
@@ -905,7 +925,8 @@
           1,
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": null
     },
@@ -936,7 +957,8 @@
           1,
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 20
       },
       "expected": {
         "latency_p50_ms": 300,
@@ -951,7 +973,8 @@
         "samples_us": [
           1.5
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 1
       },
       "expected": {
         "latency_p50_ms": 300
@@ -965,7 +988,8 @@
         "samples_us": [
           -1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 1
       },
       "expected": {
         "latency_p50_ms": 300
@@ -979,7 +1003,8 @@
         "samples_us": [
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 1
       },
       "expected": {
         "latency_p50_ms": 0
@@ -993,7 +1018,8 @@
         "samples_us": [
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": true
       },
       "expected": {
         "latency_p50_ms": 300
@@ -1007,7 +1033,8 @@
         "samples_us": [
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 1
       },
       "expected": {
         "latency_p50_ms": 60001
@@ -1021,7 +1048,8 @@
         "samples_us": [
           1
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 1
       },
       "expected": {
         "latency_p50_ms": 5000000000000
@@ -1035,7 +1063,8 @@
         "samples_us": [
           1000000001
         ],
-        "timeouts": 0
+        "timeouts": 0,
+        "planned": 1
       },
       "expected": {
         "latency_p50_ms": 300
@@ -1138,6 +1167,39 @@
       },
       "expected": {
         "latency_p95_ms": 300
+      }
+    },
+    {
+      "why": "no planned: a reading that does not say how many requests it set out to send",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
       }
     }
   ],
@@ -1250,7 +1312,7 @@
       "reason": "a budget entry is written out in full: a merge key (<<) is not read"
     }
   ],
-  "budget_manifests_why": "A whole culprit.yaml whose budgets: section arrives through a top-level merge key: the form check must see it there too, or one reader loads 300 where the other refuses (the re-audit of Phase 36 part 2). Both readers refuse it with this reason. A case with no reason is refused by both, each in its own words: the Go loader refuses a repeated key as invalid YAML.",
+  "budget_manifests_why": "Whole culprit.yaml files whose budgets: the two readers must read alike: refused by both (reason, or null for each in its own words), or loaded by both with the same value (loads). The Go loader (yaml.v3) refuses a key written twice in any mapping, reads the root's own budgets: before a merged one and the first merge before a later one; the API's reader is held to the same (Phase 37 part 1, the re-audit of 4c7bc6e).",
   "budget_manifests": [
     {
       "why": "budgets: through a top-level merge",
@@ -1271,6 +1333,41 @@
       "why": "budgets: declared twice",
       "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}\nbudgets: []\n",
       "reason": null
+    },
+    {
+      "why": "a merged budgets: and the root's own: the root's is read",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}]}\nbudgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 500, why: w}]\n",
+      "loads": 500
+    },
+    {
+      "why": "the root's own budgets: and a merged one after it: the root's is read",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}]\n<<: {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 500, why: w}]}\n",
+      "loads": 300
+    },
+    {
+      "why": "two merged budgets: sections: the first is read",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: [{budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}]}, {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 500, why: w}]}]\n",
+      "loads": 300
+    },
+    {
+      "why": "a merged budgets: the root's own overrides is never read, so its form is not checked",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 0454, why: w}]}\nbudgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}]\n",
+      "loads": 300
+    },
+    {
+      "why": "two merge keys in one mapping",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}]}\n<<: {x: 1}\n",
+      "reason": null
+    },
+    {
+      "why": "version: written twice",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nversion: 1\nbudgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}]\n",
+      "reason": null
+    },
+    {
+      "why": "a value with an anchor is not plain",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: &v 300\n    why: w\n",
+      "reason": "a budget is written as plain decimal digits, without quotes, a tag or an alias"
     }
   ]
 }

@@ -300,7 +300,7 @@ func (r *latencySetRunner) RunSet(_ context.Context, request Request) []model.Re
 		for index := range samples {
 			samples[index] = r.samplesUS
 		}
-		measured := map[string]any{"percentile": percentile, "requests": len(samples), "samples_us": samples, "timeouts": 0}
+		measured := map[string]any{"percentile": percentile, "requests": len(samples), "planned": len(samples), "samples_us": samples, "timeouts": 0}
 		expected := map[string]any{predicate: 300}
 		verdict, reason, _ := model.JudgeLatency(measured, expected)
 		reading := model.Reading{ProbeID: model.LatencyProbeID, ProbeVersion: 1, Target: request.Target,

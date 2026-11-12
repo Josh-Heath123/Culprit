@@ -24,14 +24,23 @@ var credentialPattern = regexp.MustCompile(
 		// ?password=… — consuming the value, so redaction removes it and
 		// does not leave it standing after the marker.
 		`|[a-z][a-z0-9+.-]*://\S*[?&](password|passwd|secret|token|api[_-]?key)=[^&\s]*` +
-		`|-----BEGIN [A-Z ]*PRIVATE KEY-----(?s:.*?)(-----END [A-Z ]*PRIVATE KEY-----|$)` +
+		`|-----BEGIN [A-Z ]*PRIVATE KEY-----(?s:.*?)(-----END [A-Z ]*PRIVATE KEY-----|\z)` +
 		`|\bAKIA[0-9A-Z]{16}\b` +
 		`|\bgh[pousr]_[A-Za-z0-9]{20,}` +
 		`|\bsk-[A-Za-z0-9]{20,}` +
 		// Anthropic's keys (sk-ant-api03-...): hyphens break the pattern
 		// above. Phase 35 part 2 made this a key the control plane holds.
 		`|\bsk-ant-[A-Za-z0-9_-]{20,}` +
-		`|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.`)
+		`|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.` +
+		// Phase 37 part 1, before any statement text is read: a password
+		// outside a URL (libpq's keyword form, a literal in a statement),
+		// Slack tokens, and user:pass@host with no scheme. Each is a case
+		// in shared/tests/redaction_conformance.json, which Python's
+		// redaction.py is held to as well.
+		`|\b(password|passwd|pwd)\s*=\s*('[^']*'|"[^"]*"|[^\s&;,'"]+)` +
+		`|\bxox[abposr]-[A-Za-z0-9-]{10,}` +
+		`|\bxapp-[0-9]+-[A-Za-z0-9-]{10,}` +
+		`|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@`)
 
 // LooksLikeCredential reports whether free text carries something
 // credential-shaped anywhere in it.

@@ -203,16 +203,22 @@ async def test_an_unresolved_verdict_without_a_reason_is_refused(
     assert await _count(db_engine) == 0
 
 
-LATENCY_MEASURED = {"percentile": 95, "requests": 50, "samples_us": [10_000] * 50, "timeouts": 0}
+LATENCY_MEASURED = {
+    "percentile": 95,
+    "requests": 50,
+    "planned": 50,
+    "samples_us": [10_000] * 50,
+    "timeouts": 0,
+}
 LATENCY_BUDGET = {"latency_p95_ms": 300}
 
 
-def _latency(verdict: str) -> dict:
+def _latency(verdict: str, measured: dict | None = None) -> dict:
     return _reading(
         probe_id="probe.http.latency",
         target=build("http", component="inventory-service", method="GET", path="/ready"),
         verdict=verdict,
-        measured=LATENCY_MEASURED,
+        measured=LATENCY_MEASURED if measured is None else measured,
         expected=LATENCY_BUDGET,
         reason="judged",
         grants_used=["net.http.outbound"],
@@ -235,6 +241,21 @@ async def test_a_latency_reading_whose_verdict_its_samples_do_not_give_is_refuse
     response = _post(client, {"readings": [_latency("pass")]})
     assert response.status_code == 201, response.text
     assert await _count(db_engine) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_latency_reading_without_planned_is_refused(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Phase 37 part 1: `planned` is a required input of the rule (probe
+    version 2). Without it a run cut short would be judged on its samples
+    alone, so a reading that does not say is refused, whatever its verdict,
+    and nothing is stored."""
+    without = {key: value for key, value in LATENCY_MEASURED.items() if key != "planned"}
+    for verdict in ("pass", "fail", "inconclusive"):
+        response = _post(client, {"readings": [_latency(verdict, without)]})
+        assert response.status_code == 422, verdict
+    assert await _count(db_engine) == 0
 
 
 @pytest.mark.asyncio

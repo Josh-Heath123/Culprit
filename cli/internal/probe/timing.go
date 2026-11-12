@@ -57,12 +57,9 @@ func (c *RealHTTPClient) TimeGet(ctx context.Context, url string, timeout time.D
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.DisableKeepAlives = true
 	defer transport.CloseIdleConnections()
-	client := &http.Client{
-		Transport: methodGuard{next: transport},
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	client := newGuardedClient(transport, 0, func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	})
 
 	requestCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

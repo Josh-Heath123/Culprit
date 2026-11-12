@@ -124,3 +124,18 @@ def test_an_anthropic_key_is_redacted() -> None:
 def test_evidence_describing_a_credential_is_fine() -> None:
     evidence = Evidence(kind="authorization", value="<redacted>", redacted=True)
     assert evidence.redacted
+
+
+REDACTION = json.loads(
+    (Path(__file__).parent / "redaction_conformance.json").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize("case", REDACTION["cases"], ids=lambda case: case["why"][:60])
+def test_redaction_holds_to_the_shared_cases(case: dict) -> None:
+    """The Python half of shared/tests/redaction_conformance.json, which
+    cli/internal/model/redact.go reads too."""
+    from culprit_model.redaction import looks_like_credential, redact_credentials
+
+    assert redact_credentials(case["text"]) == case["redacted"]
+    assert looks_like_credential(case["text"]) is case["credential"]

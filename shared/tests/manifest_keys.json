@@ -1,0 +1,18 @@
+{
+  "why": [
+    "Every top-level key of culprit.yaml. Both readers of the file read this list: the Go loader (cli/internal/extract.Manifest's yaml tags) and the API's model (api/app/model/manifest.py, Manifest's fields). A test in each fails unless its keys equal it exactly.",
+    "Phase 37 part 1 (PERFORMANCE_PLAN.md, end of Phase 36): the API's model did not know isolation: or probes:, both of which the Go loader reads, so a user who set either broke apply-model — the fresh-clone pattern, and two readers of one file disagreeing."
+  ],
+  "keys": [
+    "version",
+    "components",
+    "extract",
+    "invariants",
+    "suppress",
+    "severity_overrides",
+    "budgets",
+    "environments",
+    "probes",
+    "isolation"
+  ]
+}

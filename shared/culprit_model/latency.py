@@ -202,15 +202,15 @@ def _ms(microseconds: int | None) -> str:
     return f"{microseconds // 1000}.{microseconds % 1000:03d} ms"
 
 
-def planned_requests(measured: dict[str, Any]) -> int | None:
-    """How many requests the run set out to send (`planned`), or None when
-    the reading does not say. Phase 36 part 2: a run cut short by its
-    deadline is judged inconclusive, whatever the samples it has say, so
-    the count stays fixed and nothing stops early."""
+def planned_requests(measured: dict[str, Any]) -> int:
+    """How many requests the run set out to send (`planned`). Required since
+    Phase 37 part 1 (probe version 2): a run cut short by its deadline is
+    judged inconclusive, whatever the samples it has say, so the count stays
+    fixed and nothing stops early — and a reading without it would be judged
+    on its samples alone."""
     if "planned" not in measured:
-        return None
-    planned = _int(measured.get("planned"), "planned", minimum=1, maximum=MAX_REQUESTS)
-    return planned
+        raise LatencyShapeError("planned must say how many requests the run set out to send")
+    return _int(measured.get("planned"), "planned", minimum=1, maximum=MAX_REQUESTS)
 
 
 def inputs(
@@ -225,7 +225,7 @@ def inputs(
     if requests > MAX_REQUESTS:
         raise LatencyShapeError(f"requests {requests} is over the cap of {MAX_REQUESTS}")
     planned = planned_requests(measured)
-    if planned is not None and requests > planned:
+    if requests > planned:
         raise LatencyShapeError(f"requests {requests} is more than the {planned} planned")
     raw = measured.get("samples_us")
     if not isinstance(raw, list):
@@ -254,7 +254,7 @@ def judge(measured: dict[str, Any], expected: dict[str, Any] | None) -> tuple[st
     n = len(ordered)
     limit = budget * 1000
     planned = planned_requests(measured)
-    if planned is not None and requests < planned:
+    if requests < planned:
         return INCONCLUSIVE, (
             f"the run was cut short at its deadline: {requests} of {planned} requests were "
             f"sent, so p{percentile} is not judged against the {budget} ms budget"
