@@ -80,6 +80,7 @@ def extract_migration_schema(root: Path, builder: FactBuilder) -> list[Any]:
     tables = _replay(ordered)
     if not tables:
         return []
+    leading = _leading_columns(_replay_indexes(ordered))
 
     database = f"{builder.component}{DEFAULT_DATABASE_SUFFIX}"
     # `as_posix()`, not `str()`: an artefact path is compared and reported
@@ -110,6 +111,27 @@ def extract_migration_schema(root: Path, builder: FactBuilder) -> list[Any]:
                 rank=ConfidenceRank.COMMITTED_SPEC,
             )
         )
+        # Phase 37 part 1: for every column, whether the migrations leave an
+        # index led by it. True and false both, so the comparator sees a
+        # plain disagreement when the live database differs either way.
+        for column in sorted(tables[name]):
+            try:
+                column_subject = build(
+                    "schema", database=database, namespace=namespace, table=table, column=column
+                )
+            except Exception:
+                continue
+            facts.append(
+                builder.fact(
+                    column_subject,
+                    Predicate.LEADS_INDEX,
+                    column in leading.get(name, set()),
+                    source_kind=SourceKind.SPEC,
+                    artefact=artefact,
+                    locator=f"{namespace}.{table}.{column}",
+                    rank=ConfidenceRank.COMMITTED_SPEC,
+                )
+            )
     return facts
 
 
@@ -329,6 +351,167 @@ def _apply(tables: Tables, call: ast.Call) -> None:
             if columns is not None and column in columns:
                 columns.discard(column)
                 columns.add(new_name)
+
+
+# --- indexes (Phase 37 part 1) -----------------------------------------
+
+#: Per table, every index the chain leaves behind: its name (or a stand-in
+#: for one created unnamed with the table) and its key columns, in order.
+Indexes = dict[tuple[str, str], dict[str, list[str]]]
+
+
+def _replay_indexes(ordered: list[_Revision]) -> Indexes:
+    """The indexes the chain leaves behind, for whether a column *leads*
+    one: an index on (a, b) serves a filter on a, not on b, and that is what
+    a missing-index finding needs (PERFORMANCE_PLAN.md P5).
+
+    The same static reading as the columns, with the same limit: the
+    literal operations only. Read: a column's `primary_key=True`,
+    `unique=True` or `index=True`; `sa.PrimaryKeyConstraint` and
+    `sa.UniqueConstraint` in `create_table`; `create_index` and
+    `drop_index`; `create_unique_constraint`, `create_primary_key` and a
+    named `drop_constraint`. A partial index (`postgresql_where=`) or one on
+    an expression is not counted, as the live side does not count it.
+    """
+    indexes: Indexes = {}
+    for revision in ordered:
+        upgrade = _function(revision.tree, "upgrade")
+        if upgrade is None:
+            continue
+        for call in _op_calls(upgrade):
+            _apply_index(indexes, call)
+    return indexes
+
+
+def _leading_columns(indexes: Indexes) -> dict[tuple[str, str], set[str]]:
+    return {
+        table: {columns[0] for columns in named.values() if columns}
+        for table, named in indexes.items()
+    }
+
+
+def _string_list(node: ast.AST) -> list[str] | None:
+    """A literal list or tuple of column names, or None when any is not a
+    plain string (an expression index, a computed list)."""
+    if not isinstance(node, (ast.List, ast.Tuple)):
+        return None
+    names = [_literal(element) for element in node.elts]
+    if not names or not all(isinstance(name, str) for name in names):
+        return None
+    return [str(name) for name in names]
+
+
+def _index_name(node: ast.AST) -> str | None:
+    """A literal name, or `op.f("name")`."""
+    if isinstance(node, ast.Call) and node.args and getattr(node.func, "attr", None) == "f":
+        node = node.args[0]
+    literal = _literal(node)
+    return literal if isinstance(literal, str) else None
+
+
+def _apply_index(indexes: Indexes, call: ast.Call) -> None:
+    operation = call.func.attr  # type: ignore[union-attr]
+    keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+    schema = _literal(keywords["schema"]) if "schema" in keywords else "public"
+    if not isinstance(schema, str):
+        schema = "public"
+
+    def table_of(position: int, keyword: str) -> tuple[str, str] | None:
+        node = call.args[position] if len(call.args) > position else keywords.get(keyword)
+        name = _literal(node) if node is not None else None
+        return (schema, name) if isinstance(name, str) else None
+
+    if operation == "create_table":
+        table = table_of(0, "table_name")
+        if table is None:
+            return
+        named = indexes.setdefault(table, {})
+        primary: list[str] = []
+        for position, argument in enumerate(call.args[1:]):
+            if not isinstance(argument, ast.Call):
+                continue
+            function = argument.func
+            kind = (
+                function.attr
+                if isinstance(function, ast.Attribute)
+                else getattr(function, "id", None)
+            )
+            flags = {keyword.arg: _literal(keyword.value) for keyword in argument.keywords}
+            if kind == "Column":
+                column = _column_name(argument)
+                if column is None:
+                    continue
+                if flags.get("primary_key") is True:
+                    primary.append(column)
+                if flags.get("unique") is True:
+                    named[f"<unique {column}>"] = [column]
+                if flags.get("index") is True:
+                    named[f"<index {column}>"] = [column]
+            elif kind in ("PrimaryKeyConstraint", "UniqueConstraint"):
+                columns = [_literal(node) for node in argument.args]
+                if not columns or not all(isinstance(name, str) for name in columns):
+                    continue
+                name = flags.get("name")
+                key = name if isinstance(name, str) else f"<{kind} {position}>"
+                if kind == "PrimaryKeyConstraint":
+                    primary = [str(column) for column in columns]
+                    key = name if isinstance(name, str) else "<primary key>"
+                named[key] = [str(column) for column in columns]
+        if primary and "<primary key>" not in named and not any(
+            columns == primary for columns in named.values()
+        ):
+            named["<primary key>"] = primary
+
+    elif operation in ("create_index", "create_unique_constraint", "create_primary_key"):
+        if "postgresql_where" in keywords or len(call.args) < 2:
+            return
+        name = _index_name(call.args[0])
+        table = table_of(1, "table_name")
+        columns = _string_list(call.args[2]) if len(call.args) > 2 else (
+            _string_list(keywords["columns"]) if "columns" in keywords else None
+        )
+        if name is None or table is None or columns is None:
+            return
+        indexes.setdefault(table, {})[name] = columns
+
+    elif operation in ("drop_index", "drop_constraint"):
+        if not call.args:
+            return
+        name = _index_name(call.args[0])
+        if name is None:
+            return
+        named_table = table_of(1, "table_name")
+        for table, named in indexes.items():
+            if named_table is None or table == named_table:
+                named.pop(name, None)
+
+    elif operation == "drop_table":
+        table = table_of(0, "table_name")
+        if table is not None:
+            indexes.pop(table, None)
+
+    elif operation == "drop_column":
+        if len(call.args) < 2:
+            return
+        table, column = table_of(0, "table_name"), _literal(call.args[1])
+        if table is not None and isinstance(column, str):
+            named = indexes.get(table, {})
+            for key in [key for key, columns in named.items() if column in columns]:
+                del named[key]
+
+    elif operation == "rename_table":
+        old, new = table_of(0, "old_table_name"), table_of(1, "new_table_name")
+        if old is not None and new is not None and old in indexes:
+            indexes[new] = indexes.pop(old)
+
+    elif operation == "alter_column":
+        new_name = _literal(keywords["new_column_name"]) if "new_column_name" in keywords else None
+        table = table_of(0, "table_name")
+        column = _literal(call.args[1]) if len(call.args) > 1 else None
+        if table is None or not isinstance(column, str) or not isinstance(new_name, str):
+            return
+        for columns in indexes.get(table, {}).values():
+            columns[:] = [new_name if name == column else name for name in columns]
 
 
 def _column_name(node: ast.AST) -> str | None:

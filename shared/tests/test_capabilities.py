@@ -47,3 +47,21 @@ def test_no_write_capability_exists() -> None:
 def test_a_grant_outside_the_rules_is_refused(payload: dict) -> None:
     with pytest.raises(ValidationError):
         Grant(**payload)
+
+
+def test_no_capability_implies_another() -> None:
+    """Phase 37 part 1 (P4): each name is its own grant. The model holds no
+    implication between capabilities — granting db.plan.read implies no
+    db.rows.read — so the set is exactly the shared fixture's, each name
+    distinct, and nothing in the module maps one name to another."""
+    import culprit_model.capabilities as module
+
+    names = [capability.value for capability in Capability]
+    assert len(names) == len(set(names))
+    assert {"db.stats.read", "db.plan.read"} <= set(names)
+    implied = [
+        name
+        for name, value in vars(module).items()
+        if isinstance(value, dict) and any(isinstance(key, Capability) for key in value)
+    ]
+    assert implied == [], f"a mapping between capabilities: {implied}"

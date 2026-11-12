@@ -818,6 +818,19 @@ it would be a false positive.
 Emitted at rank 80, below the ORM's runtime introspection at 90, so when
 the two disagree the report treats the models as the reference.
 
+Since Phase 37 part 1 it also follows indexes, for one question: whether
+each column *leads* an index (an index on (a, b) serves a filter on a, not
+on b). It reads a column's `primary_key=True`, `unique=True` and
+`index=True`, `PrimaryKeyConstraint` and `UniqueConstraint` in
+`create_table`, `create_index`, `create_unique_constraint`,
+`create_primary_key`, `drop_index` and a named `drop_constraint` — with
+literal arguments, as for columns. A partial index (`postgresql_where=`)
+and an index on an expression are not counted, on either side. An index
+created by `op.execute("CREATE INDEX ...")`, or a constraint dropped by a
+name the reader never saw, is invisible to it, and the report will say
+the database has an index the migrations do not declare. The ORM's models
+are not read for indexes.
+
 ## A test assertion says a route is exercised, not what it returns
 
 Phase 28's extractor recorded the status codes a test asserted. Phase 29
@@ -977,7 +990,7 @@ For Kubernetes the Deployment's own spec is read, so every replica is
 described by the same template; the image digest comes from the first Pod
 by name that reports one.
 
-## Live schema: columns and nullability, Postgres and Alembic only
+## Live schema: columns, nullability and leading indexes, Postgres and Alembic only
 
 `db.metadata.read` compares which tables and columns exist and whether
 each column is nullable. It does **not** compare column types:
@@ -993,6 +1006,28 @@ read. Views, partitions and the TimescaleDB catalogues are not listed.
 The database a component's tables are compared under is `<component>-db`
 unless `database.name` says otherwise — the name the Python extractor
 uses on the INTENT side, which is what makes the two meet.
+
+Since Phase 37 part 1 each column also says whether it leads a valid index
+(`leads_index`, true or false), compared with what the migrations declare:
+an index dropped by hand is reported as declared but missing, one created
+by hand as live but undeclared. A partial index, an expression index and
+an index still being built (`indisvalid` false) are not counted. Whether
+an index *helps* a query is not judged here — that needs the planner,
+Phase 37 part 2.
+
+### What Culprit sends a database, and what holds it
+
+One file in the binary can open a database connection, and it sends only
+statements from a closed set written into it — four today, all catalogue
+reads. Anything else, an `EXPLAIN ANALYZE` included, is refused before it
+leaves, and a test counts what reaches the driver. Every session is opened
+with `default_transaction_read_only = on` and a ten-second
+`statement_timeout`, so Postgres itself refuses a write even if the first
+two layers failed. These hold against ordinary code in the binary, not
+against code written inside that one file to get around them; review of
+that file is what bounds it. Culprit never resets `pg_stat_statements`
+(a function call, which read-only mode does not stop: the template set
+does).
 
 ## Installed versions are compared between environments, not against what you declared
 
@@ -1437,8 +1472,14 @@ can still drift in content; the binary is the authority.
 A `Reading`'s evidence is refused at construction if it looks like a
 credential and is not marked redacted. "Looks like" is
 `looks_like_credential`, which matches known shapes — DSNs with inline
-passwords, PEM headers, AWS keys, GitHub tokens, JWTs, `sk-` keys. It is
-pattern matching, so a novel or unusual key format passes it. One known
+passwords, PEM headers, AWS keys, GitHub tokens, JWTs, `sk-` keys, and
+since Phase 37 part 1 a `password=`, `passwd=` or `pwd=` outside a URL
+(libpq's keyword form, a literal in a statement), Slack tokens (`xox…-`,
+`xapp-`) and `user:pass@host` with no scheme. Go and Python are held to
+one set of cases (`shared/tests/redaction_conformance.json`). It is
+pattern matching, so a novel or unusual key format passes it — and it
+errs the other way too: any `word:word@` in free text is removed as if it
+were a credential. One known
 gap: the `sk-` pattern requires the remainder to be alphanumeric, so a
 hyphenated variant such as `sk-live-abcdef0123456789` is not matched.
 
@@ -1506,6 +1547,18 @@ quickstart at all: Git Bash maps that folder to `/tmp`, the recipe hands
 `$(pwd)` to `docker run -v`, and Docker reads `/tmp/...` as a path inside
 its own VM, which is empty. The secrets step then fails with
 "can't open file '/repo/scripts/bootstrap_env.py'". Clone anywhere else.
+
+## The quickstart now builds a database for the demo
+
+Since Phase 37 part 1, `just quickstart` gives inventory-service a database
+of its own (`inventory`, in the same Postgres, owned by an `inventory`
+role) and fills a table with a million generated products, which adds
+roughly ten to thirty seconds. Its password is a fixed, synthetic one
+(`inventory-demo-not-a-secret`): the quickstart's Postgres publishes no
+port. The same Postgres now starts with `pg_stat_statements` preloaded —
+the recipe checks the running value and stops if it is not — which keeps
+statement statistics for every database on that server, Culprit's own
+included; nothing reads Culprit's.
 
 ## The quickstart leaves its fault in place
 

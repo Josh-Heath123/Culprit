@@ -232,3 +232,137 @@ def test_no_versions_directory_is_not_an_error(tmp_path: Path) -> None:
         component = "orders-api"
 
     assert extract_migration_schema(tmp_path, Builder()) == []  # type: ignore[arg-type]
+
+
+# --- indexes (Phase 37 part 1) -------------------------------------------
+
+
+def _leads_index(tmp_path: Path, *bodies: str) -> dict[str, bool]:
+    """Every leads_index fact the whole reader emits, by column."""
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from culprit_extract_python.emit import FactBuilder
+
+    chain(
+        tmp_path,
+        *(
+            revision_file(f"{index:04d}", f"{index - 1:04d}" if index else None, body)
+            for index, body in enumerate(bodies)
+        ),
+    )
+    builder = FactBuilder(
+        component="shop",
+        capture_id=uuid4(),
+        captured_at=datetime(2026, 11, 12, tzinfo=UTC),
+        extractor="test",
+    )
+    return {
+        fact.subject.rsplit(".", 1)[1]: fact.value
+        for fact in extract_migration_schema(tmp_path, builder)
+        if fact.predicate == "leads_index"
+    }
+
+
+ITEMS = """    op.create_table(
+        "items",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("sku", sa.String(), nullable=False),
+        sa.Column("category", sa.String(), nullable=False),
+        sa.Column("price", sa.Integer(), nullable=False),
+    )"""
+
+
+def test_a_primary_key_and_a_created_index_lead_an_index(tmp_path: Path) -> None:
+    leads = _leads_index(
+        tmp_path,
+        ITEMS,
+        '    op.create_index(op.f("ix_items_sku"), "items", ["sku"], unique=False)',
+    )
+    assert leads == {"id": True, "sku": True, "category": False, "price": False}
+
+
+def test_a_dropped_index_no_longer_leads(tmp_path: Path) -> None:
+    leads = _leads_index(
+        tmp_path,
+        ITEMS,
+        '    op.create_index("ix_items_sku", "items", ["sku"])',
+        '    op.drop_index("ix_items_sku", table_name="items")',
+    )
+    assert leads["sku"] is False
+
+
+def test_only_the_first_column_of_a_composite_index_leads(tmp_path: Path) -> None:
+    leads = _leads_index(
+        tmp_path, ITEMS, '    op.create_index("ix_c_p", "items", ["category", "price"])'
+    )
+    assert leads["category"] is True and leads["price"] is False
+
+
+def test_a_partial_index_and_column_flags(tmp_path: Path) -> None:
+    """A partial index serves only matching filters, and the live side does
+    not count one either; `index=True` and `unique=True` on a column do."""
+    leads = _leads_index(
+        tmp_path,
+        """    op.create_table(
+        "items",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("sku", sa.String(), unique=True),
+        sa.Column("category", sa.String(), index=True),
+        sa.Column("price", sa.Integer()),
+        sa.PrimaryKeyConstraint("id"),
+    )""",
+        '    op.create_index("ix_price", "items", ["price"],'
+        ' postgresql_where=sa.text("price > 0"))',
+    )
+    assert leads == {"id": True, "sku": True, "category": True, "price": False}
+
+
+def test_a_dropped_column_takes_its_index_and_a_rename_follows(tmp_path: Path) -> None:
+    leads = _leads_index(
+        tmp_path,
+        ITEMS,
+        '    op.create_index("ix_c", "items", ["category"])',
+        '    op.create_index("ix_p", "items", ["price"])',
+        '    op.drop_column("items", "price")',
+        '    op.alter_column("items", "category", new_column_name="kind")',
+    )
+    assert leads == {"id": True, "sku": False, "kind": True}
+
+
+def test_the_demo_migrations_declare_their_indexes() -> None:
+    """inventory-service's own migrations (Phase 37 part 1, P8), read as
+    the extractor reads them: `products` is led by its primary key and the
+    unique index on sku; `category`, which the list route filters on, is
+    not — Phase 37 part 3's missing-index fault. cli/cmd/culprit's
+    TestTheDemoDatabase holds the live side to the same two columns."""
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from culprit_extract_python.emit import FactBuilder
+
+    root = Path(__file__).resolve().parents[3] / "demo-services" / "inventory_service"
+    builder = FactBuilder(
+        component="inventory-service",
+        capture_id=uuid4(),
+        captured_at=datetime(2026, 11, 12, tzinfo=UTC),
+        extractor="test",
+    )
+    leads = {
+        fact.subject: fact.value
+        for fact in extract_migration_schema(root, builder)
+        if fact.predicate == "leads_index"
+    }
+    from culprit_model import build
+
+    declared = {"id": True, "sku": True, "category": False, "name": False, "price_cents": False}
+    assert leads == {
+        build(
+            "schema",
+            database="inventory-service-db",
+            namespace="public",
+            table="products",
+            column=column,
+        ): value
+        for column, value in declared.items()
+    }

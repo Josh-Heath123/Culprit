@@ -46,6 +46,9 @@ type TableShape struct {
 	Namespace string
 	Table     string
 	Columns   map[string]bool // column -> nullable
+	// Leading are the columns that lead a valid, non-partial index on the
+	// table (Phase 37 part 1).
+	Leading map[string]bool
 }
 
 // Schema is everything the metadata queries return.
@@ -103,6 +106,115 @@ var excludedSchemas = []string{
 	"timescaledb_experimental", "toolkit_experimental",
 }
 
+// # The boundary (Phase 37 part 1)
+//
+// This is the one file in the binary that imports pgx
+// (TestOnlyThisFileImportsPgx), so it is the one place a statement can be
+// sent to a database. Three layers hold what it sends:
+//
+//  1. A statement is a value of the unexported type statement, and every
+//     value is a constant declared below. Nothing outside this package can
+//     make one, and nothing inside builds one from text it was given.
+//  2. send is the only function that hands a statement to the driver, and
+//     it refuses one that is not in templates before anything leaves —
+//     an arbitrary statement and an EXPLAIN ANALYZE included. Values travel
+//     as bind parameters, never spliced into the text.
+//  3. Every session is opened read-only, with a statement timeout, as
+//     connection parameters (openSession). Were the first two to fail,
+//     Postgres itself refuses a write.
+
+// statement is one statement this binary may send. Its values are the
+// constants below and nothing else.
+type statement string
+
+const (
+	// columnsStatement enumerates every column of every ordinary and
+	// partitioned table, from pg_catalog (see Read).
+	columnsStatement statement = `
+		SELECT n.nspname, c.relname, a.attname, NOT a.attnotnull
+		FROM pg_catalog.pg_attribute a
+		JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind IN ('r', 'p')
+		  AND NOT c.relispartition
+		  AND a.attnum > 0
+		  AND NOT a.attisdropped
+		  AND n.nspname <> ALL($1)
+		  AND n.nspname NOT LIKE 'pg\_temp%'
+		  AND n.nspname NOT LIKE 'pg\_toast%'
+		ORDER BY n.nspname, c.relname, a.attnum`
+	// alembicExistsStatement asks whether the migration version table
+	// exists at all.
+	alembicExistsStatement statement = `SELECT to_regclass('public.alembic_version')::text`
+	// alembicVersionStatement reads the migration version: the one row
+	// §0.4 names as metadata.
+	alembicVersionStatement statement = `SELECT version_num FROM public.alembic_version`
+	// leadingColumnsStatement lists, for every valid index on an ordinary
+	// or partitioned table, the column that leads it (Phase 37 part 1): an
+	// index on (a, b) serves a filter on a, not on b. A partial index
+	// (indpred) and one led by an expression (indkey[0] = 0) are left out,
+	// as the migration reader leaves them out.
+	leadingColumnsStatement statement = `
+		SELECT DISTINCT n.nspname, c.relname, a.attname
+		FROM pg_catalog.pg_index i
+		JOIN pg_catalog.pg_class c ON c.oid = i.indrelid
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = i.indkey[0]
+		WHERE c.relkind IN ('r', 'p')
+		  AND NOT c.relispartition
+		  AND i.indisvalid
+		  AND i.indpred IS NULL
+		  AND i.indkey[0] <> 0
+		  AND n.nspname <> ALL($1)
+		  AND n.nspname NOT LIKE 'pg\_temp%'
+		  AND n.nspname NOT LIKE 'pg\_toast%'
+		ORDER BY n.nspname, c.relname, a.attname`
+)
+
+// templates is the closed set send will hand to the driver.
+var templates = map[statement]bool{
+	columnsStatement:        true,
+	alembicExistsStatement:  true,
+	alembicVersionStatement: true,
+	leadingColumnsStatement: true,
+}
+
+// ErrNotATemplate is send's refusal of a statement outside templates.
+var ErrNotATemplate = errors.New("refused before it was sent: not one of the statements this binary may send")
+
+// querier is what send needs of a session; *pgx.Conn is one, and tests
+// count what reaches it.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// send is the only function that hands a statement to the driver.
+func send(ctx context.Context, session querier, s statement, args ...any) (pgx.Rows, error) {
+	if !templates[s] {
+		return nil, ErrNotATemplate
+	}
+	return session.Query(ctx, string(s), args...)
+}
+
+// openSession connects read-only, with a statement timeout and a name the
+// database's own views show, all set as connection parameters so they hold
+// for every statement of the session.
+func openSession(ctx context.Context, dsn string) (*pgx.Conn, error) {
+	config, err := pgx.ParseConfig(withoutDriverSuffix(dsn))
+	if err != nil {
+		// Never wrapped: pgx's parse error quotes the string it failed on.
+		return nil, &DBError{Kind: DBBadDSN}
+	}
+	config.RuntimeParams["default_transaction_read_only"] = "on"
+	config.RuntimeParams["statement_timeout"] = "10000"
+	config.RuntimeParams["application_name"] = "culprit-capture"
+	conn, err := pgx.ConnectConfig(ctx, config)
+	if err != nil {
+		return nil, classify(ctx, err)
+	}
+	return conn, nil
+}
+
 // Read connects, reads, and disconnects.
 func (r PostgresReader) Read(parent context.Context, dsn string) (Schema, error) {
 	timeout := r.Timeout
@@ -112,18 +224,9 @@ func (r PostgresReader) Read(parent context.Context, dsn string) (Schema, error)
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
-	config, err := pgx.ParseConfig(withoutDriverSuffix(dsn))
+	conn, err := openSession(ctx, dsn)
 	if err != nil {
-		// Never wrapped: pgx's parse error quotes the string it failed on.
-		return Schema{}, &DBError{Kind: DBBadDSN}
-	}
-	config.RuntimeParams["default_transaction_read_only"] = "on"
-	config.RuntimeParams["statement_timeout"] = "10000"
-	config.RuntimeParams["application_name"] = "culprit-capture"
-
-	conn, err := pgx.ConnectConfig(ctx, config)
-	if err != nil {
-		return Schema{}, classify(ctx, err)
+		return Schema{}, err
 	}
 	defer conn.Close(context.Background())
 
@@ -140,19 +243,7 @@ func (r PostgresReader) Read(parent context.Context, dsn string) (Schema, error)
 	//
 	// Ordinary and partitioned tables only; partitions themselves are
 	// left out, since the code maps the parent.
-	rows, err := conn.Query(ctx, `
-		SELECT n.nspname, c.relname, a.attname, NOT a.attnotnull
-		FROM pg_catalog.pg_attribute a
-		JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
-		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-		WHERE c.relkind IN ('r', 'p')
-		  AND NOT c.relispartition
-		  AND a.attnum > 0
-		  AND NOT a.attisdropped
-		  AND n.nspname <> ALL($1)
-		  AND n.nspname NOT LIKE 'pg\_temp%'
-		  AND n.nspname NOT LIKE 'pg\_toast%'
-		ORDER BY n.nspname, c.relname, a.attnum`, excludedSchemas)
+	rows, err := send(ctx, conn, columnsStatement, excludedSchemas)
 	if err != nil {
 		return Schema{}, classify(ctx, err)
 	}
@@ -178,13 +269,45 @@ func (r PostgresReader) Read(parent context.Context, dsn string) (Schema, error)
 	if err := rows.Err(); err != nil {
 		return Schema{}, classify(ctx, err)
 	}
+
+	leading, err := send(ctx, conn, leadingColumnsStatement, excludedSchemas)
+	if err != nil {
+		return Schema{}, classify(ctx, err)
+	}
+	for leading.Next() {
+		var namespace, table, column string
+		if err := leading.Scan(&namespace, &table, &column); err != nil {
+			leading.Close()
+			return Schema{}, classify(ctx, err)
+		}
+		if shape, ok := byTable[[2]string{namespace, table}]; ok {
+			if shape.Leading == nil {
+				shape.Leading = map[string]bool{}
+			}
+			shape.Leading[column] = true
+		}
+	}
+	leading.Close()
+	if err := leading.Err(); err != nil {
+		return Schema{}, classify(ctx, err)
+	}
 	for _, key := range order {
 		schema.Tables = append(schema.Tables, *byTable[key])
 	}
 
 	var exists *string
-	if err := conn.QueryRow(ctx, `SELECT to_regclass('public.alembic_version')::text`).
-		Scan(&exists); err != nil {
+	existsRows, err := send(ctx, conn, alembicExistsStatement)
+	if err != nil {
+		return Schema{}, classify(ctx, err)
+	}
+	if existsRows.Next() {
+		if err := existsRows.Scan(&exists); err != nil {
+			existsRows.Close()
+			return Schema{}, classify(ctx, err)
+		}
+	}
+	existsRows.Close()
+	if err := existsRows.Err(); err != nil {
 		return Schema{}, classify(ctx, err)
 	}
 	if exists != nil {
@@ -202,7 +325,7 @@ func (r PostgresReader) Read(parent context.Context, dsn string) (Schema, error)
 			schema.MigrationHeads = nil
 			return schema, nil
 		}
-		versions, err := conn.Query(ctx, `SELECT version_num FROM public.alembic_version`)
+		versions, err := send(ctx, conn, alembicVersionStatement)
 		if err != nil {
 			return unreadable(err)
 		}

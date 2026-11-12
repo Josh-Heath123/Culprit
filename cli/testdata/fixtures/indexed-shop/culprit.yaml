@@ -1,0 +1,47 @@
+# Phase 37 part 1: index facts, declared and live, compared.
+#
+# One component whose only migration creates a table with a primary key
+# and one index (shop/migrations/versions). TestIndexesDeclaredAndLive
+# (cli/cmd/culprit/indexes_e2e_test.go) starts a Postgres, builds the same
+# schema in it by hand, and runs `culprit diff` against it: an index dropped
+# by hand is reported as declared but missing, and one created by hand as
+# live but undeclared. Two environments read the one database because
+# `culprit diff` compares two; each finding appears once per environment.
+version: 1
+components:
+  - name: shop
+    kind: service
+    connections:
+      - to: shop-db
+        kind: sql
+        criticality: on_request_path
+  - name: shop-db
+    kind: database
+
+extract:
+  extractors:
+    - name: python
+      # Launched from the component root (shop/), as every extractor is.
+      command: ["uv", "run", "--project", "../../../../../extractors/python", "culprit-extract-python"]
+  components:
+    shop:
+      root: shop
+      extractors: [python]
+
+environments:
+  live:
+    adapter: process
+    grants:
+      db.metadata.read: true
+    components:
+      shop:
+        database:
+          dsn_env: CULPRIT_INDEX_DB_URL
+  again:
+    adapter: process
+    grants:
+      db.metadata.read: true
+    components:
+      shop:
+        database:
+          dsn_env: CULPRIT_INDEX_DB_URL_AGAIN

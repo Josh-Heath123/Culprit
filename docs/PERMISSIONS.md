@@ -132,9 +132,20 @@ other.
 ### `db.metadata.read`
 
 **Reads:** which tables exist and which columns each has, whether each
-column is nullable, and the Alembic migration version — through the
-connection string in the variable `dsn_env` names, in the shell Culprit
-runs in. The session is opened read-only, with a statement timeout.
+column is nullable, which columns lead an index (since Phase 37 part 1),
+and the Alembic migration version — through the connection string in the
+variable `dsn_env` names, in the shell Culprit runs in. The session is
+opened read-only, with a statement timeout.
+
+**What it sends:** four fixed statements and nothing else. The binary has
+one file that can open a database connection, and it sends only
+statements from a closed set written into that file; anything else — an
+arbitrary query, an `EXPLAIN ANALYZE` — is refused before it leaves.
+Values travel as bind parameters. Every session sets
+`default_transaction_read_only = on` and a ten-second
+`statement_timeout` as connection parameters, so were the first two
+layers to fail, Postgres itself would refuse a write (a test sends one
+and sees it refused).
 
 **Never:** rows. The only row read is the migration version in
 `alembic_version`, which is the one row §0.4 of the plan names as
@@ -150,7 +161,49 @@ rather than guessing.
 
 **Finds:** a live schema behind the migration head (the deploy shipped
 the code and nobody ran the migration), a table the code maps that the
-database does not have.
+database does not have, and an index the migrations declare that the
+database lacks, or the reverse.
+
+### `db.stats.read`
+
+**Phase 37 part 1: declared, used by nothing yet.** Part 2's statement
+probe will use it. It will let Culprit read the database's own statistics
+— `pg_stat_statements` (each normalised statement's call count and time),
+`pg_stat_user_tables` and `pg_stat_user_indexes` (how each table and
+index is scanned). Statement text in `pg_stat_statements` is normalised
+— constants replaced by placeholders — and every piece of it passes
+through the same credential redaction as every other piece of text
+before it goes anywhere. Culprit never resets these statistics: that is a
+write. Implies no other capability.
+
+### `db.plan.read`
+
+**Phase 37 part 1: declared, used by nothing yet.** Part 2's plan probe
+will use it. It will let Culprit ask the planner how it would run one
+statement — `EXPLAIN (GENERIC_PLAN, FORMAT JSON)` and nothing else, which
+plans without executing anything. `EXPLAIN ANALYZE`, which runs the
+statement, is refused before it is sent. It does not imply
+`db.rows.read`, and no capability implies it (a test grants each
+capability alone and finds every other withheld).
+
+### The recommended database role, and what it reveals
+
+For `db.metadata.read` alone, any role will do (above). For the two
+Phase 37 capabilities, Postgres sets the floor:
+
+- reading another role's statement text in `pg_stat_statements` needs
+  **`pg_read_all_stats`**;
+- planning a statement needs **`SELECT` on every table it names**:
+  Postgres plans only what the role could run.
+
+So the role `db.plan.read` needs **can read rows**, whatever Culprit
+chooses to send. Culprit never sends a statement that returns a row — the
+template set holds that, and the session is read-only — but the grant
+on the role is what a stolen credential would carry, as it is for a
+Kubernetes role that can read Secrets. Use a role made for this, with
+`SELECT` on the application's tables and nothing else, and give its
+password to nothing but Culprit. `db.rows.read` stays a separate
+capability, implied by nothing.
 
 ### `db.rows.read` — per table
 

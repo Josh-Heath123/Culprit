@@ -52,9 +52,15 @@ const (
 	PredicateColumns        = "columns"
 	PredicateColumnType     = "column_type"
 	PredicateNullable       = "nullable"
-	PredicateMigrationHead  = "migration_head"
-	PredicateVersion        = "version"
-	PredicateReadBy         = "read_by"
+	// PredicateLeadsIndex is a column-level schema: subject's "an index is
+	// led by this column" — its first key column, the one a filter on it
+	// can use (Phase 37 part 1, P5). CONFIGURED from the live catalogue,
+	// INTENT from the migration chain; true and false both, so a missing
+	// or an undeclared index is a plain disagreement.
+	PredicateLeadsIndex    = "leads_index"
+	PredicateMigrationHead = "migration_head"
+	PredicateVersion       = "version"
+	PredicateReadBy        = "read_by"
 	// PredicateValueShape is kept as a name a third-party extractor
 	// may use, but nothing in this repository emits it any more.
 	//

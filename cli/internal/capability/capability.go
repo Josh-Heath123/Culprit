@@ -65,8 +65,18 @@ const (
 	// nothing may store or emit the value (Phase 33 part 1). It is not
 	// config.read.values, which is what lets a value be stored, and
 	// granting either one never implies the other.
-	ConfigInspectValues  Capability = "config.inspect.values"
-	DBMetadataRead       Capability = "db.metadata.read"
+	ConfigInspectValues Capability = "config.inspect.values"
+	DBMetadataRead      Capability = "db.metadata.read"
+	// DBStatsRead reads the database's own statistics:
+	// pg_stat_statements, pg_stat_user_tables, pg_stat_user_indexes
+	// (PERFORMANCE_PLAN.md P4, Phase 37). Statement text read this way is
+	// normalised and passes through redaction before it goes anywhere.
+	DBStatsRead Capability = "db.stats.read"
+	// DBPlanRead asks the planner how it would run a statement —
+	// `EXPLAIN (GENERIC_PLAN, FORMAT JSON)` and nothing else, which
+	// executes nothing (P4). It does not imply db.rows.read, and nothing
+	// implies it.
+	DBPlanRead           Capability = "db.plan.read"
 	DBRowsRead           Capability = "db.rows.read"
 	NetDNSResolve        Capability = "net.dns.resolve"
 	NetTCPConnect        Capability = "net.tcp.connect"
@@ -95,6 +105,8 @@ var known = map[Capability]bool{
 	ConfigReadValues:     true,
 	ConfigInspectValues:  true,
 	DBMetadataRead:       false,
+	DBStatsRead:          false,
+	DBPlanRead:           false,
 	DBRowsRead:           true,
 	NetDNSResolve:        false,
 	NetTCPConnect:        false,

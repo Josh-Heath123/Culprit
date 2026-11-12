@@ -31,6 +31,12 @@ class Capability(StrEnum):
     #: other (Phase 33 part 1).
     CONFIG_INSPECT_VALUES = "config.inspect.values"
     DB_METADATA_READ = "db.metadata.read"
+    #: The database's own statistics: pg_stat_statements,
+    #: pg_stat_user_tables, pg_stat_user_indexes (PERFORMANCE_PLAN.md P4).
+    DB_STATS_READ = "db.stats.read"
+    #: `EXPLAIN (GENERIC_PLAN, FORMAT JSON)` and nothing else, which executes
+    #: nothing. Implies no other capability, and none implies it.
+    DB_PLAN_READ = "db.plan.read"
     DB_ROWS_READ = "db.rows.read"
     NET_DNS_RESOLVE = "net.dns.resolve"
     NET_TCP_CONNECT = "net.tcp.connect"

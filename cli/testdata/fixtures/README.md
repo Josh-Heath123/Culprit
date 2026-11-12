@@ -14,6 +14,7 @@ Four projects, and the two that matter most are the ones nobody here wrote.
 |---|---|---|---|
 | `fastapi-orders/` | FastAPI, SQLAlchemy, Alembic | this repo | The home stack. Committed OpenAPI document, `.env.example`, an Alembic chain with a branch, a compose file. |
 | `react-web/` | React, TypeScript, Vite | this repo | The other half of "a Python+React repository" (acceptance criterion 1): client call sites and a `package.json` full of scoped packages. |
+| `indexed-shop/` | Alembic | this repo | Phase 37 part 1: one migration with a primary key and one index, and a `culprit.yaml` reaching a database through `dsn_env`. `TestIndexesDeclaredAndLive` builds the same schema in a real Postgres and drops and adds indexes by hand. |
 | `third-party/flask-tutorial/` | **Flask**, blueprints, `sqlite3` | **Pallets** | Flask, not FastAPI. Blueprints with prefixes, `<int:id>` converters, an `app.config.from_mapping` rather than `os.environ`, and `SECRET_KEY` set to a literal in source. |
 | `third-party/express-route-separation/` | **Express**, EJS | **TJ Holowaychuk / Express** | Node, not Python. Routes registered across four modules against one `app`, `:id` parameters, and a `package.json` this repo did not write. |
 
