@@ -16,6 +16,7 @@ from culprit_model.latency import (
     BUDGET_PREDICATES,
     Budget,
     LatencyShapeError,
+    budget_literal_problem,
     judge,
     lower_rank,
     upper_rank,
@@ -163,3 +164,11 @@ def test_a_latency_verdict_without_samples_is_refused_and_could_not_tell_is_not(
 
 def test_a_refused_latency_reading_carries_no_samples_and_is_not_judged() -> None:
     Reading.model_validate(_reading("refused", {}, None))
+
+
+@pytest.mark.parametrize("case", FIXTURE["budget_literals"], ids=lambda case: case["literal"])
+def test_a_budget_is_written_as_plain_decimal_digits(case: dict) -> None:
+    """Phase 36 part 2: the same refusals and reasons as Go's
+    model.BudgetLiteralProblem, from the one fixture."""
+    problem = budget_literal_problem(case["literal"], case["plain"])
+    assert problem == (case["reason"] if case["refused"] else None)

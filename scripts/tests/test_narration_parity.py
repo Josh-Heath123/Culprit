@@ -93,3 +93,52 @@ def test_a_verdict_or_a_reading_that_differs_is_a_difference(tmp_path: Path) -> 
         change(other)
         a, b = _write(tmp_path, "a.json", RECORDS), _write(tmp_path, "b.json", other)
         assert narration_parity.compare(a, b) == 1
+
+
+def _latency_records(budget: int, samples: list[int], connects: list[int]) -> dict:
+    records = copy.deepcopy(RECORDS)
+    records["investigation"]["readings"].append(
+        {
+            "id": "r2",
+            "reading": {
+                "probe_id": "probe.http.latency",
+                "verdict": "pass",
+                "measured": {
+                    "percentile": 95,
+                    "requests": len(samples),
+                    "samples_us": samples,
+                    "connect_us": connects,
+                    "timeout_connect_us": [],
+                    "timeouts": 0,
+                },
+                "expected": {"latency_p95_ms": budget},
+            },
+        }
+    )
+    return records
+
+
+def test_a_budget_that_differs_between_the_legs_is_a_difference(tmp_path: Path) -> None:
+    """Phase 36 part 2: `_ms` was volatile everywhere, so a declared budget
+    (`expected.latency_p95_ms`) that differed between the legs was not a
+    difference. Only measured values are."""
+    a = _write(tmp_path, "a.json", _latency_records(300, [1000, 2000], [100, 200]))
+    b = _write(tmp_path, "b.json", _latency_records(400, [1000, 2000], [100, 200]))
+    assert narration_parity.compare(a, b) == 1
+
+
+def test_differing_samples_and_timings_are_not_differences(tmp_path: Path) -> None:
+    a = _write(tmp_path, "a.json", _latency_records(300, [1000, 2000], [100, 200]))
+    b = _write(tmp_path, "b.json", _latency_records(300, [1500, 2500], [150, 250]))
+    assert narration_parity.compare(a, b) == 0
+
+
+def test_a_time_shaped_key_outside_a_measurement_is_compared(tmp_path: Path) -> None:
+    """Nothing but a reading's measurement holds a volatile time: a budget,
+    an expectation or any other `_ms` field elsewhere is compared."""
+    first = copy.deepcopy(RECORDS)
+    first["investigation"]["readings"][0]["reading"]["expected"] = {"timeout_ms": 500}
+    second = copy.deepcopy(first)
+    second["investigation"]["readings"][0]["reading"]["expected"] = {"timeout_ms": 900}
+    a, b = _write(tmp_path, "a.json", first), _write(tmp_path, "b.json", second)
+    assert narration_parity.compare(a, b) == 1

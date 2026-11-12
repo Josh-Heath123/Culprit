@@ -39,6 +39,12 @@
     },
     {
       "name": "latency",
+      "root_subject": "component:inventory-service",
+      "complete": true,
+      "verdict": "verified"
+    },
+    {
+      "name": "latency-unbudgeted",
       "root_subject": "component:order-service",
       "complete": false,
       "verdict": "inconclusive"
@@ -48,6 +54,12 @@
     {
       "name": "wrong-fix",
       "root_subject": "auth:order-service->inventory-service/audience",
+      "complete": true,
+      "verdict": "not_resolved"
+    },
+    {
+      "name": "latency-wrong-fix",
+      "root_subject": "component:inventory-service",
       "complete": true,
       "verdict": "not_resolved"
     },

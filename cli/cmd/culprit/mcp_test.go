@@ -877,3 +877,36 @@ func mustGrants(t *testing.T, manifestPath, environment string) capability.Grant
 	}
 	return grants
 }
+
+// TestALatencyProbeReachesOnlyItsBudgetsComponent: through culprit mcp, a
+// latency probe's address is the endpoint of the component whose budget
+// judges it, not any declared endpoint. Counted: nothing is sent for a
+// target whose component is not where the address points (re-audit of
+// Phase 36 part 1).
+func TestALatencyProbeReachesOnlyItsBudgetsComponent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "culprit.yaml")
+	if err := os.WriteFile(path, []byte(agentManifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	network, http := &countingNetwork{}, &countingHTTP{}
+	client := mcpSession(t, &mcpServer{
+		manifestPath: path, stateDir: t.TempDir(), agentID: "test", noPlugins: true,
+		through: &wire{Network: network, HTTP: http}, stderr: io.Discard,
+	})
+	for _, target := range []string{"component:orders", "http:orders/GET /health", "connection:payments->orders"} {
+		result := client.call("culprit_probe", map[string]any{"target": target, "environment": "production",
+			"probes": []string{"probe.http.latency"}, "inputs": map[string]any{"url": "http://payments.internal:8443/health"}})
+		if !result.IsError || !strings.Contains(string(result.Structured), "orders declares no endpoint") {
+			t.Errorf("%s with payments' address: not refused: %s", target, result.Structured)
+		}
+	}
+	if requests := http.requests.Load(); requests != 0 {
+		t.Fatalf("%d requests for latency calls that were all refused", requests)
+	}
+	// The budget's own component's endpoint is not refused for its address.
+	result := client.call("culprit_probe", map[string]any{"target": "connection:orders->payments", "environment": "production",
+		"probes": []string{"probe.http.latency"}, "inputs": map[string]any{"url": "http://payments.internal:8443/health"}})
+	if result.IsError {
+		t.Fatalf("payments' own endpoint was refused for its latency: %s", result.Structured)
+	}
+}

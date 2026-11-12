@@ -40,6 +40,11 @@ type Request struct {
 	Target      string         `json:"target"`
 	Environment string         `json:"environment"`
 	Inputs      map[string]any `json:"inputs"`
+	// SameRunAs is the reading whose run also gave this one — a route's
+	// p50 judged from the samples its p95 was (Phase 36 part 2) — or "".
+	// Verification runs that request once per round and gives each reading
+	// back the one judged against its own budget.
+	SameRunAs string `json:"same_run_as,omitempty"`
 }
 
 // Record is what `culprit diagnose` keeps beside an investigation so it
@@ -81,6 +86,17 @@ func (r Record) Check(investigation model.Investigation) error {
 		}
 		byID[request.ReadingID] = request
 	}
+	for _, request := range r.Requests {
+		if request.SameRunAs == "" {
+			continue
+		}
+		first, ok := byID[request.SameRunAs]
+		if !ok || first.SameRunAs != "" || first.ProbeID != request.ProbeID || first.Target != request.Target ||
+			first.Environment != request.Environment {
+			return fmt.Errorf("the request for reading %s names %s as its run, which is not a run of the same probe, "+
+				"target and environment", request.ReadingID, request.SameRunAs)
+		}
+	}
 	if len(byID) != len(investigation.Readings) {
 		return fmt.Errorf("the record holds %d requests for the %d readings of %s",
 			len(byID), len(investigation.Readings), investigation.ID)
@@ -105,6 +121,13 @@ func (r Record) Check(investigation model.Investigation) error {
 // grants; tests count executions through it.
 type Runner interface {
 	Run(ctx context.Context, request Request) model.Reading
+}
+
+// SetRunner is a Runner one of whose runs can give several readings, as
+// isolate.SetRunner is for the walk: a latency run judges every budget on
+// its route from one set of samples.
+type SetRunner interface {
+	RunSet(ctx context.Context, request Request) []model.Reading
 }
 
 // Options are one verification.
@@ -152,8 +175,26 @@ func Run(ctx context.Context, options Options) (model.Verification, error) {
 	// seen as the flip it is.
 	runs := make([][2]model.Reading, len(inv.Readings))
 	for round := 0; round < 2; round++ {
+		// A request several readings came from is run once a round, and
+		// each reading is given back the one judged as it was.
+		sets := map[string][]model.Reading{}
 		for index, item := range inv.Readings {
-			runs[index][round] = options.Runner.Run(ctx, requests[item.ID])
+			request := requests[item.ID]
+			first := item.ID
+			if request.SameRunAs != "" {
+				first = request.SameRunAs
+			}
+			set, ran := sets[first]
+			if !ran {
+				if runner, ok := options.Runner.(SetRunner); ok && request.ProbeID == model.LatencyProbeID {
+					set = runner.RunSet(ctx, request)
+				}
+				if len(set) == 0 {
+					set = []model.Reading{options.Runner.Run(ctx, request)}
+				}
+				sets[first] = set
+			}
+			runs[index][round] = sameQuestion(set, item.Reading)
 		}
 	}
 	reran := make([]model.Rerun, len(inv.Readings))
@@ -178,12 +219,47 @@ func Run(ctx context.Context, options Options) (model.Verification, error) {
 	verification, err := model.NewVerification(options.ID, inv.ID, inv.Environment, options.Changes,
 		reran, before, after, differences, now().UTC(),
 		func(judged model.Judgement) string {
-			return describe(judged, reran, options.Changes, differences, record)
+			return describe(judged, reran, options.Changes, differences, record, inv)
 		})
 	if err != nil {
 		return model.Verification{}, fmt.Errorf("the verification does not validate: %w", err)
 	}
 	return verification, nil
+}
+
+// sameQuestion is the reading of a run that answers what was asked: for a
+// latency run, the one judged against the same budget as the reading at
+// diagnosis. When the run gave none — the budget is no longer declared —
+// the answer is inconclusive, saying so, never another budget's verdict.
+func sameQuestion(set []model.Reading, was model.Reading) model.Reading {
+	if was.ProbeID != model.LatencyProbeID {
+		return set[0]
+	}
+	want := budgetOf(was)
+	for _, reading := range set {
+		if budgetOf(reading) == want {
+			return reading
+		}
+	}
+	if want == "" {
+		return set[0]
+	}
+	missing := set[0]
+	missing.Verdict = model.VerdictInconclusive
+	missing.Measured, missing.Expected, missing.ExpectedSource, missing.Evidence = nil, nil, nil, nil
+	missing.Reason = fmt.Sprintf("the run was judged against no %s budget: it is no longer declared, "+
+		"so this reading could not be taken again", want)
+	return missing
+}
+
+// budgetOf is the budget a latency reading was judged against, or "".
+func budgetOf(reading model.Reading) string {
+	for key := range reading.Expected {
+		if _, isBudget := model.BudgetPredicates[key]; isBudget {
+			return key
+		}
+	}
+	return ""
 }
 
 // Differences compares the environment before and after with the engine
@@ -257,7 +333,7 @@ func readings(set []model.Rerun) string {
 }
 
 func describe(judged model.Judgement, reran []model.Rerun, changes []model.Change,
-	differences []model.Difference, record Record,
+	differences []model.Difference, record Record, inv model.Investigation,
 ) string {
 	where := func(was, now model.Verdict) []model.Rerun {
 		var matched []model.Rerun
@@ -314,6 +390,12 @@ func describe(judged model.Judgement, reran []model.Rerun, changes []model.Chang
 	var reasons []string
 	if failed == 0 {
 		reasons = append(reasons, "the investigation has no failing reading, so there is nothing a change can be seen to fix")
+		if !judgedLatency(inv) {
+			// Said, not implied (Phase 36 part 2): slowness had nothing to
+			// be measured against.
+			reasons = append(reasons, "no latency budget was judged: the walk found none declared on the "+
+				"request path that a GET request can measure")
+		}
 	}
 	if len(unsettled) > 0 {
 		reasons = append(reasons, "not every reading could be settled: "+strings.Join(unsettled, "; "))
@@ -335,6 +417,22 @@ func describe(judged model.Judgement, reran []model.Rerun, changes []model.Chang
 		}
 	}
 	return "the readings do not settle it"
+}
+
+// judgedLatency reports whether the investigation asked about latency at
+// all: a latency hypothesis, or a latency reading.
+func judgedLatency(inv model.Investigation) bool {
+	for _, h := range inv.Hypotheses {
+		if h.Kind == model.HypothesisLatencyBudgetExceeded {
+			return true
+		}
+	}
+	for _, item := range inv.Readings {
+		if item.Reading.ProbeID == model.LatencyProbeID {
+			return true
+		}
+	}
+	return false
 }
 
 // changeList is the changes named, in words.

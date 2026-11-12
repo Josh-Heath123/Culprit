@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -37,6 +39,39 @@ type Budget struct {
 	// Why is required, as for an invariant: a budget nobody explained is
 	// one nobody can safely change.
 	Why string `yaml:"why"`
+
+	// literalProblem is why value, as written, is not plain decimal digits
+	// (model.BudgetLiteralProblem), or "". Set when the entry is read from
+	// YAML; validateBudgets refuses the entry when it is set.
+	literalProblem string
+}
+
+// UnmarshalYAML reads an entry and keeps how its value was written: the
+// two YAML readers of culprit.yaml read `0454`, `1e3`, `0o454` and
+// `300_000` as different numbers or as strings, so the form is checked,
+// not the number it decoded to (Phase 36 part 2).
+func (b *Budget) UnmarshalYAML(node *yaml.Node) error {
+	type fields Budget
+	var decoded fields
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*b = Budget(decoded)
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value != "value" {
+			continue
+		}
+		value := node.Content[index+1]
+		// Style 0 is plain: not quoted, not a block scalar, and with no
+		// explicit tag (yaml.TaggedStyle is a style bit). An alias is not
+		// a scalar.
+		plain := value.Kind == yaml.ScalarNode && value.Style == 0
+		b.literalProblem = model.BudgetLiteralProblem(value.Value, plain)
+	}
+	return nil
 }
 
 // BudgetExtractor is the provenance extractor of a culprit.yaml budget.
@@ -102,6 +137,9 @@ func (m *Manifest) validateBudgets() error {
 			return &PolicyError{Message: fmt.Sprintf(
 				"%s: predicate %q is not one of %s", where, budget.Predicate,
 				strings.Join(budgetPredicateNames(), ", "))}
+		}
+		if budget.literalProblem != "" {
+			return &PolicyError{Message: where + ": `value`: " + budget.literalProblem}
 		}
 		if _, ok := budgetValue(budget.Value); !ok {
 			return &PolicyError{Message: where +

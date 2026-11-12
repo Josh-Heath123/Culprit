@@ -11,10 +11,11 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 36, part 1 — latency budgets and the measurement
-  (budgets as INTENT facts, the latency rule in Go and Python,
-  `probe.http.latency`), on branch `phase-36-budgets`. Phases 26–35 are
-  merged; `docs/DIAGNOSTIC_PLAN.md` is complete.
+- **Current phase:** 36, part 2 — the walk sees slow (latency asked
+  after the errors explain nothing, `latency_budget_exceeded`, hop or
+  component from one reading), on branch `phase-36-walk`. Part 1 (budgets,
+  the rule, `probe.http.latency`) is merged; `docs/DIAGNOSTIC_PLAN.md` is
+  complete.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core
   model) and the phase you are working on — not the whole file.

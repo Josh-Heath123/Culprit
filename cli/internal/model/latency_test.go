@@ -121,3 +121,30 @@ func TestALatencyReadingWhoseVerdictItsSamplesDoNotGiveIsRefused(t *testing.T) {
 		t.Errorf("an inconclusive latency reading with nothing measured was refused: %v", err)
 	}
 }
+
+type budgetLiteral struct {
+	Literal string `json:"literal"`
+	Plain   bool   `json:"plain"`
+	Refused bool   `json:"refused"`
+	Reason  string `json:"reason"`
+}
+
+// TestABudgetIsWrittenAsPlainDecimalDigits: the shared fixture's literals,
+// the same refusals and reasons Python gives (Phase 36 part 2).
+func TestABudgetIsWrittenAsPlainDecimalDigits(t *testing.T) {
+	fixture := readFixture[struct {
+		Literals []budgetLiteral `json:"budget_literals"`
+	}](t, "latency_conformance.json")
+	if len(fixture.Literals) == 0 {
+		t.Fatal("the fixture has no budget_literals")
+	}
+	for _, c := range fixture.Literals {
+		got := BudgetLiteralProblem(c.Literal, c.Plain)
+		if c.Refused && got != c.Reason {
+			t.Errorf("%q (plain %v): %q, want %q", c.Literal, c.Plain, got, c.Reason)
+		}
+		if !c.Refused && got != "" {
+			t.Errorf("%q: refused (%s), want accepted", c.Literal, got)
+		}
+	}
+}

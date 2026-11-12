@@ -678,6 +678,57 @@
       },
       "verdict": "pass",
       "reason": "p50 is within the 300 ms budget: at 90% confidence it is at most 10.000 ms (sample 14 of 20)"
+    },
+    {
+      "why": "cut short: twenty timeouts of fifty planned, which would fail if judged, are inconclusive",
+      "measured": {
+        "percentile": 95,
+        "requests": 20,
+        "planned": 50,
+        "samples_us": [],
+        "timeouts": 20
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "the run was cut short at its deadline: 20 of 50 requests were sent, so p95 is not judged against the 300 ms budget"
+    },
+    {
+      "why": "a run that sent every request it planned is judged as before",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "planned": 20,
+        "samples_us": [
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "fail",
+      "reason": "p50 is over the 300 ms budget: at 90% confidence it is at least 900.000 ms (sample 7 of 20)"
     }
   ],
   "rejected": [
@@ -989,6 +1040,201 @@
       "expected": {
         "latency_p50_ms": 300
       }
+    },
+    {
+      "why": "more requests than were planned",
+      "measured": {
+        "percentile": 50,
+        "requests": 21,
+        "planned": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    },
+    {
+      "why": "a plan over the cap",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "planned": 51,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      }
+    }
+  ],
+  "budget_literals_why": "Phase 36 part 2: a budget's value as written in culprit.yaml. The two YAML readers (Go's yaml.v3, YAML 1.2; Python's PyYAML, YAML 1.1) read some forms as different numbers or as strings, so both refuse every form but plain decimal digits, unquoted. The Go loader, culprit_model and the API's manifest model each refuse every case here marked refused, with this reason.",
+  "budget_literals": [
+    {
+      "literal": "300",
+      "plain": true,
+      "refused": false
+    },
+    {
+      "literal": "1",
+      "plain": true,
+      "refused": false
+    },
+    {
+      "literal": "60000",
+      "plain": true,
+      "refused": false
+    },
+    {
+      "literal": "1e3",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 1e3 is not",
+      "why": "YAML 1.2 reads 1000; YAML 1.1 a string"
+    },
+    {
+      "literal": "0o454",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 0o454 is not",
+      "why": "YAML 1.2 reads octal 300; YAML 1.1 a string"
+    },
+    {
+      "literal": "0454",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 0454 is not",
+      "why": "YAML 1.1 reads octal 300; YAML 1.2 decimal 454"
+    },
+    {
+      "literal": "300_000",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 300_000 is not",
+      "why": "YAML 1.1 reads 300000; YAML 1.2 a string"
+    },
+    {
+      "literal": "0x12C",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 0x12C is not",
+      "why": "hexadecimal 300 in both, and still not decimal digits"
+    },
+    {
+      "literal": "300.0",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 300.0 is not"
+    },
+    {
+      "literal": "+300",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and +300 is not"
+    },
+    {
+      "literal": "-300",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and -300 is not"
+    },
+    {
+      "literal": "0",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 0 is not"
+    },
+    {
+      "literal": "3e2",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and 3e2 is not"
+    },
+    {
+      "literal": ".inf",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and .inf is not"
+    },
+    {
+      "literal": "300",
+      "plain": false,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, without quotes, a tag or an alias",
+      "why": "quoted: a string to both readers"
     }
   ]
 }

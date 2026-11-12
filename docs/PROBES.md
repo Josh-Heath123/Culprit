@@ -96,7 +96,7 @@ from is the next section.
 | `probe.config.present` (v2) | `key`, or a `config:` target | inspect | `config.read.names` | INTENT (`required`) | a key the code reads with no default is not set |
 | `probe.dep.version` (v2) | `package`, or a `dep:` target; optional `expect_version` | inspect | `repo.read`, plus the packages command on `process.exec.allowlist` | INTENT (`version`) | the installed version differs from a declared **exact pin**, or is absent |
 | `probe.edge.impedance` | *none* | observe | `telemetry.metrics.read` | *none* | the connection's latency or error rate is ≥ 3 standard deviations from its own history |
-| `probe.http.latency` | `url`, or an `http:` target + `base_url` | interrogate (metered) | `net.http.outbound` | INTENT (`latency_p95_ms`, `latency_p50_ms`) | the declared budget's percentile is over budget at 90% confidence (below) |
+| `probe.http.latency` | `url`, or an `http:` target + `base_url` | interrogate (metered) | `net.http.outbound` | INTENT (`latency_p95_ms`, `latency_p50_ms`) | the declared budget's percentile is over budget at 90% confidence; one reading per budget on the route (below) |
 
 Inputs are supplied with `--input key=value`, repeated. A list input
 (`expect_fields`, `expect_columns`) is built by repeating the same key:
@@ -135,10 +135,12 @@ readings are produced by the worker, which has the telemetry
 
 ## Latency against a budget — `probe.http.latency`
 
-Phase 36 part 1. A latency is only a finding against a declared budget: a
+Phase 36. A latency is only a finding against a declared budget: a
 `budgets:` entry in `culprit.yaml`, or an OpenAPI operation's
 `x-culprit-budget` (the README's "Latency budgets"). With no budget, the
-probe sends nothing and is `inconclusive`.
+probe sends nothing and is `inconclusive`. A route with both budgets is
+measured once and gives two readings, one per budget, judged from the same
+samples.
 
 What it sends, and nothing else:
 
@@ -151,7 +153,12 @@ What it sends, and nothing else:
   the refusal, not the route, so its budget is `inconclusive`.
 - **A new connection per request,** timed from dialling to the last byte of
   the response (or its first 1 MiB); the connection's setup (name resolution, TCP, TLS) is
-  recorded separately in `connect_us`. No redirect is followed.
+  recorded separately in `connect_us`, and for a request that timed out
+  after its connection completed, in `timeout_connect_us`. No redirect is
+  followed.
+- **The budgeted route, exactly.** The URL's path must be the budget's
+  route as sent — no escape, empty segment, query, fragment or userinfo
+  (LIMITS, "The probe's URL must be the budgeted route").
 
 A **sample** is a `2xx` answer or a timeout. Each request's timeout is
 twice the budget plus 500 ms (cut to what is left of the probe's 120 s run),
@@ -160,7 +167,9 @@ budget. Anything else is not a sample (`not_samples` counts them).
 
 The verdict is a pure function of the reading, so the reading carries the
 rule's inputs: every sample in `samples_us`, the timeouts, the request
-count, and the budget in `expected`. The rule (`culprit_model.latency`,
+count, how many requests the run planned (`planned`: a run cut short by its
+deadline is `inconclusive`, whatever its samples say), and the budget in
+`expected`. The rule (`culprit_model.latency`,
 `model.JudgeLatency`) takes the nearest-rank percentile and its bounds at
 the ranks the exact binomial gives for **90% confidence on each side**, in
 integer arithmetic:
@@ -186,6 +195,18 @@ culprit probe 'http:inventory-service/GET /ready' -f culprit.yaml --env faults-o
 
 `culprit probe <target>` with no `-p` runs every probe, this one included:
 against a target with a budget, that is up to 50 requests.
+
+### In the walk
+
+Since Phase 36 part 2 the probe discriminates `latency_budget_exceeded`.
+`culprit diagnose` runs it only after the error pass has found nothing,
+on each component on the request path that declares a budget a `GET` can
+measure, in subject order, from where the binary runs; a failing reading
+supports the hypothesis, all passing rule it out for that component alone.
+The slow reading's setup and server times then tell the connection from
+the component (LIMITS, "Latency in the walk"). The walk's remaining wall
+clock is the probe's deadline. `culprit verify` runs it again, once per
+round for both of a route's readings.
 
 ## What each probe rules out — `discriminates`
 

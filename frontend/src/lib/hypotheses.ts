@@ -13,6 +13,7 @@ export const HYPOTHESIS_LABELS: Readonly<Record<string, string>> = {
   auth_rejected: "Auth rejected",
   contract_mismatch: "Contract mismatch",
   config_missing: "Config missing",
+  latency_budget_exceeded: "Latency budget exceeded",
 };
 
 /** The label, or — for a kind this build does not know, stored by a newer

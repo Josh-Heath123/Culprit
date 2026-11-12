@@ -45,6 +45,7 @@ const (
 	KindAuthRejected          = model.HypothesisAuthRejected
 	KindContractMismatch      = model.HypothesisContractMismatch
 	KindConfigMissing         = model.HypothesisConfigMissing
+	KindLatencyBudgetExceeded = model.HypothesisLatencyBudgetExceeded
 )
 
 // localOrder is the order boundary hypotheses are tested in, cheapest and
@@ -79,6 +80,14 @@ type Request struct {
 // internal/probe to this; tests count executions through it.
 type Runner interface {
 	Run(ctx context.Context, request Request) model.Reading
+}
+
+// SetRunner is a Runner one of whose runs can give several readings: a
+// latency run judges every budget declared on its route from one set of
+// samples (Phase 36 part 2). The walk uses RunSet when the runner has it;
+// the first reading is the request's own.
+type SetRunner interface {
+	RunSet(ctx context.Context, request Request) []model.Reading
 }
 
 // Placement knows the environment: where each probe has to point, and
@@ -193,6 +202,11 @@ func New(components []Component, connections []Connection, facts []model.Fact,
 type Recorded struct {
 	Environment string
 	Request     Request
+	// SameRunAs is the reading whose run also gave this one, or "" when
+	// this reading's run is its own: a route's p50 judged from the samples
+	// its p95 was. Verification runs the request once and gives each its
+	// own reading back.
+	SameRunAs string
 }
 
 // Requests is the request behind every reading the walk took, by reading
@@ -223,6 +237,12 @@ type located struct {
 	rootRequest *Request
 	// blockers name why the walk stopped short of a root.
 	partial []string
+	// latency, when the second pass established a root, is "component"
+	// (the root is the slow component's own time) or "hop" (the root is
+	// the connection to it). latencyKept says the second pass ran and
+	// every budget it measured was kept.
+	latency     string
+	latencyKept bool
 }
 
 // Diagnose runs the walk from a symptom on entry. The Investigation it
@@ -238,6 +258,11 @@ func (w *Walk) Diagnose(ctx context.Context, symptom model.Symptom, entry string
 
 	found := &located{fail: map[string]string{}}
 	w.locate(ctx, entry, "", found)
+	// Latency is asked only after the errors explain nothing: no root, and
+	// no component below the entry shown to fail (Phase 36 part 2).
+	if found.root == "" && len(found.path) == 1 {
+		w.latencyPass(ctx, entry, found)
+	}
 
 	inv := model.Investigation{
 		Environment: w.options.Environment,
@@ -453,12 +478,39 @@ func (w *Walk) discriminators(kind string) []model.ProbeManifest {
 }
 
 func (w *Walk) run(ctx context.Context, request Request) string {
+	return w.runSet(ctx, request)[0]
+}
+
+// runSet runs one request and records every reading it gave, returning
+// their ids, the request's own first. A latency probe's deadline is the
+// walk's: it never outlives the walk (Phase 36 part 2).
+func (w *Walk) runSet(ctx context.Context, request Request) []string {
 	w.probesRun++
-	reading := w.runner.Run(ctx, request)
-	id := fmt.Sprintf("r%d", len(w.readings)+1)
-	w.readings = append(w.readings, model.InvestigationReading{ID: id, Reading: reading})
-	w.requests[id] = Recorded{Environment: w.options.Environment, Request: request}
-	return id
+	if request.ProbeID == model.LatencyProbeID {
+		left := w.options.MaxWallClock - w.options.Now().Sub(w.started)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, left)
+		defer cancel()
+	}
+	var readings []model.Reading
+	if set, ok := w.runner.(SetRunner); ok {
+		readings = set.RunSet(ctx, request)
+	}
+	if len(readings) == 0 {
+		readings = []model.Reading{w.runner.Run(ctx, request)}
+	}
+	var ids []string
+	for _, reading := range readings {
+		id := fmt.Sprintf("r%d", len(w.readings)+1)
+		w.readings = append(w.readings, model.InvestigationReading{ID: id, Reading: reading})
+		recorded := Recorded{Environment: w.options.Environment, Request: request}
+		if len(ids) > 0 {
+			recorded.SameRunAs = ids[0]
+		}
+		w.requests[id] = recorded
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (w *Walk) readingByID(id string) model.Reading {
@@ -778,6 +830,37 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 		Confidence:  w.rubric(ctx, found),
 	}
 	switch {
+	case found.latency != "" && len(found.partial) > 0:
+		diagnosis.Statement = fmt.Sprintf(
+			"The walk stopped at %s: it is slower than the latency budget declared for it. It could "+
+				"not check every alternative: %s.", describe(root), strings.Join(found.partial, "; "))
+	case found.latency == "component":
+		diagnosis.Statement = fmt.Sprintf(
+			"%s is slower than the latency budget declared for it, and every component it calls on "+
+				"the request path keeps its own budget. The time is %s's own: connection setup alone "+
+				"is within the budget.%s",
+			deepest, deepest, w.unbudgetedNote(found))
+		diagnosis.Remediation = fmt.Sprintf(
+			"Find what makes %s slower than its budget, or correct the budget if it is wrong; the "+
+				"reading cites the samples and the budget it was judged against.", deepest)
+		diagnosis.Complete = true
+	case found.latency == "hop":
+		_, parts, _ := model.ParseSubject(found.root)
+		hop := describe(found.root)
+		diagnosis.Statement = fmt.Sprintf(
+			"%s is slower than the latency budget declared for %s: connection setup alone is over "+
+				"it, and %s's own time is within it.%s",
+			strings.ToUpper(hop[:1])+hop[1:], parts["to_component"], parts["to_component"],
+			w.unbudgetedNote(found))
+		diagnosis.Remediation = fmt.Sprintf(
+			"Find what slows connections from %s to %s: name resolution, the network path or a TLS "+
+				"handshake.", parts["from_component"], parts["to_component"])
+		diagnosis.Complete = true
+	case found.latencyKept && len(found.partial) == 0:
+		diagnosis.Statement = fmt.Sprintf(
+			"Nothing the walk tested failed: every component below %s answers, every edge from it "+
+				"passes, and every latency budget measured on the request path was kept. What fails is "+
+				"inside %s, or is something no read-only probe observes.", deepest, deepest)
 	case found.root != "" && len(found.partial) > 0:
 		// A boundary failed a probe, but not every alternative was tested,
 		// so it is where the walk stopped — never stated as the cause.
@@ -842,13 +925,22 @@ func (w *Walk) rubric(ctx context.Context, found *located) model.ConfidenceRubri
 		request = w.requestFor(basis)
 	}
 
+	if request == nil && basis != "" {
+		// A latency reading is run again exactly as it was taken: its
+		// target is a route, which no hypothesis names.
+		if recorded, ok := w.requests[basis]; ok && recorded.Request.ProbeID == model.LatencyProbeID {
+			copied := recorded.Request
+			request = &copied
+		}
+	}
+
 	switch {
 	case request == nil:
 		rubric.Reproduced.Reason = "no failing probe established the diagnosis, so there was nothing to run again"
 	case w.outOfBudget() != "":
 		rubric.Reproduced.Reason = "not run again: " + w.outOfBudget()
 	default:
-		again := w.run(ctx, *request)
+		again := w.again(ctx, *request, basis)
 		if w.readingByID(again).Verdict == model.VerdictFail {
 			rubric.Reproduced = model.Criterion{Holds: true, Reason: fmt.Sprintf(
 				"%s failed again when run a second time (%s, then %s)", request.ProbeID, basis, again)}
@@ -921,6 +1013,33 @@ func (w *Walk) hypothesisFor(subject string) *model.Hypothesis {
 		}
 	}
 	return nil
+}
+
+// again runs request once more and returns the reading that answers the
+// same question basis did: for a latency run, the one judged against the
+// same budget.
+func (w *Walk) again(ctx context.Context, request Request, basis string) string {
+	if request.ProbeID != model.LatencyProbeID {
+		return w.run(ctx, request)
+	}
+	ids := w.runSet(ctx, request)
+	want := budgetPredicate(w.readingByID(basis))
+	for _, id := range ids {
+		if budgetPredicate(w.readingByID(id)) == want {
+			return id
+		}
+	}
+	return ids[0]
+}
+
+// budgetPredicate is the budget a latency reading was judged against, or "".
+func budgetPredicate(reading model.Reading) string {
+	for key := range reading.Expected {
+		if _, isBudget := model.BudgetPredicates[key]; isBudget {
+			return key
+		}
+	}
+	return ""
 }
 
 // requestFor rebuilds the request behind a component_fails reading.

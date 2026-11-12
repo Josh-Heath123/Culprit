@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -558,7 +559,11 @@ func (s *mcpServer) probe(ctx context.Context, arguments map[string]any) mcp.Res
 	// is not an endpoint the environment declares is refused, nothing sent.
 	// A coding agent may be carrying instructions from something it read;
 	// the network capabilities take no allowlist, so this is the one.
-	if unbound := unboundAddresses(manifest.Environments[environment], inputs); len(unbound) > 0 {
+	unbound := unboundAddresses(manifest.Environments[environment], inputs)
+	if len(unbound) == 0 && slices.Contains(probes, model.LatencyProbeID) {
+		unbound = latencyOffComponent(manifest.Environments[environment], target, inputs)
+	}
+	if len(unbound) > 0 {
 		return mcp.Result{IsError: true, Structured: map[string]any{
 			"error": "refused before anything was sent: through culprit mcp a probe reaches only the endpoints " +
 				"environment " + environment + " declares in culprit.yaml",
@@ -591,6 +596,58 @@ func (s *mcpServer) probe(ctx context.Context, arguments map[string]any) mcp.Res
 		refusals = []model.Refusal{}
 	}
 	return mcp.Result{Structured: map[string]any{"readings": readings, "refused": refusals}}
+}
+
+// latencyOffComponent binds a latency probe's address tighter than any
+// declared endpoint: to the endpoint of the component whose budget it is
+// judged against (the target's callee). A budget on inventory-service
+// judged with another component's times would be a reading about the
+// wrong thing (re-audit of Phase 36 part 1).
+func latencyOffComponent(spec extract.EnvironmentSpec, target string, inputs map[string]any) []unboundInput {
+	component := ""
+	if kind, parts, err := model.ParseSubject(target); err == nil {
+		switch kind {
+		case model.KindComponent:
+			component = parts["name"]
+		case model.KindConnection, model.KindAuth:
+			component = parts["to_component"]
+		default:
+			component = parts["component"]
+		}
+	}
+	var endpoint *extract.EndpointSpec
+	if declared, ok := spec.Endpoints[component]; ok {
+		endpoint = &declared
+	} else if settings, ok := spec.Components[component]; ok {
+		endpoint = settings.Endpoint
+	}
+	var unbound []unboundInput
+	for _, name := range []string{"url", "base_url"} {
+		text, given := inputs[name].(string)
+		if !given {
+			continue
+		}
+		parsed, err := url.Parse(text)
+		if err != nil {
+			continue // refused by unboundAddresses already
+		}
+		port := 80
+		if parsed.Scheme == "https" {
+			port = 443
+		}
+		if given := parsed.Port(); given != "" {
+			port, _ = strconv.Atoi(given)
+		}
+		if endpoint == nil {
+			unbound = append(unbound, unboundInput{Input: name, Reason: fmt.Sprintf(
+				"%s declares no endpoint, so there is no address its latency budget can be measured at", component)})
+		} else if canonicalHost(parsed.Hostname()) != canonicalHost(endpoint.Host) || port != endpoint.Port {
+			unbound = append(unbound, unboundInput{Input: name, Reason: fmt.Sprintf(
+				"%s:%d is not %s's endpoint, and probe.http.latency is judged against %s's budget",
+				parsed.Hostname(), port, component, component)})
+		}
+	}
+	return unbound
 }
 
 // unboundInput is one address input refused, and why.

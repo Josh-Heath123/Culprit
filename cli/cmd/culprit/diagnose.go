@@ -370,11 +370,16 @@ type walkRunner struct {
 }
 
 func (r walkRunner) Run(ctx context.Context, request isolate.Request) model.Reading {
-	readings := r.runner.Run(ctx, []probe.Request{{
+	return r.RunSet(ctx, request)[0]
+}
+
+// RunSet is every reading one run gave, the request's own first: a latency
+// run judges every budget on its route (Phase 36 part 2).
+func (r walkRunner) RunSet(ctx context.Context, request isolate.Request) []model.Reading {
+	return r.runner.RunOne(ctx, probe.Request{
 		ProbeID: request.ProbeID, Target: request.Target,
 		Environment: r.environment, Inputs: request.Inputs,
-	}})
-	return readings[0]
+	})
 }
 
 // wire is what a probe reaches the network through: real for the
@@ -531,6 +536,19 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 	case model.HypothesisContractMismatch:
 		if manifest.ID != "probe.http.route_conformance" {
 			return nil, "the walk does not resolve response schemas"
+		}
+		endpoint := p.endpoint(parts["component"])
+		if endpoint == nil {
+			return nil, fmt.Sprintf("no endpoint is declared for %s in this environment", parts["component"])
+		}
+		return map[string]any{"base_url": endpointURL(*endpoint, "")}, ""
+
+	case model.HypothesisLatencyBudgetExceeded:
+		// Asked of one budgeted route (Phase 36 part 2): the walk names the
+		// route as the subject, and the request is sent from wherever this
+		// agent runs — the one vantage — to the component's endpoint.
+		if manifest.ID != model.LatencyProbeID {
+			return nil, "the walk measures latency with probe.http.latency only"
 		}
 		endpoint := p.endpoint(parts["component"])
 		if endpoint == nil {

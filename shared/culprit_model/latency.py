@@ -32,6 +32,7 @@ not a sample at all — it measures a refusal, not the route.
 Deterministic and dependency-free (`.claude/rules/determinism.md`).
 """
 
+import re
 from math import comb
 from typing import Any
 
@@ -70,6 +71,30 @@ class LatencyShapeError(ValueError):
     rule's inputs."""
 
 
+#: A budget as written in culprit.yaml: plain decimal digits, no sign, no
+#: leading zero, unquoted.
+_PLAIN_DECIMAL = re.compile(r"[1-9][0-9]*")
+
+
+def budget_literal_problem(literal: str, plain: bool) -> str | None:
+    """Why a budget's value, as written in YAML, is not a plain decimal
+    integer — or None when it is. `plain` is whether the scalar was written
+    unquoted, with no tag or alias.
+
+    Phase 36 part 2: the two YAML readers of one INTENT value read some
+    forms differently. YAML 1.1 (PyYAML) reads `0454` as octal 300 and
+    `300_000` as 300000, and `1e3` and `0o454` as strings; YAML 1.2 (Go's
+    yaml.v3) reads `1e3` as 1000 and `0o454` as 300. Two readers must not
+    read two values, so both refuse every form but this one, each from
+    `shared/tests/latency_conformance.json`'s `budget_literals`. The Go
+    half is model.BudgetLiteralProblem."""
+    if not plain:
+        return "a budget is written as plain decimal digits, without quotes, a tag or an alias"
+    if _PLAIN_DECIMAL.fullmatch(literal) is None:
+        return f"a budget is written as plain decimal digits, and {literal} is not"
+    return None
+
+
 class Budget(BaseModel):
     """One `budgets:` entry: a rank-100 INTENT fact about how fast a
     subject must be. The Go loader is `cli/internal/extract/budgets.go`."""
@@ -78,8 +103,10 @@ class Budget(BaseModel):
 
     subject: str = Field(min_length=1)
     predicate: str
-    #: Whole milliseconds, 1 to MAX_BUDGET_MS. A float with no fraction
-    #: (`300.0`) is accepted, as the Go loader accepts it.
+    #: Whole milliseconds, 1 to MAX_BUDGET_MS. A float with no fraction is
+    #: accepted here, as JSON decoded in Go gives one; in culprit.yaml both
+    #: YAML readers refuse every form but plain decimal digits first
+    #: (`budget_literal_problem`).
     value: int
     #: Required, as for an invariant: a budget nobody explained is one
     #: nobody can safely change.
@@ -167,6 +194,17 @@ def _ms(microseconds: int | None) -> str:
     return f"{microseconds // 1000}.{microseconds % 1000:03d} ms"
 
 
+def planned_requests(measured: dict[str, Any]) -> int | None:
+    """How many requests the run set out to send (`planned`), or None when
+    the reading does not say. Phase 36 part 2: a run cut short by its
+    deadline is judged inconclusive, whatever the samples it has say, so
+    the count stays fixed and nothing stops early."""
+    if "planned" not in measured:
+        return None
+    planned = _int(measured.get("planned"), "planned", minimum=1, maximum=MAX_REQUESTS)
+    return planned
+
+
 def inputs(
     measured: dict[str, Any], expected: dict[str, Any] | None
 ) -> tuple[int, int, int, list[int], int]:
@@ -178,6 +216,9 @@ def inputs(
     requests = _int(measured.get("requests"), "requests")
     if requests > MAX_REQUESTS:
         raise LatencyShapeError(f"requests {requests} is over the cap of {MAX_REQUESTS}")
+    planned = planned_requests(measured)
+    if planned is not None and requests > planned:
+        raise LatencyShapeError(f"requests {requests} is more than the {planned} planned")
     raw = measured.get("samples_us")
     if not isinstance(raw, list):
         raise LatencyShapeError("samples_us must be a list")
@@ -204,6 +245,12 @@ def judge(measured: dict[str, Any], expected: dict[str, Any] | None) -> tuple[st
     ordered: list[int | None] = [*sorted(samples), *([None] * timeouts)]
     n = len(ordered)
     limit = budget * 1000
+    planned = planned_requests(measured)
+    if planned is not None and requests < planned:
+        return INCONCLUSIVE, (
+            f"the run was cut short at its deadline: {requests} of {planned} requests were "
+            f"sent, so p{percentile} is not judged against the {budget} ms budget"
+        )
     if n == 0:
         return INCONCLUSIVE, (
             f"no sample: none of {requests} requests answered 2xx or timed out, "

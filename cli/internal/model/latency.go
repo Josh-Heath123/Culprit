@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"regexp"
 	"sort"
 )
 
@@ -48,6 +49,30 @@ const MaxSampleUS = 1_000_000_000
 var BudgetPredicates = map[string]int{
 	"latency_p50_ms": 50,
 	"latency_p95_ms": 95,
+}
+
+// plainDecimal is a budget as written in culprit.yaml: plain decimal
+// digits, no sign, no leading zero.
+var plainDecimal = regexp.MustCompile(`^[1-9][0-9]*$`)
+
+// BudgetLiteralProblem says why a budget's value, as written in YAML, is
+// not a plain decimal integer, or "" when it is. plain is whether the
+// scalar was written unquoted, with no tag or alias.
+//
+// Phase 36 part 2: the two YAML readers of one INTENT value read some
+// forms differently — YAML 1.1 (PyYAML) reads `0454` as octal 300 and
+// `300_000` as 300000, YAML 1.2 (yaml.v3) reads `1e3` as 1000 and `0o454`
+// as 300. Two readers must not read two values, so both refuse every form
+// but this one, each from latency_conformance.json's budget_literals. The
+// Python half is culprit_model.latency.budget_literal_problem.
+func BudgetLiteralProblem(literal string, plain bool) string {
+	if !plain {
+		return "a budget is written as plain decimal digits, without quotes, a tag or an alias"
+	}
+	if !plainDecimal.MatchString(literal) {
+		return fmt.Sprintf("a budget is written as plain decimal digits, and %s is not", literal)
+	}
+	return ""
 }
 
 // LatencyShapeError is a measurement that is not the rule's input.
@@ -111,6 +136,11 @@ type LatencyInputs struct {
 	Requests   int
 	SamplesUS  []int
 	Timeouts   int
+	// Planned is how many requests the run set out to send, or 0 when the
+	// reading does not say. A run cut short by its deadline is judged
+	// inconclusive (Phase 36 part 2): the count stays fixed, and nothing
+	// stops early.
+	Planned int
 }
 
 // ParseLatencyInputs reads the rule's inputs from a reading's measured and
@@ -133,6 +163,14 @@ func ParseLatencyInputs(measured, expected map[string]any) (LatencyInputs, error
 	}
 	if in.Requests > LatencyMaxRequests {
 		return in, shapeError("requests %d is over the cap of %d", in.Requests, LatencyMaxRequests)
+	}
+	if raw, stated := measured["planned"]; stated {
+		if in.Planned, err = boundedNumber(raw, "planned", 1, LatencyMaxRequests); err != nil {
+			return in, err
+		}
+		if in.Requests > in.Planned {
+			return in, shapeError("requests %d is more than the %d planned", in.Requests, in.Planned)
+		}
 	}
 	raw, ok := measured["samples_us"].([]any)
 	if !ok {
@@ -264,6 +302,11 @@ func JudgeLatency(measured, expected map[string]any) (Verdict, string, error) {
 	n := len(ordered)
 	limit := in.BudgetMS * 1000
 	p := in.Percentile
+	if in.Planned > 0 && in.Requests < in.Planned {
+		return VerdictInconclusive, fmt.Sprintf(
+			"the run was cut short at its deadline: %d of %d requests were sent, so p%d is not "+
+				"judged against the %d ms budget", in.Requests, in.Planned, p, in.BudgetMS), nil
+	}
 	if n == 0 {
 		return VerdictInconclusive, fmt.Sprintf(
 			"no sample: none of %d requests answered 2xx or timed out, so p%d was not measured",
@@ -323,4 +366,95 @@ func (r Reading) validateLatency() error {
 			"a latency reading says %s, but its own samples and budget give %s", r.Verdict, verdict)
 	}
 	return nil
+}
+
+// LatencySplit is one latency reading judged twice more, against the same
+// budget by the same rule (Phase 36 part 2): its connection setup alone,
+// and the server's own time, which is each answer's total less its setup.
+// No new request and no new threshold.
+type LatencySplit struct {
+	Setup, Server             Verdict
+	SetupReason, ServerReason string
+}
+
+// SplitLatency derives the two series from a reading's measured values:
+//
+//   - setup: each answer's connect_us, and each timeout whose connection
+//     completed (timeout_connect_us); a timeout before its connection
+//     completed counts as slow setup;
+//   - server: each answer's total less its setup, and a timeout after its
+//     connection completed counts as a slow server. A timeout before the
+//     connection completed says nothing about the server, so it is not a
+//     sample there.
+//
+// An error means the reading does not carry the setup of every answer —
+// one taken before setup was recorded, or not the rule's input at all.
+func SplitLatency(measured, expected map[string]any) (LatencySplit, error) {
+	in, err := ParseLatencyInputs(measured, expected)
+	if err != nil {
+		return LatencySplit{}, err
+	}
+	connects, err := microsecondList(measured["connect_us"], "connect_us")
+	if err != nil {
+		return LatencySplit{}, err
+	}
+	if len(connects) != len(in.SamplesUS) {
+		return LatencySplit{}, shapeError("connect_us must give the setup of every answered sample")
+	}
+	connectedTimeouts, err := microsecondList(measured["timeout_connect_us"], "timeout_connect_us")
+	if err != nil {
+		return LatencySplit{}, err
+	}
+	if len(connectedTimeouts) > in.Timeouts {
+		return LatencySplit{}, shapeError("more connected timeouts than timeouts")
+	}
+	server := make([]int, len(in.SamplesUS))
+	for index, total := range in.SamplesUS {
+		if connects[index] > total {
+			return LatencySplit{}, shapeError("an answer's setup is longer than the whole answer")
+		}
+		server[index] = total - connects[index]
+	}
+	series := func(samples []int, timeouts int) map[string]any {
+		return map[string]any{
+			"percentile": in.Percentile, "requests": in.Requests,
+			"samples_us": append([]int(nil), samples...), "timeouts": timeouts,
+		}
+	}
+	setupSamples := append(append([]int(nil), connects...), connectedTimeouts...)
+	var split LatencySplit
+	if split.Setup, split.SetupReason, err = JudgeLatency(
+		series(setupSamples, in.Timeouts-len(connectedTimeouts)), expected); err != nil {
+		return LatencySplit{}, err
+	}
+	if split.Server, split.ServerReason, err = JudgeLatency(
+		series(server, len(connectedTimeouts)), expected); err != nil {
+		return LatencySplit{}, err
+	}
+	return split, nil
+}
+
+// microsecondList reads a list of whole microseconds from a measurement.
+func microsecondList(value any, name string) ([]int, error) {
+	var raw []any
+	switch typed := value.(type) {
+	case []any:
+		raw = typed
+	case []int:
+		raw = make([]any, len(typed))
+		for index, item := range typed {
+			raw[index] = item
+		}
+	default:
+		return nil, shapeError("%s must be a list", name)
+	}
+	out := make([]int, 0, len(raw))
+	for _, item := range raw {
+		number, err := boundedNumber(item, name, 0, MaxSampleUS)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, number)
+	}
+	return out, nil
 }

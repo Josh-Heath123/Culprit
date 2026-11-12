@@ -58,7 +58,7 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
-from culprit_model.latency import Budget
+from culprit_model.latency import Budget, budget_literal_problem
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -575,6 +575,47 @@ class Manifest(BaseModel):
         )
 
 
+def _reject_budget_literals(text: str, source: str) -> None:
+    """Refuses a `budgets:` value not written as plain decimal digits
+    (Phase 36 part 2). Read from the YAML node, not the parsed value: this
+    reader (YAML 1.1) takes `0454` for octal 300 and `300_000` for 300000,
+    where the Go loader (YAML 1.2) reads 454 and a string, so the form is
+    what is checked — by `culprit_model.latency.budget_literal_problem`,
+    which the Go loader's twin is held to with it."""
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    if not isinstance(root, yaml.MappingNode):
+        return
+    for key, section in root.value:
+        if key.value != "budgets" or not isinstance(section, yaml.SequenceNode):
+            continue
+        for index, entry in enumerate(section.value):
+            if not isinstance(entry, yaml.MappingNode):
+                continue
+            for field, value in entry.value:
+                if field.value != "value":
+                    continue
+                # Plain: an unquoted scalar with no explicit tag. An alias
+                # composes to the node it names, so it is caught by the
+                # anchor PyYAML leaves on it.
+                plain = (
+                    isinstance(value, yaml.ScalarNode)
+                    and value.style is None
+                    and not _tagged(text, value)
+                )
+                literal = value.value if isinstance(value, yaml.ScalarNode) else ""
+                problem = budget_literal_problem(literal, plain)
+                if problem is not None:
+                    raise ManifestError(f"{source}: budgets[{index}]: value: {problem}")
+
+
+def _tagged(text: str, node: yaml.ScalarNode) -> bool:
+    """Whether the scalar was written with an explicit tag or as an alias:
+    the composed node does not say, so the source between its marks is
+    read. A plain scalar's source is exactly its value."""
+    start, end = node.start_mark.index, node.end_mark.index
+    return text[start:end] != node.value
+
+
 def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     """Parses and validates a manifest. Pure — no filesystem access."""
     try:
@@ -586,6 +627,8 @@ def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
         raise ManifestError(f"{source}: empty")
     if not isinstance(raw, dict):
         raise ManifestError(f"{source}: expected a mapping at the top level")
+
+    _reject_budget_literals(text, source)
 
     # Before validation, not after: a credential in a field the schema
     # would reject anyway must still be reported as a credential, and a

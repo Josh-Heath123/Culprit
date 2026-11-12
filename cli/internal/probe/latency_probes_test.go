@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -369,4 +370,128 @@ func TestAUrlOnAnotherRouteSendsNothing(t *testing.T) {
 		t.Errorf("a concrete path under a declared template: %s after %d requests: %s",
 			readings[0].Verdict, server.count(), readings[0].Reason)
 	}
+}
+
+// TestAUrlTheRouteCheckOnceAcceptedSendsNothing holds the re-audit of part
+// 1: each of these was timed against GET /ready's budget (or /items/{}'s),
+// because the check compared a canonical form of the path and the probe
+// then sent the raw URL. Counted at the server: nothing is sent for any.
+func TestAUrlTheRouteCheckOnceAcceptedSendsNothing(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	host := strings.TrimPrefix(server.URL, "http://")
+	ready := p50(300)
+	items := declaredAs("http:inventory-service/GET /items/{}", "latency_p50_ms", 300)
+	for name, test := range map[string]struct {
+		url    string
+		budget *model.Fact
+	}{
+		"a trailing slash":               {server.URL + "/ready/", ready},
+		"a doubled slash":                {server.URL + "//ready", ready},
+		"an empty template segment":      {server.URL + "/items//42", items},
+		"an escaped question mark":       {server.URL + "/ready%3Fanything/else", ready},
+		"an escape then a traversal":     {server.URL + "/ready%3F/../../admin", ready},
+		"an escaped hash":                {server.URL + "/ready%23x/y/z", ready},
+		"an escaped space":               {server.URL + "/ready%20", ready},
+		"an escaped tab":                 {server.URL + "/ready%09", ready},
+		"a dot-dot template segment":     {server.URL + "/items/..", items},
+		"an escaped slash":               {server.URL + "/items%2F42", items},
+		"a query string":                 {server.URL + "/ready?delay=9999", ready},
+		"an empty query":                 {server.URL + "/ready?", ready},
+		"a fragment":                     {server.URL + "/ready#x", ready},
+		"userinfo, sent as a credential": {"http://admin:secret@" + host + "/ready", ready},
+	} {
+		readings := NewRunner(Options{
+			Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+		}).Run(context.Background(), []Request{{
+			ProbeID: model.LatencyProbeID, Target: "component:inventory-service", Environment: "local",
+			Inputs: map[string]any{"url": test.url}, Expectation: test.budget,
+		}})
+		if readings[0].Verdict != model.VerdictInconclusive || !strings.Contains(readings[0].Reason, "nothing was sent") {
+			t.Errorf("%s: %s: %s", name, readings[0].Verdict, readings[0].Reason)
+		}
+	}
+	if got := server.count(); got != 0 {
+		t.Errorf("%d requests were sent for a URL that is not the budget's route", got)
+	}
+	// Still measured: the route itself, and a concrete segment under a template.
+	for name, test := range map[string]struct {
+		url    string
+		budget *model.Fact
+	}{
+		"the route": {server.URL + "/ready", ready}, "a template": {server.URL + "/items/42", items},
+	} {
+		before := server.count()
+		readings := measureOnce(t, test.url, test.budget)
+		if readings.Verdict != model.VerdictPass || server.count()-before != 20 {
+			t.Errorf("%s: %s after %d requests: %s", name, readings.Verdict, server.count()-before, readings.Reason)
+		}
+	}
+}
+
+func measureOnce(t *testing.T, url string, budget *model.Fact) model.Reading {
+	t.Helper()
+	return NewRunner(Options{
+		Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+	}).Run(context.Background(), []Request{{
+		ProbeID: model.LatencyProbeID, Target: "component:inventory-service", Environment: "local",
+		Inputs: map[string]any{"url": url}, Expectation: budget,
+	}})[0]
+}
+
+// TestARouteWithBothBudgetsIsMeasuredOnceAndJudgedTwice (Phase 36 part 2):
+// part 1 measured only the p95 when a route declared both, so the p50 was
+// declared, never judged and never said to be unjudged. Now one run of 50
+// requests, counted at the server, gives one reading per budget, each
+// judged by the rule from the same samples and each validating. The
+// budgets come from expectation resolution, as they would from culprit.yaml.
+func TestARouteWithBothBudgetsIsMeasuredOnceAndJudgedTwice(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	route := "http:inventory-service/GET /ready"
+	facts := []model.Fact{*declaredAs(route, "latency_p50_ms", 5), *declaredAs(route, "latency_p95_ms", 300)}
+	readings := NewRunner(Options{
+		Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+		Expectations: NewExpectations(facts),
+	}).RunOne(context.Background(), Request{
+		ProbeID: model.LatencyProbeID, Target: route, Environment: "local",
+		Inputs: map[string]any{"base_url": server.URL},
+	})
+	if got := server.count(); got != model.LatencyMaxRequests {
+		t.Fatalf("%d requests for a route with two budgets, want one run of %d", got, model.LatencyMaxRequests)
+	}
+	server.neverSentAnythingButAPlainGET(t)
+	if len(readings) != 2 {
+		t.Fatalf("%d readings, want one per budget: %+v", len(readings), readings)
+	}
+	judged := map[string]model.Verdict{}
+	for _, reading := range readings {
+		if err := reading.Validate(); err != nil {
+			t.Fatalf("a reading does not validate: %v", err)
+		}
+		for predicate := range reading.Expected {
+			judged[predicate] = reading.Verdict
+		}
+		if reading.ExpectedSource == nil {
+			t.Errorf("a reading cites no budget: %+v", reading)
+		}
+	}
+	if judged["latency_p95_ms"] != model.VerdictPass || judged["latency_p50_ms"] == "" {
+		t.Fatalf("judged %v, want the p95 passed and the p50 judged", judged)
+	}
+	if !samplesEqual(readings[0].Measured["samples_us"], readings[1].Measured["samples_us"]) {
+		t.Fatal("the two readings were not judged from the same samples")
+	}
+}
+
+func samplesEqual(a, b any) bool {
+	left, lok := a.([]int)
+	right, rok := b.([]int)
+	if !lok || !rok || len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }

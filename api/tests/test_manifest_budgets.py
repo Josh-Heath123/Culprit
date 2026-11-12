@@ -47,9 +47,41 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
     assert dump_manifest(again) == exported
 
 
-def test_a_whole_float_and_the_largest_budget_load_as_the_go_loader_loads_them() -> None:
-    assert load_manifest(_manifest("latency_p95_ms", "300.0")).budgets[0].value == 300
+LITERALS = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "latency_conformance.json").read_text(
+        encoding="utf-8"
+    )
+)["budget_literals"]
+
+
+def test_the_largest_budget_loads_as_the_go_loader_loads_it() -> None:
     assert load_manifest(_manifest("latency_p95_ms", 60_000)).budgets[0].value == 60_000
+
+
+@pytest.mark.parametrize("case", LITERALS, ids=lambda case: case["literal"])
+def test_a_budget_loads_only_when_written_as_plain_decimal_digits(case: dict) -> None:
+    """Phase 36 part 2, from the fixture the Go loader reads too. Part 1
+    loaded a whole float (`300.0`); both readers now refuse every form but
+    plain decimal digits, because they read `0454`, `1e3`, `0o454` and
+    `300_000` as different numbers or as strings."""
+    written = case["literal"] if case["plain"] else json.dumps(case["literal"])
+    if case["refused"]:
+        with pytest.raises(ManifestError, match="budgets") as refused:
+            load_manifest(_manifest("latency_p95_ms", written))
+        assert case["reason"] in str(refused.value)
+    else:
+        assert load_manifest(_manifest("latency_p95_ms", written)).budgets[0].value == int(
+            case["literal"]
+        )
+
+
+@pytest.mark.parametrize(
+    "written", ["!!int 300", "*ms"], ids=["an explicit tag", "an alias"]
+)
+def test_a_tagged_or_aliased_budget_is_refused(written: str) -> None:
+    text = ("x-ms: &ms 300\n" if written == "*ms" else "") + _manifest("latency_p95_ms", written)
+    with pytest.raises(ManifestError, match="without quotes, a tag or an alias"):
+        load_manifest(text)
 
 
 def test_two_budgets_for_one_route_and_predicate_are_refused() -> None:

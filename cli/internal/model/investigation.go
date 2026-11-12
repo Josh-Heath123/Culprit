@@ -99,13 +99,17 @@ const (
 	HypothesisContractMismatch = "contract_mismatch"
 	// "A config key the code requires is not set."
 	HypothesisConfigMissing = "config_missing"
+	// "This component, or the connection to it, is slower than the budget
+	// declared for it" (Phase 36 part 2). Asked only after the errors
+	// explain nothing.
+	HypothesisLatencyBudgetExceeded = "latency_budget_exceeded"
 )
 
 // HypothesisKinds is every kind, for validating a manifest's discriminates.
 var HypothesisKinds = []string{
 	HypothesisComponentFails, HypothesisConnectionUnreachable, HypothesisDatabaseUnreachable,
 	HypothesisTLSInvalid, HypothesisAuthAudience, HypothesisAuthRejected,
-	HypothesisContractMismatch, HypothesisConfigMissing,
+	HypothesisContractMismatch, HypothesisConfigMissing, HypothesisLatencyBudgetExceeded,
 }
 
 // HypothesisLabels is each kind as a person reads it. The source is
@@ -122,6 +126,7 @@ var HypothesisLabels = map[string]string{
 	HypothesisAuthRejected:          "Auth rejected",
 	HypothesisContractMismatch:      "Contract mismatch",
 	HypothesisConfigMissing:         "Config missing",
+	HypothesisLatencyBudgetExceeded: "Latency budget exceeded",
 }
 
 // SymptomKind is how the symptom was named on the command line.

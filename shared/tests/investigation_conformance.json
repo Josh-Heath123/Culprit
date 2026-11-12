@@ -2779,7 +2779,8 @@
     "auth_audience_mismatch": "Auth audience mismatch",
     "auth_rejected": "Auth rejected",
     "contract_mismatch": "Contract mismatch",
-    "config_missing": "Config missing"
+    "config_missing": "Config missing",
+    "latency_budget_exceeded": "Latency budget exceeded"
   },
   "attestation_kinds": [
     "reproduced",
