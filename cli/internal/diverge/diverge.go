@@ -76,6 +76,10 @@ type Result struct {
 	// with divergences — "nothing could catch a mistake here" is not a
 	// finding that something is wrong.
 	Unverifiable []Unverifiable
+	// Budgets is budget coverage (Phase 36): budgets that point at
+	// nothing, and the unbudgeted surface. Filled by `culprit check`, which
+	// knows whether the manifest declares `budgets:`. See budgets.go.
+	Budgets BudgetCoverage
 }
 
 // Unverifiable is one subject with a single source of truth.
@@ -500,6 +504,12 @@ func unverifiable(bundle model.CaptureBundle, groups map[key][]model.Fact) []Unv
 	sources := map[string]map[string]bool{}
 	sample := map[string]model.Fact{}
 	for _, fact := range bundle.Facts {
+		// A budget is not a second description of its subject: a route
+		// one extractor declares and a budget times is still a route only
+		// one source could ever contradict.
+		if IsBudgetPredicate(fact.Predicate) {
+			continue
+		}
 		if sources[fact.Subject] == nil {
 			sources[fact.Subject] = map[string]bool{}
 			sample[fact.Subject] = fact

@@ -76,6 +76,11 @@ type Resolution struct {
 }
 
 // Resolve finds the expectation for one request against one manifest.
+//
+// A manifest may produce more than one predicate about the same subject —
+// probe.http.latency produces a p95 budget and a p50 (Phase 36). They are
+// tried in the manifest's order and the first with a declaration wins;
+// with none, the first's reason is given.
 func (e *Expectations) Resolve(manifest model.ProbeManifest, request Request) Resolution {
 	plane := manifest.ExpectedFrom
 	if plane != model.PlaneIntent && plane != model.PlaneConfigured {
@@ -84,7 +89,21 @@ func (e *Expectations) Resolve(manifest model.ProbeManifest, request Request) Re
 	if len(manifest.Produces) == 0 {
 		return Resolution{Missing: "this probe's manifest declares nothing it produces"}
 	}
-	produced := manifest.Produces[0]
+	var first Resolution
+	for index, produced := range manifest.Produces {
+		resolution := e.resolveOne(plane, produced, request)
+		if resolution.Fact != nil {
+			return resolution
+		}
+		if index == 0 {
+			first = resolution
+		}
+	}
+	return first
+}
+
+// resolveOne finds the expectation for one produced predicate.
+func (e *Expectations) resolveOne(plane model.Plane, produced model.Produces, request Request) Resolution {
 
 	kind, parts, reason := MeasuredSubject(produced.SubjectTemplate, request)
 	if reason != "" {

@@ -126,10 +126,20 @@ func TestTheFaultLibrary(t *testing.T) {
 			stack.t = t
 			inv, restore := stack.injectAndDiagnose(library.Symptom, fault)
 			defer restore()
+			// Phase 36 part 1: the demo's latency budget, measured. The walk
+			// does not use it yet (part 2), so the library's verdicts are
+			// unchanged; the probe alone fails under the fault and passes
+			// once it is cleared.
+			if fault.Name == "latency" {
+				stack.measureLatency(fault, model.VerdictFail)
+			}
 			// Phase 34: the loop closed. Apply the known fix, then verify
 			// from the same vantage with the change named.
 			state := stack.keepState(fault.Vantage)
 			stack.applyFix(fault.Name, restore)
+			if fault.Name == "latency" {
+				stack.measureLatency(fault, model.VerdictPass)
+			}
 			verification := stack.verify(fault, inv, state, fault.Fix.Change)
 			stack.checkVerification(verification, inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
 			results.Faults = append(results.Faults, resultOf(fault.Name, inv, verification))
@@ -544,6 +554,40 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 		}
 	}
 	return inv
+}
+
+// measureLatency runs probe.http.latency on inventory-service's GET /ready
+// from the fault's vantage, against the budget the demo's culprit.yaml
+// declares (Phase 36 part 1), and checks its verdict.
+func (s *faultStack) measureLatency(fault faultExpectation, want model.Verdict) {
+	s.t.Helper()
+	container := s.container(fault.Vantage)
+	output, err := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "probe",
+		"http:inventory-service/GET /ready", "-p", model.LatencyProbeID,
+		"--input", "base_url=http://inventory-service:8002",
+		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment,
+		"--no-plugins", "--format", "json", "--agent-id", "fault-library").Output()
+	if err != nil {
+		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != exitFindings {
+			s.t.Fatalf("culprit probe probe.http.latency in %s: %v\n%s", container, err, output)
+		}
+	}
+	var result struct {
+		Readings []model.Reading `json:"readings"`
+	}
+	if err := json.Unmarshal(output, &result); err != nil || len(result.Readings) != 1 {
+		s.t.Fatalf("culprit probe printed no single reading (%v):\n%s", err, output)
+	}
+	reading := result.Readings[0]
+	if reading.Verdict != want {
+		s.t.Errorf("probe.http.latency on GET /ready: %s, want %s: %s", reading.Verdict, want, reading.Reason)
+	}
+	if err := reading.Validate(); err != nil {
+		s.t.Errorf("the latency reading does not validate: %v", err)
+	}
+	if reading.ExpectedSource == nil || reading.ExpectedSource.Locator != "budgets[0]" {
+		s.t.Errorf("the reading was not measured against the demo's budget: %+v", reading.ExpectedSource)
+	}
 }
 
 // buildWalkBundle cross-compiles the binary for the containers and puts it

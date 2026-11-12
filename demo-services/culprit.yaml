@@ -212,3 +212,28 @@ invariants:
     predicate: required
     value: true
     why: payments-service cannot charge anyone without its provider key.
+  # Phase 36: the route the budget below is on. The walk already asks it at
+  # inventory-service (environments, health_path), but nothing declared it
+  # as INTENT, so a budget there would have pointed at nothing.
+  - subject: "http:inventory-service/GET /ready"
+    predicate: exists
+    why: >-
+      inventory-service answers readiness here, through the fault
+      middleware, unlike /health.
+
+# --- Phase 36: latency budgets ----------------------------------------------
+#
+# How fast a route must be, declared, so a measured latency has something
+# to diverge from (docs/PERFORMANCE_PLAN.md P1). Culprit never chooses a
+# budget for you; this one is the demo's own declaration.
+budgets:
+  - subject: "http:inventory-service/GET /ready"
+    predicate: latency_p95_ms
+    value: 300
+    why: >-
+      The route the isolation walk already asks at inventory-service,
+      because it passes through the fault middleware. GET /stock, the
+      route order-service actually calls, needs a token, and no probe
+      presents one (docs/LIMITS.md). 300 ms is well clear of both a healthy
+      answer (milliseconds, on the same Docker network) and the fault
+      library's injected 800 ms.

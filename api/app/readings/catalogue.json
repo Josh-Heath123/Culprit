@@ -210,6 +210,41 @@
     "cost": "cheap"
   },
   {
+    "id": "probe.http.latency",
+    "version": 1,
+    "effect": "interrogate",
+    "capabilities": [
+      "net.http.outbound"
+    ],
+    "inputs": {
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "timeout_ms": 120000,
+    "expected_from": "INTENT",
+    "produces": [
+      {
+        "subject_template": "http:{component}/{method} {path}",
+        "predicate": "latency_p95_ms"
+      },
+      {
+        "subject_template": "http:{component}/{method} {path}",
+        "predicate": "latency_p50_ms"
+      }
+    ],
+    "cost": "metered"
+  },
+  {
     "id": "probe.http.reachable",
     "version": 1,
     "effect": "interrogate",

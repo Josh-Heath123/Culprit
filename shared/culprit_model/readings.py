@@ -29,6 +29,11 @@ because it has a silent-wrong-answer failure mode:
 4. **Every capability named in `grants_used` must be a real one.** A
    reading that claims a grant nobody can spell is a reading whose
    provenance cannot be audited.
+5. **A latency reading's verdict is its own samples' verdict** (Phase 36).
+   `probe.http.latency` carries every sample and its budget, so the verdict
+   is a pure function of the reading (`culprit_model.latency.judge`), and a
+   reading that disagrees with it cannot be built — here, in Go, and so at
+   the API wherever a reading arrives.
 
 The `readings` table (migration `c07a5f31d8e4`) already carries every
 field below; Phase 31 populates it for the first time.
@@ -41,6 +46,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from culprit_model.capabilities import Capability
 from culprit_model.facts import Provenance
+from culprit_model.latency import LATENCY_PROBE_ID, LatencyShapeError, judge
 from culprit_model.planes import Plane
 from culprit_model.redaction import looks_like_credential, redact_credentials
 from culprit_model.subjects import SubjectError
@@ -245,6 +251,32 @@ class Reading(BaseModel):
     def _expiry_follows_measurement(self) -> "Reading":
         if self.expires_at is not None and self.expires_at < self.taken_at:
             raise ValueError(f"reading from {self.probe_id!r} expires before it was taken")
+        return self
+
+    @model_validator(mode="after")
+    def _a_latency_verdict_is_its_samples(self) -> "Reading":
+        if self.probe_id != LATENCY_PROBE_ID or self.verdict is Verdict.REFUSED:
+            return self
+        if "samples_us" not in self.measured:
+            # Nothing was measured — a route that is not GET, or no budget
+            # to measure against — so only "could not tell" is honest.
+            if self.verdict is not Verdict.INCONCLUSIVE:
+                raise ValueError(
+                    f"a {self.verdict.value} latency reading must carry the samples "
+                    "it was judged on"
+                )
+            return self
+        try:
+            verdict, _ = judge(self.measured, self.expected)
+        except LatencyShapeError as exc:
+            raise ValueError(
+                f"a latency reading's measurement is not the rule's input: {exc}"
+            ) from None
+        if verdict != self.verdict.value:
+            raise ValueError(
+                f"a latency reading says {self.verdict.value}, but its own samples and budget "
+                f"give {verdict}"
+            )
         return self
 
     @model_validator(mode="after")

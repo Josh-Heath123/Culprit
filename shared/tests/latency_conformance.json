@@ -1,0 +1,952 @@
+{
+  "why": [
+    "Phase 36 part 1: the latency rule, held to one fixture read by Go and Python. Verdicts and reasons must match exactly.",
+    "Integer arithmetic only: samples are whole microseconds, a bound is the order statistic at the rank the exact binomial gives for 90% confidence on each side."
+  ],
+  "judged": [
+    {
+      "why": "well under the budget: fifty answers at 10 ms against a 300 ms p95",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "samples_us": [
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "pass",
+      "reason": "p95 is within the 300 ms budget: at 90% confidence it is at most 10.000 ms (sample 50 of 50)"
+    },
+    {
+      "why": "well over: fifty answers at 900 ms against a 300 ms p95",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "samples_us": [
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "fail",
+      "reason": "p95 is over the 300 ms budget: at 90% confidence it is at least 900.000 ms (sample 45 of 50)"
+    },
+    {
+      "why": "p50 well under, from twenty answers",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345,
+          12345
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "pass",
+      "reason": "p50 is within the 300 ms budget: at 90% confidence it is at most 12.345 ms (sample 14 of 20)"
+    },
+    {
+      "why": "p50 well over, from twenty answers",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000,
+          700000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "fail",
+      "reason": "p50 is over the 300 ms budget: at 90% confidence it is at least 700.000 ms (sample 7 of 20)"
+    },
+    {
+      "why": "straddling: half at 100 ms, half at 500 ms, against a 300 ms p50",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          500000,
+          500000,
+          500000,
+          500000,
+          500000,
+          500000,
+          500000,
+          500000,
+          500000,
+          500000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "p50 cannot be placed against the 300 ms budget at 90% confidence from 20 samples: at least 100.000 ms (sample 7), at most 500.000 ms (sample 14)"
+    },
+    {
+      "why": "too few samples: three answers, forty-seven refusals",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "samples_us": [
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "p95 cannot be placed against the 300 ms budget at 90% confidence from 3 samples: at least 10.000 ms (sample 2), no upper bound; 47 of 50 requests did not answer 2xx and are not samples"
+    },
+    {
+      "why": "no sample at all: every request refused",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "samples_us": [],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "no sample: none of 50 requests answered 2xx or timed out, so p95 was not measured"
+    },
+    {
+      "why": "a timeout counted as slow: forty-nine fast answers and one timeout cannot pass a p95",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "samples_us": [
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 1
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "p95 cannot be placed against the 300 ms budget at 90% confidence from 50 samples: at least 10.000 ms (sample 45), at most a timeout (sample 50)"
+    },
+    {
+      "why": "the same forty-nine fast answers with the timeout dropped would pass",
+      "measured": {
+        "percentile": 95,
+        "requests": 49,
+        "samples_us": [
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "pass",
+      "reason": "p95 is within the 300 ms budget: at 90% confidence it is at most 10.000 ms (sample 49 of 49)"
+    },
+    {
+      "why": "timeouts fail a p50: fourteen of twenty requests timed out",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 14
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "fail",
+      "reason": "p50 is over the 300 ms budget: at 90% confidence it is at least a timeout (sample 7 of 20)"
+    },
+    {
+      "why": "the floor: forty-four fast answers cannot show a p95 within budget",
+      "measured": {
+        "percentile": 95,
+        "requests": 44,
+        "samples_us": [
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "p95 cannot be placed against the 300 ms budget at 90% confidence from 44 samples: at least 10.000 ms (sample 40), no upper bound"
+    },
+    {
+      "why": "the floor: forty-five can",
+      "measured": {
+        "percentile": 95,
+        "requests": 45,
+        "samples_us": [
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000,
+          10000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "pass",
+      "reason": "p95 is within the 300 ms budget: at 90% confidence it is at most 10.000 ms (sample 45 of 45)"
+    },
+    {
+      "why": "a sample exactly on the budget is within it",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000,
+          300000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "pass",
+      "reason": "p50 is within the 300 ms budget: at 90% confidence it is at most 300.000 ms (sample 14 of 20)"
+    },
+    {
+      "why": "one microsecond over the budget is over it",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001,
+          300001
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "fail",
+      "reason": "p50 is over the 300 ms budget: at 90% confidence it is at least 300.001 ms (sample 7 of 20)"
+    },
+    {
+      "why": "unsorted samples are judged in order",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000,
+          900000,
+          1000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "p50 cannot be placed against the 300 ms budget at 90% confidence from 20 samples: at least 1.000 ms (sample 7), at most 900.000 ms (sample 14)"
+    },
+    {
+      "why": "integral floats, as JSON decoded in Go gives them",
+      "measured": {
+        "percentile": 50.0,
+        "requests": 20.0,
+        "samples_us": [
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0,
+          10000.0
+        ],
+        "timeouts": 0.0
+      },
+      "expected": {
+        "latency_p50_ms": 300.0
+      },
+      "verdict": "pass",
+      "reason": "p50 is within the 300 ms budget: at 90% confidence it is at most 10.000 ms (sample 14 of 20)"
+    }
+  ],
+  "rejected": [
+    {
+      "why": "a percentile no budget declares",
+      "measured": {
+        "percentile": 90,
+        "requests": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    },
+    {
+      "why": "more requests than the cap",
+      "measured": {
+        "percentile": 95,
+        "requests": 51,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      }
+    },
+    {
+      "why": "more samples than requests",
+      "measured": {
+        "percentile": 50,
+        "requests": 2,
+        "samples_us": [
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    },
+    {
+      "why": "a budget for another percentile",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      }
+    },
+    {
+      "why": "no budget",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": null
+    },
+    {
+      "why": "two budgets",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300,
+        "latency_p95_ms": 300
+      }
+    },
+    {
+      "why": "a fractional sample",
+      "measured": {
+        "percentile": 50,
+        "requests": 1,
+        "samples_us": [
+          1.5
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    },
+    {
+      "why": "a negative sample",
+      "measured": {
+        "percentile": 50,
+        "requests": 1,
+        "samples_us": [
+          -1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    },
+    {
+      "why": "a zero budget",
+      "measured": {
+        "percentile": 50,
+        "requests": 1,
+        "samples_us": [
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 0
+      }
+    },
+    {
+      "why": "a boolean count",
+      "measured": {
+        "percentile": 50,
+        "requests": true,
+        "samples_us": [
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    }
+  ]
+}

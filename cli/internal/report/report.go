@@ -84,6 +84,7 @@ func renderText(writer io.Writer, input Input) error {
 		}
 		reportRefused(writer, input)
 		reportGaps(writer, input)
+		reportBudgets(writer, input)
 		if input.ShowUnverifiable {
 			renderUnverifiableText(writer, input)
 		}
@@ -119,6 +120,7 @@ func renderText(writer io.Writer, input Input) error {
 	}
 	reportRefused(writer, input)
 	reportGaps(writer, input)
+	reportBudgets(writer, input)
 	if input.ShowUnverifiable {
 		renderUnverifiableText(writer, input)
 	}
@@ -160,6 +162,33 @@ func reportGaps(writer io.Writer, input Input) {
 	for _, skip := range skips {
 		fmt.Fprintf(writer, "  %-18s %-16s %s\n",
 			truncate(skip.Component, 18), skip.Want, skip.Reason)
+	}
+}
+
+// reportBudgets prints budget coverage (Phase 36): budgets that name
+// nothing declared, always, and the unbudgeted surface when the manifest
+// declares `budgets:` at all. Neither is a divergence: one is a manifest
+// mistake nothing would otherwise surface, the other a list of routes no
+// declaration holds to a time.
+func reportBudgets(writer io.Writer, input Input) {
+	budgets := input.Result.Budgets
+	if len(budgets.Unmatched) > 0 {
+		fmt.Fprintf(writer, "\nBudgets that name nothing declared (%d) — they would never be measured\n",
+			len(budgets.Unmatched))
+		for _, entry := range budgets.Unmatched {
+			location := entry.Artefact
+			if entry.Locator != "" {
+				location += " " + entry.Locator
+			}
+			fmt.Fprintf(writer, "  %-58s %s\n", truncate(entry.Subject, 58), location)
+		}
+	}
+	if budgets.Declared {
+		fmt.Fprintf(writer, "\nUnbudgeted surface (%d) — declared routes no budget holds to a time\n",
+			len(budgets.Unbudgeted))
+		for _, subject := range budgets.Unbudgeted {
+			fmt.Fprintf(writer, "  %s\n", subject)
+		}
 	}
 }
 
@@ -343,6 +372,10 @@ type jsonReport struct {
 	Divergences  []jsonDivergence       `json:"divergences"`
 	NotChecked   []model.Skip           `json:"not_checked"`
 	Unverifiable []diverge.Unverifiable `json:"unverifiable,omitempty"`
+	// Phase 36: budget coverage. Omitted when there is none to report, so
+	// a manifest with no budgets keeps the same JSON contract.
+	UnmatchedBudgets []diverge.Unverifiable `json:"unmatched_budgets,omitempty"`
+	Unbudgeted       []string               `json:"unbudgeted,omitempty"`
 	// Phase 30: one entry per environment a diff compared. Omitted for
 	// `culprit check`, so its JSON contract is unchanged.
 	Environments []jsonEnvironment `json:"environments,omitempty"`
@@ -440,6 +473,11 @@ func buildJSON(input Input) jsonReport {
 		if report.Unverifiable == nil {
 			report.Unverifiable = []diverge.Unverifiable{}
 		}
+	}
+
+	report.UnmatchedBudgets = input.Result.Budgets.Unmatched
+	if input.Result.Budgets.Declared {
+		report.Unbudgeted = input.Result.Budgets.Unbudgeted
 	}
 
 	report.Summary.Facts = totalFacts(input)

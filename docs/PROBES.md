@@ -96,6 +96,7 @@ from is the next section.
 | `probe.config.present` (v2) | `key`, or a `config:` target | inspect | `config.read.names` | INTENT (`required`) | a key the code reads with no default is not set |
 | `probe.dep.version` (v2) | `package`, or a `dep:` target; optional `expect_version` | inspect | `repo.read`, plus the packages command on `process.exec.allowlist` | INTENT (`version`) | the installed version differs from a declared **exact pin**, or is absent |
 | `probe.edge.impedance` | *none* | observe | `telemetry.metrics.read` | *none* | the connection's latency or error rate is ≥ 3 standard deviations from its own history |
+| `probe.http.latency` | `url`, or an `http:` target + `base_url` | interrogate (metered) | `net.http.outbound` | INTENT (`latency_p95_ms`, `latency_p50_ms`) | the declared budget's percentile is over budget at 90% confidence (below) |
 
 Inputs are supplied with `--input key=value`, repeated. A list input
 (`expect_fields`, `expect_columns`) is built by repeating the same key:
@@ -131,6 +132,59 @@ Without `--env` there is no environment to read, and these probes say so.
 `probe.edge.impedance` has no CLI source and will not get one: its
 readings are produced by the worker, which has the telemetry
 (`docs/LIMITS.md`).
+
+## Latency against a budget — `probe.http.latency`
+
+Phase 36 part 1. A latency is only a finding against a declared budget: a
+`budgets:` entry in `culprit.yaml`, or an OpenAPI operation's
+`x-culprit-budget` (the README's "Latency budgets"). With no budget, the
+probe sends nothing and is `inconclusive`.
+
+What it sends, and nothing else:
+
+- **GET only, one fixed count.** 50 requests for a `latency_p95_ms`
+  budget, 20 for a `latency_p50_ms`, sequentially, each at least 50 ms
+  after the last one ended. No input, `probes:` setting or manifest raises
+  the count above 50 or narrows the spacing; a test tries each.
+- **No credential, no body, no OPTIONS or HEAD.** A route that is not `GET`
+  is `inconclusive` with nothing sent. A route that answers 401 measures
+  the refusal, not the route, so its budget is `inconclusive`.
+- **A new connection per request,** timed from dialling to the last byte of
+  the response; the connection's setup (name resolution, TCP, TLS) is
+  recorded separately in `connect_us`. No redirect is followed.
+
+A **sample** is a `2xx` answer or a timeout. Each request's timeout is
+twice the budget plus 500 ms, and a timeout counts as slower than the
+budget. Anything else is not a sample (`not_samples` counts them).
+
+The verdict is a pure function of the reading, so the reading carries the
+rule's inputs: every sample in `samples_us`, the timeouts, the request
+count, and the budget in `expected`. The rule (`culprit_model.latency`,
+`model.JudgeLatency`) takes the nearest-rank percentile and its bounds at
+the ranks the exact binomial gives for **90% confidence on each side**, in
+integer arithmetic:
+
+- **fail** when even the lower bound is over the budget;
+- **pass** when even the upper bound is within it;
+- **inconclusive** otherwise — the interval straddles the budget, or there
+  are too few samples for a bound to exist.
+
+At 90%, a p95 can be shown within budget only from 45 samples, so a p95
+budget passes only when the slowest of its 50 samples is within it. Go,
+Python and the API each refuse a latency reading whose verdict its own
+samples and budget do not give (`shared/tests/latency_conformance.json`).
+
+From inside the demo's order-service container, as the fault library runs
+it against the budget in `demo-services/culprit.yaml` (inventory-service's
+port is not published to the host):
+
+```
+culprit probe 'http:inventory-service/GET /ready' -f culprit.yaml --env faults-order \
+    -p probe.http.latency --input base_url=http://inventory-service:8002
+```
+
+`culprit probe <target>` with no `-p` runs every probe, this one included:
+against a target with a budget, that is up to 50 requests.
 
 ## What each probe rules out — `discriminates`
 

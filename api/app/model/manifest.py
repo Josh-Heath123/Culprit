@@ -58,6 +58,7 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
+from culprit_model.latency import Budget
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -411,6 +412,11 @@ class Manifest(BaseModel):
     invariants: tuple[InvariantSpec, ...] = ()
     suppress: tuple[SuppressionSpec, ...] = ()
     severity_overrides: tuple[SeverityOverrideSpec, ...] = ()
+    #: Phase 36: how fast a subject must be, as `culprit_model.latency.Budget`
+    #: judges an entry — an unknown predicate is refused here as in Go. Like
+    #: `invariants`, accepted and round-tripped, not acted on here; until it
+    #: was added, `apply-model` refused any manifest carrying one.
+    budgets: tuple[Budget, ...] = ()
 
     @model_validator(mode="after")
     def _check_environment_components(self) -> "Manifest":
@@ -658,7 +664,7 @@ def dump_manifest(manifest: Manifest) -> str:
     # Phase 29's policy sections, carried in order for the same reason:
     # an export that dropped them would delete a team's suppressions, each
     # with the reason someone wrote for it.
-    for section in ("invariants", "suppress", "severity_overrides"):
+    for section in ("invariants", "suppress", "severity_overrides", "budgets"):
         entries = getattr(manifest, section)
         if entries:
             document[section] = [

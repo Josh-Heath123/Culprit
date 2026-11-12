@@ -69,6 +69,20 @@ func (f *fakeHTTP) Options(
 	return f.response, f.err
 }
 
+// fakeTimer is an HTTP client that can also time a request (Phase 36),
+// answering each TimeGet with the next timing in turn and counting calls.
+type fakeTimer struct {
+	fakeHTTP
+	timings []Timing
+	calls   int
+}
+
+func (f *fakeTimer) TimeGet(context.Context, string, time.Duration) (Timing, error) {
+	timing := f.timings[f.calls%len(f.timings)]
+	f.calls++
+	return timing, nil
+}
+
 type fakeDatabase struct {
 	connectErr error
 	columns    []TableColumn

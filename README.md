@@ -497,6 +497,24 @@ install it into your project's environment instead
 keys and never their values, and the loader refuses anything that looks like
 a credential.
 
+**Latency budgets.** How fast a route must be is something you declare,
+never something Culprit guesses from history. A budget is an INTENT fact:
+
+```yaml
+budgets:
+  - subject: "http:api/GET /orders"
+    predicate: latency_p95_ms      # or latency_p50_ms
+    value: 300                     # whole milliseconds
+    why: the order list page waits on it
+```
+
+or `x-culprit-budget: { latency_p95_ms: 300 }` on an OpenAPI operation.
+`culprit check` reports two sources that disagree as an `intent_conflict`,
+lists a budget whose route nothing else declares, and, once you declare
+any, lists the routes that have none. `probe.http.latency` measures a
+route against its budget ([`docs/PROBES.md`](docs/PROBES.md)); its limits
+are in [`docs/LIMITS.md`](docs/LIMITS.md), "Latency budgets".
+
 ### For a coding agent: `culprit mcp`
 
 A coding agent that speaks MCP can start the binary as a tool server and run
@@ -566,7 +584,7 @@ Not counted either: the library's deliberate wrong and partial fixes, which chec
 | Command | Covers |
 |---|---|
 | `just test` | everything below that needs no cluster: the api, worker and MCP server suites (with the repository's own scripts and the shared model's conformance tests), `go test` across the CLI, and both extractors. Needs Docker for Postgres |
-| `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all thirteen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
+| `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all fourteen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
 | `just extractors-test` | the Python and Node extractors |
 | `just self-check` | `culprit check` on this repository: **no divergences, 1,023 facts across 451 subjects**, and 9 gaps listed |
 | `just self-check-coverage` | the 368 subjects only one source describes — places where a mistake would go uncaught |
