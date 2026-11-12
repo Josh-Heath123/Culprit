@@ -95,13 +95,15 @@ func NewRunner(options Options) *Runner {
 	}
 }
 
-// Run executes every request and returns one reading per request.
+// Run executes every request and returns their readings: one per request,
+// or more when one run judges several declarations (a route's p95 and p50
+// budgets, Phase 36 part 2), in the order the probe gave them.
 //
 // The result is sorted by (probe_id, target) so two runs over the same
 // inputs produce the same output in the same order — `culprit` is a
 // tool people diff, and concurrency must not show up in the diff.
 func (r *Runner) Run(ctx context.Context, requests []Request) []model.Reading {
-	readings := make([]model.Reading, len(requests))
+	sets := make([][]model.Reading, len(requests))
 	semaphore := make(chan struct{}, r.concurrency)
 	var wait sync.WaitGroup
 
@@ -111,11 +113,15 @@ func (r *Runner) Run(ctx context.Context, requests []Request) []model.Reading {
 			defer wait.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			readings[index] = r.runOne(ctx, request)
+			sets[index] = r.runOne(ctx, request)
 		}(index, request)
 	}
 	wait.Wait()
 
+	var readings []model.Reading
+	for _, set := range sets {
+		readings = append(readings, set...)
+	}
 	sort.SliceStable(readings, func(i, j int) bool {
 		if readings[i].ProbeID != readings[j].ProbeID {
 			return readings[i].ProbeID < readings[j].ProbeID
@@ -125,22 +131,29 @@ func (r *Runner) Run(ctx context.Context, requests []Request) []model.Reading {
 	return readings
 }
 
+// RunOne runs one request and returns every reading it gave: one, or one
+// per declaration a single run judged. The first is the reading for the
+// request's own expectation.
+func (r *Runner) RunOne(ctx context.Context, request Request) []model.Reading {
+	return r.runOne(ctx, request)
+}
+
 // runOne is the whole lifecycle of a single probe: look it up, check it
 // is permitted, check it is enabled here, run it under its timeout, and
 // stamp the result.
-func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
+func (r *Runner) runOne(ctx context.Context, request Request) []model.Reading {
 	probe, found := r.catalogue.Get(request.ProbeID)
 	if !found {
-		return r.emit(request, model.ProbeManifest{ID: request.ProbeID, Version: 0},
+		return []model.Reading{r.emit(request, model.ProbeManifest{ID: request.ProbeID, Version: 0},
 			inconclusive(fmt.Sprintf(
 				"no probe %q in the catalogue; `culprit probe --list` shows what there is",
-				request.ProbeID)), nil)
+				request.ProbeID)), nil)}
 	}
 
 	manifest := probe.Manifest()
 
 	if reason, disabled := r.disabled(manifest.ID, request.Environment); disabled {
-		return r.emit(request, manifest, inconclusive(reason), nil)
+		return []model.Reading{r.emit(request, manifest, inconclusive(reason), nil)}
 	}
 
 	// The capability gate. Nothing has been dialled yet and nothing will
@@ -148,11 +161,11 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 	// than inside the probe.
 	granted, missing := r.permitted(manifest, request)
 	if !granted {
-		return r.emit(request, manifest, Outcome{
+		return []model.Reading{r.emit(request, manifest, Outcome{
 			Verdict: model.VerdictRefused,
 			Reason: fmt.Sprintf("%s is not granted for this environment",
 				strings.Join(missing, " and ")),
-		}, nil)
+		}, nil)}
 	}
 
 	timeout := time.Duration(manifest.TimeoutMS) * time.Millisecond
@@ -170,14 +183,46 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 	// probe never even looks for one, and before Run, so the probe
 	// measures against it. A caller that set one keeps it.
 	var conflicts []model.Fact
+	// The conflicts behind each further expectation, in AlsoExpected's order.
+	var alsoConflicts [][]model.Fact
 	if request.Expectation == nil {
 		resolution := r.expectations.Resolve(manifest, request)
 		request.Expectation = resolution.Fact
 		request.NoExpectation = resolution.Missing
 		conflicts = resolution.Conflicts
+		for _, also := range resolution.Also {
+			request.AlsoExpected = append(request.AlsoExpected, *also.Fact)
+			alsoConflicts = append(alsoConflicts, also.Conflicts)
+		}
 	}
 
 	outcome := probe.Run(runCtx, request, r.deps)
+	grants := union(manifest.Capabilities, r.held(used.List()))
+	readings := []model.Reading{r.finish(runCtx, request, manifest, outcome, request.Expectation, conflicts, timeout, grants)}
+	for index, also := range outcome.Also {
+		// One reading per further declaration, and no more than were
+		// declared: a probe cannot add readings nobody asked for.
+		if index >= len(request.AlsoExpected) {
+			break
+		}
+		var alsoFound []model.Fact
+		if index < len(alsoConflicts) {
+			alsoFound = alsoConflicts[index]
+		}
+		fact := request.AlsoExpected[index]
+		readings = append(readings, r.finish(runCtx, request, manifest, also, &fact, alsoFound, timeout, grants))
+	}
+	return readings
+}
+
+// finish turns one outcome of a run into its reading: the conflict
+// evidence of the declaration it was measured against, the timeout rule,
+// and the stamping.
+func (r *Runner) finish(runCtx context.Context, request Request, manifest model.ProbeManifest, outcome Outcome,
+	expectation *model.Fact, conflicts []model.Fact, timeout time.Duration,
+	grants []string,
+) model.Reading {
+	outcome.Also = nil
 
 	// expected_source is the reading's link back to the claim it was
 	// measured against, so only the probe can set it: only the probe knows
@@ -187,10 +232,10 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 	// `--input expect_columns=id` cite the migration it ignored (found by
 	// the Phase 31.1 invariant audit). The conflict evidence follows the
 	// same rule: it is about the source the reading cites.
-	if outcome.ExpectedSource != nil && request.Expectation != nil &&
+	if outcome.ExpectedSource != nil && expectation != nil &&
 		outcome.Verdict != model.VerdictRefused {
 		outcome.Evidence = append(outcome.Evidence,
-			conflictEvidence(request.Expectation, conflicts)...)
+			conflictEvidence(expectation, conflicts)...)
 	}
 
 	// A probe that overran its own timeout reports that as the reason it
@@ -202,7 +247,7 @@ func (r *Runner) runOne(ctx context.Context, request Request) model.Reading {
 			"probe did not complete within %s; no verdict was reached", timeout))
 	}
 
-	return r.emit(request, manifest, outcome, union(manifest.Capabilities, r.held(used.List())))
+	return r.emit(request, manifest, outcome, grants)
 }
 
 // held keeps only the exercised grants this run's ledger actually holds.

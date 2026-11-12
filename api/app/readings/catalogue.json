@@ -242,6 +242,9 @@
         "predicate": "latency_p50_ms"
       }
     ],
+    "discriminates": [
+      "latency_budget_exceeded"
+    ],
     "cost": "metered"
   },
   {

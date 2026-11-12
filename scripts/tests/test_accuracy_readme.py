@@ -100,4 +100,6 @@ def test_no_fault_library_record_names_a_commit() -> None:
     named = [c for f in expected["faults"] for c in f.get("fix", {}).get("change", [])]
     named += [c for s in expected["scenarios"] for c in s["change"]]
     assert not [c for c in named if c.startswith("commit:")]
-    assert len([c for c in named if c.startswith("action:")]) == 3
+    # The three runtime fixes, the latency fix again for its no-budgets
+    # walk, and the wrong latency fix (Phase 36 part 2).
+    assert len([c for c in named if c.startswith("action:")]) == 5

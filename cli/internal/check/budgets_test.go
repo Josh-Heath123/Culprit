@@ -2,6 +2,7 @@ package check_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,11 +142,53 @@ func TestAnXCulpritBudgetThatIsNotABudgetIsASkipNotAFact(t *testing.T) {
 	}
 }
 
-func TestAWholeFloatBudgetLoadsAsTheAPIsModelLoadsIt(t *testing.T) {
-	budgets := "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300.0, why: w}\n" +
-		"  - {subject: \"http:shop/GET /items\", predicate: latency_p50_ms, value: 60000, why: w}\n"
-	if _, err := extract.LoadManifest(writeBudgetProject(t, budgets)); err != nil {
-		t.Fatalf("refused: %v", err)
+// TestABudgetLoadsOnlyWhenWrittenAsPlainDecimalDigits holds the Go loader
+// to the shared fixture's budget_literals (Phase 36 part 2). Part 1
+// accepted a whole float (`300.0`), as the API's model then did; the
+// review of part 1 decided both readers refuse every form but plain
+// decimal digits, because the two YAML readers read `0454`, `1e3`, `0o454`
+// and `300_000` as different numbers or as strings.
+func TestABudgetLoadsOnlyWhenWrittenAsPlainDecimalDigits(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "latency_conformance.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Literals []struct {
+			Literal string `json:"literal"`
+			Plain   bool   `json:"plain"`
+			Refused bool   `json:"refused"`
+			Reason  string `json:"reason"`
+		} `json:"budget_literals"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Literals) == 0 {
+		t.Fatalf("the fixture's budget_literals: %v", err)
+	}
+	for _, c := range fixture.Literals {
+		value := c.Literal
+		if !c.Plain {
+			value = `"` + c.Literal + `"`
+		}
+		budgets := "budgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n" +
+			"    value: " + value + "\n    why: w\n"
+		_, err := extract.LoadManifest(writeBudgetProject(t, budgets))
+		switch {
+		case c.Refused && err == nil:
+			t.Errorf("value: %s loaded, want refused", value)
+		case c.Refused && !strings.Contains(err.Error(), c.Reason):
+			t.Errorf("value: %s refused, but not for the fixture's reason: %v", value, err)
+		case !c.Refused && err != nil:
+			t.Errorf("value: %s refused: %v", value, err)
+		}
+	}
+	// An alias and an explicit tag are not plain, whatever they resolve to.
+	for name, budgets := range map[string]string{
+		"an alias": "x-ms: &ms 300\nbudgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: *ms, why: w}\n",
+		"a tag":    "budgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: !!int 300, why: w}\n",
+	} {
+		if _, err := extract.LoadManifest(writeBudgetProject(t, budgets)); err == nil {
+			t.Errorf("%s loaded, want refused", name)
+		}
 	}
 }
 
@@ -168,6 +211,82 @@ func TestABudgetIsRefusedAtLoadUnlessItIsWellFormed(t *testing.T) {
 			t.Errorf("%s: loaded, want refused", name)
 		} else if name == "unknown predicate" && !strings.Contains(err.Error(), "latency_p99_ms") {
 			t.Errorf("unknown predicate: the error does not name it: %v", err)
+		}
+	}
+}
+
+// TestABudgetValueIsNeverEchoed: error text is output (invariant 7). A
+// value written where a budget goes is refused without the value in the
+// error, so a credential pasted there does not reach stderr (the Phase 36
+// part 2 invariant audit: it did).
+func TestABudgetValueIsNeverEchoed(t *testing.T) {
+	for _, secret := range []string{"postgres://u:hunter2@db/x", "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB", "0o454"} {
+		budgets := "budgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n" +
+			"    value: " + secret + "\n    why: w\n"
+		_, err := extract.LoadManifest(writeBudgetProject(t, budgets))
+		if err == nil {
+			t.Fatalf("value: %s loaded", secret)
+		}
+		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "hunter2") {
+			t.Errorf("the error echoes the value: %v", err)
+		}
+	}
+}
+
+// TestABudgetEntryWithAMergeKeyIsRefused: the shared fixture's
+// budget_entries. A merge key brought `value: 0454` in past the form check
+// and the Go loader read 300 (the Phase 36 part 2 audit).
+func TestABudgetEntryWithAMergeKeyIsRefused(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "latency_conformance.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Entries []struct {
+			Why    string `json:"why"`
+			Entry  string `json:"entry"`
+			Reason string `json:"reason"`
+		} `json:"budget_entries"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Entries) == 0 {
+		t.Fatalf("the fixture's budget_entries: %v", err)
+	}
+	for _, c := range fixture.Entries {
+		_, err := extract.LoadManifest(writeBudgetProject(t, "budgets:\n"+c.Entry))
+		if err == nil || !strings.Contains(err.Error(), c.Reason) {
+			t.Errorf("%s: %v, want refused with %q", c.Why, err, c.Reason)
+		}
+		if c.Reason != model.BudgetMergeProblem {
+			t.Errorf("%s: the fixture's reason is not model.BudgetMergeProblem", c.Why)
+		}
+	}
+}
+
+// TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm: the shared
+// fixture's budget_manifests, which the API's reader is held to too.
+func TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "latency_conformance.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Manifests []struct {
+			Why      string `json:"why"`
+			Manifest string `json:"manifest"`
+			Reason   string `json:"reason"`
+		} `json:"budget_manifests"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Manifests) == 0 {
+		t.Fatalf("the fixture's budget_manifests: %v", err)
+	}
+	for _, c := range fixture.Manifests {
+		path := filepath.Join(t.TempDir(), "culprit.yaml")
+		if err := os.WriteFile(path, []byte(c.Manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := extract.LoadManifest(path)
+		if err == nil || !strings.Contains(err.Error(), c.Reason) {
+			t.Errorf("%s: %v, want refused with %q", c.Why, err, c.Reason)
 		}
 	}
 }

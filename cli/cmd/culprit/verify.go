@@ -167,7 +167,7 @@ func keepForVerification(stateDir string, investigation *model.Investigation, re
 		recorded := requests[item.ID]
 		record.Requests = append(record.Requests, verify.Request{
 			ReadingID: item.ID, ProbeID: recorded.Request.ProbeID, Target: recorded.Request.Target,
-			Environment: recorded.Environment, Inputs: recorded.Request.Inputs,
+			Environment: recorded.Environment, Inputs: recorded.Request.Inputs, SameRunAs: recorded.SameRunAs,
 		})
 	}
 	if before != nil {
@@ -461,6 +461,12 @@ type verifyRunner struct {
 }
 
 func (r *verifyRunner) Run(ctx context.Context, request verify.Request) model.Reading {
+	return r.RunSet(ctx, request)[0]
+}
+
+// RunSet is every reading one run gave: a latency run judges every budget
+// on its route (Phase 36 part 2).
+func (r *verifyRunner) RunSet(ctx context.Context, request verify.Request) []model.Reading {
 	runner, ok := r.runners[request.Environment]
 	if !ok {
 		grants, err := grantsFor(r.manifest, request.Environment)
@@ -475,9 +481,9 @@ func (r *verifyRunner) Run(ctx context.Context, request verify.Request) model.Re
 			r.catalogue, r.facts, grants, through)
 		r.runners[request.Environment] = runner
 	}
-	return runner.Run(ctx, []probe.Request{{
+	return runner.RunOne(ctx, probe.Request{
 		ProbeID: request.ProbeID, Target: request.Target, Environment: request.Environment, Inputs: request.Inputs,
-	}})[0]
+	})
 }
 
 func writeVerification(stdout io.Writer, format, outputPath string, verification model.Verification) error {

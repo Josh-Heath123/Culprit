@@ -73,14 +73,20 @@ type Resolution struct {
 	// Missing says, when Fact is nil, why nothing was found — written so
 	// it can end a reading's reason.
 	Missing string
+	// Also are the resolutions of the manifest's later predicates that
+	// found a fact on the same subject as Fact: a route's p50 budget beside
+	// its p95. Both are judged from one run (Phase 36 part 2).
+	Also []Resolution
 }
 
 // Resolve finds the expectation for one request against one manifest.
 //
 // A manifest may produce more than one predicate about the same subject —
 // probe.http.latency produces a p95 budget and a p50 (Phase 36). They are
-// tried in the manifest's order and the first with a declaration wins;
-// with none, the first's reason is given.
+// tried in the manifest's order and the first with a declaration is the
+// expectation; every later one declared on the same subject is in Also, so
+// one run judges them all (Phase 36 part 2: a p50 declared beside a p95
+// was never judged). With none, the first's reason is given.
 func (e *Expectations) Resolve(manifest model.ProbeManifest, request Request) Resolution {
 	plane := manifest.ExpectedFrom
 	if plane != model.PlaneIntent && plane != model.PlaneConfigured {
@@ -89,15 +95,21 @@ func (e *Expectations) Resolve(manifest model.ProbeManifest, request Request) Re
 	if len(manifest.Produces) == 0 {
 		return Resolution{Missing: "this probe's manifest declares nothing it produces"}
 	}
-	var first Resolution
+	var first, found Resolution
 	for index, produced := range manifest.Produces {
 		resolution := e.resolveOne(plane, produced, request)
-		if resolution.Fact != nil {
-			return resolution
+		switch {
+		case resolution.Fact != nil && found.Fact == nil:
+			found = resolution
+		case resolution.Fact != nil && resolution.Fact.Subject == found.Fact.Subject:
+			found.Also = append(found.Also, resolution)
 		}
 		if index == 0 {
 			first = resolution
 		}
+	}
+	if found.Fact != nil {
+		return found
 	}
 	return first
 }

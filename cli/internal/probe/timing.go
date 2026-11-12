@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,6 +37,12 @@ type Timing struct {
 	// TimedOut says the request did not complete within its timeout. A
 	// timeout is a sample slower than any answer, not an error.
 	TimedOut bool
+	// Connected says the connection was ready before the request ended —
+	// for a timeout, whether it timed out waiting for the server or before
+	// its connection completed (Phase 36 part 2: one counts against the
+	// component, the other against the hop). Connect is set only when it
+	// is true.
+	Connected bool
 }
 
 // Timer times one GET on a fresh connection. RealHTTPClient implements it;
@@ -51,7 +58,7 @@ func (c *RealHTTPClient) TimeGet(ctx context.Context, url string, timeout time.D
 	transport.DisableKeepAlives = true
 	defer transport.CloseIdleConnections()
 	client := &http.Client{
-		Transport: transport,
+		Transport: methodGuard{next: transport},
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -59,23 +66,33 @@ func (c *RealHTTPClient) TimeGet(ctx context.Context, url string, timeout time.D
 
 	requestCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var connected time.Time
-	trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { connected = time.Now() }}
-	// A constant method, as RealHTTPClient.do allows: GET, with no body.
-	request, err := http.NewRequestWithContext(
-		httptrace.WithClientTrace(requestCtx, trace), http.MethodGet, url, nil)
+	// When the connection became ready, as nanoseconds since started; zero
+	// until then. Written by the transport, which may still be dialling on
+	// its own goroutine when a timeout returns.
+	var connectedAfter atomic.Int64
+	started := time.Now()
+	trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) {
+		connectedAfter.CompareAndSwap(0, int64(max(time.Since(started), 1)))
+	}}
+	// Built where every probe request is, under its one method check.
+	request, err := newProbeRequest(httptrace.WithClientTrace(requestCtx, trace), http.MethodGet, url)
 	if err != nil {
 		return Timing{}, err
 	}
 
-	started := time.Now()
 	timedOut := func() bool {
 		return ctx.Err() == nil && errors.Is(requestCtx.Err(), context.DeadlineExceeded)
+	}
+	stamp := func(timing Timing) Timing {
+		if after := connectedAfter.Load(); after > 0 {
+			timing.Connected, timing.Connect = true, time.Duration(after)
+		}
+		return timing
 	}
 	response, err := client.Do(request)
 	if err != nil {
 		if timedOut() {
-			return Timing{TimedOut: true, Total: time.Since(started)}, nil
+			return stamp(Timing{TimedOut: true, Total: time.Since(started)}), nil
 		}
 		return Timing{}, err
 	}
@@ -84,13 +101,9 @@ func (c *RealHTTPClient) TimeGet(ctx context.Context, url string, timeout time.D
 	total := time.Since(started)
 	if readErr != nil {
 		if timedOut() {
-			return Timing{TimedOut: true, Total: total}, nil
+			return stamp(Timing{TimedOut: true, Total: total}), nil
 		}
 		return Timing{}, readErr
 	}
-	timing := Timing{Status: response.StatusCode, Total: total}
-	if !connected.IsZero() {
-		timing.Connect = connected.Sub(started)
-	}
-	return timing, nil
+	return stamp(Timing{Status: response.StatusCode, Total: total}), nil
 }

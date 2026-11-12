@@ -193,6 +193,40 @@
       "inject": "inventory-service adds 800 ms to every request (shared/faults.py)",
       "vantage": "order-service",
       "environment": "faults-order",
+      "root_subject": "component:inventory-service",
+      "root_kind": "latency_budget_exceeded",
+      "complete": true,
+      "relations": [
+        "propagates_to",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "note": "Phase 36 part 2. Every error probe passes, so the walk asks about latency: inventory-service's GET /ready is over the demo's 300 ms p95 budget, payments-service declares none, and the slow time is inventory-service's own (connection setup alone is within the budget, measured from inside order-service). Until part 2 this fault was a partial diagnosis that verified inconclusive (Q21).",
+      "edges": [
+        "http:order-service/POST /orders -[symptom_of]-> component:order-service",
+        "component:inventory-service -[propagates_to]-> component:order-service"
+      ],
+      "attestation": "reported",
+      "fix": {
+        "how": "the injected latency cleared",
+        "change": [
+          "action:cleared the latency injected into inventory-service"
+        ],
+        "verdict": "verified"
+      }
+    },
+    {
+      "name": "latency-unbudgeted",
+      "kind": "latency",
+      "manifest": "culprit-no-budgets.yaml",
+      "inject": "the latency fault again, walked with the demo's culprit.yaml less its budgets: section",
+      "vantage": "order-service",
+      "environment": "faults-order",
       "root_subject": "component:order-service",
       "complete": false,
       "relations": [],
@@ -202,16 +236,17 @@
         "counterfactual": false,
         "verified": false
       },
-      "note": "No read-only probe discriminates 'slow'; every probe passes, and the walk says the cause is inside order-service or something it cannot observe, such as added latency — a partial diagnosis, not a wrong one. Latency waits for impedance to have a CLI source (docs/LIMITS.md).",
       "edges": [],
+      "statement_contains": "no latency budget a GET request can measure is declared",
+      "note": "Culprit never chooses a budget: with none declared, slow has nothing to diverge from, the walk says so, and nothing can show a fix fixed it.",
       "attestation": "reported",
       "fix": {
-        "how": "the injected latency cleared; the walk found no failing reading, so there is nothing a fix can be seen to fix",
+        "how": "the injected latency cleared; with no budget declared there is no failing reading to see fixed",
         "change": [
           "action:cleared the latency injected into inventory-service"
         ],
         "verdict": "inconclusive",
-        "reason_contains": "no failing reading"
+        "reason_contains": "no latency budget was judged"
       }
     }
   ],
@@ -226,6 +261,17 @@
       ],
       "verdict": "not_resolved",
       "reason_contains": "probe.auth.token_shape"
+    },
+    {
+      "name": "latency-wrong-fix",
+      "fault": "latency",
+      "apply": "slow-latency-less",
+      "how": "the injected delay cut from 800 ms to 600 ms, still twice the 300 ms budget",
+      "change": [
+        "action:cut the latency injected into inventory-service to 600 ms"
+      ],
+      "verdict": "not_resolved",
+      "reason_contains": "probe.http.latency"
     },
     {
       "name": "regressed",

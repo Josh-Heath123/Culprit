@@ -24,13 +24,20 @@ func NewCatalogue() *Catalogue {
 	return &Catalogue{probes: map[string]Probe{}}
 }
 
-// Register adds a probe, refusing one whose manifest does not validate.
+// register adds a probe, refusing one whose manifest does not validate.
 //
 // This is the second place `effect: mutate` is stopped — the first being
 // ProbeManifest.Validate itself. Registration is the choke point every
-// probe passes through, built-in or third-party, so a manifest that
-// declares a write cannot reach a runner by any route.
-func (c *Catalogue) Register(probe Probe) error {
+// probe passes through, so a manifest that declares a write cannot reach a
+// runner by any route.
+//
+// Unexported (Phase 36 part 2): only BuiltIn registers a probe (Q25), and
+// the source scan that held it while this was exported was evaded by an
+// interface whose parameter is an alias of Probe, and by a generic one —
+// both found by the re-audit of part 1. Unexported, no other package can
+// name it by any route; TestOnlyBuiltInRegistersAProbe remains the
+// backstop inside this package.
+func (c *Catalogue) register(probe Probe) error {
 	manifest := probe.Manifest()
 	if err := manifest.Validate(); err != nil {
 		return fmt.Errorf("refusing to register a probe: %w", err)
@@ -104,7 +111,7 @@ func builtIn() []Probe {
 func BuiltIn() *Catalogue {
 	catalogue := NewCatalogue()
 	for _, probe := range builtIn() {
-		if err := catalogue.Register(probe); err != nil {
+		if err := catalogue.register(probe); err != nil {
 			panic(fmt.Sprintf("built-in probe catalogue is invalid: %v", err))
 		}
 	}

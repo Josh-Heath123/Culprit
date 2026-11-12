@@ -60,6 +60,12 @@ type Request struct {
 	// inconclusive rather than a verdict: a measurement with no reference
 	// establishes nothing about conformance.
 	Expectation *model.Fact
+	// AlsoExpected are further facts on the same subject, under the other
+	// predicates the manifest produces — a route's p50 budget beside its
+	// p95 (Phase 36 part 2). A probe that can judge them from the same run
+	// returns one Outcome per fact in Outcome.Also, in this order; every
+	// other probe ignores them.
+	AlsoExpected []model.Fact
 	// NoExpectation says why no expectation was found, so a probe's
 	// inconclusive reason can name what it looked for. Set by the runner.
 	NoExpectation string
@@ -99,6 +105,11 @@ type Outcome struct {
 	// ExpiresAt marks a reading whose answer has a known shelf life — a
 	// TLS expiry check, say. Optional.
 	ExpiresAt *time.Time
+	// Also are further readings from the same run, one per
+	// Request.AlsoExpected fact: a route's two budgets judged from one set
+	// of samples, so the route is measured once (Phase 36 part 2). The
+	// runner emits each as a reading of its own.
+	Also []Outcome
 }
 
 // Probe is one measurement a `culprit` binary knows how to take.

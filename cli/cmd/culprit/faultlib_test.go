@@ -52,6 +52,31 @@ type faultExpectation struct {
 	// Fix is the known fix, and the verdict `culprit verify` must give
 	// once it is applied (Phase 34).
 	Fix faultFix `json:"fix"`
+	// Kind is the fault injected and fixed, when it is not Name: the same
+	// fault walked under another manifest (Phase 36 part 2).
+	Kind string `json:"kind"`
+	// Manifest is the culprit.yaml the walk reads, in the walk bundle;
+	// empty is the demo's own.
+	Manifest string `json:"manifest"`
+	// RootKind, when set, is the kind of the supported hypothesis on the
+	// root subject (Phase 36 part 2: latency_budget_exceeded).
+	RootKind string `json:"root_kind"`
+}
+
+// injection is the fault injected and fixed.
+func (f faultExpectation) injection() string {
+	if f.Kind != "" {
+		return f.Kind
+	}
+	return f.Name
+}
+
+// manifest is the culprit.yaml the walk reads, inside the container.
+func (f faultExpectation) manifest() string {
+	if f.Manifest != "" {
+		return "/tmp/walk/" + f.Manifest
+	}
+	return "/tmp/walk/culprit.yaml"
 }
 
 type faultFix struct {
@@ -126,17 +151,16 @@ func TestTheFaultLibrary(t *testing.T) {
 			stack.t = t
 			inv, restore := stack.injectAndDiagnose(library.Symptom, fault)
 			defer restore()
-			// Phase 36 part 1: the demo's latency budget, measured. The walk
-			// does not use it yet (part 2), so the library's verdicts are
-			// unchanged; the probe alone fails under the fault and passes
-			// once it is cleared.
+			// Phase 36 part 1: the demo's latency budget, measured by the
+			// probe alone: it fails under the fault and passes once it is
+			// cleared. Part 2's walk uses the same budget.
 			if fault.Name == "latency" {
 				stack.measureLatency(fault, model.VerdictFail)
 			}
 			// Phase 34: the loop closed. Apply the known fix, then verify
 			// from the same vantage with the change named.
 			state := stack.keepState(fault.Vantage)
-			stack.applyFix(fault.Name, restore)
+			stack.applyFix(fault.injection(), restore)
 			if fault.Name == "latency" {
 				stack.measureLatency(fault, model.VerdictPass)
 			}
@@ -252,9 +276,9 @@ func (stack *faultStack) injectAndWalk(symptom string, fault faultExpectation,
 	if status := stack.placeOrder(); status != 201 {
 		t.Fatalf("POST /orders on the healthy stack answered %d, want 201", status)
 	}
-	restore := once(stack.inject(fault.Name))
+	restore := once(stack.inject(fault.injection()))
 	status := stack.placeOrder()
-	if fault.Name == "latency" {
+	if fault.injection() == "latency" {
 		if status != 201 {
 			t.Fatalf("POST /orders under added latency answered %d, want 201", status)
 		}
@@ -326,6 +350,16 @@ func checkDiagnosis(t *testing.T, want faultExpectation, inv model.Investigation
 	}
 	if d.RootSubject != want.RootSubject {
 		t.Errorf("root %s, want %s\nstatement: %s", d.RootSubject, want.RootSubject, d.Statement)
+	}
+	if want.RootKind != "" {
+		supported := false
+		for _, h := range inv.Hypotheses {
+			supported = supported || (h.Subject == d.RootSubject && h.Kind == want.RootKind &&
+				h.Status == model.HypothesisSupported)
+		}
+		if !supported {
+			t.Errorf("no supported %s hypothesis on the root %s", want.RootKind, d.RootSubject)
+		}
 	}
 	if want.StatementContains != "" && !strings.Contains(d.Statement, want.StatementContains) {
 		t.Errorf("the statement does not say %q: %s", want.StatementContains, d.Statement)
@@ -527,7 +561,7 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
 	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
 	command := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
-		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment, "--from", fault.Vantage,
+		"-f", fault.manifest(), "--env", fault.Environment, "--from", fault.Vantage,
 		"--no-plugins", "--format", "json", "--agent-id", "fault-library", "--state-dir", containerState)
 	output, err := command.Output()
 	if err != nil {
@@ -544,7 +578,7 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	// it nor the secret behind it may reach the investigation, in either
 	// format, on any fault.
 	text, _ := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
-		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment, "--from", fault.Vantage,
+		"-f", fault.manifest(), "--env", fault.Environment, "--from", fault.Vantage,
 		"--no-plugins", "--format", "text", "--state-dir", containerState).Output()
 	for _, secret := range s.secrets {
 		for format, printed := range map[string][]byte{"json": output, "text": text} {
@@ -613,6 +647,17 @@ func buildWalkBundle(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "culprit.yaml"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The demo's manifest with no budgets: the latency fault walked where
+	// nothing declares how fast is fast (Phase 36 part 2). The budgets are
+	// the manifest's last section.
+	text := strings.ReplaceAll(string(manifest), "\r\n", "\n")
+	cut := strings.Index(text, "\nbudgets:\n")
+	if cut < 0 {
+		t.Fatal("the demo's culprit.yaml has no budgets: section to take out")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "culprit-no-budgets.yaml"), []byte(text[:cut+1]), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -690,6 +735,9 @@ func (s *faultStack) applyScenario(apply string) {
 		s.waitFor("order-service", "http://inventory-service:8002/ready", "http://localhost:8001/health")
 	case "fix-contract":
 		s.fixContract()
+	case "slow-latency-less":
+		// A smaller delay, still well over the 300 ms budget: not the fix.
+		s.post("order-service", "http://inventory-service:8002/admin/fault/latency", `{"delay_ms": 600, "duration_s": 300}`)
 	case "fix-contract-break-payments":
 		s.fixContract()
 		s.post("order-service", "http://payments-service:8003/admin/fault/error-rate", `{"rate": 1.0, "duration_s": 300}`)
@@ -716,7 +764,7 @@ func (s *faultStack) verify(fault faultExpectation, inv model.Investigation, sta
 	container := s.restoreForVerify(fault, state)
 
 	arguments := []string{"exec", container, "/tmp/walk/culprit", "verify", inv.ID,
-		"-f", "/tmp/walk/culprit.yaml", "--no-plugins", "--format", "json", "--agent-id", "fault-library",
+		"-f", fault.manifest(), "--no-plugins", "--format", "json", "--agent-id", "fault-library",
 		"--state-dir", containerState, "--from", fault.Vantage}
 	for _, change := range changes {
 		arguments = append(arguments, "--change", change)

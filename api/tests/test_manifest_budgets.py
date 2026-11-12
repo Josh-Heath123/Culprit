@@ -47,9 +47,41 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
     assert dump_manifest(again) == exported
 
 
-def test_a_whole_float_and_the_largest_budget_load_as_the_go_loader_loads_them() -> None:
-    assert load_manifest(_manifest("latency_p95_ms", "300.0")).budgets[0].value == 300
+LITERALS = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "latency_conformance.json").read_text(
+        encoding="utf-8"
+    )
+)["budget_literals"]
+
+
+def test_the_largest_budget_loads_as_the_go_loader_loads_it() -> None:
     assert load_manifest(_manifest("latency_p95_ms", 60_000)).budgets[0].value == 60_000
+
+
+@pytest.mark.parametrize("case", LITERALS, ids=lambda case: case["literal"])
+def test_a_budget_loads_only_when_written_as_plain_decimal_digits(case: dict) -> None:
+    """Phase 36 part 2, from the fixture the Go loader reads too. Part 1
+    loaded a whole float (`300.0`); both readers now refuse every form but
+    plain decimal digits, because they read `0454`, `1e3`, `0o454` and
+    `300_000` as different numbers or as strings."""
+    written = case["literal"] if case["plain"] else json.dumps(case["literal"])
+    if case["refused"]:
+        with pytest.raises(ManifestError, match="budgets") as refused:
+            load_manifest(_manifest("latency_p95_ms", written))
+        assert case["reason"] in str(refused.value)
+    else:
+        assert load_manifest(_manifest("latency_p95_ms", written)).budgets[0].value == int(
+            case["literal"]
+        )
+
+
+@pytest.mark.parametrize(
+    "written", ["!!int 300", "*ms"], ids=["an explicit tag", "an alias"]
+)
+def test_a_tagged_or_aliased_budget_is_refused(written: str) -> None:
+    text = ("x-ms: &ms 300\n" if written == "*ms" else "") + _manifest("latency_p95_ms", written)
+    with pytest.raises(ManifestError, match="without quotes, a tag or an alias"):
+        load_manifest(text)
 
 
 def test_two_budgets_for_one_route_and_predicate_are_refused() -> None:
@@ -82,3 +114,50 @@ def test_a_known_budget_predicate_loads(predicate: str) -> None:
 def test_a_budget_the_rule_cannot_use_is_refused(predicate: str, value: object) -> None:
     with pytest.raises(ManifestError, match="budgets"):
         load_manifest(_manifest(predicate, value))
+
+
+@pytest.mark.parametrize(
+    "secret", ["postgres://u:hunter2@db/x", "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB"]
+)
+def test_a_credential_pasted_as_a_budget_is_never_echoed(secret: str) -> None:
+    """Invariant 7: error text is output. A value written where a budget
+    goes is refused as a credential by the scan that runs first, and the
+    literal never appears in the error (the Phase 36 part 2 invariant
+    audit: it did)."""
+    with pytest.raises(ManifestError) as refused:
+        load_manifest(_manifest("latency_p95_ms", secret))
+    assert secret not in str(refused.value)
+    assert "hunter2" not in str(refused.value)
+
+
+ENTRIES = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "latency_conformance.json").read_text(
+        encoding="utf-8"
+    )
+)["budget_entries"]
+
+
+@pytest.mark.parametrize("case", ENTRIES, ids=lambda case: case["why"])
+def test_a_budget_entry_with_a_merge_key_is_refused(case: dict) -> None:
+    """The shared fixture's budget_entries, which the Go loader is held to
+    too: a merge key brings a value in past the form check."""
+    text = f"version: 1\ncomponents:\n  - name: shop\nbudgets:\n{case['entry']}"
+    with pytest.raises(ManifestError) as refused:
+        load_manifest(text)
+    assert case["reason"] in str(refused.value)
+
+
+MANIFESTS = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "latency_conformance.json").read_text(
+        encoding="utf-8"
+    )
+)["budget_manifests"]
+
+
+@pytest.mark.parametrize("case", MANIFESTS, ids=lambda case: case["why"])
+def test_budgets_through_a_top_level_merge_are_checked_for_their_form(case: dict) -> None:
+    """The shared fixture's budget_manifests, which the Go loader reads too."""
+    with pytest.raises(ManifestError) as refused:
+        load_manifest(case["manifest"])
+    if case["reason"] is not None:
+        assert case["reason"] in str(refused.value)

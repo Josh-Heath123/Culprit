@@ -278,3 +278,145 @@ func TestTheCaptureBeforeMustBeTheOneRecorded(t *testing.T) {
 		t.Fatalf("a different capture before was accepted: %v", err)
 	}
 }
+
+// latencySetRunner answers a latency run with one reading per budget, from
+// one set of samples, as probe.Runner.RunOne does; it counts runs.
+type latencySetRunner struct {
+	samplesUS int // every sample, in microseconds
+	budgets   []string
+	runs      int
+}
+
+func (r *latencySetRunner) Run(ctx context.Context, request Request) model.Reading {
+	return r.RunSet(ctx, request)[0]
+}
+
+func (r *latencySetRunner) RunSet(_ context.Context, request Request) []model.Reading {
+	r.runs++
+	var set []model.Reading
+	for _, predicate := range r.budgets {
+		percentile := model.BudgetPredicates[predicate]
+		samples := make([]int, model.LatencyMaxRequests)
+		for index := range samples {
+			samples[index] = r.samplesUS
+		}
+		measured := map[string]any{"percentile": percentile, "requests": len(samples), "samples_us": samples, "timeouts": 0}
+		expected := map[string]any{predicate: 300}
+		verdict, reason, _ := model.JudgeLatency(measured, expected)
+		reading := model.Reading{ProbeID: model.LatencyProbeID, ProbeVersion: 1, Target: request.Target,
+			Environment: request.Environment, Verdict: verdict, Measured: measured, Expected: expected,
+			TakenAt: clock, AgentID: "verify-runner"}
+		if verdict.NeedsReason() {
+			reading.Reason = reason
+		}
+		set = append(set, reading)
+	}
+	return set
+}
+
+// latencyInvestigation: a route's p95 and p50 failed at diagnosis, from one
+// run (r2 shares r1's), and r3 is the reproduction, a run of its own.
+func latencyInvestigation() (model.Investigation, Record) {
+	before := &latencySetRunner{samplesUS: 800_000, budgets: []string{"latency_p95_ms", "latency_p50_ms"}}
+	route := "http:inventory-service/GET /ready"
+	first := before.RunSet(context.Background(), Request{Target: route, Environment: env})
+	again := before.RunSet(context.Background(), Request{Target: route, Environment: env})
+	inv := model.Investigation{
+		ID: "inv-latency", OpenedAt: clock.Add(-time.Hour), Environment: env,
+		Symptom: model.Symptom{Kind: model.SymptomComponent, Subject: "component:order-service", Source: "test",
+			Attestation: model.Attestation{Kind: model.AttestedReported, ReportedBy: "test"}},
+		Readings: []model.InvestigationReading{
+			{ID: "r1", Reading: first[0]}, {ID: "r2", Reading: first[1]}, {ID: "r3", Reading: again[0]},
+		},
+	}
+	record := Record{Version: RecordVersion, InvestigationID: inv.ID, Environment: env,
+		Vantage: "order-service", BeforeCapture: "cap-before"}
+	inputs := map[string]any{"base_url": "http://inventory-service:8002"}
+	record.Requests = []Request{
+		{ReadingID: "r1", ProbeID: model.LatencyProbeID, Target: route, Environment: env, Inputs: inputs},
+		{ReadingID: "r2", ProbeID: model.LatencyProbeID, Target: route, Environment: env, Inputs: inputs, SameRunAs: "r1"},
+		{ReadingID: "r3", ProbeID: model.LatencyProbeID, Target: route, Environment: env, Inputs: inputs},
+	}
+	return inv, record
+}
+
+// TestReadingsFromOneRunAreTakenAgainFromOneRun (Phase 36 part 2): r1 and
+// r2 came from one latency run, so each round runs it once and gives each
+// reading back the one judged against its own budget; r3 was a run of its
+// own and stays one. Two rounds: four runs, not six.
+func TestReadingsFromOneRunAreTakenAgainFromOneRun(t *testing.T) {
+	inv, record := latencyInvestigation()
+	runner := &latencySetRunner{samplesUS: 5_000, budgets: []string{"latency_p95_ms", "latency_p50_ms"}}
+	verification, err := Run(context.Background(), Options{
+		ID: "ver-latency", Investigation: inv, Record: record,
+		Changes: []model.Change{{Kind: model.ChangeAction, Description: "cleared the latency"}},
+		Before:  capture("cap-before"), After: capture("cap-after"), Runner: runner, Now: func() time.Time { return clock },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runner.runs != 4 {
+		t.Fatalf("%d latency runs for two rounds of two runs, want 4", runner.runs)
+	}
+	for _, rerun := range verification.Reran {
+		for round, reading := range rerun.Runs {
+			was := budgetOf(inv.Readings[map[string]int{"r1": 0, "r2": 1, "r3": 2}[rerun.ReadingID]].Reading)
+			if budgetOf(reading) != was {
+				t.Errorf("%s round %d was given the %s reading, want %s", rerun.ReadingID, round, budgetOf(reading), was)
+			}
+		}
+	}
+	if verification.Verdict != model.VerificationVerified {
+		t.Fatalf("verdict %s: %s", verification.Verdict, verification.Reason)
+	}
+	// A budget no longer declared is said, never answered by another's.
+	gone := &latencySetRunner{samplesUS: 5_000, budgets: []string{"latency_p95_ms"}}
+	verification, err = Run(context.Background(), Options{
+		ID: "ver-latency", Investigation: inv, Record: record, Runner: gone, Now: func() time.Time { return clock },
+		Before: capture("cap-before"), After: capture("cap-after"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run := verification.Reran[1].Runs[0]; run.Verdict != model.VerdictInconclusive || !strings.Contains(run.Reason, "no longer declared") {
+		t.Fatalf("r2 with its budget gone: %s: %s", run.Verdict, run.Reason)
+	}
+}
+
+// TestASameRunThatIsNotTheSameRequestIsRefused: a record cannot make one
+// reading borrow another probe's or target's run.
+func TestASameRunThatIsNotTheSameRequestIsRefused(t *testing.T) {
+	inv, record := latencyInvestigation()
+	record.Requests[1].SameRunAs = "r9"
+	if err := record.Check(inv); err == nil {
+		t.Fatal("a same_run_as naming no reading was accepted")
+	}
+	inv, record = latencyInvestigation()
+	record.Requests[2].SameRunAs = "r2" // r2 is itself a borrowed run
+	if err := record.Check(inv); err == nil {
+		t.Fatal("a same_run_as naming a borrowed run was accepted")
+	}
+}
+
+// TestASameRunMustBeTheSameRequest: each way a reading could borrow a run
+// that is not its own is refused — another probe, target, environment or
+// inputs (the Phase 36 part 2 audit: only a missing and a chained run were
+// tested, and inputs were not compared).
+func TestASameRunMustBeTheSameRequest(t *testing.T) {
+	for name, change := range map[string]func(*Request){
+		"another probe":       func(r *Request) { r.ProbeID = "probe.http.reachable" },
+		"another target":      func(r *Request) { r.Target = "http:inventory-service/GET /health" },
+		"another environment": func(r *Request) { r.Environment = "elsewhere" },
+		"other inputs":        func(r *Request) { r.Inputs = map[string]any{"url": "http://elsewhere.invalid/ready"} },
+	} {
+		inv, record := latencyInvestigation()
+		change(&record.Requests[1])
+		// The reading must still match its request, so only same_run_as is wrong.
+		item := &inv.Readings[1].Reading
+		item.ProbeID, item.Target, item.Environment = record.Requests[1].ProbeID, record.Requests[1].Target, record.Requests[1].Environment
+		err := record.Check(inv)
+		if err == nil || !strings.Contains(err.Error(), "names r1 as its run") {
+			t.Errorf("%s: %v, want the borrowed run refused", name, err)
+		}
+	}
+}

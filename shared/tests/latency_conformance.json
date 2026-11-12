@@ -678,6 +678,57 @@
       },
       "verdict": "pass",
       "reason": "p50 is within the 300 ms budget: at 90% confidence it is at most 10.000 ms (sample 14 of 20)"
+    },
+    {
+      "why": "cut short: twenty timeouts of fifty planned, which would fail if judged, are inconclusive",
+      "measured": {
+        "percentile": 95,
+        "requests": 20,
+        "planned": 50,
+        "samples_us": [],
+        "timeouts": 20
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      },
+      "verdict": "inconclusive",
+      "reason": "the run was cut short at its deadline: 20 of 50 requests were sent, so p95 is not judged against the 300 ms budget"
+    },
+    {
+      "why": "a run that sent every request it planned is judged as before",
+      "measured": {
+        "percentile": 50,
+        "requests": 20,
+        "planned": 20,
+        "samples_us": [
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000,
+          900000
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      },
+      "verdict": "fail",
+      "reason": "p50 is over the 300 ms budget: at 90% confidence it is at least 900.000 ms (sample 7 of 20)"
     }
   ],
   "rejected": [
@@ -989,6 +1040,237 @@
       "expected": {
         "latency_p50_ms": 300
       }
+    },
+    {
+      "why": "more requests than were planned",
+      "measured": {
+        "percentile": 50,
+        "requests": 21,
+        "planned": 20,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p50_ms": 300
+      }
+    },
+    {
+      "why": "a plan over the cap",
+      "measured": {
+        "percentile": 95,
+        "requests": 50,
+        "planned": 51,
+        "samples_us": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "timeouts": 0
+      },
+      "expected": {
+        "latency_p95_ms": 300
+      }
+    }
+  ],
+  "budget_literals_why": "Phase 36 part 2: a budget's value as written in culprit.yaml. The two YAML readers (Go's yaml.v3, YAML 1.2; Python's PyYAML, YAML 1.1) read some forms as different numbers or as strings, so both refuse every form but plain decimal digits, unquoted. The Go loader, culprit_model and the API's manifest model each refuse every case here marked refused, with this reason.",
+  "budget_literals": [
+    {
+      "literal": "300",
+      "plain": true,
+      "refused": false
+    },
+    {
+      "literal": "1",
+      "plain": true,
+      "refused": false
+    },
+    {
+      "literal": "60000",
+      "plain": true,
+      "refused": false
+    },
+    {
+      "literal": "1e3",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not",
+      "why": "YAML 1.2 reads 1000; YAML 1.1 a string"
+    },
+    {
+      "literal": "0o454",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not",
+      "why": "YAML 1.2 reads octal 300; YAML 1.1 a string"
+    },
+    {
+      "literal": "0454",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not",
+      "why": "a leading zero: YAML 1.1 (PyYAML) reads octal 300, and yaml.v3 reads it as octal 300 too, where strict YAML 1.2 reads decimal 454"
+    },
+    {
+      "literal": "300_000",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not",
+      "why": "YAML 1.1 reads 300000; YAML 1.2 a string"
+    },
+    {
+      "literal": "0x12C",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not",
+      "why": "hexadecimal 300 in both, and still not decimal digits"
+    },
+    {
+      "literal": "300.0",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "literal": "+300",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "literal": "-300",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "literal": "0",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "literal": "3e2",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "literal": ".inf",
+      "plain": true,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "literal": "300",
+      "plain": false,
+      "refused": true,
+      "reason": "a budget is written as plain decimal digits, without quotes, a tag or an alias",
+      "why": "quoted: a string to both readers"
+    }
+  ],
+  "budget_entries_why": "A budget entry that the value check cannot see into: a merge key carries the value from elsewhere, so `0454` or `1e3` would reach each reader as a number again (the Phase 36 part 2 audit). Both readers refuse any merge key in a budget entry, with this reason.",
+  "budget_entries": [
+    {
+      "why": "the value through an inline merge",
+      "entry": "  - <<: {value: 0454}\n    subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    why: w\n",
+      "reason": "a budget entry is written out in full: a merge key (<<) is not read"
+    },
+    {
+      "why": "a whole entry through a merge, with a plain value",
+      "entry": "  - <<: {why: w}\n    subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n",
+      "reason": "a budget entry is written out in full: a merge key (<<) is not read"
+    }
+  ],
+  "budget_manifests_why": "A whole culprit.yaml whose budgets: section arrives through a top-level merge key: the form check must see it there too, or one reader loads 300 where the other refuses (the re-audit of Phase 36 part 2). Both readers refuse it with this reason. A case with no reason is refused by both, each in its own words: the Go loader refuses a repeated key as invalid YAML.",
+  "budget_manifests": [
+    {
+      "why": "budgets: through a top-level merge",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 0454, why: w}]}\n",
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "why": "budgets: through a top-level merge of a list of mappings",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: [{budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 1e3, why: w}]}]\n",
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "why": "value written twice in one entry",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    value: 500\n    why: w\n",
+      "reason": null
+    },
+    {
+      "why": "budgets: declared twice",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}\nbudgets: []\n",
+      "reason": null
     }
   ]
 }

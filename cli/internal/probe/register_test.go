@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -18,12 +19,17 @@ import (
 // `culprit mcp` binds the address inputs it knows by name, and
 // TestEveryCatalogueInputIsClassified holds every catalogue probe's inputs
 // to that list. Both hold only while every probe an agent can run is a
-// catalogue probe, which is true while nothing but BuiltIn calls
-// Catalogue.Register. This test makes that a property of the source, not
-// of the reader's memory: it type-checks every non-test package under cli/
-// and finds every call of (*Catalogue).Register by its type, so a method of
-// the same name on another type (transport.Client's) is not confused for
-// it, and an aliased or chained call is not missed.
+// catalogue probe, which is true while nothing but BuiltIn registers one.
+//
+// Since Phase 36 part 2 the method is unexported (Catalogue.register), so
+// no other package can name it: the re-audit of part 1 reached the
+// exported one through an interface whose parameter is an alias of Probe,
+// and through a generic interface, and this scan saw neither.
+// TestCatalogueExportsNoRegistration holds that. This scan remains the
+// backstop: it type-checks every non-test package under cli/ and finds
+// every call of the catalogue's registration by its type — inside package
+// probe, the only place left that can make one — and any Register method
+// that takes a Probe, through any alias of it.
 
 // modulePath is cli/go.mod's module.
 const modulePath = "github.com/josh-heath123/culprit/cli"
@@ -136,7 +142,7 @@ func registrationsOutsideBuiltIn(t *testing.T, root string) []string {
 				}
 				ast.Inspect(declaration, func(node ast.Node) bool {
 					selector, ok := node.(*ast.SelectorExpr)
-					if !ok || selector.Sel.Name != "Register" {
+					if !ok || (selector.Sel.Name != "Register" && selector.Sel.Name != "register") {
 						return true
 					}
 					selection := info.Selections[selector]
@@ -170,7 +176,8 @@ func registersAProbe(object types.Object) bool {
 		return false
 	}
 	for index := 0; index < signature.Params().Len(); index++ {
-		if named, ok := signature.Params().At(index).Type().(*types.Named); ok &&
+		// Through any alias: `type PP = probe.Probe` names the same type.
+		if named, ok := types.Unalias(signature.Params().At(index).Type()).(*types.Named); ok &&
 			named.Obj().Name() == "Probe" && named.Obj().Pkg() != nil &&
 			strings.HasSuffix(named.Obj().Pkg().Path(), "internal/probe") {
 			return true
@@ -252,21 +259,25 @@ func TestARegistrationElsewhereIsFound(t *testing.T) {
 	if err := os.MkdirAll(stray, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	code := "package stray\n\nimport \"github.com/josh-heath123/culprit/cli/internal/probe\"\n\n" +
-		"// Smuggle registers a probe outside BuiltIn.\nfunc Smuggle(p probe.Probe) error {\n" +
-		"\tcatalogue := probe.BuiltIn()\n\treturn catalogue.Register(p)\n}\n"
-	if err := os.WriteFile(filepath.Join(stray, "stray.go"), []byte(code), 0o644); err != nil {
+	// Inside package probe, the one place the unexported method can be
+	// called from: a function, and a package-level initializer.
+	code := "package probe\n\n" +
+		"// smuggle registers a probe outside BuiltIn.\nfunc smuggle(p Probe) error {\n" +
+		"\tcatalogue := BuiltIn()\n\treturn catalogue.register(p)\n}\n\n" +
+		"var extra Probe\n\nvar _ = BuiltIn().register(extra)\n"
+	if err := os.WriteFile(filepath.Join(root, "internal", "probe", "smuggle.go"), []byte(code), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// The two ways around the first version of this test: a package-level
-	// initializer, and a call through an interface naming no Catalogue.
+	// Elsewhere, a Register that takes a Probe — directly, or through an
+	// alias of it (the re-audit's evasion) — is still found, whether or not
+	// anything can satisfy it now.
 	evasions := "package stray\n\nimport \"github.com/josh-heath123/culprit/cli/internal/probe\"\n\n" +
-		"var extra probe.Probe\n\n" +
-		"// Cat registers at package level.\nvar Cat = func() *probe.Catalogue {\n" +
-		"\tc := probe.BuiltIn()\n\t_ = c.Register(extra)\n\treturn c\n}()\n\n" +
 		"type registrar interface{ Register(probe.Probe) error }\n\n" +
-		"// Through registers through an interface.\nfunc Through(p probe.Probe) error {\n" +
-		"\tvar r registrar = probe.BuiltIn()\n\treturn r.Register(p)\n}\n"
+		"// Through registers through an interface.\nfunc Through(r registrar, p probe.Probe) error {\n" +
+		"\treturn r.Register(p)\n}\n\n" +
+		"type PP = probe.Probe\n\ntype aliased interface{ Register(PP) error }\n\n" +
+		"// Aliased registers through an alias of Probe.\nfunc Aliased(r aliased, p PP) error {\n" +
+		"\treturn r.Register(p)\n}\n"
 	if err := os.WriteFile(filepath.Join(stray, "evasions.go"), []byte(evasions), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -275,19 +286,35 @@ func TestARegistrationElsewhereIsFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	inTestdata := "package hid\n\nimport \"github.com/josh-heath123/culprit/cli/internal/probe\"\n\n" +
+		"type registrar interface{ Register(probe.Probe) error }\n\nvar r registrar\n\n" +
 		"var extra probe.Probe\n\n// Err registers from a testdata directory.\n" +
-		"var Err = probe.BuiltIn().Register(extra)\n"
+		"var Err = r.Register(extra)\n"
 	if err := os.WriteFile(filepath.Join(hidden, "hid.go"), []byte(inTestdata), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	found := registrationsOutsideBuiltIn(t, root)
 	want := []string{
+		"internal/probe/smuggle.go: package level",
+		"internal/probe/smuggle.go: smuggle",
+		"internal/stray/evasions.go: Aliased",
 		"internal/stray/evasions.go: Through",
-		"internal/stray/evasions.go: package level",
-		"internal/stray/stray.go: Smuggle",
 		"internal/stray/testdata/hid/hid.go: package level",
 	}
 	if strings.Join(found, " | ") != strings.Join(want, " | ") {
 		t.Fatalf("registrations outside BuiltIn found: %v, want %v", found, want)
+	}
+}
+
+// TestCatalogueExportsNoRegistration: no package but this one can add a
+// probe to a catalogue, by any route the compiler resolves — a method
+// value, an interface, an alias, a generic or an embedding all need an
+// exported method to name (the re-audit of Phase 36 part 1).
+func TestCatalogueExportsNoRegistration(t *testing.T) {
+	catalogue := reflect.TypeOf(&Catalogue{})
+	for index := 0; index < catalogue.NumMethod(); index++ {
+		method := catalogue.Method(index)
+		if method.Type.NumIn() > 1 && method.Type.In(1) == reflect.TypeOf((*Probe)(nil)).Elem() {
+			t.Errorf("Catalogue exports %s, which takes a Probe: any package could register through it", method.Name)
+		}
 	}
 }

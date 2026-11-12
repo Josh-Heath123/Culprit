@@ -442,7 +442,8 @@ environments:
   local:
     adapter: process
     components: { api: {} }
-    grants: { net.http.outbound: true, net.tcp.connect: true, net.dns.resolve: true }
+    endpoints: { api: { host: 127.0.0.1, port: 8765, health_path: /health } }
+    grants: { config.read.names: true, net.http.outbound: true, net.tcp.connect: true, net.dns.resolve: true }
 YAML
 ```
 
@@ -485,6 +486,59 @@ kill %1
 Add `--format json` to see the reading's `expected_source`, which names
 `api/openapi.json`.
 
+**4. Declare a budget, and let the walk find what is slow.** Serve `/health`
+400 ms slow, declare that it must answer within 300 ms at the 95th
+percentile, and diagnose from inside `web`:
+
+```bash
+cat >> culprit.yaml <<'YAML'
+budgets:
+  - subject: "http:api/GET /health"
+    predicate: latency_p95_ms
+    value: 300
+    why: the load balancer's health check gives up after 300 ms
+YAML
+cat > slow.py <<'PY'
+import http.server, time
+
+class Slow(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        time.sleep(0.4)
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, *args):
+        pass
+
+http.server.ThreadingHTTPServer(("127.0.0.1", 8765), Slow).serve_forever()
+PY
+python3 slow.py &
+culprit diagnose web --env local --from web --no-plugins --state-dir ./state
+```
+
+Every error probe passes — `api` answers, the connection opens — so the
+walk asks about latency: 50 spaced requests to `GET /health`, about 25
+seconds, then 50 more to see it fail again. The diagnosis is complete:
+
+```
+Diagnosis (COMPLETE)
+  root   component:api
+  api is slower than the latency budget declared for it, and every component it calls on the request path keeps its own budget. The time is api's own: connection setup alone is within the budget. No latency budget a GET request can measure is declared for web, so its latency was not asked.
+...
+  r3   fail          probe.http.latency  http:api/GET /health
+       p95 is over the 300 ms budget: at 90% confidence it is at least 402.443 ms (sample 45 of 50)
+```
+
+The same samples tell the hop from the component: connection setup alone
+is within the budget, so the time is `api`'s own, not the network's. Take
+the `time.sleep(0.4)` out, restart it, and `culprit verify <id> --from web
+--no-plugins --state-dir ./state --change "action:took the sleep out of
+/health"` measures every reading again and says `verified`. Delete the
+`budgets:` section and the same walk stays partial, saying no budget is
+declared: Culprit never decides on your behalf how fast is fast. `kill %1`
+when you are done.
+
 **On your own repository:** describe your components and connections in
 `culprit.yaml` (the demo's [`cli/testdata/demo/culprit.yaml`](cli/testdata/demo/culprit.yaml)
 is a fuller example, with route, schema and client-call extraction), then run
@@ -512,8 +566,9 @@ or `x-culprit-budget: { latency_p95_ms: 300 }` on an OpenAPI operation.
 `culprit check` reports two sources that disagree as an `intent_conflict`,
 lists a budget whose route nothing else declares, and, once you declare
 any, lists the routes that have none. `probe.http.latency` measures a
-route against its budget ([`docs/PROBES.md`](docs/PROBES.md)); its limits
-are in [`docs/LIMITS.md`](docs/LIMITS.md), "Latency budgets".
+route against its budget ([`docs/PROBES.md`](docs/PROBES.md)), and
+`culprit diagnose` uses it once the errors explain nothing (step 4 above);
+its limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "Latency budgets".
 
 ### For a coding agent: `culprit mcp`
 
@@ -559,23 +614,23 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
 
 ## Accuracy, on faults we planted
 
-**5 of 5 planted faults verified fixed** (100%), of 7 faults planted: 5 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
+**6 of 6 planted faults verified fixed** (100%), of 8 faults planted: 6 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
 
-**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 5 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
+**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 6 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
 
 **Method.** Each fault in the library (`cli/testdata/faultlib/`) is planted in the demo stack, diagnosed by `culprit diagnose` from inside a service, its known fix is applied, and `culprit verify` measures every reading again, twice, and compares the environment with the record of it taken at diagnosis. An outcome is the verification of a **complete** diagnosis; its fault class is the subject kind of the diagnosis's root. Per class, `verified` is counted against the decided outcomes (every verdict but inconclusive), and inconclusive is reported beside it, never folded in. A `verified` outcome shows that the fix for the root the walk diagnosed was seen to fix what it saw failing; a fault diagnosed at the wrong root would be counted under that root's class, so this measures diagnosis-then-fix, not whether every diagnosis named the true cause. `GET /outcomes/accuracy` counts verifications recorded through the control plane the same way, with the same function, and says for each count whether its faults were planted or real.
 
 | Fault class | Planted fault | Outcomes | Verified | Decided | Inconclusive |
 |---|---|---|---|---|---|
 | `auth` | `auth-audience` | 1 | 1 | 1 | 0 |
-| `component` | `error-rate` | 1 | 1 | 1 | 0 |
+| `component` | `error-rate`, `latency` | 2 | 2 | 2 | 0 |
 | `config` | `config` | 1 | 1 | 1 | 0 |
 | `connection` | `network-partition` | 1 | 1 | 1 | 0 |
 | `http` | `contract` | 1 | 1 | 1 | 0 |
 
-Not counted, because the walk's diagnosis was partial — an outcome is the verification of a complete one: `auth-audience-ungranted` (inconclusive); `latency` (inconclusive).
+Not counted, because the walk's diagnosis was partial — an outcome is the verification of a complete one: `auth-audience-ungranted` (inconclusive); `latency-unbudgeted` (inconclusive).
 
-Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive).
+Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `latency-wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive).
 
 <!-- accuracy:end -->
 

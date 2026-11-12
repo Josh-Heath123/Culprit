@@ -23,11 +23,17 @@ import sys
 import urllib.request
 from typing import Any
 
-#: Keys whose values differ between two runs of the same loop by nature.
+#: Keys whose values differ between two runs of the same loop by nature,
+#: wherever they appear: minted ids, record timestamps, which agent.
 _VOLATILE_KEY = re.compile(
-    r"^(id|investigation_id|agent_id|submitted_by|before_capture|after_capture)$"
-    r"|_at$|_ms$|_seconds$|^elapsed"
+    r"^(id|investigation_id|agent_id|submitted_by|before_capture|after_capture)$|_at$"
 )
+#: Inside a reading's `measured`, and only there, a time is volatile too: a
+#: duration, a sample array, a token's remaining lifetime. A reading's
+#: `expected`, a budget and a verdict are compared (Phase 36 part 2: `_ms`
+#: was volatile everywhere, so a declared budget that differed between the
+#: legs passed).
+_MEASURED_TIME = re.compile(r"_ms$|_us$|_seconds$|^elapsed")
 #: Identifiers minted per run, wherever they appear inside text.
 _MINTED = re.compile(r"\b(inv|ver|cap|nar|task)-[0-9a-z]{6,}\b")
 
@@ -49,17 +55,19 @@ def _agents(value: Any, found: set[str]) -> set[str]:
     return found
 
 
-def normalised(value: Any, agents: frozenset[str] | None = None) -> Any:
+def normalised(
+    value: Any, agents: frozenset[str] | None = None, *, measured: bool = False
+) -> Any:
     if agents is None:
         agents = frozenset(_agents(value, set()))
     if isinstance(value, dict):
         return {
-            key: normalised(item, agents)
+            key: normalised(item, agents, measured=measured or key == "measured")
             for key, item in sorted(value.items())
-            if not _VOLATILE_KEY.search(key)
+            if not _VOLATILE_KEY.search(key) and not (measured and _MEASURED_TIME.search(key))
         }
     if isinstance(value, list):
-        return [normalised(item, agents) for item in value]
+        return [normalised(item, agents, measured=measured) for item in value]
     if isinstance(value, str):
         for agent in sorted(agents, key=len, reverse=True):
             value = value.replace(agent, "<agent>")

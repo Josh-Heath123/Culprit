@@ -81,13 +81,16 @@ func (httpLatency) Manifest() model.ProbeManifest {
 		// bounded here, and the probe stops early rather than overrun it.
 		TimeoutMS:    120_000,
 		ExpectedFrom: model.PlaneIntent,
-		// p95 first: when a route has both budgets, the stricter one is
-		// measured (LIMITS).
+		// p95 first: when a route has both budgets, one run of 50 requests
+		// judges both, p95 first (Phase 36 part 2).
 		Produces: []model.Produces{
 			{SubjectTemplate: route, Predicate: "latency_p95_ms"},
 			{SubjectTemplate: route, Predicate: "latency_p50_ms"},
 		},
 		Cost: model.CostMetered,
+		// The walk asks it only after the errors explain nothing, of a
+		// component with a budget a GET can measure (Phase 36 part 2).
+		Discriminates: []string{model.HypothesisLatencyBudgetExceeded},
 		Inputs: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -124,19 +127,39 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 		return inconclusive(fmt.Sprintf(
 			"the budget is on %s %s, which is not a GET route, and this probe sends GET only: "+
 				"nothing was sent, so its latency cannot be measured", parts["method"], parts["path"]))
-	} else if !urlIsOnRoute(url, parts) {
+	} else if problem := urlOffRoute(url, parts); problem != "" {
 		// The path too: a url input naming another route would have that
 		// route's times judged against this budget (re-audit, Phase 36).
-		return inconclusive(fmt.Sprintf(
-			"the url's path is not %s, the route the budget is on: nothing was sent", parts["path"]))
+		return inconclusive(problem + ": nothing was sent")
 	}
-	predicate := request.Expectation.Predicate
-	percentile, known := model.BudgetPredicates[predicate]
-	budget, valid := wholeMilliseconds(request.Expectation.Value)
-	if !known || !valid {
-		return inconclusive(fmt.Sprintf(
-			"the budget for %s is not a whole number of milliseconds from 1 to %d under a budget "+
-				"predicate: nothing was sent", url, model.MaxBudgetMS))
+	// Every budget declared on this route is judged from the one run: the
+	// request's own and any further one (a p50 beside a p95). They are on
+	// the same subject, because expectation resolution put them together.
+	type judged struct {
+		predicate  string
+		percentile int
+		budget     int
+		fact       *model.Fact
+	}
+	var budgets []judged
+	facts := []*model.Fact{request.Expectation}
+	for index := range request.AlsoExpected {
+		facts = append(facts, &request.AlsoExpected[index])
+	}
+	count, strictest := 0, 0
+	for _, fact := range facts {
+		percentile, known := model.BudgetPredicates[fact.Predicate]
+		budget, valid := wholeMilliseconds(fact.Value)
+		if !known || !valid || fact.Subject != request.Expectation.Subject {
+			return inconclusive(fmt.Sprintf(
+				"the budget for %s is not a whole number of milliseconds from 1 to %d under a budget "+
+					"predicate: nothing was sent", url, model.MaxBudgetMS))
+		}
+		budgets = append(budgets, judged{fact.Predicate, percentile, budget, fact})
+		count = max(count, latencyRequests[percentile])
+		if strictest == 0 || budget < strictest {
+			strictest = budget
+		}
 	}
 	timer, ok := deps.HTTP.(Timer)
 	if !ok {
@@ -146,13 +169,23 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 	latencyRuns.Lock()
 	defer latencyRuns.Unlock()
 
-	count := latencyRequests[percentile]
 	if count > model.LatencyMaxRequests {
 		count = model.LatencyMaxRequests
+	}
+	// One timeout for the run, above the largest budget so a timeout is
+	// slower than every budget judged; the run stops when it cannot give
+	// one request longer than the smallest.
+	budget := strictest
+	for _, each := range budgets {
+		budget = max(budget, each.budget)
 	}
 	limit := time.Duration(budget) * time.Millisecond
 	samples := make([]int, 0, count)
 	connects := make([]int, 0, count)
+	// The connection setup of each timeout whose connection completed:
+	// the rest timed out before it did (Phase 36 part 2 tells the hop from
+	// the component by it).
+	timeoutConnects := []int{}
 	requests, timeouts, refused := 0, 0, 0
 	for requests < count {
 		if wait := LatencySpacing - time.Since(latencyLastEnded); wait > 0 && !pause(ctx, wait) {
@@ -183,6 +216,9 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 			refused++
 		case timing.TimedOut:
 			timeouts++
+			if timing.Connected {
+				timeoutConnects = append(timeoutConnects, int(timing.Connect.Microseconds()))
+			}
 		case timing.Status >= 200 && timing.Status < 300:
 			samples = append(samples, int(timing.Total.Microseconds()))
 			connects = append(connects, int(timing.Connect.Microseconds()))
@@ -197,47 +233,102 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 				"%d ms budget before its own deadline", budget))
 	}
 
-	measured := map[string]any{
-		"url": url, "method": "GET", "percentile": percentile,
-		"requests": requests, "samples_us": samples, "timeouts": timeouts,
-		// Connection setup per answered sample, in the same order: what one
-		// sample measured, recorded separately (part 2 needs it).
-		"connect_us": connects,
-		// Requests that answered other than 2xx or failed outright: not
-		// samples, and counted so the reading says why there are few.
-		"not_samples": refused,
+	// One outcome per budget, from the same samples: the request's own
+	// first, then each further one in Also.
+	var outcomes []Outcome
+	for _, each := range budgets {
+		measured := map[string]any{
+			"url": url, "method": "GET", "percentile": each.percentile,
+			"requests": requests, "samples_us": samples, "timeouts": timeouts,
+			// How many requests the run set out to send: a run cut short by
+			// its deadline is inconclusive whatever its samples say.
+			"planned": count,
+			// Connection setup per answered sample, in the same order: what
+			// one sample measured, recorded separately.
+			"connect_us": connects,
+			// Connection setup of each timeout whose connection completed.
+			"timeout_connect_us": timeoutConnects,
+			// Requests that answered other than 2xx or failed outright: not
+			// samples, and counted so the reading says why there are few.
+			"not_samples": refused,
+		}
+		expected := map[string]any{each.predicate: each.budget}
+		verdict, reason, err := model.JudgeLatency(measured, expected)
+		if err != nil {
+			return inconclusive(fmt.Sprintf("the measurement could not be judged (%v); this is a bug in the probe", err))
+		}
+		outcomes = append(outcomes, Outcome{
+			Verdict: verdict, Measured: measured, Expected: expected,
+			ExpectedSource: provenanceOf(each.fact), Reason: reason,
+		})
 	}
-	expected := map[string]any{predicate: budget}
-	verdict, reason, err := model.JudgeLatency(measured, expected)
-	if err != nil {
-		return inconclusive(fmt.Sprintf("the measurement could not be judged (%v); this is a bug in the probe", err))
-	}
-	return Outcome{
-		Verdict: verdict, Measured: measured, Expected: expected,
-		ExpectedSource: provenanceOf(request.Expectation), Reason: reason,
-	}
+	outcome := outcomes[0]
+	outcome.Also = outcomes[1:]
+	return outcome
 }
 
-// urlIsOnRoute reports whether a URL's path is the budgeted route's path,
-// canonicalised by the subject builder as every route is, a declared
-// template (`/orders/{}`) matching a concrete path.
-func urlIsOnRoute(raw string, route model.Parts) bool {
+// urlOffRoute says why a URL is not a request for the budgeted route, or
+// "" when it is. It compares the path as it is sent — parsed.EscapedPath(),
+// not a canonical form of it — segment by segment with the route's
+// declared path. Part 1 canonicalised the URL first, which is lossy on
+// purpose (it drops empty segments, trims a trailing slash and cuts at a
+// decoded `?`), and then sent the raw URL: `/ready/`, `//ready` and
+// `/ready%3F/../../admin` were each timed against GET /ready's budget
+// (re-audit of part 1). So:
+//
+//   - every segment of the route that is not a template must be equal,
+//     byte for byte, to the segment sent;
+//   - a template segment `{}` matches one non-empty segment that is not `.`
+//     or `..` and holds no escape;
+//   - no escape anywhere, no empty segment, no trailing slash;
+//   - no query and no fragment: the budget is on the route, not on an
+//     input to it;
+//   - no userinfo: a URL's userinfo is sent as a Basic credential, and
+//     this probe presents none.
+//
+// A literal route that a declared template also matches (`/items/export`
+// under `/items/{}`) is not told apart here: that needs the route table
+// (docs/LIMITS.md).
+func urlOffRoute(raw string, route model.Parts) string {
 	parsed, err := neturl.Parse(raw)
-	if err != nil || parsed.Path == "" {
-		return false
-	}
-	built, err := model.BuildSubject(model.KindHTTP, model.Parts{
-		"component": route["component"], "method": "GET", "path": parsed.Path,
-	})
 	if err != nil {
-		return false
+		return "the url does not parse"
 	}
-	_, concrete, err := model.ParseSubject(built)
-	if err != nil {
-		return false
+	if parsed.User != nil {
+		return "the url carries userinfo, which would be sent as a credential, and this probe presents none"
 	}
-	_, matches := pathMatches(route["path"], concrete["path"])
-	return matches
+	if parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.RawFragment != "" {
+		return fmt.Sprintf("the url carries a query or a fragment; the budget is on %s itself", route["path"])
+	}
+	sent := parsed.EscapedPath()
+	declared := route["path"]
+	offRoute := fmt.Sprintf("the url's path %q is not %s, the route the budget is on", sent, declared)
+	if strings.Contains(sent, "%") {
+		return offRoute
+	}
+	if declared == "/" {
+		if sent != "/" {
+			return offRoute
+		}
+		return ""
+	}
+	want := strings.Split(declared, "/")
+	got := strings.Split(sent, "/")
+	if len(want) != len(got) || got[0] != "" {
+		return offRoute
+	}
+	for index := 1; index < len(want); index++ {
+		segment := got[index]
+		switch {
+		case want[index] == "{}":
+			if segment == "" || segment == "." || segment == ".." {
+				return offRoute
+			}
+		case segment != want[index]:
+			return offRoute
+		}
+	}
+	return ""
 }
 
 // pause waits, or reports false when the run ends first.

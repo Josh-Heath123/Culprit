@@ -220,6 +220,16 @@ header value or a byte of the body. No setting raises the count. That is
 more requests than any other probe makes, which is why its manifest says
 `cost: metered`; withhold `net.http.outbound` and it sends nothing.
 
+Since Phase 36 part 2, `culprit diagnose` sends these requests too, under
+the same grant: one run per component on the request path that declares a
+budget, and only after every error probe has passed — so a walk that finds
+no error can make up to 50 requests per budgeted component, plus one more
+run to see the root fail again. `culprit verify` repeats each run twice. A
+route with both budgets is still one run. Every request is built in one
+place, which refuses any method but `GET` and `OPTIONS` before the request
+exists; through `culprit mcp` the address must be the endpoint of the
+component whose budget is judged.
+
 Withhold it and every HTTP probe reports `refused`, naming this grant.
 
 ### `repo.read`, `telemetry.metrics.read`

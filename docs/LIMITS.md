@@ -1569,14 +1569,17 @@ names the edge as the root, because the edge's own probe failed, but the
 rubric's `discriminated` is false, and says so. Separating the two needs a
 second vantage, which arrives with the production agent (Phase 33).
 
-## Added latency is not isolated
+## Added latency is isolated only against a declared budget
 
-No read-only probe discriminates "slow" from "working". Under an injected
-800 ms delay every probe passes, and the walk reports a *partial*
-diagnosis — the cause is inside the entry component, or something no
-probe observes, such as added latency — rather than blaming the entry by
-elimination. Latency waits for impedance to have a CLI source. A root
-that only elimination points at is never reported as complete.
+Slow is not a fault until something declares fast. Under an injected
+800 ms delay every error probe passes; the walk then measures each
+component's declared latency budget (see "Latency in the walk" below) and
+roots at the slow one. Where no budget a `GET` request can measure is
+declared, the diagnosis stays *partial* and says so — "no latency budget
+… is declared" — rather than blaming the entry by elimination, and a fix
+cannot be verified: there is no failing reading to see fixed. Culprit
+never chooses a budget for you, and impedance's baseline is not used as
+one.
 
 ## Contract checks need a route with no path parameter
 
@@ -2460,12 +2463,11 @@ said only for an investigation with none.
 
 ## Latency budgets
 
-Phase 36 part 1. A latency is a finding only against a declared budget
+Phase 36. A latency is a finding only against a declared budget
 (`budgets:` in `culprit.yaml`, or `x-culprit-budget` on an OpenAPI
-operation), measured by `probe.http.latency` (`docs/PROBES.md`). The walk
-does not use budgets yet: `culprit diagnose` and `culprit verify` are
-unchanged until part 2, and the fault library's latency fault still
-verifies `inconclusive`.
+operation), measured by `probe.http.latency` (`docs/PROBES.md`). Since
+part 2 the walk asks about latency too; "Latency in the walk" below says
+how, and what it cannot tell.
 
 ### Only GET routes, and only ones that need no credential
 
@@ -2507,14 +2509,29 @@ included, so against a route with a budget it sends those requests.
 
 ### A budget is 1 ms to 60 s
 
-A budget is a whole number of milliseconds, 1 to 60 000; a float with no
-fraction (`300.0`) is accepted. A larger one is refused at load — in
-`culprit check` and `apply-model` alike — because no request in a 120 s run
-could be given a timeout long enough to show it was slower. One subject
-and predicate may have one budget in a file: two are refused at load, not
-one measured and the other dropped. Write the number in plain decimal: the
-binary's YAML reader and the API's read `1e3` and `0o454` differently
-(`culprit check` takes them, `apply-model` refuses them).
+A budget is a whole number of milliseconds, 1 to 60 000. A larger one is
+refused at load — in `culprit check` and `apply-model` alike — because no
+request in a 120 s run could be given a timeout long enough to show it was
+slower. One subject and predicate may have one budget in a file: two are
+refused at load, not one measured and the other dropped.
+
+A merge key (`<<`) in a budget entry is refused by both readers, and a
+`budgets:` section that arrives through a top-level merge is checked like
+any other; a key written twice in a budget entry, or `budgets:` written
+twice, is refused by both. One split remains: a top-level key written as
+the *string* `"<<"` is ignored by the binary's loader, which ignores every
+top-level key it does not know, and refused by the API's; a budget written
+under it is then dropped by `culprit check` without a word.
+
+In `culprit.yaml` the value is written as **plain decimal digits**,
+unquoted, with no sign and no leading zero: `300`. Every other form is
+refused by both readers, with the same reason — `300.0`, `+300`, `0454`,
+`0o454`, `0x12C`, `1e3`, `300_000`, `"300"`, a tag (`!!int 300`) or an
+alias. The binary's YAML reader (YAML 1.2) and the API's (YAML 1.1) read
+several of those as different numbers or as strings (`0454` is 454 to one
+and octal 300 to the other), and two readers of one declaration must not
+read two values. An `x-culprit-budget` in an OpenAPI document is read by the
+binary alone, as a number.
 
 ### What a sample is
 
@@ -2536,8 +2553,10 @@ number as production. Measure where the number means something.
 
 ### When a route has both budgets
 
-Only the p95 is measured. A reading carries one verdict, and the stricter
-budget is the one asked about.
+One run judges both. The route is measured once — 50 requests, as for a
+p95 alone — and the run gives two readings, one per budget, each judged by
+the rule from the same samples. Each request's timeout is set from the
+larger budget, so a timeout is slower than both.
 
 ### What `culprit check` reports about budgets
 
@@ -2553,6 +2572,98 @@ does not count as a second source for the unverifiable surface.
 ### The probe's URL must be the budgeted route
 
 The budget's own subject fixes the route: a `url` or `base_url` input
-whose path is not that route's (a declared template such as `/items/{}`
-matches `/items/42`), or a budget on a route that is not `GET`, sends
-nothing and is `inconclusive`.
+whose path is not that route's, or a budget on a route that is not `GET`,
+sends nothing and is `inconclusive`. The path compared is the one sent,
+byte for byte, segment by segment: a trailing or doubled slash, any `%`
+escape, a `.` or `..` segment, a query string or a fragment is not the
+route, and nothing is sent. A declared template segment (`/items/{}`)
+matches one non-empty segment (`/items/42`). A URL with userinfo
+(`http://user:pass@…`) is refused, because it would be sent as a
+credential.
+
+A literal route that a declared template also matches is not told apart:
+with `/items/{}` budgeted, a `url` of `/items/export` is measured against
+that budget even if `/items/export` is a route of its own. The walk never
+does this — it asks the budgeted route itself — but a `url` given by hand
+can.
+
+Through `culprit mcp`, the address must also be the declared endpoint of
+the component whose budget judges the reading (the target's component),
+not merely any declared endpoint: a budget on one component is never
+judged with another's times.
+
+### What holds the GET-only rule, and what cannot
+
+Every probe request is built by one function that refuses any method but
+`GET` and `OPTIONS`, and every client in `internal/probe` sends through a
+transport that refuses the same again, and any body, before anything is
+dialled. A source scan of that package (`TestEveryRequestIsBuiltInOnePlace`)
+fails on each of the 26 ways three audits found to build or send a request
+around those two: a constructor named or taken as a value, a request value
+or literal (typed, or with its type left out inside a slice or map), a type
+made from `http.Request`, a method or transport written through a field or
+a pointer, a direct or stored `RoundTrip`, a client that is not a guarded
+literal, `http.DefaultClient`, a dot import of `net/http`, and `httptest`,
+`reflect` or `unsafe` imported.
+
+**It is a guard against ordinary code, not a proof against deliberate
+code.** It reads syntax, and each audit found new syntax that got past it
+until the scan was taught it; code written inside `internal/probe` to send
+a write — by a form not yet listed, by a header such as
+`X-HTTP-Method-Override`, or over a socket of its own — could still do so.
+What bounds that is where it can be written: the binary's network allowlist
+keeps every other package from linking a network package at all, so the
+one package that may is the one review has to read.
+
+### Latency in the walk
+
+Phase 36 part 2. `culprit diagnose` asks about latency, and these are its
+limits.
+
+- **Only after the errors explain nothing.** The walk runs its error pass
+  first, unchanged. Only when that finds no root and nothing failing below
+  the entry does it measure budgets. A fault that both errors and slows is
+  diagnosed by its errors; its latency is not measured.
+- **One vantage.** Every latency request is sent from where the binary
+  runs. Nothing is measured from inside another component, and no probe is
+  sent to an agent elsewhere.
+- **A pass rules out one component.** A budgeted route need not call what
+  is below it (`/ready` calls nothing), so a component that keeps its
+  budget rules out its own latency and nothing else. The walk measures
+  every budgeted component on the request path, depth first, rather than
+  bisecting — each a run of 20 or 50 spaced requests. The root is the
+  deepest slow component with nothing slow below it; a slow component
+  above it is propagation.
+- **Hop or component, from the same samples.** The slow reading's
+  connection setup alone, and each answer's time less its setup, are each
+  judged against the same budget by the same rule. Setup alone over, with
+  the binary inside the slow component's caller (`--from`), roots at that
+  connection; the server's time alone over roots at the component. Neither
+  alone over — or both — is partial and names both. From outside every
+  component, slow setup is "reaching X from this agent": a fact about this
+  vantage, not a connection of the system, and the diagnosis is partial. A
+  timeout after its connection completed counts against the component; one
+  before counts against the hop.
+- **What an unbudgeted component leaves unknown.** A component with no
+  budget a `GET` request can measure is not asked about. When the slow
+  root has one below it, the diagnosis is partial and names it, because it
+  could be the slower one. A component that is not below the root is named
+  in the statement as unbudgeted, without making the diagnosis partial.
+  With no budget anywhere on the request path, the diagnosis says none is
+  declared.
+- **A database below the slow component makes it partial.** A database can
+  declare no latency budget yet (statement budgets are Phase 37), so a slow
+  component that calls one on the request path is never a complete root:
+  the diagnosis names the database as unmeasured, because the time could be
+  spent there.
+- **Two slow branches at once.** When two components on different branches
+  are each slow with nothing slow below them, the first in depth-first
+  order (callees in name order) is named the root and the other is listed;
+  the diagnosis is partial, because one root does not explain both.
+- **It takes time, and the walk's clock bounds it.** Against a route 800 ms
+  slow, one run is about 45 s, and the walk takes it twice (to find the
+  root, and to see it fail again for the rubric). The walk's wall clock
+  (`isolation.max_wall_clock`, two minutes by default) is each latency
+  run's deadline: a run cut short is `inconclusive` with the samples it
+  has, its hypothesis unexplored, never judged on fewer requests than it
+  planned. `culprit verify` runs it twice more.

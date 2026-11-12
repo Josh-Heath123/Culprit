@@ -58,7 +58,7 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
-from culprit_model.latency import Budget
+from culprit_model.latency import BUDGET_MERGE_PROBLEM, Budget, budget_literal_problem
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -575,6 +575,83 @@ class Manifest(BaseModel):
         )
 
 
+def _reject_budget_literals(text: str, source: str) -> None:
+    """Refuses a `budgets:` value not written as plain decimal digits
+    (Phase 36 part 2). Read from the YAML node, not the parsed value: this
+    reader (YAML 1.1) takes `0454` for octal 300 and `300_000` for 300000,
+    where the Go loader (YAML 1.2) reads 454 and a string, so the form is
+    what is checked — by `culprit_model.latency.budget_literal_problem`,
+    which the Go loader's twin is held to with it."""
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    if not isinstance(root, yaml.MappingNode):
+        return
+    pairs = _top_level_pairs(root)
+    # PyYAML keeps the last of two equal keys; the Go loader refuses the
+    # file. One reader loading what the other refuses is what this check
+    # exists to stop (the focused re-audit of Phase 36 part 2).
+    if sum(1 for key, _ in pairs if key.value == "budgets") > 1:
+        raise ManifestError(f"{source}: budgets: is declared twice")
+    for key, section in pairs:
+        if key.value != "budgets" or not isinstance(section, yaml.SequenceNode):
+            continue
+        for index, entry in enumerate(section.value):
+            if not isinstance(entry, yaml.MappingNode):
+                continue
+            names = [field.value for field, _ in entry.value]
+            if len(names) != len(set(names)):
+                raise ManifestError(f"{source}: budgets[{index}]: a key is written twice")
+            for field, value in entry.value:
+                if field.tag == "tag:yaml.org,2002:merge" or field.value == "<<":
+                    # The fields a merge brings in are not checked for their
+                    # form; the Go loader refuses it too.
+                    raise ManifestError(f"{source}: budgets[{index}]: {BUDGET_MERGE_PROBLEM}")
+                if field.value != "value":
+                    continue
+                # Plain: an unquoted scalar with no explicit tag. An alias
+                # composes to the node it names, so it is caught by the
+                # anchor PyYAML leaves on it.
+                plain = (
+                    isinstance(value, yaml.ScalarNode)
+                    and value.style is None
+                    and not _tagged(text, value)
+                )
+                literal = value.value if isinstance(value, yaml.ScalarNode) else ""
+                problem = budget_literal_problem(literal, plain)
+                if problem is not None:
+                    raise ManifestError(f"{source}: budgets[{index}]: value: {problem}")
+
+
+def _top_level_pairs(root: yaml.MappingNode) -> list[tuple[yaml.Node, yaml.Node]]:
+    """The manifest's top-level keys and values, including any a merge key
+    brings in (`<<: {budgets: [...]}`), so a `budgets:` section that
+    arrives through a merge is checked for its form like any other (the
+    re-audit of Phase 36 part 2: it was not, and this reader loaded 300
+    where the Go loader refused)."""
+    pairs: list[tuple[yaml.Node, yaml.Node]] = []
+    pending: list[yaml.MappingNode] = [root]
+    seen: set[int] = set()
+    while pending:
+        mapping = pending.pop()
+        if id(mapping) in seen:
+            continue
+        seen.add(id(mapping))
+        for key, value in mapping.value:
+            if key.tag == "tag:yaml.org,2002:merge" or key.value == "<<":
+                merged = value.value if isinstance(value, yaml.SequenceNode) else [value]
+                pending.extend(node for node in merged if isinstance(node, yaml.MappingNode))
+                continue
+            pairs.append((key, value))
+    return pairs
+
+
+def _tagged(text: str, node: yaml.ScalarNode) -> bool:
+    """Whether the scalar was written with an explicit tag or as an alias:
+    the composed node does not say, so the source between its marks is
+    read. A plain scalar's source is exactly its value."""
+    start, end = node.start_mark.index, node.end_mark.index
+    return text[start:end] != node.value
+
+
 def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     """Parses and validates a manifest. Pure — no filesystem access."""
     try:
@@ -592,6 +669,9 @@ def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     # credential in a field the schema accepts must never reach a model
     # instance that something might log.
     _reject_credentials(raw)
+    # After the credential scan: a credential pasted as a budget is reported
+    # as one, never as a malformed budget.
+    _reject_budget_literals(text, source)
 
     try:
         return Manifest(**raw)

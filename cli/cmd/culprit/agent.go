@@ -387,6 +387,11 @@ type agentVerifyRunner struct {
 }
 
 func (r *agentVerifyRunner) Run(ctx context.Context, request verify.Request) model.Reading {
+	return r.RunSet(ctx, request)[0]
+}
+
+// RunSet is every reading one run gave, each recorded before it is used.
+func (r *agentVerifyRunner) RunSet(ctx context.Context, request verify.Request) []model.Reading {
 	runner, ok := r.runners[request.Environment]
 	if !ok {
 		under := capability.Grants{}
@@ -396,15 +401,17 @@ func (r *agentVerifyRunner) Run(ctx context.Context, request verify.Request) mod
 		runner = r.build(request.Environment, under)
 		r.runners[request.Environment] = runner
 	}
-	reading := runner.Run(ctx, []probe.Request{{
+	readings := runner.RunOne(ctx, probe.Request{
 		ProbeID: request.ProbeID, Target: request.Target, Environment: request.Environment, Inputs: request.Inputs,
-	}})[0]
-	if r.err == nil {
-		if err := r.record(reading); err != nil {
-			r.err = err
+	})
+	for _, reading := range readings {
+		if r.err == nil {
+			if err := r.record(reading); err != nil {
+				r.err = err
+			}
 		}
 	}
-	return reading
+	return readings
 }
 
 // recordingRunner is the walk's runner with the audit in front of it:
@@ -418,14 +425,22 @@ type recordingRunner struct {
 }
 
 func (r *recordingRunner) Run(ctx context.Context, request isolate.Request) model.Reading {
-	reading := r.inner.Run(ctx, request)
-	if r.err == nil {
-		if err := r.record(reading); err != nil {
-			r.err = err
-			r.cancel()
+	return r.RunSet(ctx, request)[0]
+}
+
+// RunSet is every reading one run gave, each recorded before the walk sees
+// it.
+func (r *recordingRunner) RunSet(ctx context.Context, request isolate.Request) []model.Reading {
+	readings := r.inner.RunSet(ctx, request)
+	for _, reading := range readings {
+		if r.err == nil {
+			if err := r.record(reading); err != nil {
+				r.err = err
+				r.cancel()
+			}
 		}
 	}
-	return reading
+	return readings
 }
 
 // controlPlaneClient builds the transport from the configuration: its
