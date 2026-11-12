@@ -42,6 +42,7 @@ Loading is pure — `load_manifest` parses a string. The only I/O is
 `read_manifest`, which is a one-line convenience for the CLI entry point.
 """
 
+import base64
 import re
 from collections import Counter
 from pathlib import Path
@@ -661,19 +662,25 @@ class Manifest(BaseModel):
 
 
 class YAML12Loader(yaml.SafeLoader):
-    """PyYAML's safe loader, resolving plain scalars as the Go loader's
-    yaml.v3 does (Phase 37 part 1 close-out, PERFORMANCE_PLAN.md end of
-    Phase 37: "the two manifest readers read one schema").
+    """PyYAML's safe loader, used only to *compose* — to parse and to resolve
+    each plain scalar's tag as the Go loader's yaml.v3 does (Phase 37 part
+    1 close-out, PERFORMANCE_PLAN.md end of Phase 37: "the two manifest
+    readers read one schema").
 
     PyYAML implements YAML 1.1: `yes`, `no`, `on`, `off` are booleans, a
     date is a date, and `0o454` and `1e3` are strings. yaml.v3 reads YAML
     1.2's core schema with Go's number parsing: only `true`/`false` (in
-    three cases) are booleans, dates are left as written, `0o454`, `0454`
-    and `0x1F` are integers (Go's base-0 rules, underscores allowed), and a
-    float with no fraction is an integer. Each case is in
+    three cases) are booleans, dates are left as written, and `0o454`,
+    `0454` and `0x1F` are integers (Go's base-0 rules, underscores
+    allowed). Each case is in
     shared/tests/manifest_scalar_conformance.json, which the Go loader is
-    held to as well. A SafeLoader subclass: it constructs nothing but plain
-    data, as safe_load does.
+    held to as well.
+
+    Nothing is constructed by PyYAML: `_plain_data` builds the manifest's
+    values from the composed nodes, and knows only plain data's tags, so no
+    tag can make an object (CodeQL py/unsafe-deserialization on the close-out
+    pull request: a loader passed to `yaml.load` is safe only for as long as
+    nobody registers a constructor on it).
     """
 
     # Start from no implicit resolvers at all: none of YAML 1.1's survive.
@@ -692,9 +699,7 @@ _YAML12_NUMBER = re.compile(
 
 YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:bool", _YAML12_BOOL, list("tTfF"))
 YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:null", _YAML12_NULL, ["~", "n", "N", ""])
-YAML12Loader.add_implicit_resolver(
-    "tag:yaml.org,2002:float", _YAML12_NUMBER, list("-+0123456789.")
-)
+YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:float", _YAML12_NUMBER, list("-+0123456789."))
 YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:merge", re.compile(r"^(?:<<)$"), ["<"])
 
 
@@ -721,8 +726,7 @@ def _go_parse_int(text: str) -> int | None:
     return value if -(2**63) <= value < 2**63 else None
 
 
-def _construct_yaml12_number(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> int | float:
-    text = str(loader.construct_scalar(node))
+def _yaml12_number(text: str) -> int | float:
     as_int = _go_parse_int(text)
     if as_int is not None:
         return as_int
@@ -733,18 +737,88 @@ def _construct_yaml12_number(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> 
         return float("-inf")
     if lowered == ".nan":
         return float("nan")
-    value = float(text.replace("_", ""))
-    # yaml.v3 gives a whole float, decoded into an interface, as an integer.
-    return int(value) if value.is_integer() and abs(value) < 2**63 else value
+    # A float stays a float, as yaml.v3 gives it into an untyped field;
+    # an integer field takes a whole one (`max_probes: 1e3` is 1000 to both).
+    return float(text.replace("_", ""))
 
 
-def _construct_yaml12_bool(loader: yaml.SafeLoader, node: yaml.ScalarNode) -> bool:
-    return str(loader.construct_scalar(node)).lower() == "true"
+_TAG = "tag:yaml.org,2002:"
 
 
-YAML12Loader.add_constructor("tag:yaml.org,2002:float", _construct_yaml12_number)
-YAML12Loader.add_constructor("tag:yaml.org,2002:int", _construct_yaml12_number)
-YAML12Loader.add_constructor("tag:yaml.org,2002:bool", _construct_yaml12_bool)
+def _refuse(node: yaml.Node, problem: str) -> yaml.constructor.ConstructorError:
+    return yaml.constructor.ConstructorError(None, None, problem, node.start_mark)
+
+
+def _scalar(node: yaml.ScalarNode) -> object:
+    """A scalar's value, for the tags of plain data and nothing else."""
+    tag, text = node.tag, node.value
+    if tag == _TAG + "str":
+        return text
+    if tag == _TAG + "null":
+        return None
+    if tag == _TAG + "bool":
+        return text.lower() == "true"
+    if tag in (_TAG + "int", _TAG + "float"):
+        try:
+            return _yaml12_number(text)
+        except ValueError:
+            raise _refuse(node, f"{text!r} is not a number") from None
+    if tag == _TAG + "binary":
+        try:
+            return base64.decodebytes(text.encode("ascii"))
+        except (ValueError, UnicodeEncodeError):
+            raise _refuse(node, "a !!binary value that is not base64") from None
+    raise _refuse(node, f"a value tagged {tag} is not plain data")
+
+
+def _pairs(node: yaml.MappingNode) -> list[tuple[yaml.Node, yaml.Node]]:
+    """A mapping's key/value pairs with merges (`<<`) flattened in, in the
+    order PyYAML's own flatten_mapping gives them, so a later pair wins."""
+    merged: list[tuple[yaml.Node, yaml.Node]] = []
+    own: list[tuple[yaml.Node, yaml.Node]] = []
+    for key, value in node.value:
+        if key.tag != _TAG + "merge":
+            own.append((key, value))
+        elif isinstance(value, yaml.MappingNode):
+            merged.extend(_pairs(value))
+        elif isinstance(value, yaml.SequenceNode):
+            each = []
+            for item in value.value:
+                if not isinstance(item, yaml.MappingNode):
+                    raise _refuse(item, "a merge (<<) of something that is not a mapping")
+                each.append(_pairs(item))
+            for pairs in reversed(each):
+                merged.extend(pairs)
+        else:
+            raise _refuse(value, "a merge (<<) of something that is not a mapping")
+    return merged + own
+
+
+def _plain_data(node: yaml.Node | None, memo: dict[int, object] | None = None) -> object:
+    """The composed document as dicts, lists and scalars. An alias is the
+    same node composed once, so it becomes the same object."""
+    if node is None:
+        return None
+    if isinstance(node, yaml.ScalarNode):
+        return _scalar(node)
+    memo = {} if memo is None else memo
+    if id(node) in memo:
+        return memo[id(node)]
+    if isinstance(node, yaml.SequenceNode) and node.tag == _TAG + "seq":
+        items: list[object] = []
+        memo[id(node)] = items
+        items.extend(_plain_data(item, memo) for item in node.value)
+        return items
+    if isinstance(node, yaml.MappingNode) and node.tag == _TAG + "map":
+        mapping: dict[object, object] = {}
+        memo[id(node)] = mapping
+        for key, value in _pairs(node):
+            plain_key = _plain_data(key, memo)
+            if isinstance(plain_key, (dict, list)):
+                raise _refuse(key, "a mapping key that is a mapping or a list")
+            mapping[plain_key] = _plain_data(value, memo)
+        return mapping
+    raise _refuse(node, f"a value tagged {node.tag} is not plain data")
 
 
 def _reject_budget_literals(text: str, source: str) -> None:
@@ -860,9 +934,9 @@ def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     """Parses and validates a manifest. Pure — no filesystem access."""
     try:
         # As the Go loader (yaml.v3) reads it, not as PyYAML's YAML 1.1:
-        # `yes` is a string, `0o454` a number (YAML12Loader).
-        # YAML12Loader subclasses SafeLoader: it constructs plain data only.
-        raw = yaml.load(text, Loader=YAML12Loader)
+        # `yes` is a string, `0o454` a number (YAML12Loader). Composed, then
+        # built as plain data by _plain_data: PyYAML constructs nothing.
+        raw = _plain_data(yaml.compose(text, Loader=YAML12Loader))
     except yaml.YAMLError as exc:
         raise ManifestError(f"{source}: not valid YAML:\n{exc}") from exc
 

@@ -226,8 +226,10 @@ func TestNoModelProviderIsLinkedIntoTheBinary(t *testing.T) {
 // `go list ./internal/...` and may link none of them. A package created
 // tomorrow is covered the day it exists, with no edit here.
 //
-// The rule of record: only internal/probe may link net/http; only
-// internal/probe and internal/capture may link net or crypto/tls.
+// The rule of record: only internal/probe, internal/probe/guardedhttp and
+// internal/transport may link net/http; only those, internal/capture and
+// internal/capture/dbsession may link net or crypto/tls (Q27 put the
+// client and the session in packages of their own).
 // Dependencies are transitive (`go list -deps`), so a package that reaches
 // the network through another package is caught exactly as if it had
 // imported net itself.

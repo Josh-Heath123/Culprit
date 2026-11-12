@@ -50,7 +50,7 @@ func TestASecondFileIsFound(t *testing.T) {
 }
 
 // forbidden are the packages whose types the exported surface may not name.
-var forbidden = []string{"net/http", "net"}
+var forbidden = []string{"net/http", "net", "github.com/jackc"}
 
 // TestTheExportedSurfaceNamesNoNetworkType, by go/types over the real
 // types: no exported function, method, field or type here holds a client,

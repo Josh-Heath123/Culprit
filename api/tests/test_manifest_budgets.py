@@ -75,9 +75,7 @@ def test_a_budget_loads_only_when_written_as_plain_decimal_digits(case: dict) ->
         )
 
 
-@pytest.mark.parametrize(
-    "written", ["!!int 300", "*ms"], ids=["an explicit tag", "an alias"]
-)
+@pytest.mark.parametrize("written", ["!!int 300", "*ms"], ids=["an explicit tag", "an alias"])
 def test_a_tagged_or_aliased_budget_is_refused(written: str) -> None:
     text = ("x-ms: &ms 300\n" if written == "*ms" else "") + _manifest("latency_p95_ms", written)
     with pytest.raises(ManifestError, match="without quotes, a tag or an alias"):
@@ -249,3 +247,48 @@ def test_the_api_reads_culprit_yaml_as_the_go_loader_does(case: dict) -> None:
     if "max_probes" in case:
         assert manifest.isolation is not None
         assert manifest.isolation.max_probes == case["max_probes"]
+
+
+@pytest.mark.parametrize(
+    "tagged",
+    [
+        "!!python/object/apply:os.system ['echo unsafe']",
+        "!!python/object/new:dict {}",
+        "!!python/name:os.system",
+        "!!timestamp 2026-11-12",
+    ],
+)
+def test_a_tag_that_is_not_plain_data_is_refused(tagged: str) -> None:
+    """CodeQL py/unsafe-deserialization on the close-out pull request: the
+    manifest is composed and built as plain data, so no tag constructs an
+    object, whatever is ever registered on a loader."""
+    with pytest.raises(ManifestError, match="not plain data"):
+        load_manifest(f"version: 1\ncomponents:\n  - name: shop\nx-anything: {tagged}\n")
+
+
+def test_the_manifest_loader_never_hands_pyyaml_a_document_to_construct() -> None:
+    """The structural half: nothing in manifest.py calls a PyYAML entry
+    point that constructs objects, or registers a constructor."""
+    import ast
+
+    import app.model.manifest as module
+
+    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+    banned = {
+        "load",
+        "load_all",
+        "full_load",
+        "unsafe_load",
+        "safe_load",
+        "add_constructor",
+        "add_multi_constructor",
+        "construct_document",
+    }
+    calls = [
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in banned
+    ]
+    assert calls == []

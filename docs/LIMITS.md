@@ -1023,7 +1023,10 @@ Four layers, each holding something different (Q27, ruled 2026-11-12):
   package with one non-test file, the only one in the binary that imports
   the database driver. Its exported surface — a reader, the schema it
   returns, a classified error — names no driver or network type, so no
-  code outside it can hold a connection to send something through. Go's
+  code outside it can hold a connection to send something through. The
+  test that holds this checks the types the surface *names*: a function
+  added to return a connection as `any` would pass it, and is caught only
+  by the one-file rule and review of that file. Go's
   visibility is per package, not per file: Phase 37 part 1 held this with
   "one file imports the driver", and its audit sent `EXPLAIN ANALYZE` from
   a sibling file with no import at all. That file, planted in
@@ -2617,9 +2620,28 @@ a `!!binary` that decodes to `budgets`. Both readers now take their
 top-level keys from one list (`shared/tests/manifest_keys.json`), so a key
 added to one is added to both; an older binary reading a newer manifest
 names the key it does not know and stops. Within a section, fields the
-binary does not read are still ignored. `why: 300` is still a number to
-both readers, and refused for not being text: quote a `why:` that looks
-like a number.
+binary does not read are still ignored.
+
+**What still splits (open, Q28).** The readers resolve a scalar alike; they
+do not yet *type* it alike. The binary decodes into Go types, which take a
+scalar of another kind as its text or convert it, and the API into
+pydantic models, which refuse some kinds and coerce others. The close-out's
+audit fed both 85 manifests and 23 still split, among them:
+
+- a text field written as something else — `why: true`, `why: 300`,
+  `why: 1.5`, a component `name: 0454`: text to the binary, refused by the
+  API. Quote a value that does not look like text;
+- a fraction in a whole-number field — `max_probes: 1.5`,
+  `timeout_ms: 1500.7`: truncated by the binary, refused by the API;
+- `max_probes: ~`, `budgets: ~`, an empty file or one of comments alone:
+  loaded by the binary, refused by the API;
+- the reverse — `max_probes: "5"`, `enabled: 1`, `version: "1"`,
+  `version: true`: coerced and loaded by the API, refused by the binary;
+- an untyped value (an invariant's `value:`): a date is a date to the
+  binary and text to the API.
+
+Closing these is strict typing in both readers, which is wider than the
+close-out's brief; it is put to the architecture session as Q28.
 
 In `culprit.yaml` the value is written as **plain decimal digits**,
 unquoted, with no sign and no leading zero: `300`. Every other form is
@@ -2717,8 +2739,10 @@ outside it, as is a header such as `X-HTTP-Method-Override` that a server
 chooses to honour. And the package holds against code outside it, not a
 change to it: code added to `guardedhttp` itself can do what `net/http`
 can, which is why it is one file and a test fails if a second appears. The
-binary's network allowlist names it and `internal/capture/dbsession`, and
-keeps every other package from linking a network package at all.
+binary's network allowlist names the packages that may link a network
+package — `guardedhttp` and `dbsession` among them, and `internal/probe`,
+`internal/capture` and `internal/transport` — and keeps every other
+package from linking one at all.
 
 ### Latency in the walk
 

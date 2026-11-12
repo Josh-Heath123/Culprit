@@ -121,7 +121,8 @@ var excludedSchemas = []string{
 // # The boundary (Phase 37 part 1)
 //
 // This is the one file in the binary that imports pgx
-// (TestOnlyThisFileImportsPgx), so it is the one place a statement can be
+// (TestOnlyThisFileImportsPgx), in a package of its own (Q27), so it is the
+// one place a statement can be
 // sent to a database. Three layers hold what it sends:
 //
 //  1. A statement is a value of the unexported type statement, and every

@@ -46,6 +46,12 @@ def main() -> None:
     owner = urlsplit(os.environ["INVENTORY_DATABASE_URL"])
     role, password = owner.username or "inventory", owner.password or ""
     database = owner.path.lstrip("/") or "inventory"
+    if role != "inventory" or database != "inventory":
+        # This job sets the role's password on every run, so it is held to
+        # the demo's own role: pointed at one of Culprit's, it would reset it.
+        raise SystemExit(
+            f"inventory-db-setup sets up the role and database `inventory` only, not {role!r}"
+        )
     if not password:
         # The compose file passes an empty password when infra/.env.prod
         # predates INVENTORY_DB_PASSWORD; `just quickstart` adds one.

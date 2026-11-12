@@ -49,15 +49,23 @@ func TestProbeImportsNoNetHTTP(t *testing.T) {
 	}
 }
 
-// TestAFileHereImportingNetHTTPIsFound is that rule's red state.
+// TestAFileHereImportingNetHTTPIsFound is that rule's red state, in each
+// form an import can take.
 func TestAFileHereImportingNetHTTPIsFound(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "smuggled.go"),
-		[]byte("package probe\n\nimport web \"net/http/httputil\"\n\nvar _ = web.DumpRequest\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if len(netHTTPImporters(t, root)) == 0 {
-		t.Fatal("a file importing a package under net/http was not found")
+	for name, source := range map[string]string{
+		"plain":              "package probe\n\nimport \"net/http\"\n\nvar _ http.Client\n",
+		"aliased":            "package probe\n\nimport web \"net/http\"\n\nvar _ web.Client\n",
+		"a package under it": "package probe\n\nimport \"net/http/httputil\"\n\nvar _ = httputil.DumpRequest\n",
+		"grouped, blank":     "package probe\n\nimport (\n\t\"context\"\n\t_ \"net/http/pprof\"\n)\n\nvar _ context.Context\n",
+		"dot":                "package probe\n\nimport . \"net/http\"\n\nvar _ Client\n",
+	} {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "smuggled.go"), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if len(netHTTPImporters(t, root)) == 0 {
+			t.Errorf("a file importing net/http (%s) was not found", name)
+		}
 	}
 }
 

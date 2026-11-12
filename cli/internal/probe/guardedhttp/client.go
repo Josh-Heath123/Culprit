@@ -123,9 +123,9 @@ func NewRealHTTPClient(timeout time.Duration) *RealHTTPClient {
 // (Q26, ruled 2026-11-12): every client sends through methodGuard, which
 // refuses anything but a bodiless GET or OPTIONS as the request leaves —
 // whatever built the request, and whatever was done to it after.
-// TestEveryClientComesFromTheGuardedConstructor holds that http.go and
-// timing.go, the only files here that may import net/http, build no
-// client any other way.
+// TestEveryClientComesFromTheGuardedConstructor holds that client.go, the
+// only file under internal/probe that imports net/http, builds no client
+// any other way.
 func newGuardedClient(next http.RoundTripper, timeout time.Duration,
 	redirect func(*http.Request, []*http.Request) error,
 ) *http.Client {
