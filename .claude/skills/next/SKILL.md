@@ -67,8 +67,13 @@ passed.
 
 **8. Commit, push, open the pull request, run `/ci`, then stop.** Commit the
 work on its branch with `git commit -F <message-file>` (never `shared/uv.lock`),
-push the branch, open the pull request with `gh pr create`, and run `/ci` on it
-(step 4b); record the run in §5. Never push to `main`, never force-push, and
+push the branch, open the pull request **as a draft** with `gh pr create
+--draft`, and run `/ci` on it (step 4b); record the run in §5. When the run
+report is committed and pushed, mark the pull request ready with `gh pr ready`.
+Do this last, just before stopping: a draft cannot be merged, so the human cannot
+merge ahead of the run. Before every push, run `gh pr view --json state -q
+.state`. If it says `MERGED`, push nothing more to that branch: stop, and report
+which commits are not on `main`. Never push to `main`, never force-push, and
 never merge or approve the pull request — merging is the human's, after the
 architecture review.
 

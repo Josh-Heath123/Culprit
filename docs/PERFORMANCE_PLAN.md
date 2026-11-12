@@ -254,6 +254,177 @@ database.
 telemetry: impedance stays a baseline that ranks. No threshold Culprit chooses
 for the user.
 
+**How Phase 36 is run — decided 2026-11-11.** Where this block and the fields
+above differ, this block wins.
+
+**Two parts, two `/next` runs, an architecture review after each.**
+- **Part 1 — budgets and the measurement.** Budgets become INTENT facts, the
+  latency rule exists in both languages, and `probe.http.latency` measures.
+  `culprit check` and `culprit probe` can see slow; the walk cannot yet.
+- **Part 2 — the walk sees slow.** Latency hypotheses, localisation,
+  verification, and the fault library's latency fault closing (Q21). Its
+  criteria are written at part 1's review.
+
+Phase 35's close-out lands first. Part 1's step 0 confirms it.
+
+**Decisions — where the fields predate the build.**
+- **`GET` only; `OPTIONS` is dropped** (fields 4 and 12). CORS middleware
+  answers an `OPTIONS` request before any handler runs, so its time says nothing
+  about `POST /orders`. A read-only probe cannot time a route that is not `GET`.
+  For a budget on one, the probe sends nothing and is `inconclusive`, saying
+  so. `HEAD` is not added: the HTTP client's method allowlist is unchanged.
+- **No probe presents a credential in this phase.** A budget on a route that
+  needs a token would only measure the refusal, so it is `inconclusive` ("the
+  route answered 401"). Presenting a token from `token_env` would be a new way
+  for a secret to leave the binary. It is decided on its own, at part 2's
+  review if the walk needs it, and not slipped into a latency probe. LIMITS says
+  which budgets this leaves unmeasurable.
+- **The rule is integer arithmetic on order statistics** (P2, made exact).
+  - Samples are whole microseconds.
+  - A percentile is the nearest-rank order statistic, never interpolated.
+  - Its bounds are the order statistics at the ranks the exact binomial gives
+    for 90% confidence on each side, computed in integers.
+
+  There is no floating point anywhere in the rule, so Go and Python cannot
+  disagree in a last digit. The confidence level is one constant, stated in
+  LIMITS.
+- **"The spread is too wide" (P2) means the interval straddles the budget.**
+  There is no separate width threshold: any width limit would be a number
+  Culprit chose (§4). One consequence follows from the arithmetic, not from a
+  choice. At 90%, a p95 can be shown within budget only from 45 samples
+  (1 − 0.95ⁿ ≥ 0.9 needs n ≥ 45), so a p95 budget can pass only near the cap.
+- **The sample count and spacing are not configurable** (field 10 refined). The
+  probe sends 50 requests for a p95 budget and 20 for a p50, at least 50 ms
+  apart. 50 is a hard cap in the probe. With nothing to set there is nothing to
+  lift, and nobody can configure a p95 check that could never pass.
+- **A sample is a `2xx` answer or a timeout.** A `401` or a `500` measures a
+  refusal, not the route, so it is not a sample, and too few samples is
+  `inconclusive`. A request that does not answer in time counts as slower than
+  the budget. Dropping it would report a service that has stopped answering as
+  fast. The per-request timeout is set above the budget, and the probe's own
+  timeout bounds the whole run.
+- **What one sample measures is fixed and recorded.** It is one request on a
+  new connection, timed from dialling to the last byte of the response, with
+  connection setup recorded separately. A client that pools sees less, and the
+  reading says what it measured. Part 2 needs the setup time to tell the hop
+  from the component.
+- **The reading carries the rule's inputs** (field 7): every sample, and the
+  budget in `expected` with its `expected_source`. The verdict is then a pure
+  function of the reading alone. Go's `Reading.Validate` and Python's reading
+  model each refuse a latency reading whose verdict the rule does not give, so
+  the API refuses one wherever a reading arrives. This makes the check
+  structural, as Phase 34's re-judged verifications are.
+- **A budget must point at something.** `culprit check` reports a budget whose
+  subject no other INTENT source declares; otherwise a mistyped route would
+  never be measured and nothing would say so. The unbudgeted surface is listed
+  only when the manifest declares `budgets:` at all, so a project that has not
+  opted in is not told that every route lacks one.
+- **One budget for every environment.** Budgets are INTENT, so a CI runner is
+  held to the same number as production. LIMITS says so.
+- **The demo declares its budget on inventory-service's `GET /ready`.** Its
+  `why` says this is the route the walk already asks, because it passes through
+  the fault middleware. The route order-service actually calls, `GET /stock`,
+  needs a token in the faults stack (see above). The value is set well clear of
+  both the healthy time and the injected 800 ms, and the run report says how it
+  was chosen.
+- **One vantage per walk (P3 corrected, for part 2).** A walk runs in one binary
+  (D1 amended) and sends no probe to an agent elsewhere, so "B to C from where B
+  sits" is not available. Part 2 bisects on requests sent from this vantage to
+  each component on the request path. The root is the deepest component over its
+  budget whose callees keep theirs. The connection setup that part 1 records
+  separates the hop from this vantage from the component itself. Anything only
+  another vantage could see is unexplored, and the diagnosis is partial. Part
+  2's brief restates field 14's synthetic chain on that basis.
+- **Carried in from Phase 35.** Part 2's first item limits narration parity's
+  time rule to measured values and minted ids. A declared budget that differs
+  between the legs is a difference, shown red.
+
+**Part 1 — budgets and the measurement. Brief and criteria, 2026-11-11.**
+
+**Work order.**
+0. Confirm that `main`'s push run on the close-out's merge is green, with
+   `e2e (none)`, `e2e (stub)` and `narration-parity` included. If the close-out
+   is not merged, stop. If a job failed on the runners' network, re-run it. If a
+   test failed, stop and escalate.
+1. Write the latency rule and its conformance fixture in `culprit_model`, Go
+   and Python, before any probe exists.
+2. Add budgets:
+   - `budgets:` in `culprit.yaml` (rank 100), read by the Go loader and by the
+     API's manifest model;
+   - `x-culprit-budget` on an OpenAPI operation (rank 80);
+   - the predicates `latency_p50_ms` and `latency_p95_ms`, and no others yet.
+
+   Two sources that disagree go through the comparator as an `intent_conflict`.
+   A budget on an undeclared subject is reported. The unbudgeted surface is
+   listed when `budgets:` is declared.
+3. Build `probe.http.latency` as decided above, taking its budget from
+   expectation resolution (Phase 31.1). Classify its address input, so that
+   `culprit mcp` binds it.
+4. Validate readings by the rule in Go and Python, and therefore in the API.
+5. Add the demo's budget, and run the probe in the fault-library job. It fails
+   with the latency fault injected and passes once the fault is cleared. The
+   library's expected verdicts do not change.
+6. Update the documents:
+   - PROBES;
+   - PERMISSIONS: what the probe sends, and that no new capability is needed;
+   - LIMITS: everything decided above that a user would trip over;
+   - the README's `culprit.yaml` reference: `budgets:`. The tour waits for
+     part 2.
+
+**Acceptance criteria (part 1).**
+- The rule's fixture holds in Go and Python, with the same verdicts and
+  reasons. It includes these cases:
+  - well under the budget;
+  - well over;
+  - straddling (`inconclusive`);
+  - too few samples (`inconclusive`);
+  - a timeout counted as slow, where dropping it would pass;
+  - the floor: a p95 that cannot pass from 44 samples and can from 45.
+
+  It is shown red by moving a bound one rank.
+- Against a fake server with controlled delays, counting requests at the
+  server:
+  - well under the budget passes;
+  - well over fails;
+  - straddling is `inconclusive`;
+  - mostly `401` or `500` answers are `inconclusive`;
+  - a request past its timeout counts as slow.
+- No input, configuration or manifest makes the probe send more than 50 requests
+  in a run, or space them less than 50 ms apart. A test tries each, counting at
+  the server.
+- A budget on a route that is not `GET` is `inconclusive`, with no request sent
+  (counted). The probe never sends `OPTIONS`, `HEAD`, a body or a credential.
+- Through `culprit mcp`, the probe's address input refuses an undeclared
+  endpoint before dialling (counted). `TestEveryCatalogueInputIsClassified`
+  covers the probe.
+- In `culprit check`:
+  - two sources with different budgets for one route give an `intent_conflict`;
+  - a budget on a route nothing else declares is reported;
+  - an unknown predicate is refused by the Go loader, by the Python model and by
+    the API's manifest model.
+- A latency reading whose verdict disagrees with its own samples and budget is
+  refused by Go validation, by Python validation and by the API. Each refusal
+  is shown red.
+- In CI's fault-library job, on Linux, `culprit probe probe.http.latency` on
+  inventory-service's `GET /ready` fails with the latency fault injected and
+  passes once it is cleared.
+- From a fresh `git clone`, the quickstart starts with the demo's `budgets:` in
+  `culprit.yaml`. A manifest field the API's model did not know has broken a
+  fresh clone before.
+- Every pull-request check is green, both `e2e` legs and `narration-parity`
+  included. `LLM_PROVIDER=none` changes nothing.
+
+**Do NOT implement in part 1.**
+- No walk change: no latency hypothesis, no change to verification, no change
+  to the fault library's expected verdicts.
+- No credential sent by any probe.
+- No `OPTIONS` or `HEAD`.
+- No parallel requests, no configurable count, no load.
+- No percentile other than p50 and p95.
+- No percentiles from telemetry.
+- No threshold that Culprit chooses. The demo's budget is the demo's own
+  declaration, with its `why`.
+
 ---
 
 ### Phase 37 — The database: statements, plans and indexes

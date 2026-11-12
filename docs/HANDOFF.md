@@ -43,6 +43,15 @@ checkpoint this protocol keeps. (The earlier refusals of `git commit` and
 which auto mode reads as a boundary, together with `ask` rules on `git push`
 and `gh pr create`. Both changed together.)
 
+**The pull request is a draft until the run has finished** (2026-11-11). Claude
+Code opens it with `gh pr create --draft` and marks it ready with `gh pr ready`
+only when its run report is committed and pushed, as the last thing before it
+stops. A draft cannot be merged, so a merge can no longer land ahead of the run.
+That is what happened to Phase 35 part 2: it was merged while its re-audit was
+still fixing things, and those fixes were left on the branch. Before every push
+it checks `gh pr view --json state`. If the pull request is already merged, it
+pushes nothing more to that branch and stops and reports what is not on `main`.
+
 **The one rule that makes this work:** a phase does not advance on a red gate,
 and Claude Code does not auto-start the next phase. One human keystroke per
 phase is not friction — it is the review checkpoint, and it is the only place a
@@ -55,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted); then `docs/PERFORMANCE_PLAN.md` (Phases 36–39) |
-| Current phase | **35, part 2 — The narrator** — `complete` (CI green on the merge result), awaiting the architecture review. PR #35. Run report in §5. |
-| Previous phase | **35, part 1 — The agent surface: complete**, signed off 2026-11-11 by the architecture session. Merged via PR #34 (`60d2c92`); `e2e` had not run on the pull request (ambient, Q24), so the gate is `main`'s push run, confirmed by part 2's step 0. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
+| Current phase | **35, close-out** — `not started`. Brief: `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Close-out". It brings `ec05453` and part 2's run report to `main`, with the review's corrections. Then **36, part 1**. |
+| Previous phase | **35, part 2 — The narrator: signed off 2026-11-11** by the architecture session; complete when the close-out's merge is green on `main`. Merged via PR #35 (`ac0a939`). Every check on the pull request (run 43090673530) and on `main`'s push run (43092754729) was green, read from GitHub. Step 0 is met (run 43067489387), so part 1 is complete. The run continued after the merge: `ec05453` and the report (`356012e`) are on the branch, not on `main`. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-35-narrator`, cut from `origin/main` = `60d2c92`; first commit the part 1 sign-off (`8e13685`). PR #35, open; only the human merges. Do not stage `shared/uv.lock`. |
+| Branch | `phase-35-close-out`, to be cut from `origin/phase-35-narrator` = `356012e`. Its next commit is the Phase 35 part 2 sign-off already in the working tree (six files; message `../phase-35-2-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
 | Blocking questions | None. |
 
 ---
@@ -102,8 +111,10 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 34, part 1 | The loop, in the binary | **complete** (PR #32 merged, `2ef3da6`) | **Signed off 2026-11-10** (architecture session): every check green; one conformance fixture read by Go and Python; the fault library 11/11 in CI. Q20 and Q21 ruled; criterion 3 refined. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 35, part 1 | The agent surface | **complete** (PR #34 merged, `60d2c92`) | **Signed off 2026-11-11** (architecture session): every criterion run in CI — the MCP loop through the real binary on Linux in the fault-library job, unfilterable; `e2e` did not run on the pull request (ambient, Q24), so part 2's step 0 confirms `main`'s push run green. Q22–Q24 ruled. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
-| 35, part 2 | The narrator | **complete** (CI green on the merge result; PR #35 awaiting review) | Run 2026-11-11: step 0 met (run 43067489387). Built: the Q23 binding (redirects too); the check (nine rules, each load-bearing); `narrations` and the `narrator` role; the job (none, anthropic, ollama; claimed attempts); the read and the card; CI's none/stub matrix and narration parity; the documents. Both audits' findings fixed. §5. **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md` Phase 35 — "How Phase 35 is run", then "Part 2". |
-| 36 | Latency budgets, and a walk that can see slow | not started | `docs/PERFORMANCE_PLAN.md` Phase 36. Starts after Phase 35 is complete; "How Phase 36 is run" is written at the review of Phase 35 part 2. |
+| 35, part 2 | The narrator | **complete when the close-out merges** (PR #35 merged, `ac0a939`) | **Signed off 2026-11-11** (architecture session): every check on the pull request and on `main`'s push run green, read from GitHub; step 0 met. Parity's widening (`8a09d7e`) is honest; Phase 36 part 2 narrows it. Merged before the run finished, so the re-audit's fixes (`ec05453`) and the run report (`356012e`) land with the close-out. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
+| 35, close-out | Land the re-audit's fixes; the review's corrections | not started | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Close-out": its work order, criteria and what not to build. Branch `phase-35-close-out` from `origin/phase-35-narrator` = `356012e`; its next commit is the part 2 sign-off. The first run to open its pull request as a draft. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 36, part 1 | Budgets and the measurement | not started | **Brief (2026-11-11):** `docs/PERFORMANCE_PLAN.md` Phase 36: "How Phase 36 is run", then "Part 1" at the end of the section. Step 0: `main`'s push run on the close-out's merge green, both `e2e` legs and `narration-parity` included. Branch `phase-36-budgets` from `origin/main` at that merge. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 36, part 2 | The walk sees slow | not started | `docs/PERFORMANCE_PLAN.md` Phase 36, "How Phase 36 is run". The brief and criteria are written at part 1's review. |
 | 37 | The database: statements, plans and indexes | not started | `docs/PERFORMANCE_PLAN.md` Phase 37. "How Phase 37 is run" is written at the review before it. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |

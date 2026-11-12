@@ -22,7 +22,9 @@ the handoff describes where the work is. If they disagree, the handoff wins.
   plane.
 - **Claude Code commits, pushes and opens the pull request; only the human
   merges.** Commit on the phase branch (`git commit -F <file>`, never
-  `shared/uv.lock`), push it, open the PR with `gh pr create`, run `/ci`. Never
+  `shared/uv.lock`), push it, open the PR as a draft (`gh pr create --draft`),
+  run `/ci`, and mark it ready (`gh pr ready`) only once the run report is
+  committed. If the PR is already merged, push nothing more; stop. Never
   push to `main`, force-push, merge or approve. A phase is complete only when
   CI is green on the merge result, and the next phase never starts without a
   human keystroke.

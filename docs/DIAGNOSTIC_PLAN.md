@@ -3408,6 +3408,184 @@ the binary. No tool for the narrator, and no second call. No narration of
 verifications. No narration through `culprit mcp`. No streaming. No
 remediation applied by anything.
 
+**Architecture review of part 2, 2026-11-11 — signed off; Phase 35 completes
+with the close-out below.** Merged via PR #35 (`ac0a939`). The checks were read
+from GitHub's API, not taken from the report. The pull request's run
+43090673530 on `8a09d7e` passed all 24 checks, `e2e (none)`, `e2e (stub)`,
+`narration-parity` and CodeQL included. `main`'s push run 43092754729 on
+`ac0a939` passed every job and published the images (`deploy` skipped). Step 0
+is met: `main`'s push run 43067489387 on `60d2c92` passed, `e2e` included, so
+part 1 is complete. Checked on `main`:
+
+- the binding test counts dials and resolves for `169.254.169.254`, an
+  undeclared host and an undeclared port on a declared host;
+- `test_each_rule_is_load_bearing` and `test_every_rule_has_a_case` hold every
+  rule in `RULES` to a fixture case that only that rule refuses;
+- the API's `served` re-runs `check` on every complete row;
+- `due()` never selects an investigation with three attempts, and the database
+  refuses a fourth;
+- the `none` leg counts zero calls at a stub whose address it was given;
+- both `lint-imports` contracts name every package under `app/`, which
+  `test_narrate_boundary.py` holds;
+- a test tries UPDATE, DELETE and TRUNCATE as the narrator and as the owner, and
+  each is refused;
+- `Narration.tsx` renders prose as text nodes.
+
+The run went on after the merge. The phase-auditor's re-audit found leftovers,
+which Claude Code committed as `ec05453` and pushed to the merged branch with
+its run report (`356012e`). Neither is on `main`. So on `main` two criteria
+hold only in part:
+
+- a URL written as a host with a query (`evil.example?d=…`), or as a host and a
+  port, passes the check;
+- a database error mid-attempt leaves the claim held on a pooled connection, and
+  that investigation stays "not narrated yet" until the worker restarts.
+
+Decisions:
+
+- **Narration parity (`8a09d7e`) is honest, but too broad for what comes
+  next.** The two legs differed in two values. One was the agent each leg pairs,
+  an id named inside a reason. The other was a token's remaining lifetime, a
+  measured expiry minus now, which is a time. Both are what "apart from ids and
+  times" means, and the test that a differing verdict or reading is a difference
+  still holds. But the time rule matches any key ending `_ms` or `_seconds`,
+  anywhere in the record. It would drop a declared duration as readily as a
+  measured one, and Phase 36 puts budgets in milliseconds into these records.
+  Carried into Phase 36 part 2 as its first item.
+- **Criterion 5 reworded (the report's correction, accepted).** For the
+  binary's jobs — the fault library, `culprit check`, `diagnose` and `verify` —
+  "no provider called (counted)" has nothing to count. The binary reads no
+  provider setting and links no model client (`check_no_llm_imports`,
+  `TestTheNetworkBoundaryIsAnAllowlist`). There it holds by construction; it is
+  counted in `e2e (none)`.
+- **An allowlist holds characters, not a growing denylist.** `ec05453` widens
+  the invisible-character rule to combining marks and five blank fillers. Run
+  against `ec05453`'s own check, `not＿resolved` (U+FF3F), `notˍresolved`
+  (U+02CD) and `not‗resolved` (U+2017) still pass. Each shows on the page as a
+  code-form verdict the investigation does not hold. Every category closed
+  leaves the next one open. The rule becomes one that accepts printable ASCII,
+  newline, tab and a fixed set of typographic characters, and refuses everything
+  else, which makes the wrong thing unrepresentable. The narrator writes English
+  for an English page. Prose in another script is refused, the safe failure, and
+  LIMITS says so.
+- **Every provider call is counted.** The report leaves one case open. An insert
+  that fails on anything but `uq_narrations_attempt` writes no row, so the next
+  tick calls the provider again for the same attempt, without bound if the
+  failure repeats. From now on, an attempt whose row cannot be stored is stored as
+  `failed`, "the narration could not be stored", which every CHECK admits. The
+  call goes uncounted only when the database cannot take any row, and then
+  `due()` cannot run either. The retry interval is read again under the claim,
+  as the count already is. A tick that read `due()` early can then no longer
+  make the next attempt at once.
+- **A refused row's `named` is served under the property the worker's test
+  holds:** each item a fixed label or one token, at most 80 characters, with no
+  URL and no credential, whatever the row holds. Today a row the owner inserts
+  is served as itself, redacted.
+- **`culprit mcp` serves the catalogue alone unless started with
+  `--plugins`.** A plugin probe that takes an address under a name nobody has
+  classified is not bound (the re-audit, and LIMITS). Plugins are for the
+  operator to opt into for an agent, not a default an agent inherits.
+  `culprit probe` from a terminal is unchanged.
+- **A reply's length is bounded where it is paid for.** `max_tokens` is 16000,
+  for a reply that is refused above `MAX_PROSE`, 4000 characters. Ask for no
+  more tokens than `MAX_PROSE`, and ask the same of Ollama (`num_predict`).
+  English runs well under one token per character, so no reply short enough to
+  pass is cut off.
+- **Turning narration on narrates what is already stored.** That means every
+  investigation without a complete narration, newest first, three every 15
+  seconds. Accepted as built: it is what someone turning narration on expects of
+  the page in front of them. LIMITS says it. README and PERMISSIONS must say it
+  too, because with `anthropic` it decides how much leaves the machine.
+- **Accepted as taken:**
+  - providers over `httpx`, not the SDK (field 11);
+  - `NARRATOR_MODEL` required, with no default model;
+  - evidence without measured values;
+  - `from_rows` shared by the API and the narrator;
+  - no refused prose stored;
+  - a stored narration still shown after narration is turned off.
+
+  **Left in LIMITS, accepted:**
+  - a bare domain is not a URL while prose is shown as text;
+  - a named token can be 80 characters of the model's own text;
+  - `app.main` is exempt from both contracts, because it only schedules the job.
+- **`main` requires no checks** (ruleset 26460341: deletion, non-fast-forward,
+  update). "Merge when every check is green" is therefore a habit, not a gate.
+  Twice now a pull request has been merged ahead of something: part 1 without
+  `e2e`, and part 2 before its run had finished. Two changes follow:
+  - Claude Code opens each pull request as a draft and marks it ready only when
+    its run report is committed and pushed. A draft cannot be merged.
+  - It pushes nothing more to a branch whose pull request is already merged; it
+    stops and reports.
+
+  This sign-off makes that change in `.claude/settings.json`, the `next` skill,
+  `CLAUDE.md` and the handoff's header. Adding required status checks to the
+  ruleset is Malcolm's setting.
+
+Phase 35 is complete when the close-out's merge is green on `main`. Phase 36
+part 1's step 0 confirms it, and this plan ends with it. Its successor is
+`docs/PERFORMANCE_PLAN.md`. The definition of done's recorded demonstration is
+Malcolm's, after the close-out.
+
+**Close-out — brief and criteria, 2026-11-11.**
+
+Branch `phase-35-close-out`, cut from `origin/phase-35-narrator` = `356012e`,
+so `ec05453` and the part 2 run report come with it. Its next commit is this
+sign-off, already in the working tree: `docs/DIAGNOSTIC_PLAN.md`,
+`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`, `.claude/settings.json`,
+`.claude/skills/next/SKILL.md` and `CLAUDE.md` (message
+`../phase-35-2-signoff.txt`). Open the pull request as a draft and mark it ready
+when the run report is committed. This is the first run under that rule. Do not
+stage `shared/uv.lock`.
+
+**Work order.**
+1. The character rule. `no_invisible_characters` becomes
+   `characters_are_plain`. One constant holds what is allowed: U+0020 to U+007E,
+   newline, tab, ‘ ’ “ ” – — … → ← × ≈ ≤ ≥ ± ° µ, and U+00A0. Anything else
+   is refused, named "a character outside plain text". Add fixture cases that
+   only this rule refuses:
+   - U+200B, U+034F and U+3164 splitting `not_resolved`;
+   - U+FF3F, U+02CD and U+2017 standing for its underscore;
+   - a Cyrillic letter inside a component's name.
+
+   A faithful narration with curly quotes, an em dash and an arrow passes. The
+   prompt states the rule in words.
+2. The job:
+   - an attempt whose row cannot be stored is stored as `failed`;
+   - the retry interval is read again under the claim;
+   - `max_tokens` and Ollama's `num_predict` are no more than `MAX_PROSE`.
+3. The API: a refused row's `named` is served under the worker's property.
+4. `culprit mcp` serves the catalogue alone by default, and plugins only with
+   `--plugins`.
+5. The documents:
+   - README and PERMISSIONS say that turning narration on narrates the stored
+     history, and that with `anthropic` all of it leaves the machine;
+   - LIMITS covers the character rule and `--plugins`.
+
+**Acceptance criteria (close-out).**
+- Each new fixture case is refused by `characters_are_plain` and gets through
+  with that rule removed (`test_each_rule_is_load_bearing`). The faithful case
+  passes. Record the red state: the three look-alike cases pass `ec05453`'s
+  rule.
+- A test makes the row's insert fail on a CHECK. It expects one provider call
+  and one `failed` row, and no call on the next tick inside the retry interval.
+  Without the change it is red, with a second call.
+- Two ticks that both read `due()` before either claims make one attempt inside
+  the retry interval, not two.
+- The anthropic request asks for at most `MAX_PROSE` tokens (the
+  `MockTransport` test). The Ollama request sets `num_predict` the same way.
+- An owner-inserted refused row whose `named` holds a URL, a sentence and a
+  credential is served as labels and single tokens, and none of the three
+  appears.
+- With a plugin installed, `culprit mcp` without `--plugins` lists and runs no
+  plugin probe.
+- Every check on the pull request is green, `e2e (none)`, `e2e (stub)` and
+  `narration-parity` included. Then `main`'s push run on the merge is green;
+  that is Phase 36 part 1's step 0.
+
+**Do NOT implement in the close-out.** No change to the evidence, the record,
+the role or the providers beyond the token bound. No new narration feature.
+Nothing for Phase 36.
+
 ---
 
 ## §4. Explicitly out of scope for this entire plan
