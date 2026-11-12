@@ -1017,17 +1017,23 @@ Phase 37 part 2.
 
 ### What Culprit sends a database, and what holds it
 
-One file in the binary can open a database connection, and it sends only
-statements from a closed set written into it — four today, all catalogue
-reads. Anything else, an `EXPLAIN ANALYZE` included, is refused before it
-leaves, and a test counts what reaches the driver. Every session is opened
-with `default_transaction_read_only = on` and a ten-second
-`statement_timeout`, so Postgres itself refuses a write even if the first
-two layers failed. These hold against ordinary code in the binary, not
-against code written inside that one file to get around them; review of
-that file is what bounds it. Culprit never resets `pg_stat_statements`
-(a function call, which read-only mode does not stop: the template set
-does).
+One file in the binary imports the database driver, and the statements it
+sends are a closed set written into it — four today, all catalogue reads —
+checked by a `switch` no other code can add to. Anything else, an
+`EXPLAIN ANALYZE` included, is refused before it leaves, and a test counts
+what reaches the driver. Every session is opened with
+`default_transaction_read_only = on` and a ten-second `statement_timeout`,
+so Postgres itself refuses a write.
+
+**What this does not hold (open, Q27).** "One file" is a property of
+imports, and in Go a file need not import a package to call methods on a
+value of its type. Another file in the same package (`internal/capture`)
+can take the session that file opens and send it any statement — and
+read-only mode does not stop an `EXPLAIN ANALYZE SELECT …` or a call to
+`pg_stat_statements_reset()`. The Phase 37 part 1 audit did exactly that.
+Today nothing does it, and review of `internal/capture` is what stops it;
+whether to move the session into a package of its own is for the review.
+Culprit never resets `pg_stat_statements`.
 
 ## Installed versions are compared between environments, not against what you declared
 
@@ -2581,6 +2587,16 @@ API's (YAML 1.1), and for `budgets:` the API's is held to the binary's rules
 
 Splits that remain, each refused by the API and loaded by the binary:
 
+- a field of a budget entry that YAML 1.1 types and YAML 1.2 does not:
+  `why: yes`, `why: 300`, `why: 2026-11-12` are strings to the binary and a
+  boolean, a number and a date to the API, which refuses them. Quote a
+  `why:` that looks like one;
+- a second YAML document (`---`): the binary reads the first, the API
+  refuses the file;
+- any top-level key neither knows (`x-extra: 1`): the binary ignores it, on
+  purpose — a CLI that refuses a field a newer server added is useless in CI
+  — and the API, which writes to a database, refuses it;
+
 - a top-level key written as the *string* `"<<"`. The binary ignores every
   top-level key it does not know, so a budget under it is dropped by
   `culprit check` without a word;
@@ -2664,7 +2680,7 @@ shows it red:
 
 - **Only `http.go` and `timing.go` in `internal/probe` import `net/http`**
   (or any package under it). No other file in the package can name a
-  client, a transport or a request constructor.
+  request constructor or build a client.
 - **Every client those two files build comes from one constructor**, which
   puts a guard under it. The guard refuses anything but a bodiless `GET` or
   `OPTIONS` as each request leaves, before anything is dialled — however
@@ -2677,9 +2693,14 @@ audits in a row found code shapes it did not know, and the third sent a
 **It is a guard against ordinary code, not a proof against deliberate
 code.** Raw bytes written to a socket that `net.tcp.connect` opened are
 outside it, as is a header such as `X-HTTP-Method-Override` that a server
-chooses to honour. What bounds that is where it can be written: the binary's
-network allowlist keeps every other package from linking a network package
-at all, and within `internal/probe` only two files can speak HTTP.
+chooses to honour. And not naming a type does not stop a file using it: in
+Go, another file in `internal/probe` can reach the guard's own transport
+through a client's fields, with no import, and send a `DELETE` around the
+guard — the Phase 37 part 1 audit did. Nothing does today; whether to move
+the client into a package of its own, where no other file can reach its
+fields, is open (Q27). What bounds it meanwhile is where it can be written:
+the binary's network allowlist keeps every other package from linking a
+network package at all, and review covers `internal/probe`.
 
 ### Latency in the walk
 

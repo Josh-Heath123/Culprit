@@ -31,7 +31,10 @@ _CREDENTIAL = re.compile(
     r"""|\b(password|passwd|pwd)\s*=\s*('[^']*'|"[^"]*"|[^\s&;,'"]+)"""
     r"|\bxox[abposr]-[A-Za-z0-9-]{10,}"
     r"|\bxapp-[0-9]+-[A-Za-z0-9-]{10,}"
-    r"|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@",
+    r"|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@"
+    # SQL's own form: CREATE/ALTER ROLE or USER ... PASSWORD '...', which
+    # pg_stat_statements keeps verbatim for a utility statement.
+    r"|\bPASSWORD\s+'[^']*'",
     re.IGNORECASE,
 )
 

@@ -145,7 +145,10 @@ Values travel as bind parameters. Every session sets
 `default_transaction_read_only = on` and a ten-second
 `statement_timeout` as connection parameters, so were the first two
 layers to fail, Postgres itself would refuse a write (a test sends one
-and sees it refused).
+and sees it refused). The first two hold against ordinary code, not code
+written to get around them: another file in the same Go package could use
+the session it opens (docs/LIMITS.md, "What Culprit sends a database";
+open as Q27).
 
 **Never:** rows. The only row read is the migration version in
 `alembic_version`, which is the one row §0.4 of the plan names as

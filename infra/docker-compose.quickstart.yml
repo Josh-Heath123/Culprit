@@ -27,9 +27,13 @@ services:
     # Phase 37 part 1: pg_stat_statements is preloaded, said here rather
     # than left to the image's defaults, so the demo's database can be read
     # for statement statistics (PERFORMANCE_PLAN.md P4). timescaledb is
-    # Culprit's own and must stay in the list. `just quickstart` checks the
-    # running value. Nothing in Culprit's own database changes: the
-    # extension is created only in the demo's database, by the demo.
+    # Culprit's own and must stay in the list; the list replaces the
+    # image's own default, so anything else the image preloads is no longer
+    # loaded (Culprit's database needs only timescaledb). `just quickstart`
+    # checks the running value. This is a setting of the whole server, so
+    # statistics are now kept for Culprit's own database too; the extension
+    # itself is created only in the demo's database, by the demo, and
+    # nothing reads Culprit's.
     command: ["postgres", "-c", "shared_preload_libraries=timescaledb,pg_stat_statements"]
     env_file: .env.prod
     environment:

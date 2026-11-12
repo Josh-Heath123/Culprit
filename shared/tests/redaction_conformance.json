@@ -95,6 +95,18 @@
       "credential": true
     },
     {
+      "why": "new: a role's password in SQL, which pg_stat_statements keeps verbatim",
+      "text": "CREATE ROLE app LOGIN PASSWORD 'hunter2secret'",
+      "redacted": "CREATE ROLE app LOGIN [redacted]",
+      "credential": true
+    },
+    {
+      "why": "new: ALTER USER ... WITH PASSWORD",
+      "text": "ALTER USER app WITH PASSWORD 'hunter2secret';",
+      "redacted": "ALTER USER app WITH [redacted];",
+      "credential": true
+    },
+    {
       "why": "not a credential: a route, a time, an email address",
       "text": "GET /orders at 10:30, mail ops@example.com",
       "redacted": "GET /orders at 10:30, mail ops@example.com",

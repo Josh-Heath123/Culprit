@@ -53,11 +53,12 @@ func TestOnlyTemplatesReachTheDriver(t *testing.T) {
 	if len(session.sent) != 0 {
 		t.Fatalf("%d refused statements reached the driver: %q", len(session.sent), session.sent)
 	}
-	for template := range templates {
+	all := []statement{columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement}
+	for _, template := range all {
 		_, _ = send(context.Background(), session, template)
 	}
-	if len(session.sent) != len(templates) {
-		t.Fatalf("%d of %d templates reached the driver", len(session.sent), len(templates))
+	if len(session.sent) != len(all) {
+		t.Fatalf("%d of %d templates reached the driver", len(session.sent), len(all))
 	}
 }
 

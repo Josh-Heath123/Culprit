@@ -116,7 +116,7 @@ var excludedSchemas = []string{
 //     value is a constant declared below. Nothing outside this package can
 //     make one, and nothing inside builds one from text it was given.
 //  2. send is the only function that hands a statement to the driver, and
-//     it refuses one that is not in templates before anything leaves —
+//     it refuses one that is not a template before anything leaves —
 //     an arbitrary statement and an EXPLAIN ANALYZE included. Values travel
 //     as bind parameters, never spliced into the text.
 //  3. Every session is opened read-only, with a statement timeout, as
@@ -171,12 +171,15 @@ const (
 		ORDER BY n.nspname, c.relname, a.attname`
 )
 
-// templates is the closed set send will hand to the driver.
-var templates = map[statement]bool{
-	columnsStatement:        true,
-	alembicExistsStatement:  true,
-	alembicVersionStatement: true,
-	leadingColumnsStatement: true,
+// isTemplate reports whether s is one of the constants above: a switch,
+// not a map, so no other file in the package can add a statement to the
+// set at run time (the Phase 37 part 1 audit added one from an init()).
+func isTemplate(s statement) bool {
+	switch s {
+	case columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement:
+		return true
+	}
+	return false
 }
 
 // ErrNotATemplate is send's refusal of a statement outside templates.
@@ -190,7 +193,7 @@ type querier interface {
 
 // send is the only function that hands a statement to the driver.
 func send(ctx context.Context, session querier, s statement, args ...any) (pgx.Rows, error) {
-	if !templates[s] {
+	if !isTemplate(s) {
 		return nil, ErrNotATemplate
 	}
 	return session.Query(ctx, string(s), args...)

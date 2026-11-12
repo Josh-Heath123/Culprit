@@ -144,6 +144,16 @@ func clientsBuiltElsewhere(t *testing.T, paths ...string) []string {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// net/http under its own name only: an alias would hide every
+		// check below from a reader of these two files (invariant audit).
+		for _, spec := range file.Imports {
+			imported, _ := strconv.Unquote(spec.Path.Value)
+			if imported == "net/http" && spec.Name != nil && spec.Name.Name != "http" {
+				position := fset.Position(spec.Pos())
+				found = append(found, filepath.Base(position.Filename)+":"+strconv.Itoa(position.Line)+
+					" net/http imported as "+spec.Name.Name)
+			}
+		}
 		isHTTP := func(expr ast.Expr, name string) bool {
 			selector, ok := expr.(*ast.SelectorExpr)
 			if !ok || selector.Sel.Name != name {
@@ -153,10 +163,16 @@ func clientsBuiltElsewhere(t *testing.T, paths ...string) []string {
 			return ok && ident.Name == "http"
 		}
 		for _, declaration := range file.Decls {
-			inConstructor := false
+			inConstructor, inGuard := false, false
 			if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv == nil &&
 				function.Name.Name == "newGuardedClient" {
 				inConstructor = true
+			}
+			if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv != nil &&
+				function.Name.Name == "RoundTrip" && len(function.Recv.List) == 1 {
+				if ident, ok := function.Recv.List[0].Type.(*ast.Ident); ok && ident.Name == "methodGuard" {
+					inGuard = true
+				}
 			}
 			behindPointer := map[ast.Node]bool{}
 			ast.Inspect(declaration, func(node ast.Node) bool {
@@ -186,6 +202,11 @@ func clientsBuiltElsewhere(t *testing.T, paths ...string) []string {
 					}
 					if isHTTP(typed, "Client") && !behindPointer[typed] && !inConstructor {
 						where("an http.Client value")
+					}
+					// A transport's RoundTrip, called or stored, sends around
+					// the guard; only the guard itself may use it.
+					if typed.Sel.Name == "RoundTrip" && !inGuard {
+						where("a RoundTrip outside the guard")
 					}
 				case *ast.AssignStmt:
 					for _, left := range typed.Lhs {
@@ -233,6 +254,8 @@ func TestAClientBuiltAnotherWayIsFound(t *testing.T) {
 		"a replaced transport": "func smuggle(c *RealHTTPClient) { c.client.Transport = http.DefaultTransport }",
 		"a transport through a pointer": "func smuggle(c *RealHTTPClient) {\n" +
 			"\tp := &c.client.Transport\n\t*p = http.DefaultTransport\n}",
+		"a direct RoundTrip": "func smuggle(r *http.Request) { _, _ = http.DefaultTransport.RoundTrip(r) }",
+		"a stored RoundTrip": "func smuggle() { send := http.DefaultTransport.RoundTrip; _ = send }",
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "timing.go")
@@ -334,5 +357,19 @@ func TestTheOnePlaceRefusesEveryMethodButGetAndOptions(t *testing.T) {
 		if err != nil || request.Method != method || request.Body != nil {
 			t.Errorf("newProbeRequest(%s) = %v, %v", method, request, err)
 		}
+	}
+}
+
+// TestAnAliasedNetHTTPIsFound: in the two files, net/http is imported
+// under its own name, so the client checks can see it (invariant audit,
+// Phase 37 part 1).
+func TestAnAliasedNetHTTPIsFound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "timing.go")
+	source := "package probe\n\nimport web \"net/http\"\n\nfunc smuggle() *web.Client { return &web.Client{} }\n"
+	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if found := clientsBuiltElsewhere(t, path); len(found) == 0 {
+		t.Fatal("net/http imported under another name was not found")
 	}
 }

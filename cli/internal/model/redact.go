@@ -40,7 +40,10 @@ var credentialPattern = regexp.MustCompile(
 		`|\b(password|passwd|pwd)\s*=\s*('[^']*'|"[^"]*"|[^\s&;,'"]+)` +
 		`|\bxox[abposr]-[A-Za-z0-9-]{10,}` +
 		`|\bxapp-[0-9]+-[A-Za-z0-9-]{10,}` +
-		`|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@`)
+		`|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@` +
+		// SQL's own form: CREATE/ALTER ROLE or USER ... PASSWORD '...',
+		// which pg_stat_statements keeps verbatim for a utility statement.
+		`|\bPASSWORD\s+'[^']*'`)
 
 // LooksLikeCredential reports whether free text carries something
 // credential-shaped anywhere in it.
