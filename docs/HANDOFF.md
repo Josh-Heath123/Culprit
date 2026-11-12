@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35, with 31.1, 31.2, 32.1 and 32.2 inserted); then `docs/PERFORMANCE_PLAN.md` (Phases 36–39) |
-| Current phase | **35, close-out** — `not started`. Brief: `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Close-out". It brings `ec05453` and part 2's run report to `main`, with the review's corrections. Then **36, part 1**. |
+| Current phase | **35, close-out** — `awaiting decision` on Q25. Built and green: PR #36, CI run 43162985716 on `d89f37c`, every pull-request check pass or skipping. Work item 4 (`culprit mcp --plugins`) was not built: no plugin probe exists to gate (§3). Then **36, part 1**. |
 | Previous phase | **35, part 2 — The narrator: signed off 2026-11-11** by the architecture session; complete when the close-out's merge is green on `main`. Merged via PR #35 (`ac0a939`). Every check on the pull request (run 43090673530) and on `main`'s push run (43092754729) was green, read from GitHub. Step 0 is met (run 43067489387), so part 1 is complete. The run continued after the merge: `ec05453` and the report (`356012e`) are on the branch, not on `main`. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-35-close-out`, to be cut from `origin/phase-35-narrator` = `356012e`. Its next commit is the Phase 35 part 2 sign-off already in the working tree (six files; message `../phase-35-2-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
-| Blocking questions | None. |
+| Branch | `phase-35-close-out` (PR #36, ready for review), from `356012e`; `origin/main` merged in. Do not stage `shared/uv.lock`. |
+| Blocking questions | **Q25** — blocks the close-out's sign-off on work item 4 and criterion 6 only. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q22, Q23 and Q24 were ruled 2026-11-11 (`DIAGNOSTIC_PLAN.md`, end of Phase 35): criterion 3 accepted as built and reworded; `culprit_probe`'s address inputs bound to declared endpoints, as part 2's first item; no workflow change for `e2e` — re-run it. | | |
+| 25 | **Close-out work item 4 and criterion 6 have no subject.** "`culprit mcp` serves the catalogue alone unless started with `--plugins`" and "with a plugin installed, `culprit mcp` without `--plugins` lists and runs no plugin probe" assume a plugin probe can be installed. None can: `catalogue()` is `probe.BuiltIn()` (`cli/cmd/culprit/diagnose.go:232`), and nothing else calls `Catalogue.Register`. `--no-plugins` governs extractor plugins (INTENT). Part 2's LIMITS sentence that led here was wrong and is corrected. Options: drop the item; or replace it with a test that `Catalogue.Register` is called only from `BuiltIn` (the phase-auditor's suggestion); or rule that `--plugins` should gate extractor plugins under `culprit mcp` (a different decision). Nothing was built for it. | 2026-11-12, close-out run | The close-out's sign-off (item 4, criterion 6) |
 
 ---
 
@@ -112,7 +112,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 34, part 2 | Outcomes in the control plane | **complete** (PR #33 merged, `0effc53`) | **Signed off 2026-11-11** (architecture session): every check green; the wrong-fix and right-fix loop asserted through a real agent in CI; the e2e race fixed by waiting, not loosening. Decisions at the end of Phase 34 in `DIAGNOSTIC_PLAN.md`. |
 | 35, part 1 | The agent surface | **complete** (PR #34 merged, `60d2c92`) | **Signed off 2026-11-11** (architecture session): every criterion run in CI — the MCP loop through the real binary on Linux in the fault-library job, unfilterable; `e2e` did not run on the pull request (ambient, Q24), so part 2's step 0 confirms `main`'s push run green. Q22–Q24 ruled. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | 35, part 2 | The narrator | **complete when the close-out merges** (PR #35 merged, `ac0a939`) | **Signed off 2026-11-11** (architecture session): every check on the pull request and on `main`'s push run green, read from GitHub; step 0 met. Parity's widening (`8a09d7e`) is honest; Phase 36 part 2 narrows it. Merged before the run finished, so the re-audit's fixes (`ec05453`) and the run report (`356012e`) land with the close-out. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
-| 35, close-out | Land the re-audit's fixes; the review's corrections | not started | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Close-out": its work order, criteria and what not to build. Branch `phase-35-close-out` from `origin/phase-35-narrator` = `356012e`; its next commit is the part 2 sign-off. The first run to open its pull request as a draft. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 35, close-out | Land the re-audit's fixes; the review's corrections | **awaiting decision** (Q25); PR #36, CI green on `d89f37c` (run 43162985716) | **Brief (2026-11-11):** `DIAGNOSTIC_PLAN.md`, end of Phase 35, "Close-out". Criteria 1–5 PASS by execution, 6 NOT TESTABLE AS WRITTEN (Q25), 7 green on the pull request; `main`'s push run is Phase 36 part 1's step 0. Report in §5. |
 | 36, part 1 | Budgets and the measurement | not started | **Brief (2026-11-11):** `docs/PERFORMANCE_PLAN.md` Phase 36: "How Phase 36 is run", then "Part 1" at the end of the section. Step 0: `main`'s push run on the close-out's merge green, both `e2e` legs and `narration-parity` included. Branch `phase-36-budgets` from `origin/main` at that merge. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 36, part 2 | The walk sees slow | not started | `docs/PERFORMANCE_PLAN.md` Phase 36, "How Phase 36 is run". The brief and criteria are written at part 1's review. |
 | 37 | The database: statements, plans and indexes | not started | `docs/PERFORMANCE_PLAN.md` Phase 37. "How Phase 37 is run" is written at the review before it. |
@@ -149,262 +149,147 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        35, part 2 — the narrator
-Branch:       phase-35-narrator, from origin/main = 60d2c92 (PR #34's merge);
-              its first commit is the part 1 sign-off (8e13685). PR #35.
-Run:          2026-11-11, /next.
-Status:       IMPLEMENTED; every local gate green; both audits run, every finding
-              fixed, the phase-auditor's re-audit CLOSED on all six items.
-              CI green on 8a09d7e (run 43090673530) on every job and every
-              PR check, e2e (none), e2e (stub) and narration-parity included.
-              The report commit's own run, which also carries ec05453, is
-              below.
+Phase:        35, close-out — land the re-audit's fixes; the review's corrections
+Branch:       phase-35-close-out, from origin/phase-35-narrator = 356012e;
+              b7e4d03 the part 2 sign-off, 0836e41 the work, 4f5ba7a the merge
+              of origin/main, d89f37c the audits' findings. PR #36 (draft
+              until this report).
+Run:          2026-11-12, /next.
+Status:       AWAITING DECISION on Q25 (work item 4 and criterion 6 rest on
+              a plugin probe that does not exist). Everything else built;
+              every local gate green; both audits run, every finding taken
+              up; CI green on d89f37c (run 43162985716), every PR check.
 
-STEP 0
-  main's push run on 60d2c92: run 43067489387, every job success, e2e
-  included; deploy skipped. Part 1's gate is met.
+WHAT WAS BUILT (work order 1-5)
+  1 characters_are_plain replaces no_invisible_characters:
+    PLAIN_CHARACTERS holds U+0020-U+007E, newline, tab, the brief's
+    typographic set and U+00A0; anything else is "a character outside
+    plain text". Fixture: U+FF3F, U+02CD, U+2017 for the underscore, a
+    Cyrillic letter in inventory-service (the three old invisible cases
+    renamed to this rule); a faithful case with curly quotes, an em dash
+    and an arrow. The prompt states the rule in words.
+  2 The job: a row the database refuses is stored as failed, "the
+    narration could not be stored" (logged by constraint name or error
+    class only); count, done and the retry interval are read again under
+    the claim (_attempts). If the failed row cannot be stored either,
+    NarrationNotStored names the constraint and chains nothing.
+    MAX_TOKENS = MAX_PROSE for anthropic's max_tokens and ollama's
+    options.num_predict; an ollama reply with done_reason "length" fails,
+    as anthropic's max_tokens stop already did (a cut reply would
+    otherwise be stored complete, truncated — counted as part of the
+    token bound, not a provider change).
+  3 shown() in culprit_model.narration: a fixed label (LABELS) or one
+    plain token with no whitespace, no URL, no credential, at most 80.
+    The check names through it; the API serves every refused row, stored
+    or re-checked, through it.
+  4 NOT BUILT — Q25. culprit mcp's catalogue is probe.BuiltIn() alone
+    (diagnose.go:232); nothing registers any other probe, so there is no
+    plugin probe to gate. --no-plugins governs extractor plugins. The
+    LIMITS sentence the decision rested on was wrong and is corrected.
+  5 README and PERMISSIONS: turning narration on narrates the stored
+    history, and with anthropic every stored investigation's evidence
+    leaves the machine. LIMITS: the character rule and its cost (English
+    only; a record's non-ASCII text can be cited, not copied), counted
+    calls, the token bound, credential coverage, the probe binding.
 
-WHAT WAS BUILT (work order 1-7)
-  1 Q23. culprit_probe binds url, base_url, host and port to the endpoints
-    the environment declares (endpoints:, a component's endpoint:): any
-    other address refuses the whole call before anything is dialled, with
-    the input and the reason. A redirect is bound the same way: through
-    culprit mcp the HTTP client follows one only to a declared endpoint
-    (probe.NewRealHTTPClientWithin). A host is compared as written, case
-    aside — a trailing dot or a space is refused, not normalised. culprit
-    probe from a terminal is unchanged. LIMITS rewritten for the two
-    surfaces.
-  2 shared/culprit_model/narration.py, pure: evidence() — the numbered
-    list, from the record alone; check() — nine rules, one function each
-    (citations name items; no URL; no invisible character; subjects,
-    probes, capabilities, reading ids, code forms and components must be
-    the investigation's); segments() — the prose with each citation
-    replaced by its item's text from the record. What a refusal names is
-    one token or a fixed label, URL-replaced, redacted, at most 80 chars.
-    shared/tests/narration_conformance.json: 4 faithful, 24 refused, each
-    breaking one rule. Written before any provider existed.
-  3 Migration a6c2e9d4f8b1: narrations, one row per attempt with its final
-    status; CHECKs hold what each status carries, attempts 1-3 unique per
-    investigation; triggers refuse UPDATE, DELETE, TRUNCATE to every role.
-    New role narrator: SELECT on the five investigation tables and
-    narrations, INSERT on narrations. api-reader SELECT on narrations
-    (same job, beside investigations; justified in the migration, revoked
-    in the downgrade).
-  4 worker/app/narrate: providers none (default), anthropic, ollama behind
-    one interface, plain httpx; one call per attempt, a fixed system
-    prompt and the evidence, no tools, no stream. Each attempt is claimed
-    with an advisory lock before the call, so overlapping ticks cannot
-    call twice; the claim is released even after a database error. Failures
-    are Culprit's own words, redacted; a provider's
-    error text is never read. Three attempts, retried no sooner than
-    NARRATOR_RETRY_SECONDS (60). The narrator's tables live in app.narrate.
-  5 GET /investigations/{id}/narration (api-reader): off, not_narrated,
-    complete, failed, refused — never pending; the check runs again before
-    prose is served. culprit_model.investigations.from_rows rebuilds an
-    investigation for the API and the narrator alike, so evidence numbers
-    agree. The page: a Narration card, badged Derived, beside the
-    verifications; prose as text nodes; provider and model named.
-  6 CI: e2e is a matrix, narration none and stub (scripts/narrator_stub.py,
-    Ollama's /api/chat, scripted by a marker in the symptom). Both legs get
-    the stub's model and address; only LLM_PROVIDER differs. The none leg
-    asserts the stub had no call after every journey and the agent loop.
-    narration-parity compares the agent loop's records across the legs.
-    LLM_PROVIDER=none on the cli, self-check and fault-library jobs.
-  7 README (feature row, "Narration, if you want it", providers incl.
-    Ollama, D8), PERMISSIONS (the role; exactly what is sent; anthropic
-    leaves the machine), SECURITY §7 (each "cannot" names its test),
-    LIMITS (Narration, probe binding), ARCHITECTURE 27, UPGRADING, the
-    database and determinism rules.
+CRITERIA (close-out)
+  1 new fixture cases refused by characters_are_plain, through without
+    it; the faithful case passes; red state recorded           PASS.
+      test_each_rule_is_load_bearing[characters_are_plain]. Red, by hand
+      and by the phase-auditor against ec05453's rule: U+FF3F, U+02CD,
+      U+2017 and the Cyrillic case all pass it (passed=True).
+  2 insert failing on a CHECK: one call, one failed row, no call next
+    tick inside the interval; red without the change          PASS.
+      test_an_attempt_whose_row_is_refused_is_stored_failed_and_counted.
+      Red on b7e4d03's job.py: "assert 2 == 1" (two calls) — by hand and
+      by the phase-auditor.
+  3 two ticks that both read due() before either claims make one
+    attempt                                                     PASS.
+      test_ticks_that_read_due_before_either_claims_make_one_attempt;
+      red on the old job, "assert 2 == 1".
+  4 anthropic asks for at most MAX_PROSE tokens; ollama num_predict
+    likewise                                                    PASS.
+      test_anthropic_sends_one_message_no_tools_and_no_stream;
+      test_ollama_asks_for_no_more_tokens_than_a_narration_may_hold.
+  5 owner-inserted refused row naming a URL, a sentence and a credential
+    served as labels and single tokens, none appearing         PASS.
+      test_a_refused_row_is_served_as_labels_and_single_tokens_whatever_
+      it_holds: ["a URL", "a name that cannot be shown", "a credential",
+      "billing-service", 79 x + "…"]. Only credentials the shared pattern
+      knows are caught (LIMITS).
+  6 with a plugin installed, culprit mcp without --plugins lists and
+    runs no plugin probe                     NOT TESTABLE AS WRITTEN — Q25.
+      No plugin probe can be installed; confirmed independently by the
+      phase-auditor (only BuiltIn calls Catalogue.Register).
+  7 every PR check green, e2e (none), e2e (stub), narration-parity
+    included                                                    PASS.
+    main's push run on the merge                    NOT RUN — Phase 36
+      part 1's step 0, after the merge.
 
-CRITERIA (part 2)
-  1 culprit_probe refuses an undeclared address before dialling (dials
-    counted): 169.254.169.254, an undeclared host, an undeclared port on a
-    declared host; a declared endpoint dials once; red with the binding
-    disabled; culprit probe unchanged                       PASS.
-      TestAProbeReachesOnlyDeclaredEndpoints: 15 refusals, 0 dials, 0
-      requests; the declared endpoint dials once and requests once. Red
-      with the binding disabled: "5 dial(s) and 5 request(s) for calls that
-      were all refused" (by hand, and again by the phase-auditor).
-      TestARedirectIsBoundAsTheAddressIs (real loopback servers): red with
-      the unbound client, "the undeclared server was reached 1 time(s)".
-      TestCulpritProbeFromATerminalIsUnbound. TestEveryCatalogueInputIs-
-      Classified fails on an input name nobody classified (shown red).
-  2 the fixture refuses each case with what it named and passes faithful
-    narrations; each rule red when disabled; a row inserted with unchecked
-    prose is not served as prose                            PASS.
-      test_narration.py: test_each_rule_is_load_bearing removes each of the
-      nine rules and its cases get through; test_what_a_refusal_names_is_
-      never_the_models_sentence_a_url_or_a_secret over every refusal and
-      four hostile replies. test_narrations_api.py: an owner-inserted
-      "complete" row naming an unknown subject, a bad citation and a URL is
-      served as refused.
-  3 with the stub, in CI: complete shown, derived, provider and model;
-    failed with a reason, the stub's secret leaves no trace; refused with
-    what it named; no fourth call; never pending              PASS in CI.
-      e2e/narration.spec.ts (stub leg). Also locally: the worker's job
-      tests against a real Postgres and the real ollama provider pointed at
-      the stub (failure reason "ollama answered HTTP 500", no secret in the
-      row or the log); test_three_attempts_then_no_fourth_call;
-      test_overlapping_ticks_call_the_provider_once (red without the claim:
-      4 calls).
-  4 the narrator's input is built from the record alone (asserted); one
-    call per attempt, no tools                                PASS.
-      test_a_faithful_reply_is_stored_complete_after_one_call_built_from_
-      the_record: calls == [(SYSTEM, render(evidence(record)))];
-      test_the_evidence_is_the_record_and_nothing_else. anthropic: the
-      request through httpx.MockTransport has exactly model, max_tokens,
-      system, one message — no tools, no stream. The stub refuses a
-      request offering tools.
-  5 LLM_PROVIDER=none in CI: fault library, check/diagnose/verify, every
-    e2e journey, no provider called (counted), the page says off; records
-    identical on and off apart from ids and times             PASS in CI, with the wording
-    question below.
-      e2e (none): every journey, the agent loop (diagnose, a wrong fix, the
-      right fix, verify) and the stub's /calls total == 0 with the stub's
-      address given to the worker. narration-parity: the loop's
-      investigation and verifications compared across the legs.
-      NOT TESTABLE AS WRITTEN for the binary jobs (fault library, culprit
-      check/diagnose/verify in the cli and self-check jobs): the binary
-      reads no provider setting and links no model client, so there is
-      nothing to count; held by construction (check_no_llm_imports over
-      cli/, TestTheNetworkBoundaryIsAnAllowlist). The jobs set
-      LLM_PROVIDER=none and pass.
-  6 nothing downstream reads a narration; only app.narrate talks to a
-    provider; no deterministic package imports it; lint-imports, shown red
-    by a deliberate import                                    PASS.
-      "only the narrator talks to a provider" and "nothing downstream reads
-      a narration": both BROKEN with `import httpx` in app.anomaly.scorer
-      and `from app.narrate import tables` in app.memory.link_job, KEPT
-      without. test_narrate_boundary.py holds their source lists to every
-      package in app/. check_no_llm_imports forbids app.narrate everywhere
-      deterministic and now covers api/app.
-  7 the narrator cannot update or delete a narration (a test tries); the
-    migration round-trips                                     PASS.
-      test_the_narrator_can_append_and_nothing_else (update, delete,
-      truncate as narrator and as owner; no investigation write; no read of
-      verifications or readings). check_migration_round_trip clean with two
-      narrations seeded.
-  8 markdown and HTML shown literally (e2e), refused if they carry a URL
-                                                              PASS in CI.
-      e2e: the markup reply's **, <b>, <script> appear as characters, no
-      b/strong/script/img/a element; the refuse reply's markdown image is
-      refused for its URL, no img rendered.
+DELIBERATELY NOT BUILT (the close-out's list)
+  No change to the evidence, the record, the role or the providers beyond
+  the token bound (and the cut-off reply it implies). No new narration
+  feature. Nothing for Phase 36. No --plugins flag (Q25).
 
-DELIBERATELY NOT BUILT (part 2's list)
-  No hypothesis ranking. Nothing model-related in the binary (cli/ diff:
-  mcp.go, mcp_test.go, probe/http.go, model/redact.go — no model). No tool
-  for the narrator, no second call. No narration of verifications. No
-  narration through culprit mcp. No streaming. No remediation applied. No
-  button to narrate again.
-
-GATES (local, Windows, Docker up), on ec05453
-  lint, typecheck, lint-imports (6 kept), check-schema-drift (22 tables),
-  check-no-llm-imports (9 packages), check-invariants, check-scan-coverage
-  (303 files), check-frontend-tokens, cli-lint, check_security_doc (75
-  references), check_coupled_files --base origin/main            PASS
-  just test: api+scripts+shared 1400 passed / 6 skipped, worker 88,
-    mcp_server 21, extractors 31; go test ./... all ok; frontend npm test
-    19, oxlint, tsc                                              PASS
-  check_migration_round_trip (Docker)                            PASS
+GATES (local, Windows, Docker up), on d89f37c
+  lint, typecheck, lint-imports (6 kept), check-schema-drift,
+  check-no-llm-imports, check-invariants, check-scan-coverage,
+  check-frontend-tokens, cli-lint, check_security_doc (75),
+  check_coupled_files --base origin/main                         PASS
+  just test: api+scripts+shared 1414 passed / 6 skipped, worker 93,
+    mcp_server 21, extractors 31; go test ./... 0 FAIL            PASS
   culprit check --fail-on=breaks_request_path, LLM_PROVIDER=none  exit 0
-  NOT RUN locally: just quickstart, just e2e, just fault-library — the
-  quickstart's infra/.env.prod is not readable in this session; CI runs
-  all three.
+  NOT RUN locally: check_migration_round_trip (no migration changed;
+  CI ran it), quickstart, e2e, fault library (CI ran all three).
 
 AUDITS
-  invariant-auditor: CLEAN, no violation. Risks taken up: a redirect
-    carried culprit_probe past the binding (fixed, test above); a trailing
-    dot compared as the declared host (now refused); the four bound input
-    names unasserted (TestEveryCatalogueInputIsClassified); a scheme-less
-    host/path not a URL (now is); the api handed ANTHROPIC_API_KEY by
-    env_file (set empty for the api in both Compose files). Left: app.main
-    is exempt from both contracts (it schedules the job); the contracts'
-    forbidden list names third-party clients, not stdlib urllib or
-    http.client.
-  phase-auditor: NOT COMPLETE at 8bda31b, on four findings, all fixed in
-    b50eff2: (1) a backticked span was stored and shown whole in what a
-    refusal named — the model's sentence could reach the page; (2) the
-    check missed capitalised subject kinds and reading ids, mailto:, and a
-    zero-width character splitting a verdict; (3) overlapping ticks could
-    call the provider four times for one attempt (reproduced); (4) the
-    none leg had no stub address, so its zero count proved nothing. Also
-    taken up: no test of the anthropic provider's request (added), and
-    redact_credentials missed sk-ant-... keys (Python and Go, with a test
-    each). Re-audited at 8a09d7e: all six items CLOSED (its own overlap
-    test: 1 call; its redirect mutation red). Leftovers fixed in ec05453:
-    combining marks and blank fillers splitting a verdict (now refused);
-    host?query, host\path and host:port (now URLs); the claim's cleanup
-    after a database error (the unlock failed and masked the error, the
-    lock outlived it on a pooled connection — now rolled back first,
-    test_a_database_error_mid_attempt_releases_the_claim, red before).
-    Left, in LIMITS or here: a bare domain and a non-ASCII full stop are
-    not URLs (text-only display); a named token can be 80 characters of
-    the model's text joined by underscores; a tick that read due() before
-    another wrote attempt N can make N+1 at once, skipping the retry
-    interval (still at most three); an insert failing other than on
-    uq_narrations_attempt writes no row and the next tick calls again —
-    no CHECK the code can violate was found; plugin probes' inputs are
-    not bound under culprit mcp (LIMITS).
+  invariant-auditor: CLEAN. Risks: (1) a failed fallback insert chained
+    the first error, whose text renders the failing row — fixed
+    (NarrationNotStored, from None; test); (2) rows stored before the
+    close-out are served differently: an old "an invisible character"
+    becomes "a name that cannot be shown", and complete prose with a
+    character outside the allowlist is now served refused — the safe
+    failure, no data change; (3) the token comment overclaimed — fixed.
+  phase-auditor: criteria 1-5 PASS by execution, 6 NOT TESTABLE AS
+    WRITTEN, 7 not yet run at the time. Findings: F1 an en/em dash in a
+    name passed the component rule — fixed (a joining dash is read as a
+    hyphen; two fixture cases); F2 shown()'s "no credential" is the
+    shared pattern's coverage (password=..., Slack tokens, user:pass@host
+    pass) — in LIMITS, widening the pattern is a separate decision; F3
+    overclaims about tokens — fixed; F4 the double-failure path — fixed;
+    F5 the retry interval compares the worker's clock with Postgres's
+    now() — harmless on one host, left. CLAUDE.md's phase line — fixed.
 
 DECISIONS TAKEN HERE (for review)
-  - Providers over plain httpx, not the anthropic SDK: field 11 says no
-    new dependency, httpx is already in the worker's lock (now declared),
-    and the CI stub then runs the same request code.
-  - The anthropic default model is unset: NARRATOR_MODEL is required with
-    a provider, so which model reads an investigation is the operator's.
-    anthropic-version 2023-06-01, max_tokens 16000.
-  - Evidence carries no reading's measured values or evidence, only probe,
-    target, verdict and reason (PERMISSIONS lists it).
-  - The rebuild from rows moved into culprit_model.investigations.from_rows
-    (the API's load used it alone before): numbering must agree.
-  - narrations stores no refused prose — only what it named.
-  - A stored narration is shown even after narration is turned off; "off"
-    only when there is none.
-  - The stub lives in scripts/ (scan coverage refused infra/), and its
-    refusal names a component and a URL rather than a hand-formatted
-    subject (the subject-construction lint).
-  - e2e check names are now "e2e (none)" and "e2e (stub)"; main requires
-    no checks by name (ruleset 26460341: deletion, non-fast-forward,
-    update only).
-  - Turning narration on narrates the stored history, newest first, three
-    every 15 seconds (LIMITS).
+  - An ollama reply cut off at num_predict fails, as anthropic's does.
+  - shown()'s labels: "a credential", "a name that cannot be shown".
+  - A joining en or em dash is a hyphen to the name rules (F1).
+  - The branch's upstream was unset after cutting it from
+    origin/phase-35-narrator, so no push could reach the merged branch.
 
 IN THE PLAN, FOR CORRECTION
-  - Criterion 5's "(counted)" cannot apply to the binary jobs: there is
-    nothing to count. Suggested: "by construction — the binary reads no
-    provider setting and links no model client".
-  - Fields 4-6 (worker/app/narrate as a rewrite of rag) remain stale, as
-    "How Phase 35 is run" says.
+  - Work item 4 and criterion 6 (Q25).
+  - "English runs well under one token per character ... no reply short
+    enough to pass is cut off": a token is several characters, so 4000
+    tokens bounds cost at a few times MAX_PROSE, not at it.
 
 /CI
-  run      43087534723 on 8bda31b — every job success except
-           narration-parity: the legs' records differed by the run's agent
-           named in a reason and a token's expires_in_seconds (3597 vs
-           3598) — ids and times. Fixed in 8a09d7e.
-  run      43090468335 on b50eff2 — the same narration-parity difference.
-  run      43090673530 on 8a09d7e (pull_request) — SUCCESS
+  run      43161287549 on 4f5ba7a (pull_request) — SUCCESS, every job
+  run      43162985716 on d89f37c (pull_request) — SUCCESS
   jobs     lint, typecheck, cli, test, migration-round-trip, self-check,
            kind-capture, fault-library, e2e (none), e2e (stub),
            narration-parity, build x5: success; publish, deploy skipped
-  e2e      (none): 19 passed, the four stub journeys skipped by design,
-           "the stub provider's calls: {"total": 0}"; (stub): 22 passed,
-           all four narration journeys; parity: "identical apart from ids
-           and times"
-  checks   gh pr checks 35: every check pass or skipping, CodeQL and the
+  checks   gh pr checks 36: every check pass or skipping, CodeQL and the
            four Analyze checks included
-  alerts   none open (pr=35, refs/pull/35/merge, refs/pull/35/head)
-  merge    origin/main = 60d2c92, the branch's base: the branch is the
-           merge result
-  ec05453  pushed, but GitHub never synced PR #35 to it (no run in ten
-           minutes; the PR head stayed 8a09d7e). The report commit's push
-           carries it. That run is the one for the commit that writes this
-           report, so it is recorded on PR #35, not here.
+  alerts   none open (pr=36, refs/pull/36/merge, refs/pull/36/head)
+  merge    origin/main = ac0a939 is merged into the branch (4f5ba7a): the
+           branch is the merge result
 
 LEFT OPEN
-  - The plan's criterion 5 wording (above, for correction).
-  - The re-audit's leftovers listed under AUDITS, for review.
-  - Definition of done: the recorded demonstration is Malcolm's, after
-    the merge (not /next's).
+  - Q25 (blocks the close-out's sign-off on item 4 / criterion 6).
+  - F2 and F5, above.
+  - main's push run on the merge: Phase 36 part 1's step 0.
+  - The definition of done's recorded demonstration is Malcolm's.
 ```
 
 ## §6. Escalate to the architecture session when
