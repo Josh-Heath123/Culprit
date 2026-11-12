@@ -1250,7 +1250,7 @@
       "reason": "a budget entry is written out in full: a merge key (<<) is not read"
     }
   ],
-  "budget_manifests_why": "A whole culprit.yaml whose budgets: section arrives through a top-level merge key: the form check must see it there too, or one reader loads 300 where the other refuses (the re-audit of Phase 36 part 2). Both readers refuse it with this reason.",
+  "budget_manifests_why": "A whole culprit.yaml whose budgets: section arrives through a top-level merge key: the form check must see it there too, or one reader loads 300 where the other refuses (the re-audit of Phase 36 part 2). Both readers refuse it with this reason. A case with no reason is refused by both, each in its own words: the Go loader refuses a repeated key as invalid YAML.",
   "budget_manifests": [
     {
       "why": "budgets: through a top-level merge",
@@ -1261,6 +1261,16 @@
       "why": "budgets: through a top-level merge of a list of mappings",
       "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: [{budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 1e3, why: w}]}]\n",
       "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "why": "value written twice in one entry",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n    value: 500\n    why: w\n",
+      "reason": null
+    },
+    {
+      "why": "budgets: declared twice",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - {subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 300, why: w}\nbudgets: []\n",
+      "reason": null
     }
   ]
 }

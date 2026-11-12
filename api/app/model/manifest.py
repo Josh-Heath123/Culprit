@@ -585,12 +585,21 @@ def _reject_budget_literals(text: str, source: str) -> None:
     root = yaml.compose(text, Loader=yaml.SafeLoader)
     if not isinstance(root, yaml.MappingNode):
         return
-    for key, section in _top_level_pairs(root):
+    pairs = _top_level_pairs(root)
+    # PyYAML keeps the last of two equal keys; the Go loader refuses the
+    # file. One reader loading what the other refuses is what this check
+    # exists to stop (the focused re-audit of Phase 36 part 2).
+    if sum(1 for key, _ in pairs if key.value == "budgets") > 1:
+        raise ManifestError(f"{source}: budgets: is declared twice")
+    for key, section in pairs:
         if key.value != "budgets" or not isinstance(section, yaml.SequenceNode):
             continue
         for index, entry in enumerate(section.value):
             if not isinstance(entry, yaml.MappingNode):
                 continue
+            names = [field.value for field, _ in entry.value]
+            if len(names) != len(set(names)):
+                raise ManifestError(f"{source}: budgets[{index}]: a key is written twice")
             for field, value in entry.value:
                 if field.tag == "tag:yaml.org,2002:merge" or field.value == "<<":
                     # The fields a merge brings in are not checked for their

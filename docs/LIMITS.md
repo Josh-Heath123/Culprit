@@ -2515,6 +2515,14 @@ request in a 120 s run could be given a timeout long enough to show it was
 slower. One subject and predicate may have one budget in a file: two are
 refused at load, not one measured and the other dropped.
 
+A merge key (`<<`) in a budget entry is refused by both readers, and a
+`budgets:` section that arrives through a top-level merge is checked like
+any other; a key written twice in a budget entry, or `budgets:` written
+twice, is refused by both. One split remains: a top-level key written as
+the *string* `"<<"` is ignored by the binary's loader, which ignores every
+top-level key it does not know, and refused by the API's; a budget written
+under it is then dropped by `culprit check` without a word.
+
 In `culprit.yaml` the value is written as **plain decimal digits**,
 unquoted, with no sign and no leading zero: `300`. Every other form is
 refused by both readers, with the same reason — `300.0`, `+300`, `0454`,
@@ -2590,14 +2598,22 @@ Every probe request is built by one function that refuses any method but
 `GET` and `OPTIONS`, and every client in `internal/probe` sends through a
 transport that refuses the same again, and any body, before anything is
 dialled. A source scan of that package (`TestEveryRequestIsBuiltInOnePlace`)
-fails on each way found so far to build or send a request around those two:
-a constructor named or taken as a value, a type made from `http.Request`, a
-method written through a field or a pointer, a replaced transport, a direct
-`RoundTrip`, a client that is not a guarded literal, `http.DefaultClient`,
-and `httptest`, `reflect` or `unsafe` imported. A scan of source is not a
-proof: code inside `internal/probe` that opened a socket of its own could
-still write. The binary's network allowlist keeps every other package from
-linking a network package at all, and review covers the one that may.
+fails on each of the 26 ways three audits found to build or send a request
+around those two: a constructor named or taken as a value, a request value
+or literal (typed, or with its type left out inside a slice or map), a type
+made from `http.Request`, a method or transport written through a field or
+a pointer, a direct or stored `RoundTrip`, a client that is not a guarded
+literal, `http.DefaultClient`, a dot import of `net/http`, and `httptest`,
+`reflect` or `unsafe` imported.
+
+**It is a guard against ordinary code, not a proof against deliberate
+code.** It reads syntax, and each audit found new syntax that got past it
+until the scan was taught it; code written inside `internal/probe` to send
+a write — by a form not yet listed, by a header such as
+`X-HTTP-Method-Override`, or over a socket of its own — could still do so.
+What bounds that is where it can be written: the binary's network allowlist
+keeps every other package from linking a network package at all, so the
+one package that may is the one review has to read.
 
 ### Latency in the walk
 

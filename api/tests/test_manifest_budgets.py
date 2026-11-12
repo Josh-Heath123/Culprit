@@ -159,4 +159,5 @@ def test_budgets_through_a_top_level_merge_are_checked_for_their_form(case: dict
     """The shared fixture's budget_manifests, which the Go loader reads too."""
     with pytest.raises(ManifestError) as refused:
         load_manifest(case["manifest"])
-    assert case["reason"] in str(refused.value)
+    if case["reason"] is not None:
+        assert case["reason"] in str(refused.value)

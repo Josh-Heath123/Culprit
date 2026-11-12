@@ -82,6 +82,11 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 			if path != "net/http" {
 				continue
 			}
+			// A dot import names nothing the checks below can see.
+			if spec.Name != nil && spec.Name.Name == "." {
+				position := fset.Position(spec.Pos())
+				found = append(found, filepath.Base(position.Filename)+":"+strconv.Itoa(position.Line)+" import . net/http")
+			}
 			if spec.Name != nil {
 				httpNames[spec.Name.Name] = true
 			} else {
@@ -132,6 +137,27 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 				}
 				return true
 			})
+			// http.Request is used only behind a pointer, outside any
+			// composite literal: a request value, or a literal of one —
+			// typed, or with its type left out inside a slice or map of
+			// them — is a request built without the constructor.
+			allowedRequest := map[ast.Node]bool{}
+			ast.Inspect(declaration, func(node ast.Node) bool {
+				if star, ok := node.(*ast.StarExpr); ok {
+					allowedRequest[star.X] = true
+				}
+				return true
+			})
+			mentionsRequest := func(expr ast.Expr) bool {
+				mentions := false
+				ast.Inspect(expr, func(node ast.Node) bool {
+					if name, ok := isHTTP(asExpr(node), nil); ok && name == "Request" {
+						mentions = true
+					}
+					return true
+				})
+				return mentions
+			}
 			ast.Inspect(declaration, func(node ast.Node) bool {
 				where := func(what string) {
 					position := fset.Position(node.Pos())
@@ -148,21 +174,25 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 						where("http.DefaultClient")
 					} else if ok && name == "Client" && !allowedClient[typed] {
 						where("http.Client outside a guarded literal")
+					} else if ok && name == "Request" && !allowedRequest[typed] {
+						where("http.Request not behind a pointer")
+					}
+					// A transport's RoundTrip, called or taken as a value,
+					// skips the guard; only the guard itself may use it.
+					if typed.Sel.Name == "RoundTrip" && !inGuard {
+						where(".RoundTrip")
 					}
 				case *ast.UnaryExpr:
-					// &r.Method writes the method through a pointer.
-					if selector, ok := typed.X.(*ast.SelectorExpr); ok && typed.Op == token.AND && selector.Sel.Name == "Method" {
-						where("&.Method")
+					// &r.Method and &c.Transport write through a pointer.
+					if selector, ok := typed.X.(*ast.SelectorExpr); ok && typed.Op == token.AND &&
+						(selector.Sel.Name == "Method" || selector.Sel.Name == "Transport") {
+						where("&." + selector.Sel.Name)
 					}
 				case *ast.CallExpr:
 					if selector, ok := typed.Fun.(*ast.SelectorExpr); ok && sendingMethods[selector.Sel.Name] {
 						where("." + selector.Sel.Name + "()")
 					}
-					// A request handed to a transport directly skips the
-					// guard; only the guard itself may.
-					if selector, ok := typed.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "RoundTrip" && !inGuard {
-						where(".RoundTrip()")
-					}
+
 					if ident, ok := typed.Fun.(*ast.Ident); ok && ident.Name == "new" && len(typed.Args) == 1 {
 						if name, ok := isHTTP(typed.Args[0], nil); ok && name == "Request" {
 							where("new(http.Request)")
@@ -176,8 +206,8 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 						where("type " + typed.Name.Name + " from http.Request")
 					}
 				case *ast.CompositeLit:
-					if name, ok := isHTTP(typed.Type, nil); ok && name == "Request" {
-						where("http.Request{}")
+					if typed.Type != nil && mentionsRequest(typed.Type) {
+						where("a literal of http.Request")
 					}
 					// Every client this package builds sends through the
 					// guard that checks the method again as a request leaves.
@@ -201,6 +231,12 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 	}
 	sort.Strings(found)
 	return found
+}
+
+// asExpr is node as an expression, or nil.
+func asExpr(node ast.Node) ast.Expr {
+	expr, _ := node.(ast.Expr)
+	return expr
 }
 
 // guarded reports whether an http.Client literal's Transport is a
@@ -311,6 +347,17 @@ func TestARequestBuiltAroundTheCheckIsFound(t *testing.T) {
 		"an embedded client":   "type wrapped struct{ http.Client }\n\nfunc smuggle() wrapped { return wrapped{} }",
 		"a replaced transport": `func smuggle(c *RealHTTPClient) { c.client.Transport = http.DefaultTransport }`,
 		"reflect":              `func smuggle(r *http.Request) { reflect.ValueOf(r).Elem().FieldByName("Method").SetString("PUT") }`,
+		// The focused re-audit: a DELETE got out with the scan green.
+		"a type-omitted literal": `func smuggle() []*http.Request { return []*http.Request{{Method: "DELETE"}} }`,
+		"a map of requests":      `func smuggle() map[string]*http.Request { return map[string]*http.Request{"a": {Method: "PUT"}} }`,
+		"a request value":        `func smuggle() { var r http.Request; _ = r }`,
+		"a RoundTrip value": `func smuggle(ctx context.Context) {
+	rt := http.DefaultTransport.RoundTrip
+	r, _ := newProbeRequest(ctx, http.MethodGet, "http://x")
+	_, _ = rt(r)
+}`,
+		"dot import":                 `func smuggle() { _, _ = Post("http://x", "text/plain", nil) }`,
+		"a pointer to the transport": `func smuggle(c *RealHTTPClient) { p := &c.client.Transport; *p = http.DefaultTransport }`,
 	}
 	for name, code := range ways {
 		t.Run(name, func(t *testing.T) {
@@ -337,6 +384,9 @@ func TestARequestBuiltAroundTheCheckIsFound(t *testing.T) {
 			imports := "import (\n\t\"context\"\n\t\"net/http\"\n)\n\nvar _ context.Context\n\n"
 			if name == "aliased" {
 				imports = "import web \"net/http\"\n\n"
+			}
+			if name == "dot import" {
+				imports = "import . \"net/http\"\n\n"
 			}
 			if name == "reflect" {
 				imports = "import (\n\t\"net/http\"\n\t\"reflect\"\n)\n\n"
