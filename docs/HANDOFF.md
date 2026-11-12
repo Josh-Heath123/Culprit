@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **36, part 2 — The walk sees slow** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 36, "Part 2". Step 0: `main`'s push run on `716205f` green; then the phase-auditor re-audits `3be789e`. |
-| Previous phase | **36, part 1 — Budgets and the measurement: signed off 2026-11-12** by the architecture session. It is complete when `main`'s push run on `716205f` is green. PR #37 merged as `716205f`; the pull request's runs 43181751008 and 43182997513 were green on every job, read from GitHub. Decisions at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
+| Current phase | **36, part 2 — The walk sees slow** — implemented, **awaiting review**. PR #38 (`4c7bc6e`), CI green on every check (run 43235902449). Q26 (criterion 5) is for review, not blocking. Report in §5. |
+| Previous phase | **36, part 1 — Budgets and the measurement: complete.** Signed off 2026-11-12; `main`'s push run 43218642206 on `716205f` green on every job (part 2's step 0). |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-36-walk`, to be cut from `origin/main` = `716205f`. Its first commit is the part 1 sign-off already in the working tree (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`; message `../phase-36-1-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
-| Blocking questions | None. |
+| Branch | `phase-36-walk`, from `origin/main` = `716205f`; PR #38. |
+| Blocking questions | None. Q26 is open, not blocking. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q25 was ruled 2026-11-12 (`DIAGNOSTIC_PLAN.md`, end of Phase 35): close-out item 4 and criterion 6 are withdrawn, and a test that only `probe.BuiltIn` registers a probe joins Phase 36 part 1. | | |
+| Q26 | **Phase 36 part 2, criterion 5** ("a non-GET request built anywhere in `internal/probe` is refused at one place, shown red by building one around it"). Built: one constructor (`newProbeRequest`), one rule (`checkMethod`), applied again by `methodGuard` under every client, and a source scan that fails on 26 ways around them. Three audits each found syntax the scan did not know (the third got a DELETE out with the scan green); each is a red case now, and the last fixes were not re-audited. A syntactic scan holds only against forms it knows, and `docs/LIMITS.md` now says so ("a guard against ordinary code, not a proof against deliberate code"). Accept that, or ask for something stronger — e.g. only `http.go` and `timing.go` in `internal/probe` may import `net/http` (a two-file allowlist, held like the network boundary), or a `go/types` analyzer in place of the scan. | 2026-11-12, Phase 36 part 2 run | Not blocking; part 2's review |
 
 ---
 
@@ -114,7 +114,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 35, part 2 | The narrator | **complete** (PR #35 merged, `ac0a939`; its last commits through PR #36) | **Signed off 2026-11-11** (architecture session): every check on the pull request and on `main`'s push run green, read from GitHub; step 0 met. Parity's widening (`8a09d7e`) is honest; Phase 36 part 2 narrows it. Merged before the run finished, so the re-audit's fixes (`ec05453`) and the run report (`356012e`) landed with the close-out. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | 35, close-out | Land the re-audit's fixes; the review's corrections | **complete** (PR #36 merged, `08f7d65`) | **Signed off 2026-11-12** (architecture session): `main`'s push run 43167772415 green on every job; criteria 1–5 executed, each shown red before the change. Q25 ruled: item 4 and criterion 6 are withdrawn, because the brief rested on a wrong LIMITS sentence. The first run under the draft pull request rule, and it held. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | 36, part 1 | Budgets and the measurement | **complete when `main`'s push run on `716205f` is green** (PR #37 merged) | **Signed off 2026-11-12** (architecture session): every check on the pull request green, read from GitHub. The phase-auditor recomputed every rank with exact fractions and fuzzed Go against Python on 40,000 inputs; its two NOT MET findings were fixed and counted at the server. Three corrections are carried into part 2. Decisions at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
-| 36, part 2 | The walk sees slow | not started | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 36, "Part 2" at the end of the section: its decisions, work order, criteria and what not to build. Step 0: `main`'s push run on `716205f` green, then the phase-auditor re-audits `3be789e`. Branch `phase-36-walk` from `origin/main` = `716205f`; its first commit is the part 1 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 36, part 2 | The walk sees slow | **implemented, awaiting review** (PR #38, `4c7bc6e`; CI green, run 43235902449) | Every criterion met in tests and CI; criterion 5 with Q26. **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 36, "Part 2" at the end of the section: its decisions, work order, criteria and what not to build. Step 0: `main`'s push run on `716205f` green, then the phase-auditor re-audits `3be789e`. Branch `phase-36-walk` from `origin/main` = `716205f`; its first commit is the part 1 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 37 | The database: statements, plans and indexes | not started | `docs/PERFORMANCE_PLAN.md` Phase 37. "How Phase 37 is run" is written at the review before it. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
@@ -149,215 +149,224 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        36, part 1 — budgets and the measurement
-Branch:       phase-36-budgets, from origin/main = 08f7d65 (PR #36's merge);
-              10a09dd the close-out sign-off, fbdae75 the work, fb64c71 the
-              audits' findings, 3be789e the re-audit's. PR #37 (draft until
-              this report).
+Phase:        36, part 2 — the walk sees slow
+Branch:       phase-36-walk, from origin/main = 716205f (PR #37's merge);
+              3da4cd4 the part 1 sign-off, 0a3c743 the work, f3997f0 the
+              audits' findings, 3ceb0ee the re-audit's, 4c7bc6e the
+              focused re-audit's. PR #38 (draft until this report).
 Run:          2026-11-12, /next.
-Status:       IMPLEMENTED; every local gate green; both audits run, every
-              finding fixed or written into LIMITS; CI green on 3be789e
-              (run 43181751008), every PR check. Awaiting review.
+Status:       IMPLEMENTED; every local gate green; CI green on every
+              commit (runs below); the audits' findings fixed, the last
+              round (4c7bc6e) not re-audited. One question for review,
+              not blocking: Q26 (criterion 5). Awaiting review.
 
 STEP 0
-  main's push run 43167772415 on 08f7d65 (PR #36's merge): every job
-  success, e2e (none), e2e (stub) and narration-parity included; deploy
-  skipped. Recorded, as "Added 2026-11-12" says; nothing re-run.
+  main's push run 43218642206 on 716205f: every job success, e2e (none),
+  e2e (stub) and narration-parity included; deploy skipped.
+  The phase-auditor re-audited 3be789e. Criteria 3 and 4 of part 1 CLOSED.
+  Two OPEN, fixed here before anything was built on them:
+  - urlIsOnRoute compared a canonical path and sent the raw URL: /ready/,
+    //ready, /ready%3F/../../admin, /items/.., and a userinfo URL (sent
+    as Basic auth) were timed against GET /ready's budget. Now urlOffRoute
+    compares the escaped path as sent, segment by segment, and refuses a
+    query, fragment or userinfo; red on part 1's check (14 cases, 280
+    requests). Under culprit mcp a latency probe's address must be the
+    endpoint of the budget's own component (and its scheme).
+  - the Q25 scan missed Register reached through an alias of Probe and a
+    generic interface. Catalogue.Register is unexported (register);
+    TestCatalogueExportsNoRegistration, red on an exported one.
 
-WHAT WAS BUILT (work order 1-6, and the Q25 item)
-  1 The rule, first: shared/culprit_model/latency.py and
-    cli/internal/model/latency.go, held to shared/tests/latency_conformance.json
-    (16 judged cases with verdict and reason, 13 refused inputs). Integer
-    only: nearest-rank order statistics, bounds at the exact binomial's
-    ranks for 90% on each side (100^n and binomial coefficients; math/big
-    in Go). fail when the lower bound is over, pass when the upper is
-    within, inconclusive otherwise. A timeout sorts after every answer.
-    Bounds: budget 1-60000 ms, samples at most 1e9 us, requests at most 50,
-    in both languages.
-  2 Budgets: budgets: in culprit.yaml (Go loader extract/budgets.go, rank
-    100; culprit_model.latency.Budget; the API's manifest model, carried
-    and round-tripped); x-culprit-budget on an OpenAPI operation (rank 80;
-    a bad entry is a skip under want "budgets", not http_routes). Only
-    latency_p50_ms and latency_p95_ms. One budget per subject and predicate
-    in a file. Conflicts go through the unchanged comparator.
-    diverge.Budgets lists budgets that point at nothing and, when budgets:
-    is declared, the unbudgeted surface (routes declared `exists`);
-    rendered in text and JSON. Budgets do not count as a second source
-    for the unverifiable surface.
-  3 probe.http.latency (cli/internal/probe/latency_probes.go, timing.go):
-    50 GETs for a p95, 20 for a p50, sequential, >= 50 ms apart (also
-    between runs in one process), each on a new connection, dialling to
-    last byte (or the 1 MiB read cap), setup recorded as connect_us; no
-    redirect, header, body or credential. The budget comes from
-    expectation resolution, which now tries each predicate a manifest
-    produces (only this probe has two; p95 first). The budget's subject
-    fixes method and path: a non-GET budget, or a url on another path,
-    sends nothing. Request timeout 2x budget + 500 ms, cut to what the
-    120 s run has left. url and base_url are bound under culprit mcp.
-    Probe ids named twice run once. cost: metered.
-  4 Reading validation in Go (Reading.Validate) and Python (Reading), so
-    POST /readings refuses a latency reading whose verdict its samples and
-    budget do not give.
-  5 The demo: an invariant declaring inventory-service's GET /ready, and
-    its budget: latency_p95_ms 300. Chosen as well clear of both sides: a
-    healthy /ready on the Docker network answers in milliseconds, and the
-    library injects 800 ms; 300 sits ~2.7x under the fault and far above
-    healthy, and at p95 a pass needs all 50 samples within it, so a margin
-    that wide keeps the healthy case from being held inconclusive by one
-    slow request. The fault library runs culprit probe probe.http.latency
-    under the latency fault and after its fix.
-  6 PROBES (catalogue row and a section), PERMISSIONS (net.http.outbound:
-    what the probe sends, no new capability), LIMITS ("Latency budgets"),
-    README ("Latency budgets", budgets: and x-culprit-budget), ARCHITECTURE
-    28, CLAUDE.md. The tour waits for part 2.
-  Q25 register_test.go type-checks every non-test package of the module
-    (module packages from source, others stubbed: 0.1 s) and fails on any
-    call or method value of a Register that is Catalogue's or takes a
-    probe.Probe, outside probe.BuiltIn — in function bodies, package-level
-    initializers and testdata directories. TestCulpritMcpServesTheBuiltIn-
-    Catalogue holds what the binary serves to BuiltIn's 14.
+WHAT WAS BUILT (work order 1-6)
+  1 Narration parity: _ms/_us/_seconds/elapsed are volatile only inside a
+    reading's measured; ids and _at everywhere. A budget that differs
+    between the legs is a difference (red before), samples are not.
+  2 Part 1's corrections:
+    - both budgets on a route judged from one run: Resolution.Also,
+      Request.AlsoExpected, Outcome.Also; probe.Runner.RunOne returns one
+      reading per budget. 50 requests counted at the server, two readings,
+      each validating (red under part 1's resolution: one reading).
+    - one method check: newProbeRequest builds every request, checkMethod
+      is the rule, and methodGuard, a transport under every client,
+      applies it again (and refuses a body) as a request leaves. A source
+      scan of internal/probe fails on 26 ways to go around them (see Q26).
+    - budget literals: model.BudgetLiteralProblem and
+      culprit_model.latency.budget_literal_problem, from
+      latency_conformance.json's budget_literals (1e3, 0o454, 0454,
+      300_000, 300.0, +300, 0x12C, quoted, tagged, aliased ...). The Go
+      loader reads the YAML node (Budget.UnmarshalYAML); the API composes
+      the YAML, after its credential scan. Both refuse a merge key in an
+      entry (budget_entries), budgets: through a top-level merge, and a key
+      written twice (budget_manifests). Red without each check, in both.
+  3 probe.http.latency discriminates latency_budget_exceeded; a timed-out
+    request's setup is recorded (timeout_connect_us); planned joins the
+    rule in Go and Python: a run cut short is inconclusive.
+  4 internal/isolate/latency.go: the second pass runs only when the error
+    pass found no root and nothing failing below the entry. Each component
+    on the request path with a GET budget gets the hypothesis, tested on
+    each budgeted route in subject order (supported on a fail, ruled out
+    when all pass, unexplored otherwise). A pass rules out that component
+    alone, so the pass descends the whole tree. The root is the deepest
+    slow component with nothing slow below it; above it, propagation.
+    model.SplitLatency judges setup alone and server time (total - setup)
+    against the same budget: setup over with --from the caller roots at
+    the connection (the component's hypothesis ruled out when its time
+    passed); server over roots at the component; otherwise partial,
+    naming both or "reaching X from this agent". The walk's remaining wall
+    clock is each latency run's deadline. The rubric reruns the latency
+    request and compares the same budget's reading. Verification runs a
+    shared run once a round (same_run_as in the record; probe, target,
+    environment and inputs must match). Placement places the probe on the
+    component's endpoint (base_url) from wherever the binary runs.
+  5 Fault library: latency diagnoses at component:inventory-service
+    (root_kind latency_budget_exceeded, complete) and verifies; new
+    latency-unbudgeted (the demo's manifest less budgets:) stays
+    inconclusive, "no latency budget was judged"; new scenario
+    latency-wrong-fix (600 ms) is not_resolved. results.json derived from
+    expected.json (Docker is down here) and reproduced by CI's run, whose
+    `git diff --exit-code` on it passed; README: 6 of 6 of 8 planted.
+  6 LIMITS: "Added latency is isolated only against a declared budget"
+    (replacing "is not isolated"), "Latency in the walk" (after errors;
+    one vantage; a pass rules out one component; hop or component; what an
+    unbudgeted component leaves unknown; a database below makes it
+    partial; two slow branches; time and the wall clock), "What holds the
+    GET-only rule, and what cannot", the URL rule, both budgets, the
+    literal and YAML rules. PROBES ("In the walk"), PERMISSIONS (what the
+    walk sends under net.http.outbound). README tour step 4: a budget, a
+    slow /health, `culprit diagnose web --from web` roots at api — run for
+    real on this machine (complete, reproduced, r3 p95 >= 402.443 ms) and
+    `culprit verify` said verified after the sleep came out. CLAUDE.md.
 
-CRITERIA (part 1)
-  1 the rule's fixture holds in Go and Python, same verdicts and reasons,
-    with the six named cases; red by moving a bound one rank   PASS.
-      TestTheLatencyRuleGivesTheFixturesVerdictAndReason, test_the_rule_
-      gives_the_fixtures_verdict_and_reason; ranks checked by hand in
-      both (p50 of 20: 7 and 14; p95: 44 none, 45 yes). Moving either
-      bound one rank turns cases red in both. The phase-auditor recomputed
-      ranks with exact fractions for n=1..50 (0 mismatches) and fuzzed Go
-      against Python on 40,000 inputs including bounds: 0 differences.
-  2 against a fake server, counted: under passes, over fails, straddling
-    inconclusive, mostly 401/500 inconclusive, a timeout counts as slow
+CRITERIA (part 2)
+  1 synthetic A->B->C, C slowed: root C; A->B, B->C propagation; no latency
+    reading before the error pass found nothing; B fast & C slow -> C
                                                               PASS.
-      TestTheLatencyProbeAgainstAServerWithControlledDelays (httptest).
-  3 nothing makes it send more than 50 or closer than 50 ms; a test tries
-    each                                                      PASS.
-      TestNothingMakesTheLatencyProbe... (inputs, a probes: timeout
-      override, the strictest budget, credentials as inputs);
-      TestTwoLatencyRunsAtOnceDoNotInterleave; TestALatencyProbeNamedTwice-
-      RunsOnce and ...ListedTwiceOverMCPRunsOnce (red without the
-      de-duplication: 40 requests). NOT MET at fbdae75 (phase-auditor:
-      `-p x -p x` sent 100 requests 0.1 ms apart); fixed in fb64c71, its
-      reproduction then 50 requests, 50.9 ms apart. Two separate processes
-      at once can still interleave (LIMITS).
-  4 a non-GET budget is inconclusive with nothing sent; never OPTIONS,
-    HEAD, a body or a credential                              PASS.
-      TestABudgetOnARouteThatIsNotGetSendsNothing, TestAPostBudgetSends-
-      NothingWhateverTheInputsSay, TestAUrlOnAnotherRouteSendsNothing (all
-      counted at the server); neverSentAnythingButAPlainGET on every
-      server test. NOT MET at fbdae75 (a url input made a POST budget
-      timed GETs); fixed in fb64c71; the re-audit then found a url on
-      another path judged against the budget; fixed in 3be789e.
-  5 through culprit mcp, the address input refuses an undeclared endpoint
-    before dialling (counted); classification covers it       PASS.
-      TestAProbeReachesOnlyDeclaredEndpoints (3 latency cases, 0 requests);
-      TestEveryCatalogueInputIsClassified. Red by the phase-auditor with
-      the binding removed (overlay).
-  6 culprit check: conflicting budgets -> intent_conflict; a budget on an
-    undeclared route reported; unknown predicate refused by the Go loader,
-    the Python model and the API's model                      PASS.
-      check/budgets_test.go; test_latency.py (Budget);
-      test_manifest_budgets.py.
-  7 a latency reading whose verdict disagrees is refused by Go, Python and
-    the API, each shown red                                    PASS.
-      Validators disabled by hand: Python + API 18 failed; Go
-      TestALatencyReadingWhoseVerdict... failed. Reproduced by the
-      phase-auditor.
-  8 in CI's fault-library job, on Linux: fails under the latency fault,
-    passes once cleared                                        PASS in CI.
-      measureLatency in faultlib_test.go; run 43175231182 and run 43181751008:
-      TestTheFaultLibrary/latency PASS. expected.json and results.json
-      unchanged.
-  9 from a fresh clone, the quickstart starts with the demo's budgets:
-                                                              PASS in CI.
-      Both e2e legs apply demo-services/culprit.yaml from a fresh
-      checkout; test_manifest_budgets.py loads and round-trips it.
-  10 every PR check green, both e2e legs and narration-parity;
+      isolate/latency_test.go (TestASlowCalleeIsTheRoot..., TestAFastCaller-
+      RulesOutOnlyItself, TestLatencyIsNotAskedWhenTheErrorsExplain,
+      TestASlowComponentAboveFastOnesIsTheRoot). The first build's
+      children-only root rule was red on the B-fast case. Phase-auditor:
+      mutations of the root rule and of the gate turn them red.
+  2 from the same samples: hop / component / neither / outside  PASS.
+      TestHopOrComponentFromTheSameSamples, recorded timings, no network.
+  3 CI fault library: latency root inventory-service, verified after the
+    fix, not_resolved after a wrong one; unbudgeted inconclusive saying
+    no budget is declared                                     PASS in CI.
+      runs 43228627279 (0a3c743) and 43231557369 (f3997f0): latency
+      PASS (235 s), latency-unbudgeted PASS, verify/latency-wrong-fix
+      PASS (312 s). The job is now ~11 min (was 3.5).
+  4 both budgets: one run of 50 counted, two readings validated  PASS.
+      TestARouteWithBothBudgetsIsMeasuredOnceAndJudgedTwice; through the
+      commands, TestDiagnoseFindsASlowComponentAndVerifyJudgesItsFix
+      (record same_run_as, verify 2 rounds x 2 runs x 50 + 2 requests).
+  5 a non-GET built anywhere in internal/probe refused at one place,
+    shown red                                  PASS for every form found;
+                                                see Q26.
+      TestEveryRequestIsBuiltInOnePlace, TestARequestBuiltAroundTheCheck-
+      IsFound (26 ways), TestTheGuardRefusesAWriteAsItLeaves. Red on part
+      1's TimeGet. Three audits each found syntax the scan missed (0a3c743:
+      3; f3997f0: 9; 3ceb0ee: 6 incl. one that sent a DELETE); all are
+      red cases now. 4c7bc6e was not re-audited.
+  6 1e3, 0o454, 0454, 300_000 refused by the Go loader, the Python model
+    and the API, from the shared fixture                      PASS.
+      check/budgets_test.go, shared test_latency.py, api
+      test_manifest_budgets.py; red without each check. NOT MET at 0a3c743
+      (a merge key) and at f3997f0 (a top-level merge); CLOSED at 3ceb0ee
+      by the focused re-audit.
+  7 narration parity: a differing budget is red, samples are not  PASS.
+      scripts/tests/test_narration_parity.py; red with 716205f's script.
+  8 a latency probe near the walk's end stops at its deadline; the
+    hypothesis is unexplored                                  PASS.
+      TestALatencyProbeStopsAtTheWalksDeadline; the phase-auditor ran the
+      real probe with a 1.5 s context: 22 of 50 sent, inconclusive "cut
+      short", the reading validates.
+  9 every PR check green, both e2e legs and narration-parity;
     LLM_PROVIDER=none changes nothing                          PASS.
-  Q25 only probe.BuiltIn calls Catalogue.Register, shown red   PASS.
-      TestOnlyBuiltInRegistersAProbe; TestARegistrationElsewhereIsFound
-      (a direct call, a package-level initializer, a call through an
-      interface, a package under testdata). Not caught by a source scan:
-      registration by reflection; TestCulpritMcpServesTheBuiltInCatalogue
-      holds the served catalogue instead.
+      run 43235902449 and PR #38's checks (below).
 
-DELIBERATELY NOT BUILT (part 1's list)
-  No walk change (isolate, verify, the library's verdicts untouched; the
-  probe discriminates nothing, so the walk never picks it). No credential.
-  No OPTIONS or HEAD. No parallel requests, configurable count or load. No
-  percentile but p50 and p95. No telemetry percentiles. No threshold
-  Culprit chose: the demo's 300 ms is the demo's declaration, with its why.
+DELIBERATELY NOT BUILT (part 2's list)
+  No credential sent by any probe. No second vantage, no probe dispatched
+  elsewhere. No latency from telemetry or a baseline. No early stopping
+  inside a run (a run cut short at the walk's deadline is inconclusive,
+  never judged on fewer requests than planned). No percentile but p50/p95.
+  No change to how errors are walked (the second pass runs after them;
+  existing isolate tests unchanged). Nothing for Phase 37.
 
-GATES (local, Windows, Docker up), on 3be789e
+GATES (local, Windows, Docker NOT running), on 4c7bc6e
   lint, typecheck, lint-imports (6 kept), check-schema-drift,
   check-no-llm-imports, check-invariants, check-scan-coverage, cli-lint,
-  check_security_doc (75), check_coupled_files --base origin/main  PASS
-  just test: api+scripts+shared 1506 passed / 6 skipped, worker 93,
-    mcp_server 21, extractors 31; go test ./... 0 FAIL             PASS
-  culprit check --fail-on=breaks_request_path, LLM_PROVIDER=none   exit 0
-  NOT RUN locally: quickstart, e2e, fault library, migration round trip
-  (no migration); CI ran all of them.
+  check_security_doc (75), check_coupled_files --base origin/main   PASS
+  go test ./... (cli)                                                 PASS
+  pytest without a database: api+scripts+shared 1228 passed earlier in
+    the run; the latency, manifest, shared and scripts tests 1145 passed
+    on 4c7bc6e; worker 65, mcp_server 4; extractors 31 + 22; frontend 19
+  culprit check --fail-on=breaks_request_path; LLM_PROVIDER=none   exit 0
+  NOT RUN locally: every database-backed test (api 321, worker 28,
+  mcp_server 17 — Docker down), the fault library, e2e, quickstart,
+  migration round trip (no migration). CI ran all of them.
 
 AUDITS
-  invariant-auditor: CLEAN. Risks taken up: the rank functions were
-    exported mutable vars any package could swap (now unexported seams);
-    "last byte" overstated past the 1 MiB read cap (documented). Left:
-    TimeGet builds its own request, outside do()'s method check (a
-    constant GET); no limit across separate invocations; Resolve now tries
-    every Produces entry (only this probe has two).
-  phase-auditor: NOT COMPLETE at fbdae75 — criteria 3 and 4 NOT MET (A, B
-    above), with C a whole-float budget accepted by Go and refused by the
-    API, duplicate budgets silently dropped; D two evasions of the Q25
-    test; E a huge budget overflowing the timeout into a fail with nothing
-    sent; F large budgets sending almost nothing; G Python accepting
-    values Go refused. All fixed in fb64c71. Re-audit at fb64c71: A, B,
-    C, E, F, G CLOSED; two new — a url on another path (fixed in
-    3be789e), and a package under testdata hidden from the scan (fixed).
-    Left, in LIMITS or here: two processes at once can interleave;
-    `1e3`/`0o454` read differently by the two YAML readers; registration
-    by reflection is not caught by the source scan (the served catalogue
-    is held instead). The fixes in 3be789e were not re-audited; they are
-    tested and the tests counted at the server.
+  invariant-auditor (0a3c743): 1 violation, invariant 7 — a budget value
+    that was not plain digits was echoed in the refusal, and the API ran
+    the budget check before its credential scan, so a credential pasted as
+    a budget reached stderr and the 400. Fixed in f3997f0 (no literal in
+    either refusal; credentials first); tests in Go and the API. Risks
+    taken up: same_run_as inputs, the mcp scheme. Left: AlsoExpected is
+    filled only when the caller sets no Expectation (no caller does);
+    a walk sends up to 50 GETs per budgeted component plus one rerun,
+    under the existing grant (PERMISSIONS says so).
+  phase-auditor: NOT COMPLETE at 0a3c743 (criteria 5, 6; findings A-G),
+    NOT COMPLETE at f3997f0 (5, 6; E untested), focused re-audit at
+    3ceb0ee: 6 and E CLOSED, 5 OPEN. Fixed in 4c7bc6e; not re-audited.
+    Left: F — `planned` is optional in the rule, so a part 1 reading with
+    no planned is judged on its samples (the probe always writes it).
 
 DECISIONS TAKEN HERE (for review)
-  - A budget is 1-60000 ms (model.MaxBudgetMS, MAX_BUDGET_MS): a bound on
-    what can be declared, so a timeout can mean "slower than the budget"
-    inside the 120 s run, not a judging threshold. Samples at most 1e9 us.
-  - Request timeout 2x budget + 500 ms, cut to the run's remaining time;
-    the probe's run is 120 s.
-  - When a route has both budgets, the p95 is measured.
-  - The budget's subject fixes method and path; inputs that disagree send
-    nothing.
-  - Duplicate budgets in one file are refused at load.
-  - A refusal, redirect or failed connection is "not a sample", counted as
-    not_samples.
-  - The demo's GET /ready is declared by an invariant (the walk follows
-    only `calls`, so the walk is unchanged).
-  - The fault library runs the probe from the latency fault's vantage
-    (order-service) with --input base_url.
+  - The second pass runs when the error pass found no root and nothing
+    failing below the entry (partial reasons from the first pass kept).
+  - The latency hypothesis's subject is the component; the walk asks each
+    budgeted route as its own request target (the route subject).
+  - The root rule looks at everything below, not only direct callees.
+  - Two slow roots on different branches: the first depth-first is the
+    root, the other listed, the diagnosis partial.
+  - A database below the slow root makes it partial (no DB budgets yet).
+  - Unbudgeted components not below the root are named in the statement
+    without making it partial; with no root they make it partial.
+  - Hop root: the component's hypothesis is ruled out by the same reading
+    only when its server time passed; statements say "within" only for a
+    side that passed.
+  - same_run_as in the verify record (additive, version unchanged).
+  - planned in the rule's inputs (optional; required for cut-short).
+  - Verify's no-failing-reading reason adds "no latency budget was judged"
+    when the investigation asked nothing about latency.
+  - The demo's isolation wall clock was left at the default 2 min: the
+    library's two ~45 s latency runs fit (CI: latency 235 s for the whole
+    case, two diagnoses included). No isolation: field was added, because
+    the API's manifest model does not know one.
 
 IN THE PLAN, FOR CORRECTION
-  - Field 4 and 12 still name OPTIONS; superseded by "How Phase 36 is run".
-  - Field 10's "10 to 50 requests" is superseded (fixed 20 / 50).
-  - Criterion 3 as written misses separate processes; the cap is per run
-    and per process.
+  - Criterion 5 asks a source property ("refused at one place, shown red
+    by building one around it") that a syntactic scan can hold only
+    against forms it knows: Q26.
+  - "With B fast and C slow, the root is still C" implies the root rule
+    reads everything below, not only callees; written that way here.
 
 /CI
-  run      43175231182 on fbdae75 — SUCCESS, every job
-  run      43179287944 on fb64c71 — SUCCESS, every job
-  run      43181751008 on 3be789e (pull_request) — SUCCESS
-  jobs     lint, typecheck, cli, test, migration-round-trip, self-check,
+  run 43228627279 on 0a3c743 — SUCCESS, every job (fault-library incl.)
+  run 43231557369 on f3997f0 — SUCCESS, every job
+  run 43233833896 on 3ceb0ee — SUCCESS, every job
+  run 43235902449 on 4c7bc6e (pull_request) — SUCCESS, every job:
+           lint, typecheck, cli, test, migration-round-trip, self-check,
            kind-capture, fault-library, e2e (none), e2e (stub),
-           narration-parity, build x5: success; publish, deploy skipped
-  checks   gh pr checks 37: 22 pass, 2 skipping (publish, deploy), CodeQL and the
-           four Analyze checks included
-  alerts   none open (pr=37, refs/pull/37/merge, refs/pull/37/head)
-  merge    origin/main = 08f7d65 is an ancestor of the branch: the branch
+           narration-parity, build x5; publish, deploy skipped
+  checks   gh pr checks 38: 22 pass, 2 skipping (publish, deploy), CodeQL
+           and the four Analyze checks included
+  alerts   none open (pr=38, refs/pull/38/merge, refs/pull/38/head)
+  merge    origin/main = 716205f is an ancestor of the branch: the branch
            is the merge result
 
 LEFT OPEN
-  - The audit leftovers above, for review.
-  - Part 2's brief and criteria (written at this review).
+  - Q26 (criterion 5), for review.
+  - F: whether `planned` should become required on new latency readings.
+  - The fault-library job's length (~11 min) as more latency cases land.
 ```
 
 ## §6. Escalate to the architecture session when
