@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"fmt"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -123,13 +124,19 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 		return inconclusive(fmt.Sprintf(
 			"the budget is on %s %s, which is not a GET route, and this probe sends GET only: "+
 				"nothing was sent, so its latency cannot be measured", parts["method"], parts["path"]))
+	} else if !urlIsOnRoute(url, parts) {
+		// The path too: a url input naming another route would have that
+		// route's times judged against this budget (re-audit, Phase 36).
+		return inconclusive(fmt.Sprintf(
+			"the url's path is not %s, the route the budget is on: nothing was sent", parts["path"]))
 	}
 	predicate := request.Expectation.Predicate
 	percentile, known := model.BudgetPredicates[predicate]
 	budget, valid := wholeMilliseconds(request.Expectation.Value)
 	if !known || !valid {
 		return inconclusive(fmt.Sprintf(
-			"the budget for %s is not a whole number of milliseconds under a budget predicate", url))
+			"the budget for %s is not a whole number of milliseconds from 1 to %d under a budget "+
+				"predicate: nothing was sent", url, model.MaxBudgetMS))
 	}
 	timer, ok := deps.HTTP.(Timer)
 	if !ok {
@@ -209,6 +216,28 @@ func (httpLatency) Run(ctx context.Context, request Request, deps Deps) Outcome 
 		Verdict: verdict, Measured: measured, Expected: expected,
 		ExpectedSource: provenanceOf(request.Expectation), Reason: reason,
 	}
+}
+
+// urlIsOnRoute reports whether a URL's path is the budgeted route's path,
+// canonicalised by the subject builder as every route is, a declared
+// template (`/orders/{}`) matching a concrete path.
+func urlIsOnRoute(raw string, route model.Parts) bool {
+	parsed, err := neturl.Parse(raw)
+	if err != nil || parsed.Path == "" {
+		return false
+	}
+	built, err := model.BuildSubject(model.KindHTTP, model.Parts{
+		"component": route["component"], "method": "GET", "path": parsed.Path,
+	})
+	if err != nil {
+		return false
+	}
+	_, concrete, err := model.ParseSubject(built)
+	if err != nil {
+		return false
+	}
+	_, matches := pathMatches(route["path"], concrete["path"])
+	return matches
 }
 
 // pause waits, or reports false when the run ends first.

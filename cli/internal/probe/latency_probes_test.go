@@ -332,3 +332,41 @@ func TestTheLargestBudgetIsStillMeasured(t *testing.T) {
 		t.Errorf("%s after %d requests: %s", reading.Verdict, server.count(), reading.Reason)
 	}
 }
+
+// TestAUrlOnAnotherRouteSendsNothing: the budget fixes the path as well
+// as the method, so GET /ready's budget is never passed on another route's
+// times (Phase 36 re-audit).
+func TestAUrlOnAnotherRouteSendsNothing(t *testing.T) {
+	server := newCountingServer(t, delayed(constant(0), always(200)))
+	for name, inputs := range map[string]map[string]any{
+		"another path":     {"url": server.URL + "/elsewhere"},
+		"a longer path":    {"url": server.URL + "/ready/now"},
+		"no path at all":   {"url": server.URL},
+		"another base_url": {"base_url": server.URL + "/v2"},
+	} {
+		readings := NewRunner(Options{
+			Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+		}).Run(context.Background(), []Request{{
+			ProbeID: model.LatencyProbeID, Target: "http:inventory-service/GET /ready", Environment: "local",
+			Inputs: inputs, Expectation: p50(300),
+		}})
+		if readings[0].Verdict != model.VerdictInconclusive {
+			t.Errorf("%s: %s: %s", name, readings[0].Verdict, readings[0].Reason)
+		}
+	}
+	if got := server.count(); got != 0 {
+		t.Errorf("%d requests were sent to a route the budget is not on", got)
+	}
+	// A declared template matches a concrete path, and is measured.
+	templated := declaredAs("http:inventory-service/GET /items/{}", "latency_p50_ms", 300)
+	readings := NewRunner(Options{
+		Ledger: grantEverything(t), Deps: Deps{HTTP: NewRealHTTPClient(5 * time.Second), Now: time.Now},
+	}).Run(context.Background(), []Request{{
+		ProbeID: model.LatencyProbeID, Target: "component:inventory-service", Environment: "local",
+		Inputs: map[string]any{"url": server.URL + "/items/42"}, Expectation: templated,
+	}})
+	if readings[0].Verdict != model.VerdictPass || server.count() != 20 {
+		t.Errorf("a concrete path under a declared template: %s after %d requests: %s",
+			readings[0].Verdict, server.count(), readings[0].Reason)
+	}
+}

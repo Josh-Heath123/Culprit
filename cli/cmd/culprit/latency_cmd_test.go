@@ -6,10 +6,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/model"
+	"github.com/josh-heath123/culprit/cli/internal/probe"
 )
 
 // Naming probe.http.latency twice — `-p x -p x` to culprit probe, or a
@@ -74,5 +76,16 @@ func TestALatencyProbeListedTwiceOverMCPRunsOnce(t *testing.T) {
 	}
 	if requests := http.requests.Load(); requests != 20 {
 		t.Errorf("%d requests, want 20: the probe ran more than once", requests)
+	}
+}
+
+// TestCulpritMcpServesTheBuiltInCatalogue: the catalogue every command and
+// culprit mcp run from is exactly BuiltIn's. register_test.go holds the
+// source; this holds what the binary builds, which a registration hidden
+// from a source scan (by reflection) would change (Q25, Phase 36 re-audit).
+func TestCulpritMcpServesTheBuiltInCatalogue(t *testing.T) {
+	served, built := catalogue().IDs(), probe.BuiltIn().IDs()
+	if len(served) != 14 || strings.Join(served, ",") != strings.Join(built, ",") {
+		t.Fatalf("culprit serves %v, BuiltIn registers %v", served, built)
 	}
 }

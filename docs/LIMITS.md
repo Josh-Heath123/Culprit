@@ -2495,7 +2495,9 @@ apart. Nothing configures the count or the spacing — no input, no
 `probes:` setting — and 50 is a hard cap in the probe. Naming the probe
 twice (`-p probe.http.latency -p probe.http.latency`, or twice in
 `culprit_probe`'s list) runs it once, and two latency runs in one process
-take turns, the 50 ms holding between them as within one. Each request's
+take turns, the 50 ms holding between them as within one. Two `culprit`
+processes started at once do not know of each other: their requests can
+interleave. Each request's
 timeout is twice the budget plus 500 ms, cut to what is left of the
 probe's own 120 s run; when what is left is no longer than the budget, the
 run stops with the samples it has. A route that slow is `inconclusive`
@@ -2510,7 +2512,9 @@ fraction (`300.0`) is accepted. A larger one is refused at load — in
 `culprit check` and `apply-model` alike — because no request in a 120 s run
 could be given a timeout long enough to show it was slower. One subject
 and predicate may have one budget in a file: two are refused at load, not
-one measured and the other dropped.
+one measured and the other dropped. Write the number in plain decimal: the
+binary's YAML reader and the API's read `1e3` and `0o454` differently
+(`culprit check` takes them, `apply-model` refuses them).
 
 ### What a sample is
 
@@ -2545,3 +2549,10 @@ otherwise never be measured. The unbudgeted surface (routes declared with
 unknown predicate, a value that is not a whole, positive number of
 milliseconds) is reported as a gap under `budgets`, not dropped. A budget
 does not count as a second source for the unverifiable surface.
+
+### The probe's URL must be the budgeted route
+
+The budget's own subject fixes the route: a `url` or `base_url` input
+whose path is not that route's (a declared template such as `/items/{}`
+matches `/items/42`), or a budget on a route that is not `GET`, sends
+nothing and is `inconclusive`.

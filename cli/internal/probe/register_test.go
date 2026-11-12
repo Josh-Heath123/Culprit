@@ -91,7 +91,9 @@ func registrationsOutsideBuiltIn(t *testing.T, root string) []string {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() && (entry.Name() == "testdata" || strings.HasPrefix(entry.Name(), ".")) && path != root {
+		// testdata is scanned too: the go tool builds a package there into
+		// the binary if anything imports it (Phase 36 re-audit).
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), ".") && path != root {
 			return filepath.SkipDir
 		}
 		if !entry.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
@@ -268,11 +270,22 @@ func TestARegistrationElsewhereIsFound(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(stray, "evasions.go"), []byte(evasions), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	hidden := filepath.Join(stray, "testdata", "hid")
+	if err := os.MkdirAll(hidden, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inTestdata := "package hid\n\nimport \"github.com/josh-heath123/culprit/cli/internal/probe\"\n\n" +
+		"var extra probe.Probe\n\n// Err registers from a testdata directory.\n" +
+		"var Err = probe.BuiltIn().Register(extra)\n"
+	if err := os.WriteFile(filepath.Join(hidden, "hid.go"), []byte(inTestdata), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	found := registrationsOutsideBuiltIn(t, root)
 	want := []string{
 		"internal/stray/evasions.go: Through",
 		"internal/stray/evasions.go: package level",
 		"internal/stray/stray.go: Smuggle",
+		"internal/stray/testdata/hid/hid.go: package level",
 	}
 	if strings.Join(found, " | ") != strings.Join(want, " | ") {
 		t.Fatalf("registrations outside BuiltIn found: %v, want %v", found, want)
