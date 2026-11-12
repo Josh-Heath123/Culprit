@@ -16,14 +16,18 @@ invariant 11).
 from typing import Any, Protocol
 
 import httpx
+from culprit_model.narration import MAX_PROSE
 
 from app.narrate.config import NarratorConfig
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
-#: Room for the model's own reasoning as well as the prose; the prose is
-#: held to MAX_PROSE characters after.
-MAX_TOKENS = 16000
+#: The most tokens a reply may be, for either provider: the same number as
+#: the MAX_PROSE characters a narration may hold. A token is usually several
+#: characters, so a reply can still run past MAX_PROSE (and is then a
+#: failure); the bound keeps what is paid for within a few times what could
+#: be kept. English prose short enough to pass is not cut off; one cut off fails.
+MAX_TOKENS = MAX_PROSE
 
 
 class ProviderError(Exception):
@@ -123,10 +127,14 @@ class OllamaProvider:
 
     name = "ollama"
 
-    def __init__(self, config: NarratorConfig) -> None:
+    def __init__(
+        self, config: NarratorConfig, transport: httpx.AsyncBaseTransport | None = None
+    ) -> None:
         self.model = config.model
         self._url = f"{config.ollama_url}/api/chat"
         self._timeout = config.timeout_seconds
+        # Tests only: what the request would be, with no network.
+        self._transport = transport
 
     async def complete(self, system: str, user: str) -> str:
         reply = await _post(
@@ -136,13 +144,17 @@ class OllamaProvider:
             {
                 "model": self.model,
                 "stream": False,
+                "options": {"num_predict": MAX_TOKENS},
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
             },
             self._timeout,
+            self._transport,
         )
+        if reply.get("done_reason") == "length":
+            raise ProviderError("ollama's reply was cut off at its token limit")
         message = reply.get("message")
         if not isinstance(message, dict) or not isinstance(message.get("content"), str):
             raise ProviderError("ollama answered in a shape it does not use")

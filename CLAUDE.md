@@ -11,9 +11,9 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 35, part 2 — the narrator (prose for a settled
-  investigation, in the control plane, held to its input), on branch
-  `phase-35-narrator`. Phases 26–34 and 35 part 1 are merged.
+- **Current phase:** 35, close-out — lands part 2's re-audit fixes with the
+  review's corrections, on branch `phase-35-close-out` (PR #36). Phases
+  26–34 and 35 parts 1 and 2 are merged. Next: Phase 36, part 1.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core
   model) and the phase you are working on — not the whole file.
@@ -22,7 +22,9 @@ the handoff describes where the work is. If they disagree, the handoff wins.
   plane.
 - **Claude Code commits, pushes and opens the pull request; only the human
   merges.** Commit on the phase branch (`git commit -F <file>`, never
-  `shared/uv.lock`), push it, open the PR with `gh pr create`, run `/ci`. Never
+  `shared/uv.lock`), push it, open the PR as a draft (`gh pr create --draft`),
+  run `/ci`, and mark it ready (`gh pr ready`) only once the run report is
+  committed. If the PR is already merged, push nothing more; stop. Never
   push to `main`, force-push, merge or approve. A phase is complete only when
   CI is green on the merge result, and the next phase never starts without a
   human keystroke.

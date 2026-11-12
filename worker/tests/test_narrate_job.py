@@ -13,15 +13,17 @@ test_narrations_api.py holds them against a migrated database.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import socket
 import subprocess
 import sys
 import time
+import traceback
 import urllib.request
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -31,11 +33,12 @@ import pytest_asyncio
 from app.db import metadata
 from app.narrate import prompts, tables
 from app.narrate.config import NarratorConfig
-from app.narrate.job import MAX_ATTEMPTS, narrate_investigations, narrate_one
+from app.narrate.job import MAX_ATTEMPTS, due, narrate_investigations, narrate_one
 from app.narrate.providers import AnthropicProvider, OllamaProvider, ProviderError
 from culprit_model.investigations import Investigation
-from culprit_model.narration import evidence
+from culprit_model.narration import MAX_PROSE, evidence
 from sqlalchemy import delete, insert, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.community.postgres import PostgresContainer
 
@@ -259,6 +262,30 @@ async def test_overlapping_ticks_call_the_provider_once(engine: AsyncEngine) -> 
     assert [row["attempt"] for row in await narrations(engine)] == [1]
 
 
+async def test_a_database_error_mid_attempt_releases_the_claim(
+    engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A database error aborts the transaction the claim was taken on. The
+    error must surface as itself, and the advisory lock must not outlive it
+    on a pooled connection."""
+    from app.narrate import job
+
+    investigation = await store(engine, recorded(), datetime.now(UTC))
+
+    async def broken_load(conn, investigation_id):
+        await conn.execute(text("SELECT 1 / 0"))
+
+    monkeypatch.setattr(job, "load", broken_load)
+    with pytest.raises(DBAPIError, match="division by zero"):
+        await narrate_one(engine, Scripted("x"), investigation.id, timeout_seconds=1.0)
+
+    async with engine.connect() as conn:
+        held = (
+            await conn.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'"))
+        ).scalar_one()
+    assert held == 0
+
+
 async def test_a_failed_attempt_waits_before_the_next(engine: AsyncEngine) -> None:
     await store(engine, recorded(), datetime.now(UTC))
     provider = Scripted(ProviderError("scripted answered HTTP 500"))
@@ -267,6 +294,105 @@ async def test_a_failed_attempt_waits_before_the_next(engine: AsyncEngine) -> No
         await narrate_investigations(ctx(engine, provider, retry=3600.0))
 
     assert len(provider.calls) == 1
+
+
+async def test_an_attempt_whose_row_is_refused_is_stored_failed_and_counted(
+    engine: AsyncEngine,
+) -> None:
+    """The call was made, so it is counted: a row the database will not take
+    is stored as failed, and the next tick inside the retry interval makes
+    no second call. (Before the close-out: no row, and a second call.)"""
+    investigation = await store(engine, recorded(), datetime.now(UTC))
+    provider = Scripted("The order service's token carries the wrong audience [2]. Fix it [3].")
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "ALTER TABLE narrations ADD CONSTRAINT ck_test_no_complete "
+                "CHECK (status <> 'complete')"
+            )
+        )
+    try:
+        for _ in range(2):
+            # A tick the insert fails in must not raise either; were it to,
+            # the stored row below is what is missing.
+            with contextlib.suppress(DBAPIError):
+                await narrate_investigations(ctx(engine, provider, retry=3600.0))
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE narrations DROP CONSTRAINT ck_test_no_complete"))
+
+    assert len(provider.calls) == 1
+    (row,) = await narrations(engine)
+    assert (row["investigation_id"], row["attempt"]) == (investigation.id, 1)
+    assert row["status"] == "failed"
+    assert row["reason"] == "the narration could not be stored"
+    assert row["prose"] is None and row["named"] is None
+
+
+async def test_when_no_row_can_be_stored_the_error_carries_none_of_the_row(
+    engine: AsyncEngine,
+) -> None:
+    """Both the attempt's row and its failed row refused: the error raised
+    names a constraint, and chains nothing that renders the failing row."""
+    from app.narrate.job import NarrationNotStored
+
+    investigation = await store(engine, recorded(), datetime.now(UTC))
+    prose = "The order service's token carries the wrong audience [2]. Fix it [3]."
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("ALTER TABLE narrations ADD CONSTRAINT ck_test_nothing CHECK (attempt > 99)")
+        )
+    try:
+        with pytest.raises(NarrationNotStored) as raised:
+            await narrate_one(engine, Scripted(prose), investigation.id, 1.0)
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE narrations DROP CONSTRAINT ck_test_nothing"))
+
+    assert str(raised.value) == "ck_test_nothing"
+    assert raised.value.__cause__ is None and raised.value.__suppress_context__
+    shown = "".join(traceback.format_exception(raised.value))
+    assert "wrong audience" not in shown and "Failing row" not in shown
+    async with engine.connect() as conn:
+        held = (
+            await conn.execute(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'"))
+        ).scalar_one()
+    assert held == 0
+
+
+async def test_ticks_that_read_due_before_either_claims_make_one_attempt(
+    engine: AsyncEngine,
+) -> None:
+    """Two ticks both see the investigation due, then each takes the claim
+    in turn. The second reads the retry interval again under the claim and
+    finds the first's attempt inside it."""
+    investigation = await store(engine, recorded(), datetime.now(UTC))
+    async with engine.begin() as conn:
+        await conn.execute(
+            insert(tables.narrations).values(
+                id="nar-" + "0" * 16,
+                investigation_id=investigation.id,
+                attempt=1,
+                status="failed",
+                provider="scripted",
+                model="scripted-1",
+                reason="scripted answered HTTP 500",
+                narrated_at=datetime.now(UTC) - timedelta(hours=2),
+            )
+        )
+    retry = timedelta(hours=1)
+    async with engine.connect() as conn:
+        first = await due(conn, retry)
+    async with engine.connect() as conn:
+        second = await due(conn, retry)
+    assert first == second == [investigation.id]
+    provider = Scripted(ProviderError("scripted answered HTTP 500"))
+
+    for _ in (first, second):
+        await narrate_one(engine, provider, investigation.id, 1.0, retry)
+
+    assert len(provider.calls) == 1
+    assert [row["attempt"] for row in await narrations(engine)] == [1, 2]
 
 
 async def test_with_no_provider_nothing_is_read_or_called() -> None:
@@ -369,6 +495,8 @@ async def test_anthropic_sends_one_message_no_tools_and_no_stream() -> None:
     assert set(body) == {"model", "max_tokens", "system", "messages"}
     assert body["system"] == "the system prompt"
     assert body["messages"] == [{"role": "user", "content": "the evidence"}]
+    # No more tokens than a narration may hold characters.
+    assert 0 < body["max_tokens"] <= MAX_PROSE
 
 
 @pytest.mark.parametrize(
@@ -403,3 +531,34 @@ async def test_anthropic_failures_are_closed_vocabulary(
     with pytest.raises(ProviderError) as raised:
         await anthropic(lambda request: response).complete("s", "u")
     assert raised.value.reason == reason
+
+
+# ---- the ollama provider's request, with no network ----------------------------
+
+
+async def test_ollama_asks_for_no_more_tokens_than_a_narration_may_hold() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": "ok [1]."}})
+
+    config = NarratorConfig(provider="ollama", model="m", ollama_url="http://ollama.test")
+    provider = OllamaProvider(config, transport=httpx.MockTransport(handler))
+
+    assert await provider.complete("s", "u") == "ok [1]."
+    (request,) = seen
+    body = json.loads(request.content)
+    assert 0 < body["options"]["num_predict"] <= MAX_PROSE
+    assert body["stream"] is False and "tools" not in body
+
+
+async def test_an_ollama_reply_cut_off_at_its_limit_fails() -> None:
+    config = NarratorConfig(provider="ollama", model="m", ollama_url="http://ollama.test")
+    reply = {"done_reason": "length", "message": {"role": "assistant", "content": "It fa"}}
+    provider = OllamaProvider(
+        config, transport=httpx.MockTransport(lambda request: httpx.Response(200, json=reply))
+    )
+    with pytest.raises(ProviderError) as raised:
+        await provider.complete("s", "u")
+    assert raised.value.reason == "ollama's reply was cut off at its token limit"

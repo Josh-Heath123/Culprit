@@ -25,6 +25,11 @@ sentence it supports. Cite nothing else that way.
 - Write identifiers exactly as the evidence writes them, or describe them in \
 plain words.
 - Plain text only: no markdown, no headings, no lists, no links, no URLs, no HTML.
+- Write in English, with ordinary keyboard characters only: letters, digits, \
+spaces and punctuation, plus curly quotes, en and em dashes, an ellipsis and \
+arrows. Any other character — a letter from another alphabet, an emoji, an \
+invisible or look-alike character — gets the whole reply refused. If an \
+evidence item holds such a character, cite the item rather than copying it.
 - At most three short paragraphs, under {MAX_PROSE} characters.
 - If the diagnosis is partial, say what is not known and why, from the evidence."""
 

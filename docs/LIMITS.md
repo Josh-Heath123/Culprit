@@ -2240,9 +2240,11 @@ What the binding does not hold:
   vantage; a hostile record for a declared name is not caught.
 - **It binds these four inputs.** Every catalogue probe that dials takes its
   address through them, and a test fails when a catalogue probe takes an
-  input name nobody has classified as an address or not one. A plugin probe
-  that took an address under another name would not be bound;
-  `--no-plugins` serves the catalogue alone.
+  input name nobody has classified as an address or not one. The catalogue
+  `culprit mcp` serves is the built-in one, compiled in: no probe can be
+  installed into it, so there is no third-party probe to bind. (Phase 35's
+  close-out; `--no-plugins` governs extractor plugins, which read INTENT,
+  not probes.)
 - **Declare what an agent may reach.** An endpoint declared for the walk is
   also one an agent may probe directly.
 
@@ -2295,8 +2297,8 @@ how to turn it on, and `docs/PERMISSIONS.md` exactly what is sent.
 
 A narration is refused when it cites an item not in its evidence list,
 names a subject, reading id, probe id, capability, component or code-form
-verdict the investigation does not hold, or carries a URL. That is all the
-check can see. Prose can still say something false about evidence it cites
+verdict the investigation does not hold, carries a URL, or holds a
+character outside plain text. That is all the check can see. Prose can still say something false about evidence it cites
 correctly — "the token was missing" where the reading says its audience was
 wrong — and it will be shown. The evidence is beside it, in the record's
 own words, for that reason; read the prose as a summary of the page, never
@@ -2318,28 +2320,62 @@ the safe failure.
 `http:order-service/POST /orders` in the investigation does not let
 `http:order-service/POST /refunds` through: a subject is matched whole, and
 the fragment left over is named. A subject the prose truncates or
-reformats is refused, even when a person would read it as the same thing.
+reformats is refused, even when a person would read it as the same thing —
+`Component:order-service` included: subject kinds and reading ids are
+recognised in any case, so a capitalised one the record does not hold
+verbatim is refused, and so is an ordinary word shaped like a reading id
+(`S3`, `EC2`).
 Refusal is the safe failure: the evidence is still on the page.
 
 ### What counts as a URL
 
 A scheme (`https://…`), a protocol-relative `//host`, `www.…`, `data:` and
-`mailto:`, and a dotted host followed by a path (`evil.example/collect?d=…`)
-are refused. A bare domain with no path (`evil.example`) is not, and nor is
-an HTML attribute that names no URL (`<img src="x">`): neither can carry
-data anywhere while the prose is shown as text, which it always is.
+`mailto:`, a dotted host followed by a path, a query or a backslash
+(`evil.example/x`, `evil.example?d=…`, `evil.example\x`), and a dotted host
+with a port (`evil.example:8080`) are refused. A bare domain
+(`evil.example`), one written with a non-ASCII full stop (`evil。example`),
+and an HTML attribute that names no URL (`<img src="x">`) are not: none can
+carry data anywhere while the prose is shown as text, which it always is.
+Faithful prose that repeats a `host:port` from a reading's reason is
+refused too — the safe failure.
 
-### Invisible characters are refused
+### Plain text only: English, in ordinary characters
 
-A zero-width or other Unicode format character anywhere in the prose
-refuses it. One can split a name the other rules would see
-(`not` + U+200B + `_resolved`) or reorder what is shown.
+The prose may hold printable ASCII, newline, tab, curly quotes, en and em
+dashes, an ellipsis, the two arrows, the signs for times, almost equal, at
+most, at least, plus-minus, degree and micro, and the no-break space —
+nothing else (`PLAIN_CHARACTERS`, close-out of Phase 35). Any other
+character refuses the narration, named "a character outside plain text".
+An en or em dash between two letters or digits is read as a hyphen, so
+`payment–service` is held to the component rule as `payment-service` is.
+This is an allowlist because a list of what to refuse is never finished: a
+zero-width character, a combining mark, a blank filler or a look-alike
+underscore (U+FF3F, U+02CD, U+2017) can each make `not_resolved` appear on
+the page as a verdict the investigation does not hold, and closing one
+category leaves the next open.
+
+What this costs:
+- **The narrator writes English.** Prose in another script, accented
+  letters (`é`), an emoji, or a currency sign other than `$` is refused —
+  the safe failure; the evidence is still on the page. The prompt says so.
+- **A record that holds such a character cannot be quoted.** A reason or a
+  description with a non-ASCII character in it is refused if the prose
+  copies it; cited by number (`[12]`) it is shown, because a citation is
+  replaced by the record's own text, which the check does not judge.
 
 ### What a refusal names is a word, not the model's sentence
 
 A refused narration stores and shows what it named, each item a single
-identifier-shaped token or a fixed label ("a URL", "an invisible
-character", "a name in code form"), redacted and at most 80 characters.
+token with no whitespace, in plain characters, or a fixed label ("a URL",
+"a character outside plain text", "a name in code form", "a credential",
+"a name that cannot be shown"), and at most 80 characters. The API applies
+the same rule again to every refused row it serves, so a row the table's
+owner inserts naming a sentence, a URL or a key is shown as labels. A
+token can still be up to 80 characters of the model's own text joined by
+underscores or hyphens. "No credential" means nothing the shared credential
+pattern (`redact_credentials`, and its Go twin) recognises: a key of a
+shape it does not know — `password=hunter2`, a Slack token, `user:pass@host`
+with no scheme — is served as a token like any other word.
 For a name written in backticks only its first unknown word is named, so
 a sentence in code form is never shown. At most 20 are kept.
 
@@ -2357,12 +2393,20 @@ default); the third's status is final. There is no button to narrate
 again. Narrations are append-only — a new provider or model does not
 re-narrate what is already complete.
 
+Every call is counted as an attempt. One whose row the database refuses is
+stored as failed, "the narration could not be stored", so the provider is
+not called again for it; a call goes uncounted only when the database can
+take no row at all, and then nothing is narrated. The count and the retry
+interval are both read again once an attempt is claimed, so two ticks that
+both found an investigation due make one attempt, not two.
+
 ### The newest investigations first, a few at a time
 
 The job narrates at most three investigations every 15 seconds, newest
 first. Turning narration on narrates the whole stored history, eventually,
 starting from the newest; with a slow local model that can take a while,
-and each one is a call to the provider.
+and each one is a call to the provider. With `anthropic`, every stored
+investigation's evidence leaves your machine, not only the next one's.
 
 ### Nothing is pending, but "not narrated yet" can last
 
@@ -2381,9 +2425,14 @@ read, so a useful detail in it is lost along with any secret.
 ### One request, no tools, and a fixed budget
 
 Each attempt is one request: no tools, no streaming, no second call to ask
-for more. With `anthropic`, `max_tokens` is 16000 and a reply cut off at
-that limit, or declined, is a failure. A reply longer than 4000 characters
-is a failure too, not truncated.
+for more. A reply may be at most 4000 tokens — `max_tokens` with
+`anthropic`, `num_predict` with `ollama` — the same number as the 4000
+characters a narration may hold. A token is usually several characters,
+so a reply can still run past 4000 characters and be paid for; the bound
+keeps that within a few times what could be kept. English short enough to
+keep is not cut off. One cut off at the limit (or, with
+`anthropic`, declined) is a failure. A reply longer than 4000 characters is
+a failure too, not truncated.
 
 ### Prose is shown as text
 

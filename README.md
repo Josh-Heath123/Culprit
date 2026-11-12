@@ -226,8 +226,9 @@ fault tree, readings and rubric on the page are; the prose restates them.
   narration is stored, and again before it is shown, it is checked. Every
   citation must name an item in the list. The prose may name no subject,
   reading, probe, capability, component or code-form verdict the
-  investigation does not hold, and no URL. A narration that fails is stored
-  as **refused**, with what it named, and the prose is not shown.
+  investigation does not hold, no URL, and no character outside plain
+  English text. A narration that fails is stored as **refused**, with what
+  it named, and the prose is not shown.
 - **How it is shown.** As text: markdown and HTML appear as the characters
   they are. Each citation is replaced by its evidence item's own words,
   taken from the record rather than from the model. The page says which
@@ -244,6 +245,13 @@ Providers are set in `infra/.env.prod`, by you:
 | `none` (default) | — | nowhere; nothing is narrated |
 | `ollama` | `NARRATOR_MODEL` (a model you have pulled), `OLLAMA_URL` (from the worker container, `http://host.docker.internal:11434`) | a model on your own machine; no key, nothing leaves it |
 | `anthropic` | `NARRATOR_MODEL`, `ANTHROPIC_API_KEY` | Anthropic's API: the evidence leaves your machine |
+
+**Turning narration on narrates what is already stored**, not only what
+comes next: every investigation without a complete narration, newest
+first, three every 15 seconds, until the history is done. With `anthropic`
+that means the evidence of **every stored investigation** leaves your
+machine, not just the next one's. If that is not what you want, start with
+`ollama`, or turn narration on in an install with no history.
 
 The check holds identifiers, not meaning: prose can still describe the
 cited evidence wrongly in plain words. That is why the evidence is shown

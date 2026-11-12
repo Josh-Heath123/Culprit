@@ -11,7 +11,7 @@ is replaced by its evidence item's text from the record.
 from typing import Any
 
 from culprit_model.investigations import Investigation
-from culprit_model.narration import MAX_PROSE, check, segments
+from culprit_model.narration import MAX_PROSE, check, segments, shown
 from culprit_model.redaction import redact_credentials
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,9 +67,7 @@ def served(investigation: Investigation, row: dict[str, Any], attempts: int) -> 
             return NarrationView(state="refused", named=["prose longer than allowed"], **base)
         result = check(investigation, prose)
         if not result.passed:
-            return NarrationView(
-                state="refused", named=[redact_credentials(n) for n in result.named], **base
-            )
+            return NarrationView(state="refused", named=[shown(n) for n in result.named], **base)
         return NarrationView(
             state="complete",
             segments=[
@@ -82,8 +80,12 @@ def served(investigation: Investigation, row: dict[str, Any], attempts: int) -> 
         return NarrationView(
             state="failed", reason=redact_credentials(row["reason"] or "no reason"), **base
         )
+    # What the row holds is served under the property the check gives what
+    # it names (`shown`): a fixed label or one token, never a URL, a
+    # credential or a sentence — whoever inserted the row.
+    named = [shown(n) for n in row["named"] or []]
     return NarrationView(
         state="refused",
-        named=[redact_credentials(n) for n in (row["named"] or ["something it was not given"])],
+        named=list(dict.fromkeys(named)) or ["something it was not given"],
         **base,
     )

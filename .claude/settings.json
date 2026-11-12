@@ -34,7 +34,8 @@
       "Bash(gh pr diff:*)",
       "Bash(gh workflow view:*)",
       "Bash(git push:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(gh pr ready:*)"
     ],
     "ask": [
       "Bash(gh pr merge:*)",
