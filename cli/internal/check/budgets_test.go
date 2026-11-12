@@ -329,3 +329,46 @@ func TestTheGoLoaderKnowsEveryTopLevelKeyTheAPIDoes(t *testing.T) {
 		t.Fatalf("the Go loader's top-level keys are %v; manifest_keys.json says %v", tags, want)
 	}
 }
+
+// TestTheGoLoaderReadsCulpritYamlAsTheAPIDoes: the shared scalar fixture,
+// which the API's loader is held to as well (Phase 37 part 1 close-out).
+func TestTheGoLoaderReadsCulpritYamlAsTheAPIDoes(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "manifest_scalar_conformance.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Cases []struct {
+			Why       string          `json:"why"`
+			Manifest  string          `json:"manifest"`
+			BudgetWhy *string         `json:"budget_why"`
+			MaxProbes *int            `json:"max_probes"`
+			Refused   json.RawMessage `json:"refused"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Cases) == 0 {
+		t.Fatalf("manifest_scalar_conformance.json: %v", err)
+	}
+	for _, c := range fixture.Cases {
+		path := filepath.Join(t.TempDir(), "culprit.yaml")
+		if err := os.WriteFile(path, []byte(c.Manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		manifest, err := extract.LoadManifest(path)
+		refused := len(c.Refused) > 0
+		var named string
+		_ = json.Unmarshal(c.Refused, &named)
+		switch {
+		case refused && err == nil:
+			t.Errorf("%s: loaded, want refused", c.Why)
+		case refused && named != "" && !strings.Contains(err.Error(), named):
+			t.Errorf("%s: refused without naming %q: %v", c.Why, named, err)
+		case !refused && err != nil:
+			t.Errorf("%s: refused: %v", c.Why, err)
+		case c.BudgetWhy != nil && (len(manifest.Budgets) == 0 || manifest.Budgets[0].Why != *c.BudgetWhy):
+			t.Errorf("%s: why read as %+v, want %q", c.Why, manifest.Budgets, *c.BudgetWhy)
+		case c.MaxProbes != nil && manifest.Isolation.MaxProbes != *c.MaxProbes:
+			t.Errorf("%s: max_probes read as %d, want %d", c.Why, manifest.Isolation.MaxProbes, *c.MaxProbes)
+		}
+	}
+}

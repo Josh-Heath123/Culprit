@@ -226,8 +226,10 @@ func TestNoModelProviderIsLinkedIntoTheBinary(t *testing.T) {
 // `go list ./internal/...` and may link none of them. A package created
 // tomorrow is covered the day it exists, with no edit here.
 //
-// The rule of record: only internal/probe may link net/http; only
-// internal/probe and internal/capture may link net or crypto/tls.
+// The rule of record: only internal/probe, internal/probe/guardedhttp and
+// internal/transport may link net/http; only those, internal/capture and
+// internal/capture/dbsession may link net or crypto/tls (Q27 put the
+// client and the session in packages of their own).
 // Dependencies are transitive (`go list -deps`), so a package that reaches
 // the network through another package is caught exactly as if it had
 // imported net itself.
@@ -237,9 +239,17 @@ func TestTheNetworkBoundaryIsAnAllowlist(t *testing.T) {
 		// internal/transport (Phase 33 part 2) is the agent's connection to
 		// its control plane: it dials only the configured address, follows
 		// no redirect and opens no listener (internal/transport's tests).
-		"net/http":   {"internal/probe": true, "internal/transport": true},
-		"net":        {"internal/probe": true, "internal/capture": true, "internal/transport": true},
-		"crypto/tls": {"internal/probe": true, "internal/capture": true, "internal/transport": true},
+		//
+		// internal/probe/guardedhttp and internal/capture/dbsession (Q27,
+		// ruled 2026-11-12) hold the network use internal/probe and
+		// internal/capture already had, in packages of one file each whose
+		// exported surface names no network or driver type: narrower, no
+		// new reach. probe and capture still link what those two link.
+		"net/http": {"internal/probe": true, "internal/probe/guardedhttp": true, "internal/transport": true},
+		"net": {"internal/probe": true, "internal/probe/guardedhttp": true, "internal/capture": true,
+			"internal/capture/dbsession": true, "internal/transport": true},
+		"crypto/tls": {"internal/probe": true, "internal/probe/guardedhttp": true, "internal/capture": true,
+			"internal/capture/dbsession": true, "internal/transport": true},
 	}
 	reasons := map[string]string{
 		"net":        "it can open a socket",

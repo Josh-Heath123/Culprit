@@ -978,6 +978,248 @@ Phase 36's last check, `main`'s push run on `d785af4`, is part 1's step 0.
 - No index created or dropped by Culprit.
 - No change to Culprit's own database for the demo.
 
+**Architecture review of part 1, 2026-11-12 — signed off; part 1 is complete
+when the close-out below merges.** PR #39 was merged as `b3ef508`. I read the
+checks from GitHub's API: the pull request's runs on `fcd0b0a`
+(43263355094) and on `4760e94` (43267638088) passed every job. Phase 36's last
+check is met: `main`'s push run 43250669431 on `d785af4` passed every job.
+
+The run built what it was asked to:
+- the carried-in items, each shown red first;
+- the two capabilities, with no implication between any pair;
+- a session Postgres itself makes read-only, shown in CI (`25006`);
+- `pg_stat_statements` preloaded and read back in CI;
+- the demo's own database, with a million rows seeded in the database and
+  migrations the reader understands;
+- `leads_index` facts, live and declared, compared by the existing comparator,
+  with a dropped and an added index each found.
+
+It was merged while Q27 was open and blocking. Nothing on `main` is worse for
+that: every change is additive, and the boundary it found weak is new in this
+part.
+
+- **Q27 — package isolation; Q26's premise and this phase's "one file" were
+  both wrong.** The architecture session ruled that a file which cannot *name*
+  a type cannot *use* it. In Go, visibility is per package, not per file. Any
+  file in a package reaches every unexported field and function in it, with no
+  import at all. The phase-auditor showed both:
+  - a file in `internal/probe` with no imports reached the guard's own
+    transport and sent a `DELETE`, which the server received;
+  - a file in `internal/capture` took `openSession`'s connection and sent
+    `EXPLAIN ANALYZE`. A read-only session does not stop that for a `SELECT`,
+    nor `pg_stat_statements_reset()`.
+
+  Every test stayed green. The boundary is therefore a package with one
+  non-test file:
+  - **the guarded HTTP client** — the request constructor, the method guard,
+    the client constructor and the timing;
+  - **the database session** — the session, `send`, the templates and the
+    reader.
+
+  Each lives in a package of its own. A test holds that each package has one
+  non-test file. Another test, using `go/types`, holds that its exported
+  surface names no type from `net/http`, `net` or `pgx`, so no caller can
+  unwrap a client, a transport or a connection. The network allowlist names
+  the two packages, and `internal/probe` and `internal/capture` stop importing
+  `net/http` and `pgx`. This ruling approves that allowlist change: it moves
+  existing network use into narrower packages and adds no reach.
+
+  `reflect` and `unsafe` still get through; LIMITS keeps "a guard against
+  ordinary code, not a proof against deliberate code". This is built in the
+  close-out below.
+- **The two manifest readers read one schema.** Three times now a split between
+  PyYAML (YAML 1.1) and yaml.v3 (YAML 1.2) has surfaced:
+  - literal forms;
+  - merged sections;
+  - this run's leftovers: `why: yes` is a string to Go and a boolean the API
+    refuses, a second YAML document, and an unknown top-level key that Go
+    ignores and the API refuses.
+
+  One more fixture case each time is the denylist pattern. The API's loader
+  resolves scalars as yaml.v3 does, under YAML 1.2's core schema, with no new
+  dependency: PyYAML takes custom resolvers. A shared scalar fixture holds both
+  readers. A second document is refused by both. An unknown top-level key is
+  refused by both, naming it, from the shared key list. A mistyped `budgets:`
+  silently ignored would be a check that looks like a gate and isn't. Built in
+  the close-out.
+- **The demo database's password is generated**, as the quickstart's bootstrap
+  generates every other role's, never fixed in the repository. Built in the
+  close-out.
+- **Accepted as taken:**
+  - `leads_index` on the column-level `schema:` subject, true and false;
+  - `inventory-db`'s edge is `background`, so the order walk is unchanged. Part
+    3 decides how a walk from the products route reaches the database without
+    changing every other walk;
+  - 1,000,000 rows in 200 categories, for the reasons the report gives;
+  - the preload list set explicitly. It replaces the image's default, which was
+    never observed, and LIMITS says so.
+- **A plan correction (accepted).** `pg_stat_statements` is not a trusted
+  extension, so only a superuser can create it. The demo's setup creates it as
+  the server's superuser; its migrations cannot. That is the demo's own setup,
+  not Culprit's.
+- **The recommended role** holds no `EXECUTE` on `pg_stat_statements_reset`,
+  which is the default. PERMISSIONS says so, and says why.
+- **`25db425` was not re-audited.** The close-out's phase-auditor re-audits it
+  first.
+
+**Close-out of part 1 — brief and criteria, 2026-11-12.** Branch
+`phase-37-closeout`, cut from `origin/main` = `b3ef508`. Its first commit is
+this sign-off, already in the working tree (message
+`../phase-37-1-signoff.txt`). Open a draft pull request and mark it ready when
+the run report is committed. Do not stage `shared/uv.lock`.
+
+**Work order.**
+0. Confirm `main`'s push run on `b3ef508` is green. Then have the
+   phase-auditor re-audit `25db425`.
+1. Q27: the two packages, each with one non-test file and an exported surface
+   that names no `net/http`, `net` or `pgx` type. The allowlist names them, and
+   `internal/probe` and `internal/capture` no longer import `net/http` or
+   `pgx`. Behaviour is unchanged.
+2. One schema for both manifest readers:
+   - YAML 1.2 core-schema scalars in the API's loader;
+   - a shared scalar fixture;
+   - a second document refused by both;
+   - an unknown top-level key refused by both, naming it.
+3. The demo database's password, generated by the bootstrap.
+4. LIMITS and PERMISSIONS: what each layer of the boundary holds — the package,
+   the templates, the read-only session and the role — and what each does not.
+
+**Acceptance criteria (close-out).**
+- The phase-auditor's two attacks — a file reaching the guard's transport, and
+  a file sending `EXPLAIN ANALYZE` through the session — no longer type-check.
+  A `go/types` test holds this, in the way the Q25 registration test does: it
+  plants each file and expects the error.
+- Each package has one non-test file, and a second file is shown red. Its
+  exported surface names no `net/http`, `net` or `pgx` type, and adding one is
+  shown red.
+- The network allowlist names the two packages. `internal/probe` and
+  `internal/capture` import neither `net/http` nor `pgx`. Every existing test of
+  the probes, capture and the boundary is unchanged and green.
+- From the shared fixture, both readers give the same value, or both refuse,
+  for each of these:
+  - `yes`, `no`, `on`, `off`;
+  - a date;
+  - `0454`, `0o454`, `1e3`;
+  - `~`;
+  - a second document;
+  - an unknown top-level key.
+
+  Each case is red on the old API loader.
+- No fixed password for the demo's database role remains in the repository, and
+  a fresh clone's quickstart still seeds the database.
+- Every pull-request check is green.
+
+**Do NOT implement in the close-out.** No statement timing, plan or budget. No
+walk change. Nothing outside the boundary, the readers and the demo's password.
+
+**Part 2 — statements and plans. Brief and criteria, 2026-11-12.** This starts
+after the close-out merges. Its step 0 confirms `main`'s push run on that
+merge.
+
+**Decisions.**
+- **`query_mean_ms_max` sits on a database or on one of its tables.** A table
+  budget is on `schema:<database>/<table>`; a database budget is on the
+  database component. A statement is judged by the strictest budget of the
+  tables its plan reads, otherwise by its database's budget. Without
+  `db.plan.read`, only a database budget can be applied: a table budget stays
+  unjudged, and the reading says so.
+- **`probe.db.statement_budget` measures over a fixed window.** It takes two
+  snapshots of `pg_stat_statements` 30 seconds apart in one session. The window
+  is not configurable, and the walk's deadline cuts it. For each statement in
+  the database:
+  - the deltas of `calls` and of total execution time are taken;
+  - the time is converted once, at reading, to integer microseconds;
+  - Culprit's own role's statements are excluded.
+
+  The rule is integer comparison:
+  - over budget when `total_us > budget_us × calls`;
+  - within budget otherwise;
+  - `inconclusive` when no call fell in the window, or when
+    `pg_stat_statements_info` shows a reset or an eviction during it.
+
+  There is no interval. `pg_stat_statements` keeps no per-call samples, and its
+  cumulative spread cannot be windowed exactly, so a band would be a number
+  Culprit chose. The reading shows the number of calls, and LIMITS says that a
+  mean of few calls is a mean of few calls. The reading keeps at most 20
+  statements, ranked by window time, with a count of the rest. Their text is
+  the normalised text, passed through `redact_credentials`.
+- **`probe.db.plan`** sends `EXPLAIN (GENERIC_PLAN, FORMAT JSON)` on one
+  statement. The statement is chosen by the `queryid` the walk, or the
+  statement probe, already read in the same session, and its text comes from
+  `pg_stat_statements`, never from an input. The text must begin with `SELECT`
+  or `WITH`; anything else, including a leading comment, is refused and the
+  probe is `inconclusive`. It is sent through a value only the database package
+  can construct from a statistics row, through the extended protocol.
+
+  The plan reading keeps node types, relations, the indexes used, estimated
+  rows and costs. Its filter columns are found by matching the relation's own
+  column names, from the catalogue, in the filter. The filter expression and any
+  constant are never stored.
+
+  The probe has no expectation. It follows the existing convention for a probe
+  with an empty `expected_from`. It is evidence for part 3's join, not a
+  finding on its own, because a sequential scan of a small table is normal.
+  Servers before PostgreSQL 16 are `inconclusive`, saying why.
+- **Under `culprit mcp`:**
+  - `probe.db.statement_budget` targets the declared database and takes no
+    address input;
+  - `probe.db.plan` takes a `queryid` that only the walk supplies, so
+    `culprit_probe` refuses it. An agent chooses no statement.
+- **The readings validate in Go, Python and the API.** The statement verdict is
+  re-judged from its integers, as latency readings are.
+
+**Work order.**
+0. Confirm `main`'s push run on the close-out's merge is green.
+1. `query_mean_ms_max` in both manifest readers and the API's model, from the
+   shared fixtures.
+2. The two templates for snapshots and the planned-statement value, inside the
+   database package.
+3. The two probes and their rule, in Go and Python, with a shared fixture.
+4. Reading validation in Go, Python and the API.
+5. The demo declares a `query_mean_ms_max` on `schema:inventory/products`. Its
+   `why` says what it guards.
+6. PROBES, PERMISSIONS (what each template reads) and LIMITS.
+
+**Acceptance criteria (part 2).**
+- Nothing outside the template set reaches the database: an arbitrary
+  statement, `EXPLAIN ANALYZE`, `pg_stat_statements_reset()` and a second
+  statement appended to a planned one are each counted and refused.
+- The statement rule's shared fixture holds in Go and Python. It includes:
+  - over budget;
+  - within budget;
+  - no calls (`inconclusive`);
+  - a reset during the window (`inconclusive`);
+  - the integer boundary.
+
+  It is shown red by moving the comparison.
+- In CI, on the demo's database with test traffic on the products route:
+  - the window finds the category statement over a budget the seed makes it
+    exceed;
+  - the plan shows a sequential scan of `products` filtering `category`;
+  - with an index created on `category` in a test database, the plan shows an
+    index scan and the window is within budget.
+- A statement holding a secret-looking constant leaves no trace of it in any
+  reading: not in the text, not in the plan, not in a filter.
+- Without `db.plan.read`, the plan probe is refused and a table budget is
+  unjudged, saying so. Without `pg_stat_statements`, both probes are
+  `inconclusive`, saying so. Before PostgreSQL 16, the plan probe is
+  `inconclusive`, saying so.
+- Under `culprit mcp`, `culprit_probe` refuses `probe.db.plan` and any address
+  for the statement probe, before anything is sent (counted).
+- A statement reading whose verdict disagrees with its integers is refused by
+  Go, by Python and by the API.
+- Every pull-request check is green.
+
+**Do NOT implement in part 2.**
+- No walk change, and no `statement_budget_exceeded` or `missing_index`
+  hypothesis: that is part 3.
+- No fault-library case.
+- No traffic generated by Culprit.
+- No reset.
+- No `EXPLAIN ANALYZE`.
+- No row read.
+- No index created by Culprit.
+
 ---
 
 ### Phase 38 — Bounds: what the browser downloads, and what a list returns

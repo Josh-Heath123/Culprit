@@ -20,9 +20,13 @@
 package extract
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -37,14 +41,13 @@ const ManifestVersion = 1
 
 // Manifest is culprit.yaml as this binary needs it.
 //
-// Deliberately a *partial* view: the CLI reads `components` (for names
-// and kinds) and `extract` (Phase 28 field 10), and tolerates every
-// other key the control plane's own loader understands. The Python
-// loader is strict — extra="forbid" — because it writes to a database
-// and a typo'd key there means an unmodelled connection. This one is
-// lenient in the other direction for the opposite reason: a CLI that
-// refuses to run because the manifest carries a field from a newer
-// server is useless in the CI job it exists to run in.
+// Its top-level keys are the API's model's too (manifest_keys.json), and
+// since Phase 37 part 1's close-out an unknown one is refused, as the API
+// refuses it: a mistyped `budgets:` silently ignored is a check that looks
+// like a gate and isn't. (Until then this loader ignored unknown keys, so
+// that a CLI older than its server would still run; the shared key list,
+// held equal in both, is what replaces that.) Within a section, fields
+// this binary does not read are still tolerated.
 type Manifest struct {
 	Version    int                 `yaml:"version"`
 	Components []ManifestComponent `yaml:"components"`
@@ -175,6 +178,59 @@ type ManifestError struct {
 
 func (e *ManifestError) Error() string { return e.Path + ": " + e.Message }
 
+// TopLevelKeys are the keys a culprit.yaml may have at its top level: the
+// yaml tags of Manifest, which shared/tests/manifest_keys.json holds equal
+// to the API's model's fields.
+func TopLevelKeys() []string {
+	manifest := reflect.TypeOf(Manifest{})
+	var keys []string
+	for index := 0; index < manifest.NumField(); index++ {
+		if tag, _, _ := strings.Cut(manifest.Field(index).Tag.Get("yaml"), ","); tag != "" && tag != "-" {
+			keys = append(keys, tag)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// unknownTopLevelKeys lists the top-level keys of a document that no field
+// takes, including those a merge (`<<`) brings in. A key written as the
+// string "<<" rather than a merge is unknown like any other.
+func unknownTopLevelKeys(root *yaml.Node) []string {
+	known := map[string]bool{}
+	for _, key := range TopLevelKeys() {
+		known[key] = true
+	}
+	var unknown []string
+	var visit func(mapping *yaml.Node)
+	visit = func(mapping *yaml.Node) {
+		if mapping.Kind == yaml.AliasNode && mapping.Alias != nil {
+			mapping = mapping.Alias
+		}
+		if mapping.Kind != yaml.MappingNode {
+			return
+		}
+		for index := 0; index+1 < len(mapping.Content); index += 2 {
+			key, value := mapping.Content[index], mapping.Content[index+1]
+			if key.Tag == "!!merge" {
+				if value.Kind == yaml.SequenceNode {
+					for _, merged := range value.Content {
+						visit(merged)
+					}
+				} else {
+					visit(value)
+				}
+				continue
+			}
+			if !known[key.Value] {
+				unknown = append(unknown, fmt.Sprintf("%q", key.Value))
+			}
+		}
+	}
+	visit(root)
+	return unknown
+}
+
 // LoadManifest parses and validates a culprit.yaml.
 func LoadManifest(path string) (*Manifest, error) {
 	data, err := os.ReadFile(path)
@@ -182,8 +238,29 @@ func LoadManifest(path string) (*Manifest, error) {
 		return nil, &ManifestError{Path: path, Message: "cannot be read: " + err.Error()}
 	}
 	var manifest Manifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	// One document, and only the top-level keys the API's model knows too
+	// (shared/tests/manifest_keys.json): the two readers of one file must
+	// read one schema (Phase 37 part 1 close-out). Until then a second
+	// document was read by this loader and refused by the API, and an
+	// unknown key — a mistyped `budgets:` — was silently ignored here.
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	var document yaml.Node
+	if err := decoder.Decode(&document); err != nil && !errors.Is(err, io.EOF) {
 		return nil, &ManifestError{Path: path, Message: "not valid YAML: " + err.Error()}
+	}
+	var second yaml.Node
+	if err := decoder.Decode(&second); !errors.Is(err, io.EOF) {
+		return nil, &ManifestError{Path: path, Message: "holds more than one YAML document; culprit.yaml is one"}
+	}
+	if len(document.Content) > 0 {
+		if unknown := unknownTopLevelKeys(document.Content[0]); len(unknown) > 0 {
+			return nil, &ManifestError{Path: path, Message: fmt.Sprintf(
+				"unknown top-level key %s; the keys culprit.yaml takes are %s",
+				strings.Join(unknown, ", "), strings.Join(TopLevelKeys(), ", "))}
+		}
+		if err := document.Decode(&manifest); err != nil {
+			return nil, &ManifestError{Path: path, Message: "not valid YAML: " + err.Error()}
+		}
 	}
 	if manifest.Version == 0 {
 		manifest.Version = ManifestVersion

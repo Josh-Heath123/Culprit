@@ -1,4 +1,4 @@
-package capture
+package dbsession
 
 import (
 	"context"
@@ -99,16 +99,16 @@ func pgxImporters(t *testing.T, root string) []string {
 	return found
 }
 
-// TestOnlyThisFileImportsPgx: across the whole module, database.go is the
+// TestOnlyThisFileImportsPgx: across the whole module, session.go is the
 // one non-test file that can open a database connection.
 func TestOnlyThisFileImportsPgx(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", ".."))
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	found := pgxImporters(t, root)
-	if len(found) != 1 || found[0] != "internal/capture/database.go" {
-		t.Fatalf("pgx is imported by %v; only internal/capture/database.go may", found)
+	if len(found) != 1 || found[0] != "internal/capture/dbsession/session.go" {
+		t.Fatalf("pgx is imported by %v; only internal/capture/dbsession/session.go may", found)
 	}
 }
 
@@ -116,8 +116,8 @@ func TestOnlyThisFileImportsPgx(t *testing.T) {
 func TestASecondPgxImporterIsFound(t *testing.T) {
 	root := t.TempDir()
 	for path, source := range map[string]string{
-		"internal/capture/database.go": "package capture\n\nimport \"github.com/jackc/pgx/v5\"\n\nvar _ pgx.Rows\n",
-		"internal/probe/smuggled.go":   "package probe\n\nimport \"github.com/jackc/pgx/v5/pgconn\"\n\nvar _ pgconn.PgError\n",
+		"internal/capture/dbsession/session.go": "package dbsession\n\nimport \"github.com/jackc/pgx/v5\"\n\nvar _ pgx.Rows\n",
+		"internal/probe/smuggled.go":            "package probe\n\nimport \"github.com/jackc/pgx/v5/pgconn\"\n\nvar _ pgconn.PgError\n",
 	} {
 		target := filepath.Join(root, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -134,7 +134,7 @@ func TestASecondPgxImporterIsFound(t *testing.T) {
 }
 
 // driverCallsOutsideSend lists, in a Go file, every call of a session's
-// sending methods anywhere but inside send. database.go is the one file
+// sending methods anywhere but inside send. session.go is the one file
 // that holds a session at all, so this is a property of that file, not a
 // denylist over a package.
 func driverCallsOutsideSend(t *testing.T, path string) []string {
@@ -164,14 +164,14 @@ func driverCallsOutsideSend(t *testing.T, path string) []string {
 }
 
 func TestOnlySendTalksToTheDriver(t *testing.T) {
-	if found := driverCallsOutsideSend(t, "database.go"); len(found) > 0 {
+	if found := driverCallsOutsideSend(t, "session.go"); len(found) > 0 {
 		t.Fatalf("a statement reaches the driver other than through send: %v", found)
 	}
 }
 
 // TestAStatementSentAroundSendIsFound is that rule's red state.
 func TestAStatementSentAroundSendIsFound(t *testing.T) {
-	source, err := os.ReadFile("database.go")
+	source, err := os.ReadFile("session.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestAStatementSentAroundSendIsFound(t *testing.T) {
 		"the raw conn":   "func smuggle(conn *pgx.Conn) { _ = conn.PgConn() }",
 	} {
 		t.Run(name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "database.go")
+			path := filepath.Join(t.TempDir(), "session.go")
 			if err := os.WriteFile(path, append(append([]byte{}, source...), []byte("\n"+code+"\n")...), 0o644); err != nil {
 				t.Fatal(err)
 			}

@@ -137,18 +137,25 @@ and the Alembic migration version — through the connection string in the
 variable `dsn_env` names, in the shell Culprit runs in. The session is
 opened read-only, with a statement timeout.
 
-**What it sends:** four fixed statements and nothing else. The binary has
-one file that can open a database connection, and it sends only
-statements from a closed set written into that file; anything else — an
-arbitrary query, an `EXPLAIN ANALYZE` — is refused before it leaves.
-Values travel as bind parameters. Every session sets
-`default_transaction_read_only = on` and a ten-second
-`statement_timeout` as connection parameters, so were the first two
-layers to fail, Postgres itself would refuse a write (a test sends one
-and sees it refused). The first two hold against ordinary code, not code
-written to get around them: another file in the same Go package could use
-the session it opens (docs/LIMITS.md, "What Culprit sends a database";
-open as Q27).
+**What it sends:** four fixed statements and nothing else. What holds
+that is four layers, each holding something different (docs/LIMITS.md,
+"What Culprit sends a database, and what holds it"):
+
+- **the package** — `internal/capture/dbsession`, one file, the only code
+  in the binary that can open a database connection; nothing outside it
+  can hold the connection, because its exported surface names no driver
+  type (Q27, ruled 2026-11-12). It does not hold against a change to that
+  file itself;
+- **the templates** — inside it, only statements from a closed set are
+  sent; anything else, an `EXPLAIN ANALYZE` included, is refused before it
+  leaves. Values travel as bind parameters;
+- **the read-only session** — `default_transaction_read_only = on` and a
+  ten-second `statement_timeout`, so Postgres itself refuses a write (a
+  test sends one and sees it refused). It does not refuse an
+  `EXPLAIN ANALYZE SELECT` or a function call such as
+  `pg_stat_statements_reset()`, which are not writes;
+- **the role** — what the server lets it do, and what a stolen credential
+  would carry (below).
 
 **Never:** rows. The only row read is the migration version in
 `alembic_version`, which is the one row §0.4 of the plan names as
@@ -198,6 +205,16 @@ Phase 37 capabilities, Postgres sets the floor:
   **`pg_read_all_stats`**;
 - planning a statement needs **`SELECT` on every table it names**:
   Postgres plans only what the role could run.
+
+The recommended role holds **no `EXECUTE` on
+`pg_stat_statements_reset`**. That is Postgres's default — the function is
+granted to superusers only — and it should stay so: resetting the
+statistics is a write, which the read-only session does not stop (it is a
+function call, not a write to a table), so the role is what stops it if
+everything above it failed. Culprit never calls it. `pg_read_all_stats`
+also shows the statement text of *every* database on the server, not
+only the one the connection string names; on a server shared with other
+applications, that is what the grant reveals.
 
 So the role `db.plan.read` needs **can read rows**, whatever Culprit
 chooses to send. Culprit never sends a statement that returns a row — the

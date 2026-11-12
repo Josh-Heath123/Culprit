@@ -414,6 +414,12 @@ quickstart:
     else
         echo "==> infra/.env.prod already exists, reusing it"
     fi
+    # A file generated before Phase 37's close-out has no password for the
+    # demo's own database: add a generated one (no value is printed).
+    if ! grep -q '^INVENTORY_DB_PASSWORD=.' infra/.env.prod; then
+        echo "==> Adding a generated INVENTORY_DB_PASSWORD to infra/.env.prod"
+        printf 'INVENTORY_DB_PASSWORD=%s\n' "$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)" >> infra/.env.prod
+    fi
     COMPOSE=(docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod)
     # The frontend image needs src/lib/api-types.generated.ts, which is
     # gitignored and generated from the api's OpenAPI schema. CI generates

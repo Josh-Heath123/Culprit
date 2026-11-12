@@ -217,7 +217,7 @@ jobs:
       - name: The database boundary and index facts (real Postgres)
         run: |
           cd cli
-          CULPRIT_DOCKER_TESTS=1 go test ./internal/capture -run TestASessionIsReadOnlyAtTheServer -v
+          CULPRIT_DOCKER_TESTS=1 go test ./internal/capture/dbsession -run TestASessionIsReadOnlyAtTheServer -v
           CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run 'TestIndexesDeclaredAndLive|TestTheDemoDatabase' -v
 
       # Every released platform, built here rather than only at tag time,

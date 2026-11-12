@@ -272,9 +272,10 @@ services:
     environment:
       # Phase 37 part 1: inventory-service's own database (P8), a separate
       # database in this Postgres with its own role, set up by
-      # inventory-db-setup below. The password is synthetic: Postgres
-      # publishes no port to the host.
-      INVENTORY_DATABASE_URL: postgresql://inventory:inventory-demo-not-a-secret@postgres:5432/inventory
+      # inventory-db-setup below. Its password is generated into
+      # infra/.env.prod by bootstrap_env.py (`just quickstart` adds it to an
+      # older file): no password for it is written in the repository.
+      INVENTORY_DATABASE_URL: postgresql://inventory:${INVENTORY_DB_PASSWORD:-}@postgres:5432/inventory
       # Both empty (a bare `docker compose up`) turns the check off; the
       # recipe sets both, per run.
       EXPECTED_AUDIENCE: ${DEMO_TOKEN_SECRET:+inventory-service}
@@ -302,7 +303,7 @@ services:
       INVENTORY_ADMIN_USER: ${POSTGRES_USER}
       INVENTORY_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
       INVENTORY_ADMIN_DB: ${POSTGRES_DB}
-      INVENTORY_DATABASE_URL: postgresql://inventory:inventory-demo-not-a-secret@postgres:5432/inventory
+      INVENTORY_DATABASE_URL: postgresql://inventory:${INVENTORY_DB_PASSWORD:-}@postgres:5432/inventory
     depends_on:
       postgres:
         condition: service_healthy

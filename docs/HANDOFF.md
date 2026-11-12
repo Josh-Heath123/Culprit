@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **37, part 1 — Reading the database safely** — **`awaiting decision`** (Q27, blocking). Built; CI green on `fcd0b0a` (run 43263355094); PR #39. The phase-auditor found criterion 1 NOT MET and Q26's premise false, for one reason (Q27). Report in §5. |
-| Previous phase | **36, part 2 — The walk sees slow: signed off 2026-11-12.** **Phase 36 is complete:** `main`'s push run 43250669431 on `d785af4` green on every job. PR #38 was merged as `d785af4`; the pull request's runs 43235902449 and 43238653732 were green on every job, read from GitHub. Q26 is ruled. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
+| Current phase | **37, part 1 close-out** — `awaiting decision` (Q28). Built on `phase-37-closeout`, PR #40 (ready for review); CI green on `21651a8` (run 43287075789) and every pull-request check pass, CodeQL included. Criteria 1–5, 7–9 met; 6 met on the fixture, one clause not testable as written (Q29). The readers still split on typing (Q28). Report: §5. Then **37, part 2** (briefed). |
+| Previous phase | **37, part 1 — Reading the database safely: signed off 2026-11-12** by the architecture session; complete when the close-out merges. PR #39 was merged as `b3ef508`; the pull request's runs 43263355094 and 43267638088 were green on every job, read from GitHub. Q27 is ruled: package isolation. **Phase 36 is complete**: `main`'s push run 43250669431 on `d785af4` was green. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-37-database`, from `origin/main` = `d785af4`; PR #39. |
-| Blocking questions | **Q27** blocks part 1's completion. |
+| Branch | `phase-37-closeout`, to be cut from `origin/main` = `b3ef508`. Its first commit is the part 1 sign-off, already in the working tree (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`; message `../phase-37-1-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
+| Blocking questions | **Q28** — whether the close-out is complete with the readers' remaining typing splits documented, or needs strict typing in both. |
 
 ---
 
@@ -79,7 +79,8 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q27 | **"One file" is a property of imports, not of use.** Q26 (only `http.go` and `timing.go` import `net/http`; every client from the guarded constructor) and Phase 37's boundary (only `database.go` imports pgx; it sends only templates) both assume a file that cannot *name* a type cannot *use* it. In Go it can: a method call or field access on a value needs no import. The phase-auditor added a file to `internal/probe`, importing nothing, that reached the guard's own transport through a client's fields and sent a `DELETE` (the server received it); and a file to `internal/capture` that took `openSession`'s connection and sent `EXPLAIN ANALYZE DELETE …` — which a read-only session does not stop for `EXPLAIN ANALYZE SELECT` or `pg_stat_statements_reset()`. Every test stayed green. **The structural fix** is package isolation: the guarded client (`newProbeRequest`, `methodGuard`, `newGuardedClient`, `RealHTTPClient`) and the database session (`openSession`, `send`, the templates, `PostgresReader`) each in a package of its own with one non-test file, where no other file can reach unexported fields — held by a test that the package has one file. Both new packages link `net`, so `TestTheNetworkBoundaryIsAnAllowlist` would have to name them: widening that allowlist is an escalation (§6), and the premise of a ruled decision is wrong. Decide: package isolation (and the allowlist naming the two packages), or accept "review covers the package" as the bound (LIMITS now says that), or another way. | 2026-11-12, Phase 37 part 1 run | **Blocking:** part 1's criterion 1, and Q26's ruling |
+| Q28 | **The manifest readers resolve scalars alike but do not type them alike.** The close-out's phase-auditor fed both readers 85 manifests; 23 still split. A text field written as another kind (`why: true`, `why: 300`, `name: 0454`) is text to the binary and refused by the API; a fraction in a whole-number field (`max_probes: 1.5`) is truncated by the binary and refused by the API; `max_probes: ~`, `budgets: ~` and an empty file load in the binary only; `max_probes: "5"`, `enabled: 1` and `version: "1"` are coerced by the API and refused by the binary; an untyped `value:` date is a date to one and text to the other. Closing them is strict typing in both (Go: refuse a scalar whose resolved tag does not match the field's type; API: pydantic strict mode), wider than the brief's listed cases. Options: (a) strict typing in both, in this close-out or as its own item; (b) accept, documented (LIMITS, "What still splits"). | 2026-11-12, close-out phase-auditor | The close-out's completion |
+| Q29 | Not blocking. (1) Criterion 6's "each red on the old API loader" cannot hold for `0454` and `~` (never a split) or for the second document and unknown key (they split the other way); suggested wording in §5. (2) The re-audit of `25db425`: SQL `PASSWORD` redaction misses `E'…'`, `U&'…'`, dollar quotes, no space and a comment before the quote, and leaks the tail of `'…''…'` — same in Go and Python. (3) For part 2: `db.stats.read`'s template should filter `pg_stat_statements` to the current database's `dbid`; `pg_read_all_stats` shows every database's statement text (PERMISSIONS now says so). | 2026-11-12, close-out | — |
 
 ---
 
@@ -114,9 +115,10 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 35, part 2 | The narrator | **complete** (PR #35 merged, `ac0a939`; its last commits through PR #36) | **Signed off 2026-11-11** (architecture session): every check on the pull request and on `main`'s push run green, read from GitHub; step 0 met. Parity's widening (`8a09d7e`) is honest; Phase 36 part 2 narrows it. Merged before the run finished, so the re-audit's fixes (`ec05453`) and the run report (`356012e`) landed with the close-out. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | 35, close-out | Land the re-audit's fixes; the review's corrections | **complete** (PR #36 merged, `08f7d65`) | **Signed off 2026-11-12** (architecture session): `main`'s push run 43167772415 green on every job; criteria 1–5 executed, each shown red before the change. Q25 ruled: item 4 and criterion 6 are withdrawn, because the brief rested on a wrong LIMITS sentence. The first run under the draft pull request rule, and it held. Decisions at the end of Phase 35 in `DIAGNOSTIC_PLAN.md`. |
 | 36, part 1 | Budgets and the measurement | **complete when `main`'s push run on `716205f` is green** (PR #37 merged) | **Signed off 2026-11-12** (architecture session): every check on the pull request green, read from GitHub. The phase-auditor recomputed every rank with exact fractions and fuzzed Go against Python on 40,000 inputs; its two NOT MET findings were fixed and counted at the server. Three corrections are carried into part 2. Decisions at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
-| 36, part 2 | The walk sees slow | **complete when `main`'s push run on `d785af4` is green** (PR #38 merged) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The library's latency fault roots at inventory-service and verifies; a wrong fix gives `not_resolved`; without budgets it is `inconclusive`. Q21 is closed. Q26 is ruled. Three audit rounds' findings were fixed. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
-| 37, part 1 | Reading the database safely | **awaiting decision** (Q27; PR #39, CI green on `fcd0b0a`) | Criteria 2–10 met (CI where marked); criterion 1 NOT MET, Q26's premise false — both Q27. **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37: "How Phase 37 is run", then "Part 1" at the end of the section. Step 0: `main`'s push run on `d785af4` green, then the phase-auditor re-audits `4c7bc6e`. Branch `phase-37-database` from `origin/main` = `d785af4`; its first commit is the Phase 36 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 37, part 2 | Statements and plans | not started | `docs/PERFORMANCE_PLAN.md` Phase 37, "How Phase 37 is run". The brief and criteria are written at part 1's review. |
+| 36, part 2 | The walk sees slow | **complete** (PR #38 merged, `d785af4`; `main`'s push run 43250669431 green) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The library's latency fault roots at inventory-service and verifies; a wrong fix gives `not_resolved`; without budgets it is `inconclusive`. Q21 is closed. Q26 is ruled, and Q27 corrected its premise. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
+| 37, part 1 | Reading the database safely | **complete when the close-out merges** (PR #39 merged, `b3ef508`) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub; a read-only session refused at the server in CI; the demo's database is seeded, and index facts are found both ways. Q27 is ruled: Q26's premise and "one file" were wrong, because Go's visibility is per package, so package isolation follows. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
+| 37, part 1 close-out | Package isolation; one schema for both manifest readers | **awaiting decision** (Q28) — PR #40; CI green on `21651a8`, every check pass | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37, "Close-out of part 1": its work order, criteria and what not to build. Step 0: `main`'s push run on `b3ef508` green, then the phase-auditor re-audits `25db425`. Branch `phase-37-closeout` from `origin/main` = `b3ef508`; its first commit is the part 1 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 37, part 2 | Statements and plans | not started | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37, "Part 2" at the end of the section. It starts after the close-out merges; step 0 confirms `main`'s push run on that merge. Branch `phase-37-statements` from that merge. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 37, part 3 | The database in the walk | not started | `docs/PERFORMANCE_PLAN.md` Phase 37, "How Phase 37 is run". The brief and criteria are written at part 2's review. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
@@ -151,214 +153,202 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        37, part 1 — reading the database safely
-Branch:       phase-37-database, from origin/main = d785af4 (PR #38's merge);
-              b20dfc5 the Phase 36 sign-off, 155c7eb the carried-in items,
-              fcd0b0a the database work, then the audits' fixes and this
-              report. PR #39.
+Phase:        37, part 1 close-out — package isolation; one schema for
+              both manifest readers
+Branch:       phase-37-closeout, from origin/main = b3ef508 (PR #39's
+              merge); 58e4f83 the part 1 sign-off, d37542e the close-out,
+              21651a8 the audits' findings, then this report. PR #40.
 Run:          2026-11-12, /next.
-Status:       AWAITING DECISION (Q27, blocking). Built; every local gate
-              green; CI green on fcd0b0a (run 43263355094, every job). The
-              phase-auditor: PHASE NOT COMPLETE — criterion 1 NOT MET, and
-              Q26's premise is false, for one reason: in Go, another file
-              in the same package can use a value without importing its
-              type. Fixing it means new packages that link the network,
-              so the network allowlist test would have to name them: an
-              escalation (§6), not mine to decide.
+Status:       AWAITING DECISION (Q28, Q29). Built; every local gate green;
+              CI green on 21651a8 (run 43287075789, every job) and every
+              PR check pass, CodeQL included, no open alert. The
+              phase-auditor: criteria 1-5, 7, 8 MET; criterion 6 met on
+              the fixture, NOT TESTABLE AS WRITTEN in one clause (Q29);
+              and the readers still split on 23 of 85 manifests it wrote,
+              which strict typing in both would close and the brief did
+              not ask for (Q28). The invariant-auditor: clean.
 
 STEP 0
-  main's push run 43250669431 on d785af4: every job success (fault library,
-  e2e (none), e2e (stub), narration-parity); deploy skipped.
-  The phase-auditor re-audited 4c7bc6e's manifest and fixture changes:
-  OPEN — the API's reader counted merged budgets: sections as "written
-  twice" (it refused three files the Go loader loads), and an anchored
-  value (`&v 300`) was plain to Go only; LIMITS' "one split remains" was
-  false. Fixed in 155c7eb: the API reads budgets: as yaml.v3 does (a key
-  written twice in any mapping refused; the root's own budgets: before a
-  merged one, the first merge before a later; only that section
-  form-checked; a non-string top-level key refused); Go treats an anchor as
-  not plain; budget_manifests holds both readers to every case with what
-  loads (red on the old reader: 5 cases; Go: the anchor).
+  main's push run 43272962537 on b3ef508: every job success (fault
+  library, e2e (none), e2e (stub), kind-capture, narration-parity);
+  deploy skipped.
+  The phase-auditor re-audited 25db425 ("the audits' findings"): every
+  item CLOSED, each red when reverted, with these left:
+  - the template set's switch had no test that failed on revert — FIXED
+    here: TestTheTemplateSetIsTheConstants (the switch lists exactly the
+    statement constants, no map of statements), red with a constant the
+    switch omits or a map;
+  - LIMITS "four today, all catalogue reads" — FIXED: three catalogue
+    reads and the Alembic version row;
+  - redaction of SQL PASSWORD misses E'…', U&'…', dollar quotes, no
+    space, a comment before the quote, and leaks the tail of '…''…' —
+    OPEN, low, same in Go and Python; outside this brief (Q29);
+  - for part 2: with pg_stat_statements preloaded server-wide, a
+    pg_read_all_stats role sees every database's statement text,
+    Culprit's migrations' CREATE ROLE … PASSWORD among them (redacted
+    today). PERMISSIONS now says so; db.stats.read's template should
+    filter to the current database's dbid (Q29).
 
-WHAT WAS BUILT (work order 1-7)
-  1 Carried in (155c7eb):
-    - redact_credentials, Go and Python, from shared/tests/
-      redaction_conformance.json: password=… outside a URL, Slack tokens,
-      user:pass@host, and (after the audit) SQL's PASSWORD '…'. Python now
-      removes a whole private-key block, as Go did. Red without: Go 14
-      mismatches, Python 9.
-    - Q26: the 26-form method scan is retired. Only http.go and timing.go
-      may import net/http (allowlist test, red with a third file, aliased,
-      or a package under net/http); every client comes from
-      newGuardedClient, which installs methodGuard (red for a literal, new,
-      a value, the default client, an embedding, a replaced transport, a
-      transport through a pointer, a direct or stored RoundTrip, an aliased
-      import); the guard refuses a non-GET or a body as it leaves; a
-      request changed after it was built (method, pointer to the method,
-      body) is refused at a real server, counted 0.
-    - planned required by the rule in Go and Python, so by the API;
-      probe.http.latency version 2; a fixture case without it.
-    - shared/tests/manifest_keys.json: both readers know the same top-level
-      keys; the API's model gains probes: and isolation:, validated as Go
-      validates them and exported whole.
-  2 db.stats.read, db.plan.read: Go, Python, the shared fixture, the
-    frontend's plain words; the agent's parser and the allowance take them
-    by name. TestNoCapabilityImpliesAnother (every pair);
-    TestAnAllowanceNarrowsTheDatabaseCapabilities. No probe declares them
-    until part 2, so the probe catalogue is unchanged by them.
-  3 The boundary (internal/capture/database.go): the only non-test pgx
-    importer (allowlist test, red with a second); statements are an
-    unexported type of constants, checked by a switch (after the audit:
-    it was a map an init() could extend); send is the only driver call in
-    the file and refuses anything else first (counted at a fake driver: an
-    arbitrary statement, EXPLAIN ANALYZE, a reset, a second statement
-    appended — 0 reached it); openSession sets read-only, a 10 s
-    statement timeout and application_name as connection parameters.
-    Capture and the database probes run through it unchanged.
-  4 pg_stat_statements: the quickstart's Postgres starts with
-    shared_preload_libraries=timescaledb,pg_stat_statements, set
-    explicitly; the recipe reads the running value and stops if it is
-    missing. CI e2e: "shared_preload_libraries: timescaledb,
-    pg_stat_statements". The image's own default was NOT observed: the
-    list is set rather than measured, and it replaces the default
-    (Culprit's database needs only timescaledb; LIMITS and the compose
-    comment say so).
-  5 The demo's database (P8): inventory-service's own Alembic migrations
-    (products: id primary key, sku unique index, category not indexed) and
-    a seed migration of 1,000,000 rows in 200 categories, generated in the
-    database. Why that size: a sequential scan of one category reads the
-    whole ~80 MB table (tens to hundreds of ms), an index on category would
-    read 5,000 rows (well under 1 ms) — a gap wider than any statement
-    budget part 3 should declare, on a laptop or a runner. Set up by
-    inventory_service/setup_db.py, run by `just quickstart` as a one-shot
-    service: as the server's superuser it creates the inventory role and
-    database and pg_stat_statements there (not a trusted extension, so the
-    owner cannot — a deviation from "done by its migrations as their
-    owner"), then applies the migrations as the inventory role. GET
-    /products?category=…; 503 without a database (the fault stack).
-    culprit.yaml declares inventory-db, its edge `background`: POST
-    /orders never reads it, and on the request path it would change every
-    walk the fault library checks. CI e2e: "inventory's products: 1000000
-    rows".
-  6 Index facts: leads_index on the column-level schema: subject, true or
-    false for every column. CONFIGURED from capture (a fourth template:
-    valid, non-partial, non-expression indexes' first column); INTENT from
-    the migration reader (create_index, drop_index, constraints, column
-    flags, renames, drops). The generic comparator compares them; absence
-    is not judged for it, so a missing table adds no index finding.
-  7 PERMISSIONS (db.metadata.read's four statements, the two capabilities,
-    the recommended role and that it can read rows), LIMITS (indexes, the
-    boundary and what it does not hold, the GET-only rule, the readers'
-    splits, redaction, the quickstart's database), README (Databases),
-    CLAUDE.md.
+WHAT WAS BUILT (work order 1-4)
+  1 Q27, package isolation (ruled 2026-11-12).
+    - internal/probe/guardedhttp: the guarded client, one non-test file
+      (client.go), the only net/http importer under internal/probe. Its
+      exported surface names no net/http, net or pgx type. internal/probe
+      keeps its names as aliases and imports no net/http.
+    - internal/capture/dbsession: the read-only, template-only session,
+      one non-test file (session.go), the only pgx importer. Its exported
+      surface names no pgx or net type. internal/capture keeps its names
+      as aliases and imports no driver.
+    - internal/boundarytest (test-only; not linked into the binary): one
+      non-test file; the exported surface by go/types over the real
+      types (export data via go list); PlantedErrors type-checks a package
+      with one more file.
+    - The network allowlist names both, as the ruling approved; the CI
+      Docker step runs the session's read-only test from its new path.
+  2 One schema for both manifest readers.
+    - API: YAML12Loader resolves plain scalars as yaml.v3 does (yes/no/
+      on/off strings, dates as written, 0454/0o454/1e3 numbers). After
+      CodeQL flagged yaml.load with a custom loader
+      (py/unsafe-deserialization, PR #40), PyYAML constructs nothing: the
+      document is composed and built as plain data from an explicit set of
+      tags; !!python/* and !!timestamp are refused as "not plain data".
+    - Go: LoadManifest refuses a second document and any top-level key not
+      in Manifest's yaml tags (held equal to the API's fields by
+      manifest_keys.json), naming it — merges, "<<" as a string and
+      !!binary keys included.
+    - shared/tests/manifest_scalar_conformance.json, 16 cases, read by
+      both.
+  3 The demo database's password: generated by bootstrap_env.py
+    (INVENTORY_DB_PASSWORD); just quickstart adds one to an older
+    .env.prod; setup_db sets the role's password every run, refuses an
+    empty one, and refuses any role or database but `inventory` (it would
+    otherwise reset whatever role the URL named). No fixed password
+    remains.
+  4 LIMITS and PERMISSIONS: what each layer (package, templates,
+    read-only session, role) holds and does not; no EXECUTE on
+    pg_stat_statements_reset (Postgres's default) and why; what
+    pg_read_all_stats reveals; the YAML splits now closed and the ones
+    still open (Q28).
 
-CRITERIA (part 1)
-  1 nothing outside the template set reaches the database; an arbitrary
-    statement and EXPLAIN ANALYZE refused before they leave, counted; the
-    allowlist fails on a second pgx importer           NOT MET (Q27).
-      The tests as written pass and are red where they should be. The
-      phase-auditor added a file to internal/capture with no pgx import
-      that called openSession(...).Exec("EXPLAIN ANALYZE DELETE …") and
-      added a template from an init(); every test stayed green. The second
-      half is fixed (a switch). The first is the package boundary, Q27.
-  2 in CI, a write through a weakened path refused as read-only;
-    statement_timeout on every session                  PASS in CI.
-      TestASessionIsReadOnlyAtTheServer (cli job, run 43263355094): CREATE
-      TABLE and CREATE ROLE refused, 25006; SHOW gives on, 10s,
-      culprit-capture.
-  3 the two capabilities from the shared fixture; an allowance narrows
-    them; neither implies db.rows.read; none implies another   PASS.
-      Red: making db.plan.read hold db.rows.read fails the Go test
-      (phase-auditor). The Python test is weak: Python has no implication
-      mechanism to test.
-  4 demo database: capture yields the seeded table's index facts, the
-    reader the declared ones; dropped by hand -> declared but missing;
-    created by hand -> live but undeclared              PASS (live in CI).
-      TestTheDemoDatabase (CI): live leading id, sku; head
-      0002_seed_products; setup run twice. test_the_demo_migrations_
-      declare_their_indexes: id, sku true; category, name, price false.
-      TestIndexesDeclaredAndLive (CI): none at baseline, items.sku after
-      DROP, items.category after CREATE, each intent_vs_configured.
-  5 redaction of password=…, a Slack token, user:pass@host in Go and
-    Python from shared cases, red without              PASS.
-  6 Q26: a third net/http importer red; a client built another way red;
-    the guard refuses a non-GET and a body, each red    PASS as written;
-                                                         premise false (Q27).
-      The phase-auditor added a file to internal/probe with no net/http
-      import that took a client's transport through its fields
-      (c.client.Transport.(methodGuard).next) and sent a DELETE: the
-      server received it. Not naming a type does not stop a file using it.
-  7 a latency reading without planned refused by Go, Python, the API PASS.
-      Go and Python here, red on the old rule; the API test in CI's test
-      job.
-  8 isolation: accepted by both; a key one knows and the other does not
-    fails a test                                       PASS.
-      Red both ways (phase-auditor). Left, in LIMITS: an unknown top-level
-      key is ignored by Go on purpose and refused by the API.
-  9 from a fresh clone the quickstart starts with the demo's database,
-    migrated and seeded                                PASS in CI (e2e).
-  10 fault library unchanged and green; LLM_PROVIDER=none changes nothing;
-    every PR check green                               PASS (fcd0b0a).
+CRITERIA
+  1 The audit's two attacks no longer type-check — MET. Planted and built
+    by the auditor: internal/probe "undefined: newProbeRequest", "c.client
+    undefined (cannot refer to unexported field client)"; internal/capture
+    "undefined: openSession", "send", "statement". Both build at b3ef508.
+    TestTheAuditsAttackNoLongerTypeChecks in each package; a file using
+    only the exported surface type-checks.
+  2 One non-test file each — MET; a real second file fails
+    TestThisPackageHasOneFile in both.
+  3 Exported surface names no net/http, net or pgx type — MET; red for a
+    function, method, field, alias and connection, and the auditor's own
+    generics, callbacks, func types, channels, embedded and promoted
+    fields. Gap: a function returning the connection as `any` is not
+    caught by this test (one-file rule and review are what hold it);
+    stated in LIMITS.
+  4 Allowlist names both; probe and capture import neither — MET; red by
+    planting net/http in probe (now five import forms), pgx in capture,
+    and removing dbsession from the allowlist.
+  5 Existing tests unchanged and green — MET. Moved tests differ only in
+    package, paths and HTTPResponse→Response. Two probe tests were
+    replaced by a stricter rule (probe imports no net/http at all); its
+    red state now covers plain, aliased, sub-package, grouped blank and
+    dot imports.
+  6 Both readers agree or both refuse on yes, no, on, off, a date, 0454,
+    0o454, 1e3, ~, a second document, an unknown key — MET on the shared
+    fixture, all 16 cases, in both. "Each red on the old API loader":
+    7 red (yes, no, on, off, date, 0o454, 1e3); a second document and the
+    unknown keys were already refused by the old API and are red on the
+    old Go loader (4); 0454 and ~ were never a split and are red on
+    neither — NOT TESTABLE AS WRITTEN for those two (Q29).
+  7 No fixed demo password; fresh-clone quickstart seeds — MET: git grep
+    finds none; build_env gives a fresh 43-character password per call;
+    CI's e2e (none) and e2e (stub) ran just quickstart from a clean
+    checkout, seeding included, green on 21651a8.
+  8 LIMITS and PERMISSIONS per layer; no EXECUTE on the reset — MET,
+    checked against the code by the auditor.
+  9 Every PR check green — MET on 21651a8 (below).
 
-DELIBERATELY NOT BUILT (part 1's list)
-  No statement timing, plan or statement budget. No walk change. No EXPLAIN
-  of any kind sent. No row read by Culprit (alembic_version as before). No
-  pg_stat_statements reset. No index created or dropped by Culprit. No
-  change to Culprit's own database (the server-wide preload list aside,
-  which LIMITS states).
+DELIBERATELY NOT BUILT (the brief's list)
+  No statement timing, plan or budget; no walk change; nothing outside
+  the boundaries, the readers and the demo password (auditor: no
+  query_mean, GENERIC_PLAN or pg_stat_statements code; isolate, agent,
+  mcp, worker, routers untouched). The redaction gaps and the remaining
+  reader splits are left for the architecture session, not widened into.
 
-GATES (local, Windows, Docker NOT running)
-  lint, typecheck, lint-imports (6 kept), check-schema-drift,
-  check-no-llm-imports, check-invariants, check-scan-coverage, cli-lint,
-  check_security_doc (75), check_coupled_files --base origin/main   PASS
-  go test ./... (cli)                                                 PASS
-  pytest without a database: shared, scripts, manifests 1188 passed;
-  extractors/python 37; frontend 19
-  NOT RUN locally: every database-backed test, the Docker tests, the
-  quickstart, e2e, the fault library. CI ran them all.
+GATES (local, Windows)
+  just lint PASS · typecheck PASS · lint-imports PASS (6 kept) ·
+  check-schema-drift PASS · just test PASS (1619 passed, 6 skipped; then
+  93, 21, 37) · cli-lint PASS · cli-test PASS · check_coupled_files PASS
+  · check-no-llm-imports PASS · check-invariants PASS ·
+  check-scan-coverage PASS · extractors-test PASS · culprit check
+  --fail-on=breaks_request_path PASS · LLM_PROVIDER=none culprit check
+  PASS. After 21651a8: lint, typecheck, cli-lint, go test ./..., the
+  manifest/model and scripts suites PASS. Docker-gated tests: not run
+  locally; run in CI.
+
+CI (the merge result: origin/main = b3ef508 is the branch's base, so the
+branch is the merge result)
+  d37542e  run 43282424663  every job success; PR check CodeQL FAIL —
+           open alert #5 py/unsafe-deserialization api/app/model/
+           manifest.py (yaml.load with a SafeLoader subclass). Fixed in
+           21651a8 by not constructing through PyYAML at all, with a
+           test; not dismissed.
+  21651a8  run 43287075789  https://github.com/Josh-Heath123/Culprit/
+           actions/runs/43287075789
+    success lint, typecheck, cli, test, migration-round-trip, self-check,
+            fault-library, kind-capture, e2e (none), e2e (stub),
+            narration-parity, build ×5; skipped build / publish, deploy
+    PR checks: every one pass or skipping — CodeQL, Analyze (go, python,
+            javascript-typescript, actions), Culprit included.
+    Code-scanning alerts open: none (pr=40, refs/pull/40/merge,
+            refs/pull/40/head all empty).
 
 AUDITS
-  invariant-auditor (fcd0b0a): CLEAN, 0 violations. Risks taken up: a
-    RoundTrip or an aliased net/http in the two files (now red cases); the
-    compose comment overstated what stays unchanged (corrected). Left: the
-    synthetic demo password in the compose file; the user:pass@ pattern
-    over-redacts; PERMISSIONS' role can read rows (documented).
-  phase-auditor (fcd0b0a): NOT COMPLETE — criterion 1 NOT MET, Q26's
-    premise false (both Q27); templates mutable (fixed); redaction missed
-    SQL PASSWORD '…' (fixed); LIMITS overclaimed in two places (rewritten);
-    CLAUDE.md stale (fixed). Left, in LIMITS: why: yes / 300 / a date is a
-    string to Go and refused by the API; a second YAML document; an
-    unknown top-level key. The fixes after fcd0b0a were not re-audited.
+  invariant-auditor (d37542e): CLEAN. Allowlist as narrow as the moved
+    code needs (dbsession: net and crypto/tls only); the YAML loader
+    constructs nothing unsafe; boundarytest not linked into the binary;
+    no test weakened. Risks fixed in 21651a8: setup_db's ALTER ROLE held
+    to `inventory`; INVENTORY_DB_PASSWORD in .env.prod.example; the
+    allowlist's stale rule-of-record comment.
+  phase-auditor (d37542e): see CRITERIA. Its findings: the readers still
+    split (Q28); criterion 6's wording (Q29); the surface test's `any`
+    gap (stated in LIMITS); the narrower red state (widened); stale
+    comments (fixed); LIMITS's false "why: 300 is a number to both"
+    (removed; the splits are now listed).
 
 DECISIONS TAKEN HERE (for review)
-  - leads_index (column-level, true and false) as the index predicate.
-  - inventory-db's edge is background, so the order walk is unchanged.
-  - The seed is 1,000,000 rows, 200 categories (reasons above).
-  - pg_stat_statements is created by the demo's setup as superuser, not by
-    its migrations as owner: the extension is not trusted.
-  - The preload list is set explicitly and replaces the image's default.
-  - A fixed synthetic password for the demo's database role.
+  - The Go loader now refuses unknown top-level keys. Until now it ignored
+    them on purpose so an older CLI would run against a newer server's
+    manifest; the shared key list replaces that, and an older binary now
+    stops and names the key.
+  - CodeQL was answered by changing the design (compose, then build plain
+    data from a closed set of tags), not by dismissing the alert.
+  - setup_db sets the inventory role's password on every run so a
+    Postgres volume from before the generated password still works.
 
 IN THE PLAN, FOR CORRECTION
-  - "One file opens database connections" and Q26's "no other file can
-    name a client, a transport" are true of imports and not of use: Q27.
-  - "Creating the extension ... by its migrations as their owner" cannot
-    hold for pg_stat_statements, which only a superuser may create.
-
-/CI
-  run 43263355094 on fcd0b0a (pull_request) — SUCCESS, every job:
-           lint, typecheck, cli (with the new database step: the three
-           Docker tests PASS), test, migration-round-trip, self-check,
-           kind-capture, fault-library, e2e (none), e2e (stub),
-           narration-parity, build x5; publish, deploy skipped
-  run on the report commit — see the PR's checks
-  merge    origin/main = d785af4 is an ancestor of the branch: the branch
-           is the merge result
+  - Criterion 6 asks every case to be red on the old API loader; 0454 and
+    ~ never split, and the second document and unknown key split the
+    other way (refused by the old API, loaded by the old Go loader).
+    Suggested: "each case on which the readers split at b3ef508 is red
+    on the reader that split; cases that never split are pins" (Q29).
+  - "One schema" by fixture closes listed cases one at a time — the
+    denylist pattern the ruling warned against. A schema is typing too
+    (Q28).
 
 LEFT OPEN
-  - Q27 (blocking part 1's completion).
-  - The readers' remaining splits (LIMITS).
+  Q28 (blocking the close-out's completion): strict typing in both
+    readers, or accept and document the splits.
+  Q29 (not blocking): criterion 6's rewording; the SQL PASSWORD
+    redaction gaps; db.stats.read's dbid filter in part 2.
+  Housekeeping for the human: the phase-auditor could not delete
+    C:\Users\flosh\AppData\Local\Temp\p37audit.SgVp (its differential
+    harness) and an old scratchpad worktree directory with long
+    node_modules paths; the invariant-auditor left a postgres:16-alpine
+    container (wizardly_keller) from a slow first start.
 ```
+
+---
 
 ## §6. Escalate to the architecture session when
 
