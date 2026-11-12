@@ -436,6 +436,209 @@ Phase 35's close-out lands first. Part 1's step 0 confirms it.
   classified. `probe.http.latency` joins the catalogue through `BuiltIn`, like
   every other probe.
 
+**Architecture review of part 1, 2026-11-12 — signed off; the gate is `main`'s
+push run.** PR #37 was merged as `716205f`. I read the checks from GitHub's API.
+The pull request's last run, 43182997513 on `e169fcc`, passed every job. The
+run before it, 43181751008 on `3be789e`, passed every job too, including both
+`e2e` legs, `narration-parity` and the fault library.
+
+Checked on disk:
+- The rule's arithmetic is integer-only. The only floats are whole-number JSON
+  inputs, which are accepted, as Go accepts them.
+- `latency_conformance.json` holds the six named cases, the 44/45 floor, and a
+  sample exactly on the budget.
+- The probe caps itself at `LatencyMaxRequests`, whatever its inputs say.
+
+The phase-auditor's work is the reason to trust this part. It recomputed every
+rank from n = 1 to n = 50 with exact fractions. It fuzzed Go against Python on
+40,000 inputs and found no differences. It found two criteria NOT MET on the
+first build:
+- `-p x -p x` sent 100 requests 0.1 ms apart;
+- a `url` input made a `POST` budget send timed `GET`s.
+
+Both were fixed and tested at the server. Decisions:
+
+- **Accepted as taken:**
+  - budgets are bounded at 1–60000 ms. That bounds what can be declared, not a
+    judging threshold;
+  - the request timeout is 2 × budget + 500 ms, cut to what the run has left;
+  - the budget's subject fixes method and path, and inputs that disagree send
+    nothing;
+  - a duplicate budget in one file is refused;
+  - `not_samples` counts the requests that were not samples;
+  - the demo's `GET /ready` is declared by an invariant;
+  - the fault library times the probe from the fault's own vantage.
+- **Plan corrections (accepted):**
+  - fields 4 and 12 no longer name `OPTIONS`;
+  - field 10's "10 to 50" is now a fixed 20 or 50;
+  - criterion 3's cap holds per run and per process. Two processes at once can
+    interleave, and LIMITS says so.
+- **Both budgets on one route are both judged.** Today, when a route declares
+  a p50 and a p95, only the p95 is measured. The p50 is declared, never judged,
+  and never reported as unjudged: a check that looks like a gate and isn't.
+  One run of 50 samples judges both. Part 2 does this.
+- **Every request passes one method check.** `TimeGet` builds its own request
+  outside `do()`'s allowlist. It is a constant `GET` today, but the allowlist
+  holds only if no request can be built around it. Part 2 routes it through.
+- **A budget is written as a plain decimal integer, or it is refused.** The
+  two YAML readers disagree on forms like `1e3`, `0o454` and `0454`: YAML 1.2
+  and YAML 1.1 read them as different numbers, or as strings. Two readers of one
+  INTENT value must not read two values. Both refuse every form but plain
+  decimal digits, with each form as a shared fixture case. Part 2 does this.
+- **`3be789e` was not re-audited.** It holds the fix for a `url` on another
+  path and the scan of packages under `testdata`. Part 2's phase-auditor
+  re-audits it first.
+- **Registration by reflection** escapes the source scan. The served-catalogue
+  test holds instead. Accepted.
+
+Part 1 is complete once `main`'s push run on `716205f` is green, `e2e` included.
+Part 2's step 0 confirms it.
+
+**Part 2 — the walk sees slow. Brief and criteria, 2026-11-12.**
+
+**Decisions.**
+- **Latency is asked only after errors explain nothing.** The walk runs as it
+  does today: `component_fails`, bisection, then the boundary hypotheses in
+  `localOrder`. Only if that finds no root — the partial diagnosis "the cause is
+  inside X or something it cannot observe, such as added latency" — does a
+  second pass ask about latency over the same tree. Errors are cheaper and more
+  fundamental. A latency probe costs at least 2.5 s and is `metered`, and a
+  failing request has no meaningful latency anyway. The agent loop's audience
+  fault is found by the first pass, so it takes no latency reading, and
+  narration parity has no noisy measurement to compare.
+- **The hypothesis is `latency_budget_exceeded` on a component.** It is
+  generated for every component reached from the entry that has at least one
+  measurable budget, meaning a `GET` budget. It is tested by
+  `probe.http.latency` on each of that component's measurable budgets, in
+  subject order:
+  - **supported** when one fails;
+  - **ruled out** when all pass;
+  - **unexplored**, with the probe's reason, otherwise.
+
+  A component with no measurable budget is not given the hypothesis. The partial
+  diagnosis names it as unbudgeted, so "no budget declared" is said, not
+  implied.
+- **A pass rules out only that component's own latency.** For errors, a passing
+  request at X rules out everything below X, because the request exercised it.
+  A budgeted route need not call what is below it; `/ready` calls nothing. So a
+  latency pass rules out X alone, and the second pass descends the tree
+  depth-first rather than bisecting. The tree is small, and the walk's probe and
+  wall-clock limits still bound it.
+- **The root is the deepest slow component whose callees keep their budgets.**
+  A slow component whose child is also slow is propagation. The fault tree
+  records it as an edge, never as the root. A slow component with a child that
+  could not be measured (unbudgeted, refused or inconclusive) is a partial
+  diagnosis that names the child.
+- **Hop or component, from the same reading, with no new request.** Each sample
+  keeps its connection setup (part 1's `connect_us`). Part 2 adds the setup of
+  a timed-out request, or the fact that its connection never completed. The rule
+  judges two derived series against the same budget:
+  - setup alone;
+  - the server's time, which is total minus setup.
+
+  When setup alone fails and this agent runs inside X's caller, the root is the
+  connection `caller → X`. When the server's time alone fails, the root is X.
+  When neither does alone, the diagnosis is partial and names both. When this
+  agent runs outside every component, slow setup is "reaching X from this
+  agent", not a connection of the system, and the diagnosis is partial. A
+  timeout after the connection completed counts against X; a timeout before it
+  counts against the hop. There is no new threshold: it is the same budget and
+  the same rule.
+- **A latency probe never outlives the walk.** The walk's remaining wall clock
+  is the probe's deadline. A run cut short is `inconclusive` with the samples it
+  has, which is the probe's behaviour at its own deadline, and the hypothesis
+  is unexplored.
+- **Verification is unchanged.** It re-takes every reading, the latency
+  readings included, and `model.Judge` decides. After the known fix the
+  library's latency fault is `verified`. After a wrong fix it is
+  `not_resolved`. A noisy pass after the fix is `inconclusive`. That is honest,
+  and it is not to be retried away.
+- **Still no credential** (part 1's decision stands). Budgets on authenticated
+  routes stay unmeasurable. Revisit this when such a budget is what stands
+  between Culprit and its first finding in someone else's project.
+
+**Work order.**
+0. Confirm `main`'s push run on `716205f` is green, both `e2e` legs and
+   `narration-parity` included. If a job failed on the runners' network, re-run
+   it; if a test failed, stop and escalate. Then have the phase-auditor
+   re-audit `3be789e` before anything is built on it.
+1. Narrow narration parity (carried in from Phase 35). Inside a reading's
+   `measured`, time-shaped values are volatile: keys ending `_ms`, `_us` or
+   `_seconds`, and the sample arrays. So are minted ids and record timestamps.
+   Nothing else is: a reading's `expected`, a budget and a verdict are compared.
+2. Part 1's corrections:
+   - both budgets judged from one run, with one reading per budget;
+   - `TimeGet` routed through the method check;
+   - budget literals held to plain decimal integers in both readers, with a
+     shared fixture.
+3. The probe joins the walk: `probe.http.latency` discriminates
+   `latency_budget_exceeded`, and the setup of a timed-out request is recorded.
+4. The second pass, the root rule, and hop or component, in `internal/isolate`.
+5. The fault library:
+   - the latency fault diagnoses with the demo's budget and verifies after its
+     known fix;
+   - a wrong fix gives `not_resolved`;
+   - the same fault with no budgets declared stays `inconclusive`, saying no
+     budget is declared.
+
+   `expected.json`, `results.json` and the README's number are regenerated, the
+   number still labelled as planted faults.
+6. Update the documents: the README tour shows a budget finding a slow hop.
+   LIMITS:
+   - latency is asked only after errors;
+   - one vantage;
+   - a pass rules out one component;
+   - how hop and component are told apart;
+   - what an unbudgeted component leaves unknown.
+
+   PROBES and PERMISSIONS for the probe's role in the walk.
+
+**Acceptance criteria (part 2).**
+- On a synthetic chain A → B → C with C slowed, where B's budgeted route calls
+  C:
+  - the walk roots at `latency_budget_exceeded` on C;
+  - A → B and B → C are recorded as propagation, never as the root;
+  - no latency reading is taken before the error pass has found nothing;
+  - with B fast and C slow, the root is still C, because a pass at B rules out
+    nothing below it.
+- From the same samples:
+  - setup alone over the budget, with the agent in the caller, roots at the
+    connection;
+  - server time alone over it roots at the component;
+  - neither alone is a partial diagnosis naming both;
+  - the agent outside every component is partial, naming "reaching X from this
+    agent".
+
+  Each case is a unit test with recorded samples, with no network.
+- In CI, on Linux, the fault library's latency fault:
+  - diagnoses with root `component:inventory-service`, kind
+    `latency_budget_exceeded`;
+  - verifies `verified` after its known fix, and `not_resolved` after a wrong
+    one;
+  - without budgets, verifies `inconclusive`, saying no budget is declared.
+- A route with both budgets is measured once (50 requests, counted at the
+  server) and gives two readings, each validated by the rule.
+- A non-`GET` request built anywhere in `internal/probe` is refused at one
+  place, shown red by building one around it.
+- `1e3`, `0o454`, `0454` and `300_000` as a budget are refused by the Go loader,
+  by the Python model and by the API's manifest model, each from the shared
+  fixture.
+- Narration parity: a budget that differs between the legs is a difference,
+  red before the change; differing samples and timings are not.
+- A latency probe started near the end of the walk's wall clock stops at the
+  walk's deadline, and the hypothesis is unexplored.
+- Every pull-request check is green, both `e2e` legs and `narration-parity`
+  included. `LLM_PROVIDER=none` changes nothing.
+
+**Do NOT implement in part 2.**
+- No credential sent by any probe.
+- No second vantage, and no probe dispatched to an agent elsewhere.
+- No latency from telemetry, and no baseline as a reference.
+- No early stopping inside a probe's run: the count stays fixed.
+- No percentile other than p50 and p95.
+- No change to how errors are walked.
+- Nothing for Phase 37.
+
 ---
 
 ### Phase 37 — The database: statements, plans and indexes
