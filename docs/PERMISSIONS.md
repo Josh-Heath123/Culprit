@@ -468,6 +468,12 @@ and is sent as written.
 | `ollama` | `OLLAMA_URL`, the operator's own Ollama: on the same machine, nothing leaves it |
 | `anthropic` | `https://api.anthropic.com/v1/messages`, with `ANTHROPIC_API_KEY`: **the evidence leaves your machine** and is handled under Anthropic's terms for API data |
 
+**What is sent is the whole stored history, not only what comes next.**
+Turning narration on narrates every investigation that has no complete
+narration, newest first, three every 15 seconds. With `anthropic`, the
+evidence of every investigation already stored leaves your machine, a few
+at a time, until each has been narrated or has had its three attempts.
+
 What comes back is stored only after the check, as prose, or as what it
 named, or as a failure reason built from Culprit's own words — never the
 provider's error text, which is not read.

@@ -33,7 +33,6 @@ module is the check *on* a model, and imports none.
 """
 
 import re
-import unicodedata
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -247,19 +246,29 @@ def _unknown_tokens(prose: str, ctx: Context) -> Iterator[str]:
 Rule = Callable[[str, Context], list[str]]
 
 
-#: Characters that render as nothing but are not format characters: the
-#: Hangul and halfwidth fillers and the blank Braille pattern.
-_BLANKS = frozenset("\u115f\u1160\u3164\uffa0\u2800")
+#: Every character a narration may hold: printable ASCII, newline, tab, a
+#: fixed set of typographic characters and the no-break space. An allowlist,
+#: not a list of what to refuse: each category of look-alike or invisible
+#: character closed by name leaves the next one open (`not` + U+FF3F +
+#: `resolved` reads as a verdict the investigation does not hold). The
+#: narrator writes English for an English page; prose in another script is
+#: refused, which is the safe failure (docs/LIMITS.md).
+PLAIN_CHARACTERS = frozenset(
+    "".join(chr(code) for code in range(0x20, 0x7F))
+    + "\n\t"
+    + "\u2018\u2019\u201c\u201d"  # curly single and double quotes
+    + "\u2013\u2014\u2026"  # en dash, em dash, ellipsis
+    + "\u2192\u2190\u00d7\u2248"  # right and left arrows, times, almost equal
+    + "\u2264\u2265\u00b1\u00b0\u00b5"  # at most, at least, plus-minus, degree, micro
+    + "\u00a0"  # no-break space
+)
 
 
-def no_invisible_characters(prose: str, ctx: Context) -> list[str]:
-    """No zero-width or other format character: one can split a name the
-    other rules would see (`not` + U+200B + `_resolved`), or reorder what is shown."""
-    return [
-        "an invisible character"
-        for ch in prose
-        if unicodedata.category(ch) in ("Cf", "Mn", "Me") or ch in _BLANKS
-    ][:1]
+def characters_are_plain(prose: str, ctx: Context) -> list[str]:
+    """Every character is in PLAIN_CHARACTERS. Anything else — a zero-width
+    or combining character splitting a name, a look-alike underscore, a
+    letter from another script inside a component's name — is refused."""
+    return ["a character outside plain text" for ch in prose if ch not in PLAIN_CHARACTERS][:1]
 
 
 def citations_name_items(prose: str, ctx: Context) -> list[str]:
@@ -325,7 +334,7 @@ def components_are_the_investigations(prose: str, ctx: Context) -> list[str]:
 RULES: tuple[Rule, ...] = (
     citations_name_items,
     no_url,
-    no_invisible_characters,
+    characters_are_plain,
     subjects_are_the_investigations,
     probes_are_the_investigations,
     capabilities_are_the_investigations,
@@ -335,12 +344,34 @@ RULES: tuple[Rule, ...] = (
 )
 
 
-def _shown(name: str) -> str:
-    """What was named, made safe to store and show: never a URL, never a
-    credential, never longer than _MAX_NAMED characters."""
+#: The fixed labels a refusal may name besides single tokens.
+LABELS = frozenset(
+    {
+        "a URL",
+        "a character outside plain text",
+        "a name in code form",
+        "no prose",
+        "a credential",
+        "a name that cannot be shown",
+    }
+)
+
+
+def shown(name: str) -> str:
+    """What was named, made safe to store and show: a fixed label, or one
+    token — no whitespace, plain characters only — that is not a URL,
+    carries no credential and is at most _MAX_NAMED characters. The check
+    applies it to what it finds, and the API again to every stored row, so
+    a row put into the table by any other route is served under the same
+    property."""
+    if name in LABELS:
+        return name
     if _URL.search(name):
         return "a URL"
-    name = redact_credentials(name)
+    if redact_credentials(name) != name:
+        return "a credential"
+    if not name or any(ch.isspace() or ch not in PLAIN_CHARACTERS for ch in name):
+        return "a name that cannot be shown"
     return name if len(name) <= _MAX_NAMED else name[: _MAX_NAMED - 1] + "…"
 
 
@@ -359,7 +390,7 @@ def check(investigation: Investigation, prose: str, rules: tuple[Rule, ...] = RU
     named: list[str] = []
     for rule in rules:
         for found in rule(prose, ctx):
-            name = _shown(found)
+            name = shown(found)
             if name not in named:
                 named.append(name)
     if not prose.strip():

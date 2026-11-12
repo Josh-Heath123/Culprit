@@ -16,6 +16,12 @@ fourth attempt is never made: the job does not pick an investigation with
 three, and the database refuses a fourth (`ck_narrations_three_attempts`).
 A failed or refused attempt is retried no sooner than RETRY_AFTER later.
 
+Every provider call is counted. An attempt whose row the database will not
+take (a CHECK, a value it refuses) is stored as `failed`, "the narration
+could not be stored", which every CHECK admits, so the next tick does not
+call again for the same attempt. A call goes uncounted only when the
+database can take no row at all, and then `due()` cannot run either.
+
 The job reads the investigation tables and its own narrations, and inserts
 narrations, as the `narrator` role — and does nothing else.
 """
@@ -32,7 +38,7 @@ from culprit_model.investigations import Investigation, from_rows
 from culprit_model.narration import MAX_PROSE, check, evidence
 from culprit_model.redaction import redact_credentials
 from sqlalchemy import Table, and_, func, insert, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from app.narrate import prompts, tables
@@ -119,19 +125,28 @@ async def load(conn: AsyncConnection, investigation_id: str) -> Investigation | 
     )
 
 
-async def _attempts(conn: AsyncConnection, investigation_id: str) -> tuple[int, bool]:
+async def _attempts(
+    conn: AsyncConnection, investigation_id: str, retry_after: timedelta
+) -> tuple[int, bool, bool]:
+    """The attempts made, whether one is complete, and whether the last was
+    made inside the retry interval — read under the claim, so a tick that
+    read `due()` before another tick's attempt sees that attempt."""
     n = tables.narrations
-    count, done = (
+    count, done, recent = (
         await conn.execute(
-            select(func.count(), func.coalesce(func.bool_or(n.c.status == "complete"), False))
+            select(
+                func.count(),
+                func.coalesce(func.bool_or(n.c.status == "complete"), False),
+                func.coalesce(func.max(n.c.narrated_at) > func.now() - retry_after, False),
+            )
             .select_from(n)
             .where(n.c.investigation_id == investigation_id)
         )
     ).one()
-    return int(count), bool(done)
+    return int(count), bool(done), bool(recent)
 
 
-def _constraint(exc: IntegrityError) -> str:
+def _constraint(exc: DBAPIError) -> str:
     """The violated constraint's name, never the error's text: Postgres
     renders the failing row into it."""
     orig = getattr(exc, "orig", None)
@@ -182,8 +197,16 @@ def _claim_key(investigation_id: str) -> int:
     return int.from_bytes(digest[:8], "big", signed=True)
 
 
+#: The reason stored when an attempt's own row is refused by the database.
+NOT_STORED = "the narration could not be stored"
+
+
 async def narrate_one(
-    engine: AsyncEngine, provider: Provider, investigation_id: str, timeout_seconds: float
+    engine: AsyncEngine,
+    provider: Provider,
+    investigation_id: str,
+    timeout_seconds: float,
+    retry_after: timedelta = RETRY_AFTER,
 ) -> str | None:
     """Narrate one investigation once, if it is still due. Returns the
     status written, or None when nothing was attempted.
@@ -193,8 +216,9 @@ async def narrate_one(
     attempt's row is written. Two ticks that overlap — a slow provider and
     a cron that fires every 15 seconds — cannot both call the provider for
     one attempt; the second finds the lock taken and does nothing. The
-    attempts are counted again under the lock, so one written meanwhile is
-    seen. (The database's uq_narrations_attempt stays the backstop.)
+    attempts and the retry interval are read again under the lock, so one
+    written meanwhile is seen. (The database's uq_narrations_attempt stays
+    the backstop.)
     """
     key = _claim_key(investigation_id)
     async with engine.connect() as conn:
@@ -203,9 +227,11 @@ async def narrate_one(
         if not claimed:
             return None
         try:
-            count, done = await _attempts(conn, investigation_id)
+            count, done, recent = await _attempts(conn, investigation_id, retry_after)
             investigation = (
-                None if done or count >= MAX_ATTEMPTS else await load(conn, investigation_id)
+                None
+                if done or count >= MAX_ATTEMPTS or recent
+                else await load(conn, investigation_id)
             )
             await conn.commit()
             if investigation is None:
@@ -226,13 +252,25 @@ async def narrate_one(
             try:
                 await conn.execute(insert(tables.narrations).values(**row))
                 await conn.commit()
-            except IntegrityError as exc:
+            except DBAPIError as exc:
                 await conn.rollback()
-                if _constraint(exc) != "uq_narrations_attempt":
-                    raise
-                # Written by a worker that did not take the lock; its row stands.
-                logger.info("narration_attempt_taken investigation=%s", investigation_id)
-                return None
+                constraint = _constraint(exc)
+                if isinstance(exc, IntegrityError) and constraint == "uq_narrations_attempt":
+                    # Written by a worker that did not take the lock; its row stands.
+                    logger.info("narration_attempt_taken investigation=%s", investigation_id)
+                    return None
+                # The call was made; it is counted. The constraint's name or
+                # the error's class, never its text: Postgres renders the
+                # failing row into that.
+                logger.warning(
+                    "narration_not_stored investigation=%s attempt=%d cause=%s",
+                    investigation_id,
+                    row["attempt"],
+                    constraint or type(exc.orig).__name__,
+                )
+                row.update(status="failed", prose=None, named=None, reason=NOT_STORED)
+                await conn.execute(insert(tables.narrations).values(**row))
+                await conn.commit()
         finally:
             # Roll back first: after a database error the transaction is
             # aborted and the unlock would fail, stranding the claim on a
@@ -266,10 +304,11 @@ async def narrate_investigations(ctx: dict) -> dict[str, int]:
     engine: AsyncEngine = ctx["narrator_engine"]
     config = ctx["narrator_config"]
     timeout = float(config.timeout_seconds)
+    retry_after = timedelta(seconds=config.retry_seconds)
     async with engine.connect() as conn:
-        investigation_ids = await due(conn, timedelta(seconds=config.retry_seconds))
+        investigation_ids = await due(conn, retry_after)
     narrated = 0
     for investigation_id in investigation_ids:
-        if await narrate_one(engine, provider, investigation_id, timeout) is not None:
+        if await narrate_one(engine, provider, investigation_id, timeout, retry_after) is not None:
             narrated += 1
     return {"narrated": narrated}
