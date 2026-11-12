@@ -72,9 +72,12 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 		httpNames := map[string]bool{}
 		for _, spec := range file.Imports {
 			path, _ := strconv.Unquote(spec.Path.Value)
-			if path == "net/http/httptest" {
+			// reflect and unsafe can write a request's method, or a client's
+			// transport, where no syntax shows it (the re-audit of the
+			// Phase 36 part 2 fixes).
+			if path == "net/http/httptest" || path == "reflect" || path == "unsafe" {
 				position := fset.Position(spec.Pos())
-				found = append(found, filepath.Base(position.Filename)+":"+strconv.Itoa(position.Line)+" net/http/httptest")
+				found = append(found, filepath.Base(position.Filename)+":"+strconv.Itoa(position.Line)+" "+path)
 			}
 			if path != "net/http" {
 				continue
@@ -101,6 +104,34 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 				function.Name.Name == "newProbeRequest" {
 				continue // the one place
 			}
+			// The guard's own RoundTrip is the one place a request is handed
+			// to a transport.
+			inGuard := false
+			if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv != nil && function.Name.Name == "RoundTrip" {
+				if len(function.Recv.List) == 1 {
+					if ident, ok := function.Recv.List[0].Type.(*ast.Ident); ok && ident.Name == "methodGuard" {
+						inGuard = true
+					}
+				}
+			}
+			// The uses of http.Client that are allowed: the type of a guarded
+			// literal, and a named field holding a pointer to one. Any other —
+			// `var c http.Client`, new(http.Client), an embedded client, a
+			// conversion — is a client with no guard under it.
+			allowedClient := map[ast.Node]bool{}
+			ast.Inspect(declaration, func(node ast.Node) bool {
+				switch typed := node.(type) {
+				case *ast.CompositeLit:
+					if name, ok := isHTTP(typed.Type, nil); ok && name == "Client" && guarded(typed) {
+						allowedClient[typed.Type] = true
+					}
+				case *ast.Field:
+					if star, ok := typed.Type.(*ast.StarExpr); ok && len(typed.Names) > 0 {
+						allowedClient[star.X] = true
+					}
+				}
+				return true
+			})
 			ast.Inspect(declaration, func(node ast.Node) bool {
 				where := func(what string) {
 					position := fset.Position(node.Pos())
@@ -115,10 +146,22 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 						where("http." + name)
 					} else if name, ok := isHTTP(typed, nil); ok && name == "DefaultClient" {
 						where("http.DefaultClient")
+					} else if ok && name == "Client" && !allowedClient[typed] {
+						where("http.Client outside a guarded literal")
+					}
+				case *ast.UnaryExpr:
+					// &r.Method writes the method through a pointer.
+					if selector, ok := typed.X.(*ast.SelectorExpr); ok && typed.Op == token.AND && selector.Sel.Name == "Method" {
+						where("&.Method")
 					}
 				case *ast.CallExpr:
 					if selector, ok := typed.Fun.(*ast.SelectorExpr); ok && sendingMethods[selector.Sel.Name] {
 						where("." + selector.Sel.Name + "()")
+					}
+					// A request handed to a transport directly skips the
+					// guard; only the guard itself may.
+					if selector, ok := typed.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "RoundTrip" && !inGuard {
+						where(".RoundTrip()")
 					}
 					if ident, ok := typed.Fun.(*ast.Ident); ok && ident.Name == "new" && len(typed.Args) == 1 {
 						if name, ok := isHTTP(typed.Args[0], nil); ok && name == "Request" {
@@ -145,6 +188,10 @@ func requestsBuiltElsewhere(t *testing.T, directory string) []string {
 					for _, left := range typed.Lhs {
 						if selector, ok := left.(*ast.SelectorExpr); ok && selector.Sel.Name == "Method" {
 							where(".Method =")
+						}
+						// Replacing a client's transport takes the guard away.
+						if selector, ok := left.(*ast.SelectorExpr); ok && selector.Sel.Name == "Transport" {
+							where(".Transport =")
 						}
 					}
 				}
@@ -249,6 +296,21 @@ func TestARequestBuiltAroundTheCheckIsFound(t *testing.T) {
 		"httptest":            `func smuggle() *http.Request { return httptest.NewRequest("POST", "http://x", nil) }`,
 		"an unguarded client": `func smuggle() *http.Client { return &http.Client{Transport: http.DefaultTransport} }`,
 		"the default client":  `func smuggle() *http.Client { return http.DefaultClient }`,
+		// The re-audit of the fixes: around the guard, not the constructor.
+		"a pointer to the method": `func smuggle(ctx context.Context) {
+	r, _ := newProbeRequest(ctx, http.MethodGet, "http://x")
+	m := &r.Method
+	*m = "DELETE"
+}`,
+		"a direct RoundTrip": `func smuggle(ctx context.Context) {
+	r, _ := newProbeRequest(ctx, http.MethodGet, "http://x")
+	_, _ = http.DefaultTransport.RoundTrip(r)
+}`,
+		"a zero-value client":  `func smuggle() { var c http.Client; _ = c }`,
+		"new(http.Client)":     `func smuggle() *http.Client { return new(http.Client) }`,
+		"an embedded client":   "type wrapped struct{ http.Client }\n\nfunc smuggle() wrapped { return wrapped{} }",
+		"a replaced transport": `func smuggle(c *RealHTTPClient) { c.client.Transport = http.DefaultTransport }`,
+		"reflect":              `func smuggle(r *http.Request) { reflect.ValueOf(r).Elem().FieldByName("Method").SetString("PUT") }`,
 	}
 	for name, code := range ways {
 		t.Run(name, func(t *testing.T) {
@@ -275,6 +337,9 @@ func TestARequestBuiltAroundTheCheckIsFound(t *testing.T) {
 			imports := "import (\n\t\"context\"\n\t\"net/http\"\n)\n\nvar _ context.Context\n\n"
 			if name == "aliased" {
 				imports = "import web \"net/http\"\n\n"
+			}
+			if name == "reflect" {
+				imports = "import (\n\t\"net/http\"\n\t\"reflect\"\n)\n\n"
 			}
 			if name == "httptest" {
 				imports = "import (\n\t\"net/http\"\n\t\"net/http/httptest\"\n)\n\n"

@@ -585,7 +585,7 @@ def _reject_budget_literals(text: str, source: str) -> None:
     root = yaml.compose(text, Loader=yaml.SafeLoader)
     if not isinstance(root, yaml.MappingNode):
         return
-    for key, section in root.value:
+    for key, section in _top_level_pairs(root):
         if key.value != "budgets" or not isinstance(section, yaml.SequenceNode):
             continue
         for index, entry in enumerate(section.value):
@@ -610,6 +610,29 @@ def _reject_budget_literals(text: str, source: str) -> None:
                 problem = budget_literal_problem(literal, plain)
                 if problem is not None:
                     raise ManifestError(f"{source}: budgets[{index}]: value: {problem}")
+
+
+def _top_level_pairs(root: yaml.MappingNode) -> list[tuple[yaml.Node, yaml.Node]]:
+    """The manifest's top-level keys and values, including any a merge key
+    brings in (`<<: {budgets: [...]}`), so a `budgets:` section that
+    arrives through a merge is checked for its form like any other (the
+    re-audit of Phase 36 part 2: it was not, and this reader loaded 300
+    where the Go loader refused)."""
+    pairs: list[tuple[yaml.Node, yaml.Node]] = []
+    pending: list[yaml.MappingNode] = [root]
+    seen: set[int] = set()
+    while pending:
+        mapping = pending.pop()
+        if id(mapping) in seen:
+            continue
+        seen.add(id(mapping))
+        for key, value in mapping.value:
+            if key.tag == "tag:yaml.org,2002:merge" or key.value == "<<":
+                merged = value.value if isinstance(value, yaml.SequenceNode) else [value]
+                pending.extend(node for node in merged if isinstance(node, yaml.MappingNode))
+                continue
+            pairs.append((key, value))
+    return pairs
 
 
 def _tagged(text: str, node: yaml.ScalarNode) -> bool:

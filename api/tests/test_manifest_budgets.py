@@ -145,3 +145,18 @@ def test_a_budget_entry_with_a_merge_key_is_refused(case: dict) -> None:
     with pytest.raises(ManifestError) as refused:
         load_manifest(text)
     assert case["reason"] in str(refused.value)
+
+
+MANIFESTS = json.loads(
+    (Path(__file__).parents[2] / "shared" / "tests" / "latency_conformance.json").read_text(
+        encoding="utf-8"
+    )
+)["budget_manifests"]
+
+
+@pytest.mark.parametrize("case", MANIFESTS, ids=lambda case: case["why"])
+def test_budgets_through_a_top_level_merge_are_checked_for_their_form(case: dict) -> None:
+    """The shared fixture's budget_manifests, which the Go loader reads too."""
+    with pytest.raises(ManifestError) as refused:
+        load_manifest(case["manifest"])
+    assert case["reason"] in str(refused.value)

@@ -1249,5 +1249,18 @@
       "entry": "  - <<: {why: w}\n    subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: 300\n",
       "reason": "a budget entry is written out in full: a merge key (<<) is not read"
     }
+  ],
+  "budget_manifests_why": "A whole culprit.yaml whose budgets: section arrives through a top-level merge key: the form check must see it there too, or one reader loads 300 where the other refuses (the re-audit of Phase 36 part 2). Both readers refuse it with this reason.",
+  "budget_manifests": [
+    {
+      "why": "budgets: through a top-level merge",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: {budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 0454, why: w}]}\n",
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    },
+    {
+      "why": "budgets: through a top-level merge of a list of mappings",
+      "manifest": "version: 1\ncomponents:\n  - name: shop\n<<: [{budgets: [{subject: \"http:shop/GET /items\", predicate: latency_p95_ms, value: 1e3, why: w}]}]\n",
+      "reason": "a budget is written as plain decimal digits, and this value is not"
+    }
   ]
 }

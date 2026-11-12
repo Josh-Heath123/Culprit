@@ -261,3 +261,32 @@ func TestABudgetEntryWithAMergeKeyIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm: the shared
+// fixture's budget_manifests, which the API's reader is held to too.
+func TestBudgetsThroughATopLevelMergeAreCheckedForTheirForm(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "shared", "tests", "latency_conformance.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Manifests []struct {
+			Why      string `json:"why"`
+			Manifest string `json:"manifest"`
+			Reason   string `json:"reason"`
+		} `json:"budget_manifests"`
+	}
+	if err := json.Unmarshal(raw, &fixture); err != nil || len(fixture.Manifests) == 0 {
+		t.Fatalf("the fixture's budget_manifests: %v", err)
+	}
+	for _, c := range fixture.Manifests {
+		path := filepath.Join(t.TempDir(), "culprit.yaml")
+		if err := os.WriteFile(path, []byte(c.Manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := extract.LoadManifest(path)
+		if err == nil || !strings.Contains(err.Error(), c.Reason) {
+			t.Errorf("%s: %v, want refused with %q", c.Why, err, c.Reason)
+		}
+	}
+}

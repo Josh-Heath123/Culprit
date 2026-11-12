@@ -2584,6 +2584,21 @@ the component whose budget judges the reading (the target's component),
 not merely any declared endpoint: a budget on one component is never
 judged with another's times.
 
+### What holds the GET-only rule, and what cannot
+
+Every probe request is built by one function that refuses any method but
+`GET` and `OPTIONS`, and every client in `internal/probe` sends through a
+transport that refuses the same again, and any body, before anything is
+dialled. A source scan of that package (`TestEveryRequestIsBuiltInOnePlace`)
+fails on each way found so far to build or send a request around those two:
+a constructor named or taken as a value, a type made from `http.Request`, a
+method written through a field or a pointer, a replaced transport, a direct
+`RoundTrip`, a client that is not a guarded literal, `http.DefaultClient`,
+and `httptest`, `reflect` or `unsafe` imported. A scan of source is not a
+proof: code inside `internal/probe` that opened a socket of its own could
+still write. The binary's network allowlist keeps every other package from
+linking a network package at all, and review covers the one that may.
+
 ### Latency in the walk
 
 Phase 36 part 2. `culprit diagnose` asks about latency, and these are its

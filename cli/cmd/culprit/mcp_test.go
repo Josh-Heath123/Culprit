@@ -903,6 +903,16 @@ func TestALatencyProbeReachesOnlyItsBudgetsComponent(t *testing.T) {
 	if requests := http.requests.Load(); requests != 0 {
 		t.Fatalf("%d requests for latency calls that were all refused", requests)
 	}
+	// The right host and port by the wrong scheme is another endpoint:
+	// payments' is plain HTTP.
+	scheme := client.call("culprit_probe", map[string]any{"target": "connection:orders->payments", "environment": "production",
+		"probes": []string{"probe.http.latency"}, "inputs": map[string]any{"url": "https://payments.internal:8443/health"}})
+	if !scheme.IsError || !strings.Contains(string(scheme.Structured), "is not payments's endpoint") {
+		t.Errorf("https to payments' plain endpoint: not refused: %s", scheme.Structured)
+	}
+	if requests := http.requests.Load(); requests != 0 {
+		t.Fatalf("%d requests for a refused scheme", requests)
+	}
 	// The budget's own component's endpoint is not refused for its address.
 	result := client.call("culprit_probe", map[string]any{"target": "connection:orders->payments", "environment": "production",
 		"probes": []string{"probe.http.latency"}, "inputs": map[string]any{"url": "http://payments.internal:8443/health"}})
