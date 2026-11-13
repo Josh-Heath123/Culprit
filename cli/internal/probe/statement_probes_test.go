@@ -118,8 +118,14 @@ func TestAPlanKeepsNoConstant(t *testing.T) {
 	if len(nodes) != 2 || nodes[0]["relation"] != "public.products" || nodes[1]["index"] != "products_category" {
 		t.Fatalf("nodes: %s", out)
 	}
-	if columns := nodes[0]["filter_columns"].([]string); strings.Join(columns, ",") != "category,name" {
-		t.Fatalf("filter columns %v, want category and name (and not category from inside a string)", columns)
+	// Phase 37 part 3: the row-by-row filter and the index condition are kept
+	// apart. name is filtered (category appears in it only inside a string);
+	// category is served by the recheck and the index condition.
+	if columns := nodes[0]["filter_columns"].([]string); strings.Join(columns, ",") != "name" {
+		t.Fatalf("filter columns %v, want name only (category is inside a string there)", columns)
+	}
+	if columns := nodes[0]["index_cond_columns"].([]string); strings.Join(columns, ",") != "category" {
+		t.Fatalf("index condition columns %v, want category", columns)
 	}
 }
 
@@ -177,5 +183,18 @@ func TestThePlanProbeTakesAQueryIDAsTextOrAnExactInt(t *testing.T) {
 		Target: "component:inventory-db", Inputs: map[string]any{"queryid": 7.0}}, deps)
 	if outcome.Verdict != model.VerdictInconclusive || !strings.Contains(outcome.Reason, "pass it as text") {
 		t.Errorf("a float queryid: %s (%s)", outcome.Verdict, outcome.Reason)
+	}
+}
+
+// TestTextIsWithheldBefore16AndSaysWhy (Q32): on a server before 16 the
+// session returns no text at all, and the reading says that is why.
+func TestTextIsWithheldBefore16AndSaysWhy(t *testing.T) {
+	window := capture.StatementWindow{ServerVersion: 150004,
+		Statements: []capture.StatementStats{{QueryID: 3, Calls: 1, TotalMicros: 10}}}
+	request := Request{ProbeID: model.StatementProbeID, Target: "component:inventory-db",
+		Expectation: declaredAs("component:inventory-db", "query_mean_ms_max", 50)}
+	outcome := dbStatementBudget{}.Run(context.Background(), request, Deps{Statements: fakeStatements{window: window}})
+	if text := outcome.Measured["statements"].([]any)[0].(map[string]any)["text"]; text != TextWithheldBefore16 {
+		t.Fatalf("text %v", text)
 	}
 }

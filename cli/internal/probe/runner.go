@@ -381,7 +381,15 @@ func (r *Runner) emit(
 		GrantsUsed:     used,
 	})
 
-	if err := reading.Validate(); err != nil {
+	// Against the manifest when there is one: a verdict the probe did not
+	// declare is a bug in the probe, like any other invalid reading (Q31).
+	// A request for a probe not in the catalogue has no manifest to hold it
+	// to, and its reading is the inconclusive "no probe" one.
+	check := reading.Validate
+	if len(manifest.Verdicts) > 0 {
+		check = func() error { return reading.ValidateFor(manifest) }
+	}
+	if err := check(); err != nil {
 		return model.Reading{
 			ProbeID:      manifest.ID,
 			ProbeVersion: version,

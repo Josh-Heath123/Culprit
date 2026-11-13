@@ -185,6 +185,31 @@ const (
 		  AND n.nspname NOT LIKE 'pg\_temp%'
 		  AND n.nspname NOT LIKE 'pg\_toast%'
 		ORDER BY n.nspname, c.relname, a.attname`
+	// indexColumnsStatement is every valid, non-partial index on an
+	// ordinary or partitioned table, with its key columns in order (Phase
+	// 37 part 3): the CONFIGURED plane a missing_index finding cites, and
+	// the columns of the index a plan walks, which the recommended index
+	// carries. An index with an expression among its keys is left out: no
+	// column list describes it. Catalogue only, no row of any table.
+	indexColumnsStatement statement = `
+		SELECT n.nspname, c.relname, ic.relname, array_agg(a.attname ORDER BY k.ord)::text[]
+		FROM pg_catalog.pg_index i
+		JOIN pg_catalog.pg_class c ON c.oid = i.indrelid
+		JOIN pg_catalog.pg_class ic ON ic.oid = i.indexrelid
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+		LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum AND k.attnum <> 0
+		WHERE c.relkind IN ('r', 'p')
+		  AND NOT c.relispartition
+		  AND i.indisvalid
+		  AND i.indpred IS NULL
+		  AND k.ord <= i.indnkeyatts
+		  AND n.nspname <> ALL($1)
+		  AND n.nspname NOT LIKE 'pg\_temp%'
+		  AND n.nspname NOT LIKE 'pg\_toast%'
+		GROUP BY n.nspname, c.relname, ic.relname
+		HAVING count(a.attname) = count(*)
+		ORDER BY n.nspname, c.relname, ic.relname`
 )
 
 // The statistics templates (Phase 37 part 2), under db.stats.read and
@@ -194,7 +219,9 @@ const (
 // MERGE — the statements pg_stat_statements normalises, constants replaced
 // by $n. Any other text (a utility statement such as CREATE ROLE ...
 // PASSWORD '...', stored as written, or one beginning with a comment) is
-// NULL before it leaves the server (Q29 (2)).
+// NULL before it leaves the server (Q29 (2)). Before PostgreSQL 16 every
+// text is NULL (Q32): there a SELECT ... INTO is a utility statement whose
+// constants Postgres did not normalise, yet its text begins with SELECT.
 const (
 	// statsProbeStatement is the server's version and whether this
 	// database has pg_stat_statements.
@@ -204,7 +231,8 @@ const (
 	// statsSnapshotStatement is one snapshot of this database's statements.
 	statsSnapshotStatement statement = `
 		SELECT s.queryid, sum(s.calls)::bigint, sum(s.total_exec_time)::float8,
-		       max(CASE WHEN s.query ~* '^(select|with|insert|update|delete|merge)\M'
+		       max(CASE WHEN current_setting('server_version_num')::int >= 160000
+		                 AND s.query ~* '^(select|with|insert|update|delete|merge)\M'
 		                THEN s.query END)
 		FROM pg_stat_statements s
 		WHERE s.dbid = (SELECT oid FROM pg_catalog.pg_database WHERE datname = current_database())
@@ -232,7 +260,8 @@ const (
 func isTemplate(s statement) bool {
 	switch s {
 	case columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement,
-		statsProbeStatement, statsSnapshotStatement, statsInfoStatement, planRowStatement:
+		statsProbeStatement, statsSnapshotStatement, statsInfoStatement, planRowStatement,
+		indexColumnsStatement:
 		return true
 	}
 	return false
@@ -256,6 +285,11 @@ func planFromRow(text string) (plannedStatement, error) {
 	}
 	return plannedStatement{text: text}, nil
 }
+
+// ErrNotAQuery is the refusal of a parsed statement that returns no rows
+// (a SELECT ... INTO): nothing is asked of the planner.
+var ErrNotAQuery = errors.New(
+	"refused after parsing, before planning: the statement returns no rows, so it is not a query")
 
 // ErrNotPlannable is the refusal of a text that is not one SELECT or WITH.
 var ErrNotPlannable = errors.New(
@@ -300,6 +334,13 @@ func sendPlan(ctx context.Context, session planner, p plannedStatement) (string,
 		return "", err
 	}
 	defer func() { _ = session.Deallocate(context.Background(), planName) }()
+	// A query returns rows; the server's own description says whether this
+	// one does. SELECT ... INTO begins with SELECT and returns none: it is
+	// CREATE TABLE AS, and is not planned (found on PostgreSQL 16, Phase 37
+	// part 3). Decided by the server, not by a pattern over the text.
+	if len(description.Fields) == 0 {
+		return "", ErrNotAQuery
+	}
 	nulls := make([]string, len(description.ParamOIDs))
 	for index := range nulls {
 		nulls[index] = "NULL"
@@ -544,6 +585,15 @@ type StatementPlan struct {
 	Unavailable   string
 	ServerVersion int
 	TableColumns  map[string][]string
+	// Indexes are the live indexes on each table, "namespace.table", with
+	// their key columns in order (Phase 37 part 3).
+	Indexes map[string][]IndexShape
+}
+
+// IndexShape is one live index: its name and its key columns, in order.
+type IndexShape struct {
+	Name    string
+	Columns []string
 }
 
 // StatsReader reads statement statistics and plans, each in one
@@ -561,6 +611,11 @@ type StatsReader struct {
 // StatementWindowLength is the window, fixed (PERFORMANCE_PLAN.md, Phase 37
 // part 2: "not configurable, and the walk's deadline cuts it").
 const StatementWindowLength = 30 * time.Second
+
+// WindowMargin is the time a window needs besides its span: the session,
+// the version check and two snapshots. A caller with less than span plus
+// this left gets no window.
+const WindowMargin = 5 * time.Second
 
 // MinimumPlanVersion is PostgreSQL 16: the brief's floor for the plan
 // probe, set when GENERIC_PLAN was the mechanism and kept as ruled on
@@ -685,6 +740,16 @@ func (r StatsReader) Window(parent context.Context, dsn string, plan bool) (Stat
 	if window == 0 {
 		window = StatementWindowLength
 	}
+	// The caller's deadline (the walk's remaining clock, or the probe's own
+	// timeout) bounds the window: one that cannot fit is not started, and
+	// nothing is sent (Phase 37 part 3).
+	if deadline, bounded := parent.Deadline(); bounded {
+		if left := time.Until(deadline); left < window+WindowMargin {
+			return StatementWindow{Unavailable: fmt.Sprintf(
+				"the caller's deadline leaves %s, less than the %s window and its snapshots, "+
+					"so no window was started", left.Round(time.Second), window)}, nil
+		}
+	}
 	ctx, cancel, conn, err := r.session(parent, dsn, window)
 	if err != nil {
 		return StatementWindow{}, err
@@ -705,7 +770,14 @@ func (r StatsReader) Window(parent context.Context, dsn string, plan bool) (Stat
 		var before map[int64]snapshotRow
 		before, err = readSnapshot(ctx, conn)
 		if err == nil {
-			if err = r.wait(ctx, window); err == nil {
+			if err = r.wait(ctx, window); err != nil && ctx.Err() != nil {
+				// The caller's deadline, or the session's own, fell inside
+				// the window: what was measured is not the window, and a
+				// partial window would be judged as a whole one.
+				result.Unavailable = "the window was cut short by the caller's deadline, so no statement was timed"
+				return result, nil
+			}
+			if err == nil {
 				var after map[int64]snapshotRow
 				after, err = readSnapshot(ctx, conn)
 				if err == nil {
@@ -828,6 +900,9 @@ func (r StatsReader) Plan(parent context.Context, dsn string, queryID int64) (St
 	case errors.Is(err, ErrNotPlannable):
 		result.Unavailable = "no SELECT or WITH with that queryid in this database's statistics"
 		return result, nil
+	case errors.Is(err, ErrNotAQuery):
+		result.Unavailable = "the statement with that queryid returns no rows (a SELECT ... INTO), so it is not planned"
+		return result, nil
 	case err != nil && unloaded(err):
 		result.Unavailable = "pg_stat_statements is installed but not loaded (shared_preload_libraries)"
 		return result, nil
@@ -836,6 +911,9 @@ func (r StatsReader) Plan(parent context.Context, dsn string, queryID int64) (St
 	}
 	result.PlanJSON = plan
 	if result.TableColumns, err = tableColumns(ctx, conn); err != nil {
+		return StatementPlan{}, classify(ctx, err)
+	}
+	if result.Indexes, err = tableIndexes(ctx, conn); err != nil {
 		return StatementPlan{}, classify(ctx, err)
 	}
 	return result, nil
@@ -888,4 +966,24 @@ func classify(ctx context.Context, err error) error {
 		return &DBError{Kind: DBUnreachable}
 	}
 	return &DBError{Kind: DBOtherFailure}
+}
+
+// tableIndexes reads every live index's key columns, by table.
+func tableIndexes(ctx context.Context, conn querier) (map[string][]IndexShape, error) {
+	rows, err := send(ctx, conn, indexColumnsStatement, excludedSchemas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]IndexShape{}
+	for rows.Next() {
+		var namespace, table, name string
+		var columns []string
+		if err := rows.Scan(&namespace, &table, &name, &columns); err != nil {
+			return nil, err
+		}
+		key := namespace + "." + table
+		out[key] = append(out[key], IndexShape{Name: name, Columns: columns})
+	}
+	return out, rows.Err()
 }

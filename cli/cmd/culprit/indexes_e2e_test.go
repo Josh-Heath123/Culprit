@@ -51,8 +51,10 @@ func startPostgres(t *testing.T) (string, func(sql string)) {
 	}
 	deadline := time.Now().Add(90 * time.Second)
 	for {
-		if err := exec.Command("docker", "exec", container, "pg_isready", "-U", "postgres", "-d", "shop").Run(); err == nil {
-			if exec.Command("docker", "exec", container, "psql", "-U", "postgres", "-d", "shop", "-c", "SELECT 1").Run() == nil {
+		// Over TCP, not the socket: the image's first-boot server listens on
+		// the socket only and is then restarted.
+		if err := exec.Command("docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "shop").Run(); err == nil {
+			if exec.Command("docker", "exec", container, "psql", "-h", "127.0.0.1", "-U", "postgres", "-d", "shop", "-c", "SELECT 1").Run() == nil {
 				break
 			}
 		}

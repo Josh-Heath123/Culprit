@@ -31,6 +31,7 @@ type authTokenShape struct{}
 func (authTokenShape) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.auth.token_shape",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisAuthAudience},
 		// Version 2 (Phase 32 part 2): token_env, so the token can be read
 		// from the environment instead of handed in by the caller.
@@ -222,6 +223,7 @@ type authPropagation struct{}
 func (authPropagation) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.auth.propagation",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisAuthRejected},
 		Version:       1,
 		Effect:        model.EffectInterrogate,

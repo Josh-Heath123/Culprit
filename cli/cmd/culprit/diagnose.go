@@ -412,6 +412,7 @@ func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, age
 		Environment: environment, Spec: manifest.Environments[environment],
 		ManifestDir: filepath.Dir(manifestPath), Grants: grants, Ledger: ledger,
 		Runner: capture.ExecRunner{Timeout: timeout}, Reader: capture.PostgresReader{Timeout: timeout},
+		Stats: capture.StatsReader{Timeout: timeout},
 	}
 	deps := probe.Deps{
 		Network: through.Network, HTTP: through.HTTP, Now: time.Now,
@@ -513,6 +514,23 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 
 	case model.HypothesisDatabaseUnreachable:
 		if reason := p.mustRunAt(parts["from_component"], "its database connection"); reason != "" {
+			return nil, reason
+		}
+		return map[string]any{}, ""
+
+	case model.HypothesisStatementBudgetExceeded, model.HypothesisMissingIndex:
+		// The database pass (Phase 37 part 3) asks on the entry's own
+		// connection to its database, as database_unreachable does: the
+		// database it reads, as it reads it. The statement probe takes no
+		// input; the walk gives the plan probe the statement's queryid.
+		want := model.StatementProbeID
+		if h.Kind == model.HypothesisMissingIndex {
+			want = model.PlanProbeID
+		}
+		if manifest.ID != want {
+			return nil, "the walk reads statements with " + model.StatementProbeID + " and plans with " + model.PlanProbeID + " only"
+		}
+		if reason := p.mustRunAt(parts["from_component"], "the statements its database runs for it"); reason != "" {
 			return nil, reason
 		}
 		return map[string]any{}, ""

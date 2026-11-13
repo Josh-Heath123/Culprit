@@ -1313,6 +1313,210 @@ The pull request was merged while Q28 was open and blocking. Again, nothing on
     the products statement's text is kept.
   - A statement from another database is not read.
 
+**Architecture review of part 2, 2026-11-13 — signed off; Q31 and Q32
+ruled.** PR #41 was merged as `1b2496b`. I read the checks from GitHub's API.
+The pull request's runs on `74ab042` (43380877940, attempt 2) and `89152a8`
+(43390113268) passed every job, and no code-scanning alert is open. The first
+attempt on `74ab042` lost its runner before `e2e (none)` started; the fault
+was the runner's, not the change's. Part 1's step 0 is met: `main`'s push run
+43293248631 on `ee3e19e` passed.
+
+It was merged while Q31 was open. Q31 blocked only Q30's change, so that is
+safe.
+
+**Rulings made in chat during the run, recorded here (2026-11-13):**
+- **The generic plan comes from a prepared statement.** The brief's
+  `EXPLAIN (GENERIC_PLAN)` cannot work over the extended protocol: every `$n`
+  must be bound, and Postgres folds the bound values into the plan, so it
+  planned for NULL. The architecture session's spec was wrong. The run instead
+  parses the statement as a prepared statement and explains it under
+  `plan_cache_mode = force_generic_plan`, on the extended protocol, with
+  nothing executed. `TestTheGenericPlanAgainstARealPostgres` holds this in
+  CI:
+  - the session stays read-only before, between and after every message;
+  - `ANALYZE` is never sent, shown red;
+  - a second statement appended to the text is refused at parse (`42601`).
+- **The demo's plan walks `ix_products_sku` and filters `category`.** It is
+  not a sequential scan, because of `ORDER BY sku LIMIT`. The test asserts the
+  filter on `category`.
+- **An index on `(category, sku)` brings the statement within budget; one on
+  `category` alone does not.** On Linux the means per call were:
+  - no index: 96.1 ms;
+  - `category` alone: 96.4 ms;
+  - `(category, sku)`: 0.014 ms.
+
+  Part 3 builds on this.
+
+**Decisions:**
+- **Q31 — a probe declares the verdicts it can give.** Q30's ruling keyed the
+  exemption on an empty `expected_from`. It would have caught
+  `probe.edge.impedance`, which has no expectation plane and does fail, at 3σ.
+  The architecture session's rule was wrong again. Keying it on whether a fail
+  fixture exists would let a forgotten fixture pass as "cannot fail". The
+  structural answer is a declaration:
+  - **Every probe's manifest lists the verdicts it can return**, in Go, in
+    Python and in the catalogue mirror. `probe.db.plan` lists `pass`,
+    `inconclusive` and `refused`; impedance lists all four.
+  - **A reading whose verdict its probe did not declare is refused** by
+    validation in Go, Python and the API.
+  - **The fixture gate requires one fixture for each declared verdict.**
+  - **No probe is named anywhere.**
+
+  The exemption by name is removed. Built as part 3's first item.
+- **Q32 — statement text is kept only on PostgreSQL 16 and later.** On 14 and
+  15, a `SELECT … INTO` is a utility statement whose constants Postgres did not
+  normalise, yet its text begins with `SELECT`. The plan probe already needs 16,
+  so before 16 the statement probe lists statements by `queryid` and timings,
+  with their text withheld, and says so. On 16, CI runs a `SELECT … INTO` with a
+  secret-looking constant inside the window and finds no trace of it in any
+  reading. If 16 keeps it, the run stops and escalates; it adds no pattern.
+  Built in part 3.
+- **A2 — the auditor's 23 splits are labelled.** Each split carries its origin
+  in the corpus, and the test checks each by label, not by a count. Built in
+  part 3.
+- **A4 — reworded (accepted).** The `CREATE ROLE … PASSWORD` statements run
+  inside the window, written as Culprit's migrations write them, in the demo's
+  database and in a Postgres 16 test database. Reproducing the quickstart's own
+  Alembic path is not required.
+- **The statistics session is bounded by the caller's deadline:** the walk's
+  remaining clock, or `--timeout`, as the latency probe is. A window cut short
+  is `inconclusive`. Built in part 3.
+- **Accepted as taken:**
+  - statements a budget applies to are kept before the rest;
+  - an exact-integer `queryid` is accepted at the terminal, and a float is
+    refused;
+  - a statement too large to judge is named in the reason;
+  - tables outside `public` are taken as `public`, with a LIMITS entry. This is
+    revisited when a schema other than `public` matters.
+
+Part 2 is complete once `main`'s push run on `1b2496b` is green. Part 3's
+step 0 confirms it.
+
+**Part 3 — the database in the walk. Brief and criteria, 2026-11-13.**
+
+**Decisions.**
+- **The database pass runs third, and from the entry.** It runs only when the
+  error pass and the latency pass found no root strictly below the entry. It
+  asks about the databases the entry component connects to, by an edge of any
+  kind, because a symptom at X with nothing failing or slow below X leaves X's
+  own work, and the databases X reads, as what remains. A database that only a
+  deeper component reaches through a `background` edge is not asked; LIMITS
+  says so.
+
+  Every existing fault-library walk is therefore unchanged. Their roots are
+  found by the first two passes, and the latency fault's root, inventory, is a
+  callee, not the entry. `inventory-service → inventory-db` stays `background`
+  for the order walks.
+- **Two hypotheses.**
+  - **`statement_budget_exceeded`** is on the budget's own subject: a table
+    (`schema:<db>/<table>`) or the database component. It is supported when the
+    statement probe's reading fails. A slow entry above it is propagation.
+  - **`missing_index`** is on the filtered column's `schema:` subject. It is
+    supported only when P5's four planes agree:
+    - **OBSERVED:** a statement is over its budget;
+    - **the plan:** it filters column C of table T with no index condition
+      serving C, whatever the scan node. Ruling 2 showed it need not be a
+      sequential scan;
+    - **CONFIGURED:** no live index leads C (`leads_index` false);
+    - **INTENT:** the migrations declare none.
+
+    The root cites all four.
+- **An index exists but the plan does not use it.** That is the `category`-only
+  case: a live index leads C, but the plan walks another index for the order
+  and filters C. Then the root is `statement_budget_exceeded`, not
+  `missing_index`. Its evidence is the plan and the live index, and the
+  statement says what the plan does.
+- **The recommended change is derived from the plan, deterministically.** It
+  is an index whose leading columns are the filtered columns, followed by the
+  columns of the index the plan walks for its order, if it walks one. For the
+  demo that gives `(category, sku)`. Verification, not the recommendation,
+  decides whether a change worked.
+- **Without `db.plan.read`:** a database budget can still support
+  `statement_budget_exceeded`, but there is no `missing_index`. The diagnosis
+  is partial and names the capability. A table budget is unjudged.
+- **The walk sends no statement and no request to make traffic.** The statement
+  window measures the system's own traffic. In the fault library the load
+  generator supplies it, on `GET /products`.
+- **The fault library gains the demo's database, and one database fault.**
+  - **The healthy head.** The demo's migrations gain `0003`, which adds
+    `(category, sku)`, so the quickstart and the healthy stack are within
+    budget.
+  - **Planting the fault.** The library runs the stack at `0002`, with no index
+    on `category`. That is the harness's own setup; Culprit creates and drops
+    nothing.
+  - **The known fix** is upgrading to `0003`, recorded as a `commit` change
+    naming the revision.
+  - **The wrong fix** is an index on `category` alone, applied by the harness
+    from the library's own test data, and it gives `not_resolved`.
+  - **The symptom** is reported on `http:inventory-service/GET /products`.
+  - **A latency budget.** The demo declares a p95 budget on `GET /products`,
+    set well clear of both the healthy time and the fault's time. The report
+    says how it was chosen.
+- **The fault-library job:** if it passes 15 minutes, shard it in this part.
+  First, a test must prove the shards cover every case in `expected.json`
+  exactly once.
+
+**Work order.**
+0. Confirm `main`'s push run on `1b2496b` is green.
+1. Carried in:
+   - Q31: probes declare their verdicts, and readings are validated against
+     them;
+   - Q32: text kept on 16 and later only, with the `SELECT … INTO` check on 16;
+   - A2: the 23 splits labelled;
+   - the statistics session bounded by the caller's deadline.
+2. The database pass, the two hypotheses, and the join, in `internal/isolate`,
+   tested on recorded readings first.
+3. The recommended change, derived from the plan.
+4. The demo's `0003` migration, the latency budget on `GET /products`, the
+   load generator's traffic on it, and the database in the faults stack.
+5. The library's database fault, its known fix and its wrong fix. Then
+   `expected.json`, `results.json` and the README's number, still labelled as
+   planted faults.
+6. The documents:
+   - the README tour: a database finding;
+   - PROBES and PERMISSIONS;
+   - LIMITS: the entry rule, the four planes, the unused-index case, what a
+     `background` database leaves unasked, and that the system's own traffic is
+     the measurement.
+
+**Acceptance criteria (part 3).**
+- On recorded readings, with no network:
+  - the four planes give `missing_index` on `category`, citing each;
+  - a live index on `category` that the plan does not use gives
+    `statement_budget_exceeded`, with the plan and the index cited;
+  - with no plan, the diagnosis is partial and names `db.plan.read`;
+  - with no budget, the database is named unbudgeted.
+- No database is asked when the error or latency pass found a root below the
+  entry. Every existing fault-library case is unchanged: `expected.json`
+  differs only by the new cases.
+- In CI, on Linux, the library's database fault:
+  - diagnoses `missing_index` on `category`, complete, recommending
+    `(category, sku)`;
+  - verifies `verified` after `0003` as a `commit` change;
+  - is `not_resolved` after the `category`-only index.
+- Q31:
+  - a reading with a verdict its probe did not declare is refused by Go, by
+    Python and by the API, each shown red;
+  - the fixture gate requires one fixture per declared verdict, and no probe
+    is named anywhere.
+- Q32: before 16, no statement text is kept. On 16, a `SELECT … INTO` with a
+  secret-looking constant leaves no trace in any reading.
+- A2: each of the 23 labelled splits is checked by its label.
+- A statement window started near the walk's deadline stops at it, and the
+  hypothesis is unexplored.
+- Every pull-request check is green. The fault-library job takes 15 minutes or
+  less, or is sharded with its coverage proof. `LLM_PROVIDER=none` changes
+  nothing.
+
+**Do NOT implement in part 3.**
+- No index created or dropped by Culprit. The harness plants the fault and
+  applies the fixes.
+- No traffic generated by the walk.
+- No `EXPLAIN ANALYZE`, no reset, and no row read.
+- No route-level dependency declarations in `culprit.yaml`.
+- No N+1 (that is Phase 39).
+- Nothing for Phase 38.
+
 ---
 
 ### Phase 38 — Bounds: what the browser downloads, and what a list returns

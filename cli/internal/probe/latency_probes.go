@@ -73,7 +73,8 @@ func (httpLatency) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		// A literal, so api/tests/test_probes_api.py can read it; held equal to
 		// model.LatencyProbeID by TestTheLatencyProbeIsTheOneTheRuleJudges.
-		ID: "probe.http.latency",
+		ID:       "probe.http.latency",
+		Verdicts: allVerdicts,
 		// 2 since Phase 37 part 1: every reading says how many requests it
 		// planned, and the rule requires it.
 		Version:      2,

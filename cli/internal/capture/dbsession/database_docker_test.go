@@ -31,8 +31,9 @@ func postgresForTest(t *testing.T) string {
 	}
 	container := strings.TrimSpace(string(out))
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", container).Run() })
+	// Ready over TCP, not the socket: see postgresImageWithStatements.
 	deadline := time.Now().Add(90 * time.Second)
-	for exec.Command("docker", "exec", container, "psql", "-U", "postgres", "-c", "SELECT 1").Run() != nil {
+	for exec.Command("docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "postgres").Run() != nil {
 		if time.Now().After(deadline) {
 			t.Fatal("the test Postgres did not become ready")
 		}

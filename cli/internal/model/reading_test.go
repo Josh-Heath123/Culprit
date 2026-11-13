@@ -34,6 +34,17 @@ type acceptedReading struct {
 	Reading Reading `json:"reading"`
 }
 
+// againstManifest is a reading checked against a probe's declared
+// verdicts (Q31): the manifest by id from manifests_accepted, the reading
+// readings_accepted[0] with this verdict.
+type againstManifest struct {
+	Why      string  `json:"why"`
+	Accepted bool    `json:"accepted"`
+	Manifest string  `json:"manifest"`
+	Verdict  Verdict `json:"verdict"`
+	ProbeID  string  `json:"probe_id"`
+}
+
 type readingFixture struct {
 	Verdicts          []verdictCase      `json:"verdicts"`
 	Effects           []effectCase       `json:"effects"`
@@ -42,6 +53,7 @@ type readingFixture struct {
 	ManifestsRejected []rejectedManifest `json:"manifests_rejected"`
 	ReadingsAccepted  []acceptedReading  `json:"readings_accepted"`
 	ReadingsRejected  []acceptedReading  `json:"readings_rejected"`
+	AgainstManifests  []againstManifest  `json:"readings_against_manifests"`
 }
 
 func TestVerdictSetMatchesTheSharedFixture(t *testing.T) {
@@ -74,6 +86,7 @@ func TestEffectSetMatchesTheSharedFixture(t *testing.T) {
 		manifest := ProbeManifest{
 			ID: "probe.test.case", Version: 1,
 			Effect: Effect(testCase.Name), TimeoutMS: 1000,
+			Verdicts: []Verdict{VerdictPass, VerdictInconclusive},
 		}
 		err := manifest.Validate()
 		if testCase.Allowed && err != nil {
@@ -171,6 +184,40 @@ func TestReadingRoundTripsThroughJSON(t *testing.T) {
 		if decoded.Verdict != testCase.Reading.Verdict ||
 			decoded.Target != testCase.Reading.Target {
 			t.Errorf("round trip changed the reading (%s)", testCase.Why)
+		}
+	}
+}
+
+// TestReadingsAreHeldToTheirProbesDeclaredVerdicts (Q31): a reading whose
+// verdict its probe did not declare is refused, as readings.py refuses it.
+func TestReadingsAreHeldToTheirProbesDeclaredVerdicts(t *testing.T) {
+	fixture := readFixture[readingFixture](t, "reading_conformance.json")
+	manifests := map[string]ProbeManifest{}
+	for _, manifest := range fixture.ManifestsAccepted {
+		manifests[manifest.ID] = manifest
+	}
+	if len(fixture.AgainstManifests) == 0 {
+		t.Fatal("fixture has no readings against manifests")
+	}
+	for _, testCase := range fixture.AgainstManifests {
+		manifest, ok := manifests[testCase.Manifest]
+		if !ok {
+			t.Fatalf("%s: no accepted manifest %q", testCase.Why, testCase.Manifest)
+		}
+		reading := fixture.ReadingsAccepted[0].Reading
+		reading.ProbeID = testCase.Manifest
+		if testCase.ProbeID != "" {
+			reading.ProbeID = testCase.ProbeID
+		}
+		reading.Verdict = testCase.Verdict
+		reading.Reason = "as the fixture says"
+		reading.GrantsUsed = nil
+		err := reading.ValidateFor(manifest)
+		if testCase.Accepted && err != nil {
+			t.Errorf("%s: refused: %v", testCase.Why, err)
+		}
+		if !testCase.Accepted && err == nil {
+			t.Errorf("%s: accepted", testCase.Why)
 		}
 	}
 }

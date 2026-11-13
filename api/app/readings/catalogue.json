@@ -32,7 +32,13 @@
     "discriminates": [
       "auth_rejected"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.auth.token_shape",
@@ -67,7 +73,13 @@
     "discriminates": [
       "auth_audience_mismatch"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.config.present",
@@ -98,7 +110,13 @@
     "discriminates": [
       "config_missing"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.db.connect",
@@ -122,11 +140,17 @@
     "discriminates": [
       "database_unreachable"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.db.plan",
-    "version": 1,
+    "version": 2,
     "effect": "inspect",
     "capabilities": [
       "db.plan.read"
@@ -146,7 +170,15 @@
         "predicate": "statement_plan"
       }
     ],
-    "cost": "cheap"
+    "discriminates": [
+      "missing_index"
+    ],
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.db.schema_conformance",
@@ -180,7 +212,13 @@
         "predicate": "columns"
       }
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.db.statement_budget",
@@ -201,7 +239,16 @@
         "predicate": "query_mean_ms_max"
       }
     ],
-    "cost": "cheap"
+    "discriminates": [
+      "statement_budget_exceeded"
+    ],
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.dep.version",
@@ -232,7 +279,13 @@
         "predicate": "version"
       }
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.edge.impedance",
@@ -252,7 +305,13 @@
         "predicate": "impedance"
       }
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.http.latency",
@@ -290,7 +349,13 @@
     "discriminates": [
       "latency_budget_exceeded"
     ],
-    "cost": "metered"
+    "cost": "metered",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.http.reachable",
@@ -321,7 +386,13 @@
     "discriminates": [
       "component_fails"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.http.route_conformance",
@@ -355,7 +426,13 @@
     "discriminates": [
       "contract_mismatch"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.http.schema_conformance",
@@ -393,7 +470,13 @@
     "discriminates": [
       "contract_mismatch"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.net.dns_resolve",
@@ -421,7 +504,13 @@
         "predicate": "dns_resolves"
       }
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.net.tcp_connect",
@@ -456,7 +545,13 @@
     "discriminates": [
       "connection_unreachable"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   },
   {
     "id": "probe.net.tls_validity",
@@ -492,6 +587,12 @@
     "discriminates": [
       "tls_invalid"
     ],
-    "cost": "cheap"
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "fail",
+      "inconclusive",
+      "refused"
+    ]
   }
 ]

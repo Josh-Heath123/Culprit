@@ -67,6 +67,8 @@ HYPOTHESIS_KINDS: frozenset[str] = frozenset(
         "contract_mismatch",
         "config_missing",
         "latency_budget_exceeded",
+        "statement_budget_exceeded",
+        "missing_index",
     }
 )
 
@@ -163,6 +165,10 @@ class ProbeManifest(BaseModel):
     #: nothing ever".
     discriminates: tuple[str, ...] = ()
     cost: Cost = Cost.CHEAP
+    #: Every verdict this probe can return (Q31, 2026-11-13). A reading whose
+    #: verdict its probe did not declare is refused (`Reading.validate_for`),
+    #: and the fixture gate requires one fixture per declared verdict.
+    verdicts: tuple[Verdict, ...]
 
     @model_validator(mode="after")
     def _no_probe_may_mutate(self) -> "ProbeManifest":
@@ -193,6 +199,28 @@ class ProbeManifest(BaseModel):
             raise ValueError(
                 f"probe {self.id!r} discriminates {unknown}, which the isolation "
                 "walk does not know; it would never be chosen, silently"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _verdicts_are_declared(self) -> "ProbeManifest":
+        if not self.verdicts:
+            raise ValueError(
+                f"probe {self.id!r} declares no verdicts; a probe lists every verdict it can return"
+            )
+        if len(set(self.verdicts)) != len(self.verdicts):
+            raise ValueError(f"probe {self.id!r} declares a verdict twice")
+        if Verdict.INCONCLUSIVE not in self.verdicts:
+            raise ValueError(
+                f"probe {self.id!r} does not declare inconclusive. A probe that "
+                "cannot admit uncertainty is a probe that guesses"
+            )
+        # Not the converse: a probe with no manifest capability can still be
+        # refused by a source enforcing a per-key grant (token_shape).
+        if self.capabilities and Verdict.REFUSED not in self.verdicts:
+            raise ValueError(
+                f"probe {self.id!r} needs a capability but does not declare refused, "
+                "which the runner returns when the grant is missing"
             )
         return self
 
@@ -376,3 +404,25 @@ def _redact_mapping(values: dict | None) -> dict | None:
         else:
             redacted[key] = value
     return redacted
+
+
+class UndeclaredVerdict(ValueError):
+    """A reading whose verdict its probe's manifest does not declare (Q31)."""
+
+
+def validate_for(reading: Reading, manifest: ProbeManifest) -> None:
+    """Hold `reading` to its probe's declared verdicts (Q31, 2026-11-13).
+
+    The Reading model validates itself; this is the check it cannot make
+    alone, because it needs the probe's manifest. Go's `Reading.ValidateFor`
+    is its twin, and `reading_conformance.json` holds both to the same
+    cases."""
+    if reading.probe_id != manifest.id:
+        raise UndeclaredVerdict(
+            f"a reading from {reading.probe_id!r} checked against the manifest of {manifest.id!r}"
+        )
+    if reading.verdict not in manifest.verdicts:
+        raise UndeclaredVerdict(
+            f"a {reading.verdict.value} reading from {reading.probe_id!r}, which declares only "
+            f"{[verdict.value for verdict in manifest.verdicts]}"
+        )

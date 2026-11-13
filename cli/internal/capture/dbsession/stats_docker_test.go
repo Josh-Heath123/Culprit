@@ -29,20 +29,35 @@ import (
 const (
 	secretConstant = "hunter2-constant-not-a-category"
 	secretPassword = "sup3r-s3cret-role-password"
+	// intoSecret is the constant of a SELECT ... INTO, a utility statement
+	// before PostgreSQL 16 (Q32).
+	intoSecret = "into-s3cret-constant-not-a-category"
 )
 
 func postgresWithStatements(t *testing.T) (container, address string) {
+	return postgresImageWithStatements(t, "postgres:16-alpine")
+}
+
+func postgresImageWithStatements(t *testing.T, image string) (container, address string) {
 	t.Helper()
+	// Pulled first, so the readiness deadline below times the server, not
+	// the download.
+	if out, err := exec.Command("docker", "pull", "-q", image).CombinedOutput(); err != nil {
+		t.Fatalf("docker pull %s: %v: %s", image, err, out)
+	}
 	out, err := exec.Command("docker", "run", "-d", "--rm", "-e", "POSTGRES_PASSWORD=stats-test",
-		"-p", "127.0.0.1::5432", "postgres:16-alpine",
+		"-p", "127.0.0.1::5432", image,
 		"postgres", "-c", "shared_preload_libraries=pg_stat_statements").CombinedOutput()
 	if err != nil {
 		t.Fatalf("docker run: %v\n%s", err, out)
 	}
 	container = strings.TrimSpace(string(out))
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", container).Run() })
+	// Ready over TCP, not the socket: the image's first-boot server listens
+	// on the socket only and is then restarted, so a socket check can pass
+	// before the server the tests connect to is up.
 	deadline := time.Now().Add(90 * time.Second)
-	for exec.Command("docker", "exec", container, "psql", "-U", "postgres", "-c", "SELECT 1").Run() != nil {
+	for exec.Command("docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "postgres").Run() != nil {
 		if time.Now().After(deadline) {
 			t.Fatal("the test Postgres did not become ready")
 		}
@@ -90,6 +105,8 @@ func TestStatementsAndPlansAgainstARealPostgres(t *testing.T) {
 				"SELECT id, name FROM products WHERE category = '"+secretConstant+"'")
 		}
 		psql(t, container, "postgres", "shop", "CREATE ROLE leaked LOGIN PASSWORD '"+secretPassword+"'")
+		psql(t, container, "app", "shop",
+			"SELECT id INTO TEMP into_target FROM products WHERE category = '"+intoSecret+"'")
 		psql(t, container, "app", "other", "SELECT 4242 AS other_database_marker")
 		return nil
 	}
@@ -112,17 +129,29 @@ func TestStatementsAndPlansAgainstARealPostgres(t *testing.T) {
 	var products *StatementStats
 	for index, statement := range window.Statements {
 		everything := statement.Text + statement.PlanJSON
-		for _, secret := range []string{secretConstant, secretPassword, "PASSWORD", "other_database_marker", "pg_stat_statements"} {
+		for _, secret := range []string{secretConstant, secretPassword, intoSecret, "PASSWORD", "other_database_marker", "pg_stat_statements"} {
 			if strings.Contains(everything, secret) {
 				t.Errorf("queryid %d's reading holds %q", statement.QueryID, secret)
 			}
 		}
-		if strings.Contains(statement.Text, "FROM products WHERE category = $1") {
+		if strings.Contains(statement.Text, "FROM products WHERE category = $1") && !strings.Contains(statement.Text, " INTO ") {
 			products = &window.Statements[index]
 		}
 	}
 	if products == nil {
 		t.Fatalf("the products statement was not in the window: %+v", window.Statements)
+	}
+	// Q32: the SELECT ... INTO and the CREATE ROLE ran inside the window, so
+	// the window holds both, each either without its text or with it
+	// normalised; the secret checks above are not vacuous.
+	seen := 0
+	for _, statement := range window.Statements {
+		if !statement.TextKept || strings.Contains(strings.ToUpper(statement.Text), " INTO ") {
+			seen++
+		}
+	}
+	if seen < 2 {
+		t.Errorf("the SELECT ... INTO and the CREATE ROLE are not both in the window: %+v", window.Statements)
 	}
 	if products.Calls != 5 || products.TotalMicros <= 0 {
 		t.Errorf("the products statement: %d calls, %d µs; want 5 calls and some time", products.Calls, products.TotalMicros)
@@ -209,6 +238,10 @@ func TestTheGenericPlanAgainstARealPostgres(t *testing.T) {
 		INSERT INTO products (category, name)
 		  SELECT 'category-' || (i % 200), 'product ' || i FROM generate_series(1, 5000) i;
 		ANALYZE products;
+		CREATE INDEX products_category_name ON products (category, name);
+		CREATE INDEX products_name_covering ON products (name) INCLUDE (category);
+		CREATE INDEX products_partial ON products (category) WHERE name <> '';
+		CREATE INDEX products_lower ON products (lower(name));
 		CREATE ROLE reader LOGIN PASSWORD 'reader-pass' IN ROLE pg_read_all_stats;
 		GRANT SELECT ON products TO reader;`)
 	dsn := "postgresql://reader:reader-pass@" + address + "/shop?sslmode=disable"
@@ -260,6 +293,23 @@ func TestTheGenericPlanAgainstARealPostgres(t *testing.T) {
 		t.Errorf("the planned statement was executed: calls %d before, %d after", before, after)
 	}
 
+	// The live indexes (Phase 37 part 3), read in the same read-only
+	// session: key columns in order, an INCLUDE column left out, and a
+	// partial or expression index not listed, since no column list
+	// describes what it serves.
+	indexes, err := tableIndexes(ctx, witness)
+	if err != nil {
+		t.Fatalf("tableIndexes: %v", err)
+	}
+	var got []string
+	for _, index := range indexes["public.products"] {
+		got = append(got, index.Name+"("+strings.Join(index.Columns, ",")+")")
+	}
+	want := "products_category_name(category,name) products_name_covering(name) products_pkey(id)"
+	if strings.Join(got, " ") != want {
+		t.Errorf("live indexes on products: %v, want %s", got, want)
+	}
+
 	// The guard in sendPlan refuses ';' before anything is sent. Bypass it
 	// and the server's Parse refuses the second statement on its own.
 	_, err = conn.Prepare(ctx, "culprit_plan_appended",
@@ -271,5 +321,92 @@ func TestTheGenericPlanAgainstARealPostgres(t *testing.T) {
 	var rows int64
 	if err := conn.QueryRow(ctx, "SELECT count(*) FROM products").Scan(&rows); err != nil || rows != 5000 {
 		t.Fatalf("products holds %d rows (%v), want 5000", rows, err)
+	}
+}
+
+// TestNoTextIsKeptBeforePostgres16 (Q32): on PostgreSQL 15 the window still
+// times every statement, by queryid, but no text leaves the server, the
+// products SELECT's included.
+func TestNoTextIsKeptBeforePostgres16(t *testing.T) {
+	if os.Getenv("CULPRIT_DOCKER_TESTS") != "1" {
+		t.Skip("NOT RUN: set CULPRIT_DOCKER_TESTS=1 to run the PostgreSQL 15 statistics test (needs Docker)")
+	}
+	container, address := postgresImageWithStatements(t, "postgres:15-alpine")
+	psql(t, container, "postgres", "postgres", "CREATE DATABASE shop")
+	psql(t, container, "postgres", "shop", `
+		CREATE EXTENSION pg_stat_statements;
+		CREATE TABLE products (id serial PRIMARY KEY, category text NOT NULL, name text NOT NULL);
+		INSERT INTO products (category, name)
+		  SELECT 'category-' || (i % 200), 'product ' || i FROM generate_series(1, 5000) i;
+		CREATE ROLE app LOGIN PASSWORD 'app-pass';
+		GRANT SELECT ON products TO app;
+		CREATE ROLE reader LOGIN PASSWORD 'reader-pass' IN ROLE pg_read_all_stats;`)
+	dsn := "postgresql://reader:reader-pass@" + address + "/shop?sslmode=disable"
+	traffic := func(ctx context.Context, _ time.Duration) error {
+		for i := 0; i < 3; i++ {
+			psql(t, container, "app", "shop",
+				"SELECT id, name FROM products WHERE category = '"+secretConstant+"'")
+		}
+		psql(t, container, "app", "shop",
+			"SELECT id INTO TEMP into_target FROM products WHERE category = '"+intoSecret+"'")
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	reader := StatsReader{Span: time.Second, Wait: traffic}
+	window, err := reader.Window(ctx, dsn, false)
+	for attempt := 0; err != nil && attempt < 20; attempt++ {
+		time.Sleep(time.Second)
+		window, err = reader.Window(ctx, dsn, false)
+	}
+	if err != nil || window.Unavailable != "" {
+		t.Fatalf("Window: %v %q", err, window.Unavailable)
+	}
+	if window.ServerVersion >= 160000 || window.ServerVersion < 150000 {
+		t.Fatalf("server_version_num %d, want PostgreSQL 15", window.ServerVersion)
+	}
+	timed := 0
+	for _, statement := range window.Statements {
+		if statement.TextKept || statement.Text != "" {
+			t.Errorf("queryid %d kept text on PostgreSQL 15: %q", statement.QueryID, statement.Text)
+		}
+		if statement.Calls == 3 {
+			timed++
+		}
+	}
+	if timed == 0 {
+		t.Errorf("the products statement was not timed by queryid: %+v", window.Statements)
+	}
+}
+
+// TestAWindowCutShortIsUnavailable: the caller's deadline falls inside the
+// window; what was measured is not a window, and none is returned.
+func TestAWindowCutShortIsUnavailable(t *testing.T) {
+	if os.Getenv("CULPRIT_DOCKER_TESTS") != "1" {
+		t.Skip("NOT RUN: set CULPRIT_DOCKER_TESTS=1 to run the cut-short window test (needs Docker)")
+	}
+	container, address := postgresWithStatements(t)
+	psql(t, container, "postgres", "postgres", "CREATE ROLE reader LOGIN PASSWORD 'reader-pass' IN ROLE pg_read_all_stats")
+	psql(t, container, "postgres", "postgres", "CREATE EXTENSION pg_stat_statements")
+	dsn := "postgresql://reader:reader-pass@" + address + "/postgres?sslmode=disable"
+	// The window is 1 s and the deadline 8 s, so it starts; the wait then
+	// outlasts the deadline, as a walk's clock running out would.
+	waitPastDeadline := func(ctx context.Context, _ time.Duration) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	var window StatementWindow
+	var err error
+	for attempt := 0; attempt < 20; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		window, err = StatsReader{Span: time.Second, Wait: waitPastDeadline}.Window(ctx, dsn, false)
+		cancel()
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil || !strings.Contains(window.Unavailable, "cut short") || len(window.Statements) != 0 {
+		t.Fatalf("%v %q %d statements", err, window.Unavailable, len(window.Statements))
 	}
 }

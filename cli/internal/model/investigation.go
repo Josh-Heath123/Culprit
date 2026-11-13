@@ -103,6 +103,13 @@ const (
 	// declared for it" (Phase 36 part 2). Asked only after the errors
 	// explain nothing.
 	HypothesisLatencyBudgetExceeded = "latency_budget_exceeded"
+	// "A statement in this database, or on this table, is slower than the
+	// query_mean_ms_max declared for it" (Phase 37 part 3). Asked by the
+	// database pass, after errors and latency explain nothing below the entry.
+	HypothesisStatementBudgetExceeded = "statement_budget_exceeded"
+	// "No index serves the column this statement filters": supported only
+	// when OBSERVED, the plan, CONFIGURED and INTENT agree (Phase 37 part 3).
+	HypothesisMissingIndex = "missing_index"
 )
 
 // HypothesisKinds is every kind, for validating a manifest's discriminates.
@@ -110,6 +117,7 @@ var HypothesisKinds = []string{
 	HypothesisComponentFails, HypothesisConnectionUnreachable, HypothesisDatabaseUnreachable,
 	HypothesisTLSInvalid, HypothesisAuthAudience, HypothesisAuthRejected,
 	HypothesisContractMismatch, HypothesisConfigMissing, HypothesisLatencyBudgetExceeded,
+	HypothesisStatementBudgetExceeded, HypothesisMissingIndex,
 }
 
 // HypothesisLabels is each kind as a person reads it. The source is
@@ -118,15 +126,17 @@ var HypothesisKinds = []string{
 // unless this map equals it exactly. The walk's statements and reasons
 // use these words, never the kind itself.
 var HypothesisLabels = map[string]string{
-	HypothesisComponentFails:        "Component fails",
-	HypothesisConnectionUnreachable: "Connection unreachable",
-	HypothesisDatabaseUnreachable:   "Database unreachable",
-	HypothesisTLSInvalid:            "TLS certificate invalid",
-	HypothesisAuthAudience:          "Auth audience mismatch",
-	HypothesisAuthRejected:          "Auth rejected",
-	HypothesisContractMismatch:      "Contract mismatch",
-	HypothesisConfigMissing:         "Config missing",
-	HypothesisLatencyBudgetExceeded: "Latency budget exceeded",
+	HypothesisComponentFails:          "Component fails",
+	HypothesisConnectionUnreachable:   "Connection unreachable",
+	HypothesisDatabaseUnreachable:     "Database unreachable",
+	HypothesisTLSInvalid:              "TLS certificate invalid",
+	HypothesisAuthAudience:            "Auth audience mismatch",
+	HypothesisAuthRejected:            "Auth rejected",
+	HypothesisContractMismatch:        "Contract mismatch",
+	HypothesisConfigMissing:           "Config missing",
+	HypothesisLatencyBudgetExceeded:   "Latency budget exceeded",
+	HypothesisStatementBudgetExceeded: "Statement budget exceeded",
+	HypothesisMissingIndex:            "Missing index",
 }
 
 // SymptomKind is how the symptom was named on the command line.

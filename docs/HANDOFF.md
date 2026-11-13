@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **37, part 2 — Statements and plans** — `awaiting decision` (Q31). Built; CI green on `74ab042` (run 43380877940), PR #41. The architecture session's rulings of 2026-11-13 are recorded in §5 as ruled; Q30's change waits on Q31. Q32 is open and blocks nothing. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37: "Part 2", then "Added to part 2, 2026-11-12". |
-| Previous phase | **37, part 1 close-out — complete**, signed off 2026-11-12 by the architecture session. PR #40 was merged as `ee3e19e`; the pull request's runs 43287075789 and 43290346292 were green on every job, read from GitHub. Q28 and Q29 are ruled. **Phase 37 part 1 is complete.** Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
+| Current phase | **37, part 3 — The database in the walk** — `awaiting decision` (Q33, blocking item 4 on). Items 1–3 built; PR #42 (draft). Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37, "Part 3". Step 0: `main`'s push run on `1b2496b` green. Item 1 carries in Q31 (probes declare their verdicts), Q32, A2 and the statistics deadline. |
+| Previous phase | **37, part 2 — Statements and plans: signed off 2026-11-13** by the architecture session. It is complete when `main`'s push run on `1b2496b` is green. PR #41 merged as `1b2496b`; the pull request's runs 43380877940 and 43390113268 were green on every job, read from GitHub. The mid-run rulings, Q31 and Q32 are recorded at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-37-statements`, to be cut from `origin/main` = `ee3e19e`. Its first commit is the close-out sign-off, already in the working tree (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`; message `../phase-37-closeout-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
-| Blocking questions | Q31 — blocks only Q30's change (the exemption keyed on the manifest), not the rest of the phase. |
+| Branch | `phase-37-walk`, to be cut from `origin/main` = `1b2496b`. Its first commit is the part 2 sign-off, already in the working tree (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`; message `../phase-37-2-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
+| Blocking questions | **Q33** — where the demo's migration INTENT (`leads_index`) comes from inside the fault library's walk. |
 
 ---
 
@@ -79,8 +79,8 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| 31 | **Q30's ruling, keyed on the manifest, would catch `probe.edge.impedance`.** The ruling: a probe whose `expected_from` is empty is exempt from the fail fixture, and a test holds every such probe to never returning fail. But `probe.edge.impedance` (Phase 31) also declares no expectation plane: impedance is OBSERVED against its own history. It returns `fail` at 3σ or more, and it has a fail fixture. As ruled, the new test is red on it. Options: (a) a probe with an empty `expected_from` and no fail fixture is held to never failing (keyed on manifest and fixtures, no names); (b) a manifest property marking evidence-only probes, in Go, Python and the catalogue mirror; (c) impedance stops failing, which reverses Phase 31. Until ruled, the exemption by name for `probe.db.plan` stays. | 2026-11-13, Phase 37 part 2 | Q30's change only, not the phase's other work |
-| 32 | **`SELECT … INTO` before PostgreSQL 16.** On 14 and 15 it is a utility statement (`CREATE TABLE AS`) whose constants Postgres did not normalise, yet its text begins with `SELECT`, so the six-statement rule (Q29 (2)) would keep it, with only `redact_credentials` behind it. Raised by the phase-auditor and not verified on a PostgreSQL 15 server. Options: keep text only on 16 and later, raise the statement probe's floor to 16, or verify on 15 first. Stated in LIMITS. | 2026-11-13, Phase 37 part 2 | Nothing |
+| Q33 | **How does the fault library's walk get the demo's migration INTENT?** Part 3's criterion wants the database fault diagnosed `missing_index` on `category`, *complete*, and `missing_index` is complete only when INTENT says the migrations declare no index led by `category` (a `leads_index` false fact). Only the Python extractor plugin's migration reader (`extractors/python/culprit_extract_python/migrations.py`, static `ast`) emits `leads_index`. `diagnose` takes INTENT from `check.Run` over the manifest's `extract:` section. `demo-services/culprit.yaml` deliberately has no `extract:` section (its own comment: per-component roots break on `import shared`), and the fault library runs the walk inside the demo container with `--no-plugins`. As things stand the walk stays partial and correctly says no migration facts were given. Options: **(a)** an `extract:` section scoped to `inventory_service/migrations`, with the Python extractor available to the walk in the fault container and the database case run without `--no-plugins` (recommended: the INTENT is the migrations' own, by the reader that already exists); **(b)** a built-in Go reader for Alembic `create_index` (a second copy of the Python reader's rules); **(c)** a `leads_index: false` invariant in `culprit.yaml` (a person's assertion, not the migrations', and wrong once `0003` lands). Raised 2026-11-13, Phase 37 part 3, before item 4. | 2026-11-13 | **Blocking**: items 4–6 (the demo's `0003`, the library's database fault, the documents). |
+| — | Q31 and Q32 were ruled on 2026-11-13 (`PERFORMANCE_PLAN.md`, end of Phase 37). Q31: every probe declares the verdicts it can give, readings are validated against that declaration, and the fixture gate requires one fixture per declared verdict, with no names. Q32: statement text is kept only on PostgreSQL 16 and later, and CI checks `SELECT … INTO` on 16. Both are built in part 3. | | |
 
 ---
 
@@ -118,8 +118,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 36, part 2 | The walk sees slow | **complete** (PR #38 merged, `d785af4`; `main`'s push run 43250669431 green) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The library's latency fault roots at inventory-service and verifies; a wrong fix gives `not_resolved`; without budgets it is `inconclusive`. Q21 is closed. Q26 is ruled, and Q27 corrected its premise. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
 | 37, part 1 | Reading the database safely | **complete** (PR #39 `b3ef508`, close-out PR #40 `ee3e19e`) | **Signed off 2026-11-12** (architecture session): a read-only session refused at the server in CI; the demo's database is seeded; index facts are found both ways. Q27 ruled package isolation, built in the close-out. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 1 close-out | Package isolation; one schema for both manifest readers | **complete** (PR #40 merged, `ee3e19e`) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The audit's two attacks no longer type-check; each boundary package has one non-test file. The CodeQL alert was answered by redesign. Q28 is ruled (strict typing and a differential corpus, in part 2); Q29 is ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
-| 37, part 2 | Statements and plans | **awaiting decision** (Q31) — PR #41, CI green on `74ab042` (run 43380877940); run report in §5 | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37: "Part 2", then "Added to part 2, 2026-11-12" at the end of the section. Step 0: `main`'s push run on `ee3e19e` green. Item 1 is Q28's strict typing, with the differential corpus. Branch `phase-37-statements` from `origin/main` = `ee3e19e`; its first commit is the close-out sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
-| 37, part 3 | The database in the walk | not started | `docs/PERFORMANCE_PLAN.md` Phase 37, "How Phase 37 is run". The brief and criteria are written at part 2's review. |
+| 37, part 2 | Statements and plans | **complete when `main`'s push run on `1b2496b` is green** (PR #41 merged) | **Signed off 2026-11-13** (architecture session): every check on the pull request was green, read from GitHub. The generic plan comes from a prepared statement under `force_generic_plan` (the brief was wrong). `(category, sku)` brings the statement within budget, which `category` alone does not. Q28's corpus holds 5,684 manifests. Q31 and Q32 are ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
+| 37, part 3 | The database in the walk | **awaiting decision** (Q33) | **Brief (2026-11-13):** `docs/PERFORMANCE_PLAN.md` Phase 37, "Part 3" at the end of the section: its decisions, work order, criteria and what not to build. Step 0: `main`'s push run on `1b2496b` green. Branch `phase-37-walk` from `origin/main` = `1b2496b`; its first commit is the part 2 sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
 
@@ -153,184 +153,85 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        37, part 2 — statements and plans
-Branch:       phase-37-statements, from origin/main = ee3e19e; 60184f9 the
-              close-out sign-off, f1cff6f the phase, 74ab042 the audits'
-              and CI's findings, then this report. PR #41.
-Run:          2026-11-12 to 2026-11-13, /next, resumed after a context
-              clear; the architecture session's rulings of 2026-11-13
-              applied.
-Status:       AWAITING DECISION (Q31). Built; CI green on 74ab042 (run
-              43380877940), every PR check pass, no open alert. Q30's
-              change is not built: as ruled it would catch
-              probe.edge.impedance (Q31). Q32 is open and blocks nothing.
+Phase:        37, part 3 — the database in the walk
+Branch:       phase-37-walk, from origin/main = 1b2496b. PR #42 (draft).
+Run:          2026-11-13: CI repair on PR #42, then items 2 and 3.
+Status:       AWAITING DECISION (Q33, blocking items 4-6). Items 1-3
+              built. CI green on ffd7bf1 (run 43439643068); the later
+              commits' run is recorded on the pull request.
 
 STEP 0
-  main's push run 43293248631 on ee3e19e: 21 jobs success, deploy
-  skipped.
+  main's push run 43395786047 on 1b2496b: success.
 
-RULINGS OF 2026-11-13 (architecture session) — RULED
-  1 Q30 ratified with one change: key the fail-fixture exemption on the
-    manifest (an empty expected_from), not the probe's name; a test holds
-    every such probe to never returning fail, shown red; the exemption by
-    name for probe.db.plan removed.
-    NOT BUILT — Q31. probe.edge.impedance (Phase 31) also declares an
-    empty expected_from, returns fail at 3 standard deviations and has a
-    fail fixture, so the test as ruled is red on it. Malcolm chose to
-    escalate (2026-11-13). The exemption by name stays; probe_test.go
-    says why.
-  2 The three places the brief did not match real Postgres — accepted:
-    - Generic plans: a prepared statement explained under plan_cache_mode
-      = force_generic_plan, on the extended protocol, nothing executed.
-      The three tests are TestTheGenericPlanAgainstARealPostgres (new, in
-      CI's Docker step, Postgres 16): the session read-only before,
-      between and after every message (SHOW transaction_read_only on the
-      same session); ANALYZE never sent; a second statement appended to
-      the text refused by the server's Parse (42601), sendPlan's own guard
-      bypassed. Red when sendPlan sends EXPLAIN (ANALYZE ...): "ANALYZE
-      was sent". Its other check, that the statement's calls do not move,
-      did NOT catch that mutation (pg_stat_statements does not count an
-      EXECUTE inside EXPLAIN by default); the sent-text check holds it.
-    - The demo plan walks ix_products_sku and filters category; the test
-      asserts the filter on category.
-    - (category, sku) brings the query within budget; category alone does
-      not. Measured (the test's MEASURED lines; local, 2026-11-13; mean
-      per call against the 20 ms budget):
-        no index on category        153 ms   (159 ms in an earlier run)
-        index on category alone     153 ms   (171 ms), verdict fail
-        index on (category, sku)    0.025 ms, verdict pass
-      CI, run 43380877940 (Linux): 96.1 ms, 96.4 ms (fail), 0.014 ms.
-      Noted for part 3.
-  3 Full suites not rerun locally; CI is the gate of record. Local runs
-    were one package or one test at a time, no quickstart running.
+CI REPAIR — PR #42 red on 1cfd133 (run 43401573511)
+  Failing job: cli. TestTheGenericPlanAgainstARealPostgres: the first
+  `psql -h 127.0.0.1` was refused ("connection refused") just after the
+  container came up. Cause: the official image's first-boot server
+  listens on the Unix socket only and is restarted after its setup, so
+  the readiness check, which ran psql over the socket, could pass on that
+  temporary server. Not a runner or download failure, and not the code
+  under test.
+  Fix (ffd7bf1): the four helpers that start a test Postgres
+  (dbsession's two, cmd/culprit's statements and indexes tests) wait for
+  `pg_isready -h 127.0.0.1`, which answers only once the final server
+  listens on TCP. No gate changed. Run 43439643068 on ffd7bf1: every job
+  success (deploy and publish skipped); every PR check pass or skipping;
+  no open code-scanning alert (pr=42, refs/pull/42/merge and /head all
+  empty). origin/main was already in the branch, so that run tested the
+  merge result.
 
-WHAT WAS BUILT (f1cff6f; the work order)
-  1 Q28: strict typing in both manifest readers — one type per field,
-    null and empty refused naming the field, untyped values keep their
-    text, unknown keys refused at every level. Go: typed.go walks yaml.v3
-    nodes against a schema derived from Manifest; API: YAML12Loader ports
-    yaml.v3's resolver and _typed builds plain data against a schema from
-    the pydantic models. shared/tests/manifest_schema.json (61 fields)
-    and manifest_corpus.json (5,684 cases: every field x 91 scalar forms,
-    48 structural variants, the close-out audit's 85 manifests). Then
-    query_mean_ms_max in both readers and the API's model.
-  2 Q29: four statistics templates, filtered to this database's dbid and
-    away from Culprit's role; text leaves the server only for SELECT,
-    WITH, INSERT, UPDATE, DELETE, MERGE. plannedStatement, made only by
-    planFromRow; sendPlan as in ruling 2.
-  3 probe.db.statement_budget (integer rule in Go and Python, shared
-    statement_conformance.json) and probe.db.plan (evidence, no
-    expectation; filter columns by name only; before 16 inconclusive).
-    culprit mcp refuses probe.db.plan, any queryid and any input to the
-    statement probe, before anything is sent.
-  4 Readings re-judged in Go, Python and POST /readings.
-  5 The demo's 20 ms query_mean_ms_max on
-    schema:inventory-db/public.products.
-  6 PROBES, PERMISSIONS, LIMITS.
+ITEM 2 — the database pass, the two hypotheses, the join (ffba326)
+  internal/isolate/database.go. Runs only when the error and latency
+  passes found no root strictly below the entry; asks the databases the
+  entry connects to by an edge of any kind. statement_budget_exceeded on
+  the budget's subject; missing_index on the column, supported only when
+  the four planes agree, citing the statement and plan readings; a live
+  index the plan does not use roots at the budget. No INTENT, or INTENT
+  that disagrees, leaves missing_index unexplored and the diagnosis
+  partial.
+  Found and fixed while finishing it: the isolate tests gave
+  probe.db.plan a hand-built manifest discriminating missing_index, but
+  the real manifest declared nothing and the binary's placement had no
+  case for either kind, so the binary would never have run the pass.
+  probe.db.plan (version 2) now declares missing_index; placement puts
+  both probes inside the entry, as database_unreachable is placed.
+  TestTheDatabasePassIsPlacedWithTheRealCatalogue holds the real
+  catalogue and placement to it; it is red without the declaration
+  (shown). The plan's live-index query is checked against a real
+  Postgres (key, INCLUDE, partial and expression indexes) inside
+  TestTheGenericPlanAgainstARealPostgres, which CI already runs.
+  A reason string named a `culprit diagnose --intent` flag that does not
+  exist; it now says what is true, and its test asserts that.
 
-FIXED AFTER THE AUDITS AND CI (74ab042)
-  - CI run 43376316313: test_probes_api counted fourteen probes. Sixteen;
-    the exact set is still held to the Go source.
-  - Four new `# type: ignore` in api/app/model/manifest.py (§6 counts an
-    ignore as a weakening) replaced by annotations and isinstance;
-    pyright 0 errors.
-  - A4: the CREATE ROLE ... PASSWORD statements ran before the window, so
-    their check could not fail. They now run inside each window, in this
-    database and another, and the test requires the reading to list them
-    as "text not kept".
-  - The MCP refusal count could not move (no budget declared, so the
-    probe returned before its source). It can now: 5 calls counted with
-    the guard removed.
-  - probeStats's version and extension gates and unloaded() had no test:
-    gates_test.go, red when either gate is changed.
-  - probe.db.plan read `culprit probe --input queryid=7` (an int) as
-    unnamed. An exact int is taken; a float is refused ("pass it as
-    text").
-  - Found running the demo test: twenty slower statements no budget
-    applies to pushed the judged one out of the 20 kept, and a window
-    within budget read inconclusive. Statements a budget applies to are
-    now kept before the rest;
-    TestStatementsWithABudgetAreKeptBeforeThoseWithout, red without it.
-  - A statement too large to judge is named in the reason.
-  - Stale GENERIC_PLAN comments corrected; README says sixteen probes.
+ITEM 3 — the recommendation, derived from the plan
+  recommendIndex: the filtered columns no index condition serves, then
+  the walked index's columns, each once. The demo's plan gives
+  public.products (category, sku). TestTheRecommendationIsDerivedFromThePlan.
 
-CRITERIA (phase-auditor on f1cff6f, re-checked after 74ab042)
-  1 Nothing outside the templates reaches the database — MET (unit,
-    counted; mutations red); real server in CI.
-  2 The statement rule's fixture in Go and Python, five cases, red when
-    the comparison moves — MET.
-  3 On the demo's database: over budget without an index; the plan reads
-    products filtering category (sku index, ruling 2); within budget with
-    (category, sku) — MET locally and in CI.
-  4 A secret-looking constant leaves no trace — MET (unit; real server in
-    CI).
-  5 Without db.plan.read the plan probe refused and a table budget
-    unjudged, saying so; without pg_stat_statements both inconclusive;
-    before 16 the plan probe inconclusive — MET, the gates now tested at
-    the session too.
-  6 culprit mcp refuses, counted — MET; the count can now go red.
-  7 A disagreeing statement reading refused by Go, Python and the API —
-    MET (Go and Python mutated red; the API in CI).
-  8 Every PR check green — see CI.
-  A1 The corpus agrees — MET (5,684 cases, both readers).
-  A2 The auditor's 23 splits in the corpus — MET BY INSPECTION: the 85
-     seeds are there, and every split LIMITS@ee3e19e names is a seed with
-     its expected outcome; the test checks only the count. Not labelled.
-  A3 Loosening either reader turns it red — MET (Go 1024 cases; API 1048
-     and 48).
-  A4 CREATE ROLE ... PASSWORD in no reading while the products text is
-     kept — MET IN SUBSTANCE, NOT AS WRITTEN: the statements run inside
-     the window on the demo's database and on a Postgres 16 test
-     database, written as Culprit's migrations write them, not through
-     the quickstart's Alembic migrations, which need the control plane's
-     TimescaleDB image. For the review to reword, or to ask for the
-     quickstart itself.
-  A5 Another database's statement not read — MET (dbid pinned in unit;
-     both Docker tests in CI).
+CRITERIA ON RECORDED READINGS (go test ./internal/isolate, no network)
+  four planes -> missing_index on category, citing each       PASS
+  unused live index -> statement_budget_exceeded, plan+index  PASS
+  no plan -> partial, names db.plan.read                      PASS
+  no budget -> database named unbudgeted                      PASS
+  error root below the entry -> no database asked             PASS
+  window cut by the deadline -> unexplored                    PASS
 
-DELIBERATELY NOT BUILT
-  No walk change, no statement_budget_exceeded or missing_index, no fault
-  case, no traffic by Culprit, no reset, no EXPLAIN ANALYZE, no row read,
-  no index created by Culprit (phase-auditor: none found).
+LOCAL GATES (Windows, on ffba326 + this commit)
+  go build, go vet ./..., gofmt, just cli-lint: clean.
+  go test: isolate, model, probe, capture/..., verify, cmd/culprit: ok.
+  Docker: dbsession's five CI tests, ok.
+  shared tests (through api's env): 617 passed. frontend npm test: 19/19.
+  just check-invariants, check-no-llm-imports: clean.
+  Not run locally: just fault-library, e2e, migration round-trip (CI).
 
-CI
-  f1cff6f  run 43376316313  failure on test only (the probe count, above);
-           every other job success.
-  74ab042  run 43380877940  https://github.com/Josh-Heath123/Culprit/
-           actions/runs/43380877940 — attempt 1: e2e (none) failed before
-           its first step, "The hosted runner lost communication with the
-           server" (runner fault; narration-parity skipped behind it);
-           rerun of the failed job, attempt 2: every job success; build /
-           publish and deploy skipped.
-    PR checks: every one pass or skipping — CodeQL, Analyze (go, python,
-           javascript-typescript, actions), Culprit included.
-    Code-scanning alerts open: none (pr=41, refs/pull/41/merge,
-           refs/pull/41/head all empty).
-    The branch contains origin/main = ee3e19e, so the branch is the
-    merge result.
-
-AUDITS
-  invariant-auditor (f1cff6f): CLEAN. Risks: the plan mechanism differs
-    from the plan's text (ruled, 2); a stale comment (fixed); the four
-    ignores (fixed); tables outside `public` taken as public (in LIMITS);
-    the statistics session's timeout is its own 20 s plus the window, not
-    the CLI's --timeout (left; for the review).
-  phase-auditor (f1cff6f): NOT COMPLETE then — A4 could not fail, the MCP
-    count and A2 could not fail, the gates untested, the int queryid, the
-    too-large pass. All fixed in 74ab042 except A2's labels (above) and
-    SELECT ... INTO on PostgreSQL 14–15 (Q32, unverified).
-
-LEFT OPEN
-  Q31 (blocks Q30's change only): impedance and the manifest-keyed
-    exemption.
-  Q32 (blocks nothing): SELECT ... INTO before PostgreSQL 16.
-  For the review: A4's wording, A2's labels, the statistics session's
-    timeout.
-  Housekeeping: the phase-auditor left files under /tmp (*.bak,
-    /tmp/audit37/); its cleanup was refused.
+STOPPED AT — Q33 (blocking)
+  The database fault's criterion ("missing_index on category, complete")
+  needs migration INTENT inside the fault library's walk, and nothing
+  supplies it there: only the Python extractor plugin emits leads_index,
+  the demo's culprit.yaml has no extract: section, and the library runs
+  --no-plugins. Options and a recommendation are in §3. Items 4-6 wait
+  on it.
 ```
-
----
 
 ## §6. Escalate to the architecture session when
 

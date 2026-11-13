@@ -37,15 +37,17 @@ import (
 // Hypothesis kinds are model.Hypothesis* — the vocabulary
 // ProbeManifest.Discriminates speaks, shared with internal/probe.
 const (
-	KindComponentFails        = model.HypothesisComponentFails
-	KindConnectionUnreachable = model.HypothesisConnectionUnreachable
-	KindDatabaseUnreachable   = model.HypothesisDatabaseUnreachable
-	KindTLSInvalid            = model.HypothesisTLSInvalid
-	KindAuthAudience          = model.HypothesisAuthAudience
-	KindAuthRejected          = model.HypothesisAuthRejected
-	KindContractMismatch      = model.HypothesisContractMismatch
-	KindConfigMissing         = model.HypothesisConfigMissing
-	KindLatencyBudgetExceeded = model.HypothesisLatencyBudgetExceeded
+	KindComponentFails          = model.HypothesisComponentFails
+	KindConnectionUnreachable   = model.HypothesisConnectionUnreachable
+	KindDatabaseUnreachable     = model.HypothesisDatabaseUnreachable
+	KindTLSInvalid              = model.HypothesisTLSInvalid
+	KindAuthAudience            = model.HypothesisAuthAudience
+	KindAuthRejected            = model.HypothesisAuthRejected
+	KindContractMismatch        = model.HypothesisContractMismatch
+	KindConfigMissing           = model.HypothesisConfigMissing
+	KindLatencyBudgetExceeded   = model.HypothesisLatencyBudgetExceeded
+	KindStatementBudgetExceeded = model.HypothesisStatementBudgetExceeded
+	KindMissingIndex            = model.HypothesisMissingIndex
 )
 
 // localOrder is the order boundary hypotheses are tested in, cheapest and
@@ -141,6 +143,10 @@ type Walk struct {
 	components map[string]Component
 	// declared is every on-request-path edge, as culprit.yaml lists them.
 	declared map[string][]Connection
+	// connected is every edge, of any kind, by caller: the database pass
+	// asks of the databases the entry connects to however it does (Phase
+	// 37 part 3).
+	connected map[string][]Connection
 	// children is the request-path tree rooted at the entry: each
 	// component's edges to components first reached through it. A model
 	// may declare an edge back up the path (the demo's inventory-service
@@ -179,11 +185,13 @@ func New(components []Component, connections []Connection, facts []model.Fact,
 		options: options, manifests: manifests, runner: runner, placement: placement,
 		facts: facts, components: map[string]Component{}, declared: map[string][]Connection{},
 		children: map[string][]Connection{}, index: map[string]int{}, requests: map[string]Recorded{},
+		connected: map[string][]Connection{},
 	}
 	for _, component := range components {
 		walk.components[component.Name] = component
 	}
 	for _, connection := range connections {
+		walk.connected[connection.From] = append(walk.connected[connection.From], connection)
 		if connection.OnRequestPath {
 			walk.declared[connection.From] = append(walk.declared[connection.From], connection)
 		}
@@ -247,6 +255,14 @@ type located struct {
 	// a component root, connection setup alone was within the budget; for
 	// a hop, the component's own time was. Inconclusive is not kept.
 	otherSideKept bool
+	// database is what the third pass established, and databaseAsked says
+	// it ran (Phase 37 part 3).
+	database      *dbFinding
+	databaseAsked bool
+	// latencyUnasked is the latency pass's sentence when nothing on the
+	// request path has a budget: a partial on its own, a note under a
+	// database root, which explains the symptom without it.
+	latencyUnasked string
 }
 
 // Diagnose runs the walk from a symptom on entry. The Investigation it
@@ -266,6 +282,16 @@ func (w *Walk) Diagnose(ctx context.Context, symptom model.Symptom, entry string
 	// no component below the entry shown to fail (Phase 36 part 2).
 	if found.root == "" && len(found.path) == 1 {
 		w.latencyPass(ctx, entry, found)
+		// The database pass runs when neither pass found a root strictly
+		// below the entry: the entry's own work, and the databases it
+		// reads, are what remain (Phase 37 part 3). A slow entry above a
+		// statement over its budget is propagation, not the root.
+		if found.root == "" && len(found.path) == 1 {
+			w.databasePass(ctx, entry, found)
+			if found.database != nil {
+				w.rootAtDatabase(found)
+			}
+		}
 	}
 
 	inv := model.Investigation{
@@ -487,10 +513,12 @@ func (w *Walk) run(ctx context.Context, request Request) string {
 
 // runSet runs one request and records every reading it gave, returning
 // their ids, the request's own first. A latency probe's deadline is the
-// walk's: it never outlives the walk (Phase 36 part 2).
+// walk's: it never outlives the walk (Phase 36 part 2). So is the statement
+// probe's, whose 30-second window is not started when the walk cannot fit
+// it, and is unavailable when the walk's clock cuts it (Phase 37 part 3).
 func (w *Walk) runSet(ctx context.Context, request Request) []string {
 	w.probesRun++
-	if request.ProbeID == model.LatencyProbeID {
+	if request.ProbeID == model.LatencyProbeID || request.ProbeID == model.StatementProbeID {
 		left := w.options.MaxWallClock - w.options.Now().Sub(w.started)
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, left)
@@ -821,7 +849,9 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 		add(componentSubject(child), componentSubject(parent), model.RelationPropagatesTo,
 			found.fail[child], found.fail[parent])
 	}
-	if found.root != "" {
+	if found.database != nil {
+		databaseTree(found.database, entry, add)
+	} else if found.root != "" {
 		add(componentSubject(deepest), found.root, model.RelationCausedBy, found.rootReading)
 	}
 
@@ -834,6 +864,8 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 		Confidence:  w.rubric(ctx, found),
 	}
 	switch {
+	case found.database != nil:
+		w.databaseDiagnosis(diagnosis, found, entry)
 	case found.latency != "" && len(found.partial) > 0:
 		diagnosis.Statement = fmt.Sprintf(
 			"The walk stopped at %s: it is slower than the latency budget declared for it. It could "+

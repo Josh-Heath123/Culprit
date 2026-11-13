@@ -156,3 +156,17 @@ func pass(measured map[string]any) Outcome {
 func fail(measured map[string]any, reason string) Outcome {
 	return Outcome{Verdict: model.VerdictFail, Measured: measured, Reason: reason}
 }
+
+// The verdict declarations probes make in their manifests (Q31,
+// 2026-11-13). allVerdicts is a probe that measures against an
+// expectation, or against a threshold, and so can fail. evidenceVerdicts
+// is a probe that reports what it read with no finding of its own: it
+// passes when it read something, and has no fail to give.
+var (
+	allVerdicts = []model.Verdict{
+		model.VerdictPass, model.VerdictFail, model.VerdictInconclusive, model.VerdictRefused,
+	}
+	evidenceVerdicts = []model.Verdict{
+		model.VerdictPass, model.VerdictInconclusive, model.VerdictRefused,
+	}
+)

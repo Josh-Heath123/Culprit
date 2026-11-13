@@ -29,6 +29,7 @@ type (
 	StatementWindow = dbsession.StatementWindow
 	// StatementPlan is one statement's generic plan.
 	StatementPlan = dbsession.StatementPlan
+	IndexShape    = dbsession.IndexShape
 )
 
 // The closed set of database failures.

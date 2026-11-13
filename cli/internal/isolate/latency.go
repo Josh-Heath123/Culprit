@@ -142,9 +142,10 @@ func (w *Walk) latencyPass(ctx context.Context, entry string, found *located) {
 		}
 		switch {
 		case len(unbudgeted) == len(order):
-			found.partial = append(found.partial, fmt.Sprintf(
+			found.latencyUnasked = fmt.Sprintf(
 				"no latency budget a GET request can measure is declared for %s, so whether the "+
-					"request is slow was not asked; Culprit does not choose a budget", joinNames(unbudgeted)))
+					"request is slow was not asked; Culprit does not choose a budget", joinNames(unbudgeted))
+			found.partial = append(found.partial, found.latencyUnasked)
 		case len(unbudgeted) > 0:
 			found.partial = append(found.partial, fmt.Sprintf(
 				"no latency budget a GET request can measure is declared for %s, so whether %s slow "+

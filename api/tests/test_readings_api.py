@@ -459,3 +459,31 @@ async def test_a_credential_posted_in_a_reading_is_not_what_gets_stored(
     assert "hunter2" not in row.measured, row.measured
     # Redaction must not have eaten the measurement it was protecting.
     assert "503" in row.measured, row.measured
+
+
+@pytest.mark.asyncio
+async def test_a_reading_with_a_verdict_its_probe_did_not_declare_is_refused(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Q31 (Phase 37 part 3): the catalogue's probe.db.plan declares pass,
+    inconclusive and refused. A fail from it is refused, and nothing is
+    stored; a pass is stored."""
+
+    def plan(verdict: str) -> dict:
+        return _reading(
+            probe_id="probe.db.plan",
+            target=build("component", name="inventory-db"),
+            verdict=verdict,
+            measured={"queryid": "7", "nodes": [], "tables": []},
+            reason="as the test says",
+            grants_used=["db.plan.read"],
+        )
+
+    response = _post(client, {"readings": [plan("fail")]})
+    assert response.status_code == 422, response.text
+    assert "declares only" in response.text
+    assert await _count(db_engine) == 0
+
+    response = _post(client, {"readings": [plan("pass")]})
+    assert response.status_code == 201, response.text
+    assert await _count(db_engine) == 1

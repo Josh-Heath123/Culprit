@@ -266,6 +266,7 @@ func runProbe(ctx context.Context, in probeInput) ([]model.Reading, *capability.
 			Ledger:      ledger,
 			Runner:      capture.ExecRunner{Timeout: in.Timeout},
 			Reader:      capture.PostgresReader{Timeout: in.Timeout},
+			Stats:       capture.StatsReader{Timeout: in.Timeout},
 		}
 		deps.Database = sources.Database()
 		deps.Config = sources.Config()

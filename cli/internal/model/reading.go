@@ -108,6 +108,13 @@ type ProbeManifest struct {
 	// Phase 32; empty here means "discriminates nothing yet".
 	Discriminates []string `json:"discriminates,omitempty"`
 	Cost          Cost     `json:"cost,omitempty"`
+	// Verdicts lists every verdict this probe can return (Q31, 2026-11-13).
+	// A reading whose verdict its probe did not declare is refused, and the
+	// fixture gate requires one fixture per declared verdict. Every probe
+	// declares inconclusive; a probe that needs a capability declares
+	// refused, since the runner refuses it when the grant is missing (a
+	// probe without one may declare it too, for a source that refuses).
+	Verdicts []Verdict `json:"verdicts"`
 }
 
 // Validate enforces the same rules readings.py does.
@@ -177,6 +184,61 @@ func (m ProbeManifest) Validate() error {
 					"adding one is a design decision requiring its own plan "+
 					"document, not a probe", m.ID, name)
 		}
+	}
+	return m.validateVerdicts()
+}
+
+// validateVerdicts holds a manifest's declared verdicts to the rules
+// readings.py holds them to (shared/tests/reading_conformance.json).
+func (m ProbeManifest) validateVerdicts() error {
+	if len(m.Verdicts) == 0 {
+		return fmt.Errorf("probe %q declares no verdicts; a probe lists every verdict it can return", m.ID)
+	}
+	seen := map[Verdict]bool{}
+	for _, verdict := range m.Verdicts {
+		if !verdict.Valid() {
+			return fmt.Errorf("probe %q declares unknown verdict %q", m.ID, verdict)
+		}
+		if seen[verdict] {
+			return fmt.Errorf("probe %q declares verdict %q twice", m.ID, verdict)
+		}
+		seen[verdict] = true
+	}
+	if !seen[VerdictInconclusive] {
+		return fmt.Errorf("probe %q does not declare inconclusive. A probe that cannot "+
+			"admit uncertainty is a probe that guesses", m.ID)
+	}
+	// Not the converse: a probe with no manifest capability can still be
+	// refused by a data source enforcing a per-key grant (token_shape's
+	// token_env under config.inspect.values).
+	if len(m.Capabilities) > 0 && !seen[VerdictRefused] {
+		return fmt.Errorf("probe %q needs a capability but does not declare refused, "+
+			"which the runner returns when the grant is missing", m.ID)
+	}
+	return nil
+}
+
+// Declares reports whether this probe declared verdict v.
+func (m ProbeManifest) Declares(v Verdict) bool {
+	for _, declared := range m.Verdicts {
+		if declared == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateFor is Validate, and that the reading is from this probe and its
+// verdict is one the probe declared (Q31).
+func (r Reading) ValidateFor(m ProbeManifest) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+	if r.ProbeID != m.ID {
+		return fmt.Errorf("a reading from %q checked against the manifest of %q", r.ProbeID, m.ID)
+	}
+	if !m.Declares(r.Verdict) {
+		return fmt.Errorf("a %s reading from %q, which declares only %v", r.Verdict, r.ProbeID, m.Verdicts)
 	}
 	return nil
 }
