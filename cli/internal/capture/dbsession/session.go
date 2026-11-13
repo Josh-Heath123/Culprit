@@ -185,6 +185,31 @@ const (
 		  AND n.nspname NOT LIKE 'pg\_temp%'
 		  AND n.nspname NOT LIKE 'pg\_toast%'
 		ORDER BY n.nspname, c.relname, a.attname`
+	// indexColumnsStatement is every valid, non-partial index on an
+	// ordinary or partitioned table, with its key columns in order (Phase
+	// 37 part 3): the CONFIGURED plane a missing_index finding cites, and
+	// the columns of the index a plan walks, which the recommended index
+	// carries. An index with an expression among its keys is left out: no
+	// column list describes it. Catalogue only, no row of any table.
+	indexColumnsStatement statement = `
+		SELECT n.nspname, c.relname, ic.relname, array_agg(a.attname ORDER BY k.ord)::text[]
+		FROM pg_catalog.pg_index i
+		JOIN pg_catalog.pg_class c ON c.oid = i.indrelid
+		JOIN pg_catalog.pg_class ic ON ic.oid = i.indexrelid
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord)
+		LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum AND k.attnum <> 0
+		WHERE c.relkind IN ('r', 'p')
+		  AND NOT c.relispartition
+		  AND i.indisvalid
+		  AND i.indpred IS NULL
+		  AND k.ord <= i.indnkeyatts
+		  AND n.nspname <> ALL($1)
+		  AND n.nspname NOT LIKE 'pg\_temp%'
+		  AND n.nspname NOT LIKE 'pg\_toast%'
+		GROUP BY n.nspname, c.relname, ic.relname
+		HAVING count(a.attname) = count(*)
+		ORDER BY n.nspname, c.relname, ic.relname`
 )
 
 // The statistics templates (Phase 37 part 2), under db.stats.read and
@@ -235,7 +260,8 @@ const (
 func isTemplate(s statement) bool {
 	switch s {
 	case columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement,
-		statsProbeStatement, statsSnapshotStatement, statsInfoStatement, planRowStatement:
+		statsProbeStatement, statsSnapshotStatement, statsInfoStatement, planRowStatement,
+		indexColumnsStatement:
 		return true
 	}
 	return false
@@ -559,6 +585,15 @@ type StatementPlan struct {
 	Unavailable   string
 	ServerVersion int
 	TableColumns  map[string][]string
+	// Indexes are the live indexes on each table, "namespace.table", with
+	// their key columns in order (Phase 37 part 3).
+	Indexes map[string][]IndexShape
+}
+
+// IndexShape is one live index: its name and its key columns, in order.
+type IndexShape struct {
+	Name    string
+	Columns []string
 }
 
 // StatsReader reads statement statistics and plans, each in one
@@ -878,6 +913,9 @@ func (r StatsReader) Plan(parent context.Context, dsn string, queryID int64) (St
 	if result.TableColumns, err = tableColumns(ctx, conn); err != nil {
 		return StatementPlan{}, classify(ctx, err)
 	}
+	if result.Indexes, err = tableIndexes(ctx, conn); err != nil {
+		return StatementPlan{}, classify(ctx, err)
+	}
 	return result, nil
 }
 
@@ -928,4 +966,24 @@ func classify(ctx context.Context, err error) error {
 		return &DBError{Kind: DBUnreachable}
 	}
 	return &DBError{Kind: DBOtherFailure}
+}
+
+// tableIndexes reads every live index's key columns, by table.
+func tableIndexes(ctx context.Context, conn querier) (map[string][]IndexShape, error) {
+	rows, err := send(ctx, conn, indexColumnsStatement, excludedSchemas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]IndexShape{}
+	for rows.Next() {
+		var namespace, table, name string
+		var columns []string
+		if err := rows.Scan(&namespace, &table, &name, &columns); err != nil {
+			return nil, err
+		}
+		key := namespace + "." + table
+		out[key] = append(out[key], IndexShape{Name: name, Columns: columns})
+	}
+	return out, rows.Err()
 }

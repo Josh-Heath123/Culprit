@@ -150,7 +150,7 @@
   },
   {
     "id": "probe.db.plan",
-    "version": 1,
+    "version": 2,
     "effect": "inspect",
     "capabilities": [
       "db.plan.read"
@@ -169,6 +169,9 @@
         "subject_template": "component:{name}",
         "predicate": "statement_plan"
       }
+    ],
+    "discriminates": [
+      "missing_index"
     ],
     "cost": "cheap",
     "verdicts": [
@@ -235,6 +238,9 @@
         "subject_template": "component:{name}",
         "predicate": "query_mean_ms_max"
       }
+    ],
+    "discriminates": [
+      "statement_budget_exceeded"
     ],
     "cost": "cheap",
     "verdicts": [

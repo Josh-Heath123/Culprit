@@ -39,11 +39,12 @@ func (dbStatementBudget) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		// A literal, held equal to model.StatementProbeID by
 		// TestTheStatementProbesAreTheOnesTheRuleJudges.
-		ID:           "probe.db.statement_budget",
-		Verdicts:     allVerdicts,
-		Version:      1,
-		Effect:       model.EffectInspect,
-		Capabilities: []string{"db.stats.read"},
+		ID:            "probe.db.statement_budget",
+		Verdicts:      allVerdicts,
+		Discriminates: []string{model.HypothesisStatementBudgetExceeded},
+		Version:       1,
+		Effect:        model.EffectInspect,
+		Capabilities:  []string{"db.stats.read"},
 		// The 30-second window, and the reads either side of it.
 		TimeoutMS:    75_000,
 		ExpectedFrom: model.PlaneIntent,
@@ -218,9 +219,13 @@ type dbPlan struct{}
 
 func (dbPlan) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:           "probe.db.plan",
-		Verdicts:     evidenceVerdicts,
-		Version:      1,
+		ID:       "probe.db.plan",
+		Verdicts: evidenceVerdicts,
+		// The walk's missing_index rests on the plan (Phase 37 part 3).
+		Discriminates: []string{model.HypothesisMissingIndex},
+		// Version 2 (Phase 37 part 3): filter and index-condition columns kept
+		// apart, and the live indexes on the tables the plan reads.
+		Version:      2,
 		Effect:       model.EffectInspect,
 		Capabilities: []string{"db.plan.read"},
 		TimeoutMS:    15_000,
@@ -269,10 +274,23 @@ func (dbPlan) Run(ctx context.Context, request Request, deps Deps) Outcome {
 	if len(nodes) == 0 {
 		return inconclusive("the planner's answer could not be read")
 	}
+	tables := planTables(nodes)
+	// The live indexes on the tables the plan reads, with their key columns
+	// (Phase 37 part 3): what the database is set up with, read in the
+	// plan's session.
+	indexes := map[string]any{}
+	for _, table := range tables {
+		listed := []any{}
+		for _, index := range plan.Indexes[table] {
+			listed = append(listed, map[string]any{"name": index.Name, "columns": index.Columns})
+		}
+		indexes[table] = listed
+	}
 	return pass(map[string]any{
 		"queryid":            strconv.FormatInt(queryID, 10),
 		"nodes":              nodes,
-		"tables":             planTables(nodes),
+		"tables":             tables,
+		"indexes":            indexes,
 		"server_version_num": plan.ServerVersion,
 	})
 }
@@ -320,20 +338,11 @@ func ParsePlan(planJSON string, tableColumns map[string][]string) []map[string]a
 			}
 			entry["relation"] = namespace + "." + node.Relation
 			columns := tableColumns[namespace+"."+node.Relation]
-			named := map[string]bool{}
-			for _, expression := range []string{node.Filter, node.IndexCond, node.Recheck, node.JoinFilter} {
-				for _, column := range columns {
-					if columnNamed(expression, column) {
-						named[column] = true
-					}
-				}
-			}
-			filtered := make([]string, 0, len(named))
-			for column := range named {
-				filtered = append(filtered, column)
-			}
-			sort.Strings(filtered)
-			entry["filter_columns"] = filtered
+			// Kept apart (Phase 37 part 3): a column the planner filters row by
+			// row, and a column an index condition serves. missing_index rests
+			// on the difference.
+			entry["filter_columns"] = namedColumns(columns, node.Filter, node.JoinFilter)
+			entry["index_cond_columns"] = namedColumns(columns, node.IndexCond, node.Recheck)
 		}
 		if node.Index != "" {
 			entry["index"] = node.Index
@@ -345,6 +354,22 @@ func ParsePlan(planJSON string, tableColumns map[string][]string) []map[string]a
 	}
 	walk(top[0].Plan)
 	return nodes
+}
+
+// namedColumns are the columns, of the relation's own, that any of the
+// expressions names, sorted. The expressions themselves are not kept.
+func namedColumns(columns []string, expressions ...string) []string {
+	named := []string{}
+	for _, column := range columns {
+		for _, expression := range expressions {
+			if columnNamed(expression, column) {
+				named = append(named, column)
+				break
+			}
+		}
+	}
+	sort.Strings(named)
+	return named
 }
 
 // columnNamed reports whether expression names column as an identifier:

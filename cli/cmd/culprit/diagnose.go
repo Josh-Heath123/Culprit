@@ -518,6 +518,23 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 		}
 		return map[string]any{}, ""
 
+	case model.HypothesisStatementBudgetExceeded, model.HypothesisMissingIndex:
+		// The database pass (Phase 37 part 3) asks on the entry's own
+		// connection to its database, as database_unreachable does: the
+		// database it reads, as it reads it. The statement probe takes no
+		// input; the walk gives the plan probe the statement's queryid.
+		want := model.StatementProbeID
+		if h.Kind == model.HypothesisMissingIndex {
+			want = model.PlanProbeID
+		}
+		if manifest.ID != want {
+			return nil, "the walk reads statements with " + model.StatementProbeID + " and plans with " + model.PlanProbeID + " only"
+		}
+		if reason := p.mustRunAt(parts["from_component"], "the statements its database runs for it"); reason != "" {
+			return nil, reason
+		}
+		return map[string]any{}, ""
+
 	case model.HypothesisAuthAudience:
 		from, to := parts["from_component"], parts["to_component"]
 		if p.spec.Adapter == extract.AdapterProcess {

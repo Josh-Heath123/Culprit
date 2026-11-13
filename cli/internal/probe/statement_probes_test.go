@@ -118,8 +118,14 @@ func TestAPlanKeepsNoConstant(t *testing.T) {
 	if len(nodes) != 2 || nodes[0]["relation"] != "public.products" || nodes[1]["index"] != "products_category" {
 		t.Fatalf("nodes: %s", out)
 	}
-	if columns := nodes[0]["filter_columns"].([]string); strings.Join(columns, ",") != "category,name" {
-		t.Fatalf("filter columns %v, want category and name (and not category from inside a string)", columns)
+	// Phase 37 part 3: the row-by-row filter and the index condition are kept
+	// apart. name is filtered (category appears in it only inside a string);
+	// category is served by the recheck and the index condition.
+	if columns := nodes[0]["filter_columns"].([]string); strings.Join(columns, ",") != "name" {
+		t.Fatalf("filter columns %v, want name only (category is inside a string there)", columns)
+	}
+	if columns := nodes[0]["index_cond_columns"].([]string); strings.Join(columns, ",") != "category" {
+		t.Fatalf("index condition columns %v, want category", columns)
 	}
 }
 

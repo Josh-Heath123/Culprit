@@ -238,6 +238,10 @@ func TestTheGenericPlanAgainstARealPostgres(t *testing.T) {
 		INSERT INTO products (category, name)
 		  SELECT 'category-' || (i % 200), 'product ' || i FROM generate_series(1, 5000) i;
 		ANALYZE products;
+		CREATE INDEX products_category_name ON products (category, name);
+		CREATE INDEX products_name_covering ON products (name) INCLUDE (category);
+		CREATE INDEX products_partial ON products (category) WHERE name <> '';
+		CREATE INDEX products_lower ON products (lower(name));
 		CREATE ROLE reader LOGIN PASSWORD 'reader-pass' IN ROLE pg_read_all_stats;
 		GRANT SELECT ON products TO reader;`)
 	dsn := "postgresql://reader:reader-pass@" + address + "/shop?sslmode=disable"
@@ -287,6 +291,23 @@ func TestTheGenericPlanAgainstARealPostgres(t *testing.T) {
 	}
 	if after := calls(); after != before {
 		t.Errorf("the planned statement was executed: calls %d before, %d after", before, after)
+	}
+
+	// The live indexes (Phase 37 part 3), read in the same read-only
+	// session: key columns in order, an INCLUDE column left out, and a
+	// partial or expression index not listed, since no column list
+	// describes what it serves.
+	indexes, err := tableIndexes(ctx, witness)
+	if err != nil {
+		t.Fatalf("tableIndexes: %v", err)
+	}
+	var got []string
+	for _, index := range indexes["public.products"] {
+		got = append(got, index.Name+"("+strings.Join(index.Columns, ",")+")")
+	}
+	want := "products_category_name(category,name) products_name_covering(name) products_pkey(id)"
+	if strings.Join(got, " ") != want {
+		t.Errorf("live indexes on products: %v, want %s", got, want)
 	}
 
 	// The guard in sendPlan refuses ';' before anything is sent. Bypass it

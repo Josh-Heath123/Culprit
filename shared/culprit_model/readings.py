@@ -67,6 +67,8 @@ HYPOTHESIS_KINDS: frozenset[str] = frozenset(
         "contract_mismatch",
         "config_missing",
         "latency_budget_exceeded",
+        "statement_budget_exceeded",
+        "missing_index",
     }
 )
 
