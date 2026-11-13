@@ -487,10 +487,12 @@ func (w *Walk) run(ctx context.Context, request Request) string {
 
 // runSet runs one request and records every reading it gave, returning
 // their ids, the request's own first. A latency probe's deadline is the
-// walk's: it never outlives the walk (Phase 36 part 2).
+// walk's: it never outlives the walk (Phase 36 part 2). So is the statement
+// probe's, whose 30-second window is not started when the walk cannot fit
+// it, and is unavailable when the walk's clock cuts it (Phase 37 part 3).
 func (w *Walk) runSet(ctx context.Context, request Request) []string {
 	w.probesRun++
-	if request.ProbeID == model.LatencyProbeID {
+	if request.ProbeID == model.LatencyProbeID || request.ProbeID == model.StatementProbeID {
 		left := w.options.MaxWallClock - w.options.Now().Sub(w.started)
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, left)

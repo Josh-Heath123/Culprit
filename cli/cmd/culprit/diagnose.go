@@ -412,6 +412,7 @@ func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, age
 		Environment: environment, Spec: manifest.Environments[environment],
 		ManifestDir: filepath.Dir(manifestPath), Grants: grants, Ledger: ledger,
 		Runner: capture.ExecRunner{Timeout: timeout}, Reader: capture.PostgresReader{Timeout: timeout},
+		Stats: capture.StatsReader{Timeout: timeout},
 	}
 	deps := probe.Deps{
 		Network: through.Network, HTTP: through.HTTP, Now: time.Now,

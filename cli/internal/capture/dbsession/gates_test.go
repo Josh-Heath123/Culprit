@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -97,5 +98,17 @@ func TestAnUnloadedExtensionIsRecognised(t *testing.T) {
 	}
 	if strings.TrimSpace(string(statsProbeStatement)) == "" {
 		t.Fatal("no version and extension template")
+	}
+}
+
+// TestAWindowThatCannotFitTheDeadlineIsNotStarted: with less than the
+// window and its margin left, nothing is opened or sent. The DSN names a
+// port nothing listens on; dialling it would be an error, not this answer.
+func TestAWindowThatCannotFitTheDeadlineIsNotStarted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	window, err := StatsReader{}.Window(ctx, "postgresql://reader@127.0.0.1:1/shop", true)
+	if err != nil || !strings.Contains(window.Unavailable, "no window was started") {
+		t.Fatalf("%v %q", err, window.Unavailable)
 	}
 }

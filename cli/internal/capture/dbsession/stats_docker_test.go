@@ -354,3 +354,35 @@ func TestNoTextIsKeptBeforePostgres16(t *testing.T) {
 		t.Errorf("the products statement was not timed by queryid: %+v", window.Statements)
 	}
 }
+
+// TestAWindowCutShortIsUnavailable: the caller's deadline falls inside the
+// window; what was measured is not a window, and none is returned.
+func TestAWindowCutShortIsUnavailable(t *testing.T) {
+	if os.Getenv("CULPRIT_DOCKER_TESTS") != "1" {
+		t.Skip("NOT RUN: set CULPRIT_DOCKER_TESTS=1 to run the cut-short window test (needs Docker)")
+	}
+	container, address := postgresWithStatements(t)
+	psql(t, container, "postgres", "postgres", "CREATE ROLE reader LOGIN PASSWORD 'reader-pass' IN ROLE pg_read_all_stats")
+	psql(t, container, "postgres", "postgres", "CREATE EXTENSION pg_stat_statements")
+	dsn := "postgresql://reader:reader-pass@" + address + "/postgres?sslmode=disable"
+	// The window is 1 s and the deadline 8 s, so it starts; the wait then
+	// outlasts the deadline, as a walk's clock running out would.
+	waitPastDeadline := func(ctx context.Context, _ time.Duration) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	var window StatementWindow
+	var err error
+	for attempt := 0; attempt < 20; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		window, err = StatsReader{Span: time.Second, Wait: waitPastDeadline}.Window(ctx, dsn, false)
+		cancel()
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil || !strings.Contains(window.Unavailable, "cut short") || len(window.Statements) != 0 {
+		t.Fatalf("%v %q %d statements", err, window.Unavailable, len(window.Statements))
+	}
+}

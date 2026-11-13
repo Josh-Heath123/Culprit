@@ -577,6 +577,11 @@ type StatsReader struct {
 // part 2: "not configurable, and the walk's deadline cuts it").
 const StatementWindowLength = 30 * time.Second
 
+// WindowMargin is the time a window needs besides its span: the session,
+// the version check and two snapshots. A caller with less than span plus
+// this left gets no window.
+const WindowMargin = 5 * time.Second
+
 // MinimumPlanVersion is PostgreSQL 16: the brief's floor for the plan
 // probe, set when GENERIC_PLAN was the mechanism and kept as ruled on
 // 2026-11-13; force_generic_plan is older, but 16 is what CI holds it to.
@@ -700,6 +705,16 @@ func (r StatsReader) Window(parent context.Context, dsn string, plan bool) (Stat
 	if window == 0 {
 		window = StatementWindowLength
 	}
+	// The caller's deadline (the walk's remaining clock, or the probe's own
+	// timeout) bounds the window: one that cannot fit is not started, and
+	// nothing is sent (Phase 37 part 3).
+	if deadline, bounded := parent.Deadline(); bounded {
+		if left := time.Until(deadline); left < window+WindowMargin {
+			return StatementWindow{Unavailable: fmt.Sprintf(
+				"the caller's deadline leaves %s, less than the %s window and its snapshots, "+
+					"so no window was started", left.Round(time.Second), window)}, nil
+		}
+	}
 	ctx, cancel, conn, err := r.session(parent, dsn, window)
 	if err != nil {
 		return StatementWindow{}, err
@@ -720,7 +735,14 @@ func (r StatsReader) Window(parent context.Context, dsn string, plan bool) (Stat
 		var before map[int64]snapshotRow
 		before, err = readSnapshot(ctx, conn)
 		if err == nil {
-			if err = r.wait(ctx, window); err == nil {
+			if err = r.wait(ctx, window); err != nil && ctx.Err() != nil {
+				// The caller's deadline, or the session's own, fell inside
+				// the window: what was measured is not the window, and a
+				// partial window would be judged as a whole one.
+				result.Unavailable = "the window was cut short by the caller's deadline, so no statement was timed"
+				return result, nil
+			}
+			if err == nil {
 				var after map[int64]snapshotRow
 				after, err = readSnapshot(ctx, conn)
 				if err == nil {
