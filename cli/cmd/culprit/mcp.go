@@ -555,6 +555,18 @@ func (s *mcpServer) probe(ctx context.Context, arguments map[string]any) mcp.Res
 			"refused": refused,
 		}}
 	}
+	// Nothing an agent says reaches SQL (Phase 37's decisions): the plan
+	// probe plans a statement only the walk chooses, by a queryid from a
+	// window it read, so culprit_probe refuses it and any queryid; the
+	// statement probe reads the declared database and takes no input at
+	// all — no address, no statement, no table.
+	if walkOnly := walkOnlyRefusals(probes, inputs); len(walkOnly) > 0 {
+		return mcp.Result{IsError: true, Structured: map[string]any{
+			"error": "refused before anything was sent: through culprit mcp an agent names no " +
+				"statement, and the database probes reach only the database culprit.yaml declares",
+			"refused": walkOnly,
+		}}
+	}
 	// And where they go is culprit.yaml's too (Q23): an address input that
 	// is not an endpoint the environment declares is refused, nothing sent.
 	// A coding agent may be carrying instructions from something it read;
@@ -692,6 +704,35 @@ func declaredEndpoints(spec extract.EnvironmentSpec) (map[hostPort]bool, map[str
 // one written.
 func canonicalHost(host string) string {
 	return strings.ToLower(host)
+}
+
+// walkOnlyInputs are inputs only the walk supplies: culprit_probe refuses
+// them, whatever probe they are given to.
+var walkOnlyInputs = map[string]bool{"queryid": true}
+
+// walkOnlyRefusals is the plan probe, any walk-only input, and any input
+// given to the statement probe.
+func walkOnlyRefusals(probes []string, inputs map[string]any) []probeRefusal {
+	var refused []probeRefusal
+	for _, id := range probes {
+		switch id {
+		case model.PlanProbeID:
+			refused = append(refused, probeRefusal{Probe: id,
+				Reason: "plans a statement only the walk chooses, from a window it read"})
+		case model.StatementProbeID:
+			if len(inputs) > 0 {
+				refused = append(refused, probeRefusal{Probe: id,
+					Reason: "takes no input: it reads the database culprit.yaml declares for its target"})
+			}
+		}
+	}
+	for name := range inputs {
+		if walkOnlyInputs[name] {
+			refused = append(refused, probeRefusal{Probe: strings.Join(probes, ","),
+				Reason: "input " + name + " is supplied only by the walk"})
+		}
+	}
+	return refused
 }
 
 // unboundAddresses is every address input that is not a declared endpoint

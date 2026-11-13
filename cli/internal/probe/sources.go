@@ -46,8 +46,10 @@ type Sources struct {
 	Grants      capability.Grants
 	Ledger      *capability.Ledger
 
-	Runner    capture.Runner
-	Reader    capture.MetadataReader
+	Runner capture.Runner
+	Reader capture.MetadataReader
+	// Stats reads statement statistics and plans (Phase 37 part 2).
+	Stats     capture.StatsReader
 	LookupEnv func(string) (string, bool)
 	Environ   func() []string
 
@@ -253,6 +255,60 @@ func (p *packageSource) Version(ctx context.Context, component, name string) (st
 	}
 	version, found := versions[model.CanonicalComponent(name)]
 	return version, found, nil
+}
+
+// --- statements and plans (Phase 37 part 2) --------------------------
+
+// Statements reads statement statistics and plans through
+// capture.StatsReader, finding the DSN as Database does.
+func (s *Sources) Statements() StatementInspector {
+	s.withDefaults()
+	return &statementSource{db: &databaseSource{s: s}}
+}
+
+type statementSource struct{ db *databaseSource }
+
+// sourceError keeps a reader's failure to its closed kind: never the
+// driver's text beside a DSN.
+func sourceError(err error) error {
+	var dbErr *capture.DBError
+	if errors.As(err, &dbErr) && dbErr.Kind == capture.DBTimedOut {
+		return &UnavailableError{Reason: string(dbErr.Kind)}
+	}
+	return errors.New(capture.SafeReason(err))
+}
+
+func (st *statementSource) Window(ctx context.Context, name string) (capture.StatementWindow, bool, error) {
+	dsn, err := st.db.dsnFor(name)
+	if err != nil {
+		return capture.StatementWindow{}, false, err
+	}
+	// Plans need db.plan.read, which the runner did not check: the window
+	// is db.stats.read's. Without it each statement is judged by the
+	// database's budget alone, and the reading says a table budget went
+	// unjudged.
+	plan := st.db.s.Grants.Has(capability.DBPlanRead)
+	window, err := st.db.s.Stats.Window(ctx, dsn, plan)
+	if err != nil {
+		return capture.StatementWindow{}, false, sourceError(err)
+	}
+	planned := plan && window.TableColumns != nil
+	if planned {
+		exercised(ctx, capability.DBPlanRead)
+	}
+	return window, planned, nil
+}
+
+func (st *statementSource) Plan(ctx context.Context, name string, queryID int64) (capture.StatementPlan, error) {
+	dsn, err := st.db.dsnFor(name)
+	if err != nil {
+		return capture.StatementPlan{}, err
+	}
+	plan, err := st.db.s.Stats.Plan(ctx, dsn, queryID)
+	if err != nil {
+		return capture.StatementPlan{}, sourceError(err)
+	}
+	return plan, nil
 }
 
 // --- database ---------------------------------------------------------

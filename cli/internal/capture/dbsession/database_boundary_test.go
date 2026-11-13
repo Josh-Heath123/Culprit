@@ -9,12 +9,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The database boundary (Phase 37 part 1): one file opens connections, it
@@ -23,11 +25,35 @@ import (
 // TestASessionIsReadOnlyAtTheServer, against a real Postgres.
 
 // countingSession is a querier that counts what reaches it.
-type countingSession struct{ sent []string }
+type countingSession struct {
+	sent []string
+	args [][]any
+}
 
-func (s *countingSession) Query(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
+func (s *countingSession) Query(_ context.Context, sql string, args ...any) (pgx.Rows, error) {
 	s.sent = append(s.sent, sql)
+	s.args = append(s.args, args)
 	return nil, errors.New("counted, not run")
+}
+
+// Prepare counts a protocol Parse, and describes as many parameters as the
+// text's highest $n, as Postgres would.
+func (s *countingSession) Prepare(_ context.Context, name, sql string) (*pgconn.StatementDescription, error) {
+	s.sent = append(s.sent, "PARSE "+name+": "+sql)
+	s.args = append(s.args, nil)
+	highest := 0
+	for _, match := range regexp.MustCompile(`\$([0-9]+)`).FindAllStringSubmatch(sql, -1) {
+		if n, _ := strconv.Atoi(match[1]); n > highest {
+			highest = n
+		}
+	}
+	return &pgconn.StatementDescription{Name: name, SQL: sql, ParamOIDs: make([]uint32, highest)}, nil
+}
+
+func (s *countingSession) Deallocate(_ context.Context, name string) error {
+	s.sent = append(s.sent, "DEALLOCATE "+name)
+	s.args = append(s.args, nil)
+	return nil
 }
 
 // TestOnlyTemplatesReachTheDriver: an arbitrary statement and an EXPLAIN
@@ -53,7 +79,8 @@ func TestOnlyTemplatesReachTheDriver(t *testing.T) {
 	if len(session.sent) != 0 {
 		t.Fatalf("%d refused statements reached the driver: %q", len(session.sent), session.sent)
 	}
-	all := []statement{columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement}
+	all := []statement{columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement,
+		statsProbeStatement, statsSnapshotStatement, statsInfoStatement, planRowStatement}
 	for _, template := range all {
 		_, _ = send(context.Background(), session, template)
 	}
@@ -134,8 +161,10 @@ func TestASecondPgxImporterIsFound(t *testing.T) {
 }
 
 // driverCallsOutsideSend lists, in a Go file, every call of a session's
-// sending methods anywhere but inside send. session.go is the one file
-// that holds a session at all, so this is a property of that file, not a
+// sending methods anywhere but inside send and sendPlan — the plan's one
+// non-template text, which Phase 37's decisions name and sendPlan refuses
+// unless it is a single SELECT or WITH. session.go is the one file that
+// holds a session at all, so this is a property of that file, not a
 // denylist over a package.
 func driverCallsOutsideSend(t *testing.T, path string) []string {
 	t.Helper()
@@ -150,7 +179,8 @@ func driverCallsOutsideSend(t *testing.T, path string) []string {
 	}
 	var found []string
 	for _, declaration := range file.Decls {
-		if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv == nil && function.Name.Name == "send" {
+		if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv == nil &&
+			(function.Name.Name == "send" || function.Name.Name == "sendPlan") {
 			continue
 		}
 		ast.Inspect(declaration, func(node ast.Node) bool {

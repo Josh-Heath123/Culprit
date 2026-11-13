@@ -243,6 +243,42 @@ async def test_a_latency_reading_whose_verdict_its_samples_do_not_give_is_refuse
     assert await _count(db_engine) == 1
 
 
+STATEMENT_MEASURED = {
+    "reset_during_window": False,
+    "statements": [{"queryid": "7", "calls": 5, "total_us": 260_000, "budget_ms": 50}],
+}
+
+
+@pytest.mark.asyncio
+async def test_a_statement_reading_whose_verdict_its_integers_do_not_give_is_refused(
+    client: TestClient, db_engine: AsyncEngine
+) -> None:
+    """Phase 37 part 2: a statement reading carries each statement's calls,
+    total time and budget, so its verdict is re-judged from those integers.
+    260 ms over 5 calls against 50 ms each is over; a reading saying pass or
+    inconclusive is refused, and nothing is stored."""
+
+    def statement(verdict: str) -> dict:
+        return _reading(
+            probe_id="probe.db.statement_budget",
+            target=build("component", name="inventory-db"),
+            verdict=verdict,
+            measured=STATEMENT_MEASURED,
+            expected={"database_budget_ms": 50},
+            reason="judged",
+            grants_used=["db.stats.read"],
+        )
+
+    for wrong in ("pass", "inconclusive"):
+        response = _post(client, {"readings": [statement(wrong)]})
+        assert response.status_code == 422, wrong
+    assert await _count(db_engine) == 0
+
+    response = _post(client, {"readings": [statement("fail")]})
+    assert response.status_code == 201, response.text
+    assert await _count(db_engine) == 1
+
+
 @pytest.mark.asyncio
 async def test_a_latency_reading_without_planned_is_refused(
     client: TestClient, db_engine: AsyncEngine

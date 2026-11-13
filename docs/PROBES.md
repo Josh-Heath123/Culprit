@@ -93,6 +93,8 @@ from is the next section.
 | `probe.auth.propagation` | `url`, `token` | interrogate | `net.http.outbound` | INTENT | the downstream answers 401 or 403 |
 | `probe.db.connect` (v2) | *none* — the target names the database | inspect | `db.metadata.read` | CONFIGURED | a read-only connection is refused |
 | `probe.db.schema_conformance` (v2) | a `schema:` target, or `table`, `schema`; optional `expect_columns` | inspect | `db.metadata.read` | INTENT (`columns`) | the live table lacks a column the declaration maps, or does not exist |
+| `probe.db.statement_budget` | *none* — the target names the database | inspect | `db.stats.read`; `db.plan.read` to judge by a table's budget | INTENT (`query_mean_ms_max`) | a statement's time over a 30-second window, against its calls, is over its budget (below) |
+| `probe.db.plan` | `queryid` — supplied by the walk only | inspect | `db.plan.read` | *none* — evidence | never: it reads a generic plan; inconclusive without one (below) |
 | `probe.config.present` (v2) | `key`, or a `config:` target | inspect | `config.read.names` | INTENT (`required`) | a key the code reads with no default is not set |
 | `probe.dep.version` (v2) | `package`, or a `dep:` target; optional `expect_version` | inspect | `repo.read`, plus the packages command on `process.exec.allowlist` | INTENT (`version`) | the installed version differs from a declared **exact pin**, or is absent |
 | `probe.edge.impedance` | *none* | observe | `telemetry.metrics.read` | *none* | the connection's latency or error rate is ≥ 3 standard deviations from its own history |
@@ -207,6 +209,56 @@ The slow reading's setup and server times then tell the connection from
 the component (LIMITS, "Latency in the walk"). The walk's remaining wall
 clock is the probe's deadline. `culprit verify` runs it again, once per
 round for both of a route's readings.
+
+## Statements and plans — `probe.db.statement_budget`, `probe.db.plan`
+
+Phase 37 part 2. A budget on a statement is `query_mean_ms_max` in
+`culprit.yaml`'s `budgets:`, in whole milliseconds, on a table
+(`schema:<database>/<namespace>.<table>`, no column) or on the database's
+component — a component of kind `database` the file declares.
+
+**The statement probe** takes two snapshots of the database's
+`pg_stat_statements`, 30 seconds apart, in one read-only session — the
+window is fixed, and the walk's deadline cuts it. For each normalised
+statement called in the window it has the change in calls and in total
+execution time, converted once to whole microseconds. Only this database's
+statements are read (its `dbid`), never those of the role Culprit connects
+as. The rule is integer comparison:
+
+- **fail** when a statement's `total_us > budget_ms × 1000 × calls`;
+- **pass** when every statement with a budget is within it;
+- **inconclusive** when the statistics were reset, or a statement evicted,
+  during the window, or when no call to a budgeted statement fell in it —
+  and when the database has no `pg_stat_statements`, saying so.
+
+A statement is judged by the strictest budget of the tables its plan
+reads, otherwise by the database's budget. Which tables it reads takes a
+plan, so with `db.plan.read` granted the probe plans each statement in the
+same session; without it only the database's budget applies, a table's
+stays unjudged, and the reading says so. The reading keeps at most 20
+statements, those over budget first, then by time in the window, and
+counts the rest. A statement's text is kept only when it begins with
+`SELECT`, `WITH`, `INSERT`, `UPDATE`, `DELETE` or `MERGE` — the statements
+Postgres stores with every constant replaced by `$n`; any other is listed
+by `queryid` with "text not kept". The verdict is re-judged from the
+reading's integers in Go, in Python and at `POST /readings`.
+
+**The plan probe** asks the planner how it would run one statement, named
+by its `queryid` from the database's own statistics — never by text a
+caller gives. Only a `SELECT` or `WITH` is planned; anything else,
+including text beginning with a comment, is inconclusive. The plan is
+generic: the statement is parsed as a prepared statement and explained,
+under `plan_cache_mode = force_generic_plan`, without its parameters'
+values, and nothing is executed. The reading keeps each node's type,
+relation, index, estimated rows and cost, and the relation's own column
+names its filter mentions — never the filter or a constant. It has no
+expectation: a sequential scan of a small table is normal, so a plan is
+evidence for the walk (Phase 37 part 3), not a finding. Before PostgreSQL
+16 it is inconclusive, saying so.
+
+Under `culprit mcp`, `culprit_probe` refuses `probe.db.plan` and any
+`queryid`, and any input at all to `probe.db.statement_budget`, before
+anything is sent: an agent names no statement, table or address.
 
 ## What each probe rules out — `discriminates`
 

@@ -19,6 +19,7 @@ DEMO = Path(__file__).parents[2] / "demo-services" / "culprit.yaml"
 #: Built, never hand-formatted (scripts/tests/test_subject_construction.py).
 ITEMS = build("http", component="shop", method="GET", path="/items")
 READY = build("http", component="inventory-service", method="GET", path="/ready")
+PRODUCTS = build("schema", database="inventory-db", namespace="public", table="products")
 
 BASE = """
 version: 1
@@ -39,7 +40,8 @@ def _manifest(predicate: str, value: object) -> str:
 def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
     manifest = load_manifest(DEMO.read_text(encoding="utf-8"))
     assert [(b.subject, b.predicate, b.value) for b in manifest.budgets] == [
-        (READY, "latency_p95_ms", 300)
+        (READY, "latency_p95_ms", 300),
+        (PRODUCTS, "query_mean_ms_max", 20),
     ]
     exported = dump_manifest(manifest)
     again = load_manifest(exported)
@@ -186,7 +188,7 @@ version: 1
 components:
   - name: shop
 environments:
-  local: {adapter: process}
+  local: {adapter: process, components: {shop: {}}}
 isolation:
   max_probes: 30
   max_wall_clock: 4m
@@ -263,7 +265,9 @@ def test_a_tag_that_is_not_plain_data_is_refused(tagged: str) -> None:
     manifest is composed and built as plain data, so no tag constructs an
     object, whatever is ever registered on a loader."""
     with pytest.raises(ManifestError, match="not plain data"):
-        load_manifest(f"version: 1\ncomponents:\n  - name: shop\nx-anything: {tagged}\n")
+        load_manifest(
+            f"version: 1\ninvariants:\n  - subject: s\n    predicate: p\n    value: {tagged}\n"
+        )
 
 
 def test_the_manifest_loader_never_hands_pyyaml_a_document_to_construct() -> None:

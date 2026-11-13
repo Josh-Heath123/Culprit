@@ -391,6 +391,9 @@ type wire struct {
 	// (found by dsn_env). Only tests set it; the grant that gates it is
 	// still the runner's, on the probe's manifest.
 	Database probe.DatabaseInspector
+	// Statements stands in for the environment's statement source, as
+	// Database does; only tests set it.
+	Statements probe.StatementInspector
 }
 
 func realWire(timeout time.Duration) wire {
@@ -413,10 +416,13 @@ func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, age
 	deps := probe.Deps{
 		Network: through.Network, HTTP: through.HTTP, Now: time.Now,
 		Database: sources.Database(), Config: sources.Config(), Packages: sources.Packages(),
-		Secrets: sources.Secrets(),
+		Secrets: sources.Secrets(), Statements: sources.Statements(),
 	}
 	if through.Database != nil {
 		deps.Database = through.Database
+	}
+	if through.Statements != nil {
+		deps.Statements = through.Statements
 	}
 	return probe.NewRunner(probe.Options{
 		Catalogue: catalogue, Ledger: ledger, AgentID: agentID,

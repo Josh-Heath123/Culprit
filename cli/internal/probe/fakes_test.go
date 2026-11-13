@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net"
 	"time"
+
+	"github.com/josh-heath123/culprit/cli/internal/capture"
 )
 
 // Fakes for every seam in Deps.
@@ -96,6 +98,36 @@ func (f fakeDatabase) Columns(
 ) ([]TableColumn, error) {
 	return f.columns, f.columnsErr
 }
+
+// fakeStatements is a StatementInspector with a fixed answer (Phase 37
+// part 2), and counts what reaches it.
+type fakeStatements struct {
+	window  capture.StatementWindow
+	planned bool
+	plan    capture.StatementPlan
+	err     error
+	calls   *int
+}
+
+func (f fakeStatements) Window(context.Context, string) (capture.StatementWindow, bool, error) {
+	if f.calls != nil {
+		*f.calls++
+	}
+	return f.window, f.planned, f.err
+}
+
+func (f fakeStatements) Plan(context.Context, string, int64) (capture.StatementPlan, error) {
+	if f.calls != nil {
+		*f.calls++
+	}
+	return f.plan, f.err
+}
+
+// seqScanPlan is a generic plan of products filtering category, as
+// Postgres 16 gives it, with the parameter left in the filter.
+const seqScanPlan = `[{"Plan": {"Node Type": "Seq Scan", "Relation Name": "products", "Alias": "products",
+  "Startup Cost": 0.00, "Total Cost": 1985.00, "Plan Rows": 250, "Plan Width": 40,
+  "Filter": "(category = $1)"}}]`
 
 type fakeMetrics struct {
 	sample ImpedanceSample

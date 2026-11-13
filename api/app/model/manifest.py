@@ -42,13 +42,18 @@ Loading is pure — `load_manifest` parses a string. The only I/O is
 `read_manifest`, which is a one-line convenience for the CLI entry point.
 """
 
-import base64
+import datetime
+import functools
+import math
 import re
+import types
+import typing
 from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any
 
 import yaml
+from culprit_model import subjects
 from culprit_model.capabilities import ALLOWLISTED, Capability
 from culprit_model.graph import (
     Component,
@@ -59,7 +64,12 @@ from culprit_model.graph import (
     DeclaredBy,
     SystemGraph,
 )
-from culprit_model.latency import BUDGET_MERGE_PROBLEM, Budget, budget_literal_problem
+from culprit_model.latency import (
+    BUDGET_MERGE_PROBLEM,
+    STATEMENT_BUDGET_PREDICATES,
+    Budget,
+    budget_literal_problem,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -183,6 +193,41 @@ def _reject_credentials(node: Any, path: str = "") -> None:
                 )
 
 
+#: cli/internal/model/divergence.go's severities.
+_SEVERITIES = frozenset({"breaks_request_path", "degrades", "cosmetic", "unknown"})
+_GO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
+
+def _is_go_date(text: str) -> bool:
+    """Go's time.Parse("2006-01-02", text): two-digit month and day."""
+    if _GO_DATE.fullmatch(text) is None:
+        return False
+    try:
+        datetime.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _check_subject(where: str, subject: str) -> None:
+    """cli/internal/extract/policy.go's checkSubject: a canonical subject
+    URI, or a prefix pattern ending in `*` that names at least a kind. The
+    subject is not repeated in the message."""
+    if not subject.strip():
+        raise ValueError(f"{where}: `subject` is required")
+    if subject.endswith("*"):
+        if ":" not in subject[:-1]:
+            raise ValueError(f"{where}: a pattern must name at least a subject kind and component")
+        return
+    try:
+        kind, parts = subjects.parse(subject)
+        rebuilt = subjects.build(kind, **parts)
+    except subjects.SubjectError:
+        raise ValueError(f"{where}: not a subject URI") from None
+    if rebuilt != subject:
+        raise ValueError(f"{where}: not in canonical form")
+
+
 class ConnectionSpec(BaseModel):
     """One outgoing edge, as written in the manifest."""
 
@@ -282,12 +327,20 @@ class DatabaseEnvSpec(BaseModel):
 class EndpointEnvSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    host: str = Field(pattern=r"^[^/@:\s]+$")
+    host: str
     port: int = Field(ge=1, le=65535)
     tls: bool = False
     #: Phase 32: the path the isolation walk requests at this component.
     #: Go's `validateEndpoint` rule: a path, no query string or credentials.
     health_path: str = Field(default="", pattern=r"^(/[^ @?#]*)?$")
+
+    @field_validator("host")
+    @classmethod
+    def _a_bare_hostname(cls, host: str) -> str:
+        """Go's validateEndpoint: not blank, and no `/`, `@`, `:` or space."""
+        if not host.strip() or any(char in host for char in "/@: "):
+            raise ValueError("a bare hostname, with no scheme, port or credentials")
+        return host
 
 
 class EnvironmentComponentSpec(BaseModel):
@@ -522,6 +575,117 @@ class Manifest(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _check_environments_as_go_does(self) -> "Manifest":
+        """cli/internal/extract/environments.go's rules, which this model did
+        not hold until the differential corpus found them (Q28): a manifest
+        `culprit env capture` refuses is refused here too."""
+        known = {component.name for component in self.components}
+        for name, spec in (self.environments or {}).items():
+            where = f"environments.{name}"
+            if not name.strip() or any(char in name for char in " /\\"):
+                raise ValueError(
+                    f"{where}: an environment name may not be blank or contain spaces or slashes"
+                )
+            allowlist = spec.grants.get(Capability("process.exec.allowlist"), ())
+            for command, argv in spec.exec.items():
+                if not argv or not argv[0].strip():
+                    raise ValueError(f"{where}.exec.{command}: an empty command")
+                if isinstance(allowlist, bool) or command not in allowlist:
+                    raise ValueError(
+                        f"{where}.exec.{command}: declared but not in "
+                        "grants.process.exec.allowlist, "
+                        "so it can never run"
+                    )
+            if not spec.components:
+                raise ValueError(f"{where}.components: name at least one component to capture")
+            if spec.adapter == "process" and len(spec.components) != 1:
+                raise ValueError(
+                    f"{where}: the process adapter captures one component's environment; name one"
+                )
+            for component, settings in spec.components.items():
+                at = f"{where}.components.{component}"
+                for field, command in (
+                    ("env_command", settings.env_command),
+                    ("packages", settings.packages),
+                ):
+                    if command and command not in spec.exec:
+                        raise ValueError(
+                            f"{at}.{field}: names a command not declared under {where}.exec"
+                        )
+                if spec.adapter == "exec" and not settings.env_command:
+                    raise ValueError(
+                        f"{at}.env_command: the exec adapter reads a component's "
+                        "environment from a command"
+                    )
+                for callee in settings.tokens:
+                    if callee not in known:
+                        raise ValueError(f"{at}.tokens: {callee!r} is not a component in this file")
+            for component in spec.endpoints:
+                if component not in known:
+                    raise ValueError(f"{where}.endpoints.{component}: not a component in this file")
+        return self
+
+    @model_validator(mode="after")
+    def _check_policy_as_go_does(self) -> "Manifest":
+        """cli/internal/extract/policy.go's rules for invariants, suppressions
+        and severity overrides (Q28): reasons and whys that are only spaces
+        are missing, a subject must parse and be canonical (or be a prefix
+        pattern naming at least a kind), a date is YYYY-MM-DD."""
+        for index, invariant in enumerate(self.invariants):
+            where = f"invariants[{index}]"
+            if not invariant.why.strip():
+                raise ValueError(f"{where}: `why` is required")
+            if not invariant.predicate.strip():
+                raise ValueError(f"{where}: `predicate` is required")
+            _check_subject(where, invariant.subject)
+        for index, suppression in enumerate(self.suppress):
+            where = f"suppress[{index}]"
+            if not suppression.reason.strip():
+                raise ValueError(f"{where}: `reason` is required")
+            _check_subject(where, suppression.subject)
+            if suppression.expires and not _is_go_date(suppression.expires):
+                raise ValueError(f"{where}: `expires` is not a YYYY-MM-DD date")
+        for index, override in enumerate(self.severity_overrides):
+            where = f"severity_overrides[{index}]"
+            if not override.reason.strip():
+                raise ValueError(f"{where}: `reason` is required")
+            if override.severity not in _SEVERITIES:
+                raise ValueError(f"{where}: severity is not one of {sorted(_SEVERITIES)}")
+            _check_subject(where, override.subject)
+        return self
+
+    @model_validator(mode="after")
+    def _check_statement_budgets(self) -> "Manifest":
+        """A `query_mean_ms_max` budget (Phase 37 part 2) is on a table —
+        `schema:<database>/<ns>.<table>`, no column — or on the database's
+        component, and either way on a component this file declares as a
+        database. cli/internal/extract/budgets.go holds the same rule."""
+        databases = {c.name for c in self.components if c.kind == ComponentKind.DATABASE}
+        for index, budget in enumerate(self.budgets):
+            if budget.predicate not in STATEMENT_BUDGET_PREDICATES:
+                continue
+            where = f"budgets[{index}]"
+            kind, parts = subjects.parse(budget.subject)
+            if kind == subjects.SubjectKind.SCHEMA:
+                if parts.get("column"):
+                    raise ValueError(
+                        f"{where}: a statement budget is on a table or a database, not on a column"
+                    )
+                database = parts["database"]
+            elif kind == subjects.SubjectKind.COMPONENT:
+                database = parts["name"]
+            else:
+                raise ValueError(
+                    f"{where}: a statement budget is on a table "
+                    "(schema:<database>/<namespace>.<table>) or on a database component"
+                )
+            if database not in databases:
+                raise ValueError(
+                    f"{where}: {database} is not a component of kind database in this file"
+                )
+        return self
+
+    @model_validator(mode="after")
     def _check_budgets_are_not_repeated(self) -> "Manifest":
         """One budget per subject and predicate in a file, as the Go loader
         holds: two would be one source saying two things, and one of them
@@ -662,166 +826,312 @@ class Manifest(BaseModel):
 
 
 class YAML12Loader(yaml.SafeLoader):
-    """PyYAML's safe loader, used only to *compose* — to parse and to resolve
-    each plain scalar's tag as the Go loader's yaml.v3 does (Phase 37 part
-    1 close-out, PERFORMANCE_PLAN.md end of Phase 37: "the two manifest
-    readers read one schema").
+    """PyYAML's safe loader, used only to *compose*: to parse, and to give
+    each plain scalar the tag the Go loader's yaml.v3 gives it.
 
-    PyYAML implements YAML 1.1: `yes`, `no`, `on`, `off` are booleans, a
-    date is a date, and `0o454` and `1e3` are strings. yaml.v3 reads YAML
-    1.2's core schema with Go's number parsing: only `true`/`false` (in
-    three cases) are booleans, dates are left as written, and `0o454`,
-    `0454` and `0x1F` are integers (Go's base-0 rules, underscores
-    allowed). Each case is in
-    shared/tests/manifest_scalar_conformance.json, which the Go loader is
-    held to as well.
+    PyYAML implements YAML 1.1, where `yes` is a boolean, a date is a date
+    and `0o454` is a string. yaml.v3 reads YAML 1.2's core schema with Go's
+    number parsing. `resolve` below ports yaml.v3's own resolver
+    (`resolve.go`), branch for branch, so both readers see one tag for one
+    scalar. The differential corpus (shared/tests/manifest_corpus.json)
+    holds the two equal across every field and every scalar form.
 
-    Nothing is constructed by PyYAML: `_plain_data` builds the manifest's
-    values from the composed nodes, and knows only plain data's tags, so no
-    tag can make an object (CodeQL py/unsafe-deserialization on the close-out
-    pull request: a loader passed to `yaml.load` is safe only for as long as
-    nobody registers a constructor on it).
+    Nothing is constructed by PyYAML: `_typed` builds the manifest's values
+    from the composed nodes and knows only plain data's tags, so no tag can
+    make an object (CodeQL py/unsafe-deserialization, Phase 37 part 1
+    close-out).
     """
 
-    # Start from no implicit resolvers at all: none of YAML 1.1's survive.
-    yaml_implicit_resolvers: dict = {}  # noqa: RUF012 — PyYAML's own class attribute
-
-
-_YAML12_BOOL = re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$")
-_YAML12_NULL = re.compile(r"^(?:~|null|Null|NULL|)$")
-#: Anything Go's ParseInt (base 0, underscores removed) or ParseFloat
-#: might read; the constructor decides which, as yaml.v3 does.
-_YAML12_NUMBER = re.compile(
-    r"^[-+]?(?:0[bB][01_]+|0[oO][0-7_]+|0[xX][0-9a-fA-F_]+|[0-9][0-9_]*"
-    r"|(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|\.(?:inf|Inf|INF))$"
-    r"|^\.(?:nan|NaN|NAN)$"
-)
-
-YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:bool", _YAML12_BOOL, list("tTfF"))
-YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:null", _YAML12_NULL, ["~", "n", "N", ""])
-YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:float", _YAML12_NUMBER, list("-+0123456789."))
-YAML12Loader.add_implicit_resolver("tag:yaml.org,2002:merge", re.compile(r"^(?:<<)$"), ["<"])
-
-
-def _go_parse_int(text: str) -> int | None:
-    """Go's strconv.ParseInt(text, 0, 64) after yaml.v3 removes
-    underscores: a sign, then 0b/0o/0x, a leading-zero octal, or decimal."""
-    digits = text.replace("_", "")
-    sign = -1 if digits.startswith("-") else 1
-    digits = digits.lstrip("+-")
-    try:
-        if digits[:2].lower() == "0b":
-            value = int(digits[2:], 2)
-        elif digits[:2].lower() == "0o":
-            value = int(digits[2:], 8)
-        elif digits[:2].lower() == "0x":
-            value = int(digits[2:], 16)
-        elif len(digits) > 1 and digits.startswith("0"):
-            value = int(digits[1:], 8)
-        else:
-            value = int(digits, 10)
-    except ValueError:
-        return None
-    value *= sign
-    return value if -(2**63) <= value < 2**63 else None
-
-
-def _yaml12_number(text: str) -> int | float:
-    as_int = _go_parse_int(text)
-    if as_int is not None:
-        return as_int
-    lowered = text.lower()
-    if lowered in (".inf", "+.inf"):
-        return float("inf")
-    if lowered == "-.inf":
-        return float("-inf")
-    if lowered == ".nan":
-        return float("nan")
-    # A float stays a float, as yaml.v3 gives it into an untyped field;
-    # an integer field takes a whole one (`max_probes: 1e3` is 1000 to both).
-    return float(text.replace("_", ""))
+    def resolve(self, kind, value, implicit):  # type: ignore[override]
+        if kind is yaml.ScalarNode:
+            if implicit[0]:
+                return _TAG + _v3_resolve(value)[0]
+            return _TAG + "str"
+        return super().resolve(kind, value, implicit)
 
 
 _TAG = "tag:yaml.org,2002:"
 
+#: yaml.v3's resolveMap: the scalars it reads by lookup alone.
+_V3_MAP: dict[str, tuple[str, object]] = {
+    **{word: ("bool", True) for word in ("true", "True", "TRUE")},
+    **{word: ("bool", False) for word in ("false", "False", "FALSE")},
+    **{word: ("null", None) for word in ("", "~", "null", "Null", "NULL")},
+    **{word: ("float", math.nan) for word in (".nan", ".NaN", ".NAN")},
+    **{word: ("float", math.inf) for word in (".inf", ".Inf", ".INF", "+.inf", "+.Inf", "+.INF")},
+    **{word: ("float", -math.inf) for word in ("-.inf", "-.Inf", "-.INF")},
+    "<<": ("merge", "<<"),
+}
+#: Go's ParseInt/ParseUint with base 0, once yaml.v3 has removed every `_`.
+_GO_INT = re.compile(r"([+-]?)(0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|0[0-7]*|[1-9][0-9]*)")
+#: yaml.v3's yamlStyleFloat, and the decimal floats Go's ParseFloat reads.
+_YAML_STYLE_FLOAT = re.compile(r"[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?")
+#: yaml.v3 tries a timestamp only for text that starts with four digits and
+#: a dash. Such text is never a number, and a timestamp is text here (Q28),
+#: so it is text either way.
+_DATE_LIKE = re.compile(r"[0-9]{4}-")
 
-def _refuse(node: yaml.Node, problem: str) -> yaml.constructor.ConstructorError:
-    return yaml.constructor.ConstructorError(None, None, problem, node.start_mark)
 
-
-def _scalar(node: yaml.ScalarNode) -> object:
-    """A scalar's value, for the tags of plain data and nothing else."""
-    tag, text = node.tag, node.value
-    if tag == _TAG + "str":
-        return text
-    if tag == _TAG + "null":
+def _go_int(text: str, *, signed: bool) -> int | None:
+    match = _GO_INT.fullmatch(text)
+    if match is None or (match.group(1) and not signed):
         return None
-    if tag == _TAG + "bool":
-        return text.lower() == "true"
-    if tag in (_TAG + "int", _TAG + "float"):
-        try:
-            return _yaml12_number(text)
-        except ValueError:
-            raise _refuse(node, f"{text!r} is not a number") from None
-    if tag == _TAG + "binary":
-        try:
-            return base64.decodebytes(text.encode("ascii"))
-        except (ValueError, UnicodeEncodeError):
-            raise _refuse(node, "a !!binary value that is not base64") from None
-    raise _refuse(node, f"a value tagged {tag} is not plain data")
+    sign, digits = match.groups()
+    prefix = digits[:2].lower()
+    if prefix in ("0x", "0b", "0o"):
+        value = int(digits[2:], {"0x": 16, "0b": 2, "0o": 8}[prefix])
+    elif len(digits) > 1 and digits[0] == "0":
+        value = int(digits[1:], 8)
+    else:
+        value = int(digits, 10)
+    value = -value if sign == "-" else value
+    if signed:
+        return value if -(2**63) <= value < 2**63 else None
+    return value if value < 2**64 else None
 
 
-def _pairs(node: yaml.MappingNode) -> list[tuple[yaml.Node, yaml.Node]]:
-    """A mapping's key/value pairs with merges (`<<`) flattened in, in the
-    order PyYAML's own flatten_mapping gives them, so a later pair wins."""
-    merged: list[tuple[yaml.Node, yaml.Node]] = []
-    own: list[tuple[yaml.Node, yaml.Node]] = []
+def _go_float(text: str) -> float | None:
+    """Go's ParseFloat for the decimal forms yaml.v3 hands it; a value out
+    of range is an error there, not an infinity."""
+    if _YAML_STYLE_FLOAT.fullmatch(text) is None:
+        return None
+    value = float(text)
+    return None if math.isinf(value) else value
+
+
+def _v3_resolve(text: str) -> tuple[str, object]:
+    """yaml.v3's resolve("", text): the short tag and value of a plain
+    scalar, by the first character's hint, as resolve.go decides it."""
+    if text in _V3_MAP:
+        return _V3_MAP[text]
+    hint = text[0]
+    if hint == ".":
+        value = _go_float(text)
+        return ("float", value) if value is not None else ("str", text)
+    if hint in "+-0123456789":
+        if _DATE_LIKE.match(text):
+            return "str", text
+        plain = text.replace("_", "")
+        for signed in (True, False):
+            number = _go_int(plain, signed=signed)
+            if number is not None:
+                return "int", number
+        value = _go_float(plain)
+        if value is not None:
+            return "float", value
+    return "str", text
+
+
+def _refuse(node: yaml.Node, problem: str) -> "ManifestError":
+    """A refusal naming the field and the line, never the value."""
+    return ManifestError(f"{problem} (line {node.start_mark.line + 1})")
+
+
+def _scalar(node: yaml.ScalarNode, path: str) -> tuple[str, object]:
+    """A scalar's kind (str, int, float, bool, null) and value, as yaml.v3
+    decodes it: an explicit tag must agree with what the text resolves to
+    (`!!float` also takes an integer); `!!str` takes any text. Any other
+    tag — `!!binary`, `!!timestamp`, `!!python/...` — is not plain data.
+    The value is never put in a message (invariant 7)."""
+    short = node.tag[len(_TAG) :] if node.tag.startswith(_TAG) else None
+    if short == "str":
+        return "str", node.value
+    if short not in ("int", "float", "bool", "null"):
+        raise _refuse(node, f"{path}: a value tagged {node.tag} is not plain data")
+    kind, value = _v3_resolve(node.value)
+    if short == "float" and kind == "int":
+        return "float", float(value)  # type: ignore[arg-type]
+    if kind != short:
+        raise _refuse(node, f"{path}: the text cannot be read as !!{short}")
+    return kind, value
+
+
+def _repeated_key(node: yaml.MappingNode, path: str) -> None:
+    """yaml.v3's uniqueKeys: no mapping holds two keys of one kind and text."""
+    seen: set[tuple[type, str]] = set()
+    for key, _ in node.value:
+        identity = (type(key), key.value if isinstance(key, yaml.ScalarNode) else "")
+        if identity in seen:
+            raise _refuse(key, f"{path or '<root>'}: a key is written twice in one mapping")
+        seen.add(identity)
+
+
+def _pairs(node: yaml.MappingNode, path: str) -> list[tuple[str, yaml.Node, yaml.Node]]:
+    """A mapping's pairs in yaml.v3's order — its own keys, then what each
+    merge (`<<`) brings in, a merged mapping's own keys before its merges —
+    where the first to set a key wins. Every key must be text."""
+    _repeated_key(node, path)
+    own: list[tuple[str, yaml.Node, yaml.Node]] = []
+    merges: list[yaml.Node] = []
     for key, value in node.value:
-        if key.tag != _TAG + "merge":
-            own.append((key, value))
-        elif isinstance(value, yaml.MappingNode):
-            merged.extend(_pairs(value))
-        elif isinstance(value, yaml.SequenceNode):
-            each = []
-            for item in value.value:
-                if not isinstance(item, yaml.MappingNode):
-                    raise _refuse(item, "a merge (<<) of something that is not a mapping")
-                each.append(_pairs(item))
-            for pairs in reversed(each):
-                merged.extend(pairs)
+        if isinstance(key, yaml.ScalarNode) and key.tag == _TAG + "merge":
+            merges.append(value)
+            continue
+        if not isinstance(key, yaml.ScalarNode) or _scalar(key, path)[0] != "str":
+            raise _refuse(key, f"{path or '<root>'}: every key is text")
+        own.append((key.value, key, value))
+    for merged in merges:
+        items = merged.value if isinstance(merged, yaml.SequenceNode) else [merged]
+        for item in items:
+            if not isinstance(item, yaml.MappingNode):
+                raise _refuse(item, f"{path or '<root>'}: a merge (<<) of something not a mapping")
+            own.extend(_pairs(item, path))
+    first: dict[str, tuple[str, yaml.Node, yaml.Node]] = {}
+    for entry in own:
+        first.setdefault(entry[0], entry)
+    return list(first.values())
+
+
+#: What one manifest field holds (Q28: one type per field).
+Schema = tuple[str, Any]
+
+
+def _schema_of(annotation: Any) -> Schema:
+    """The type a model field holds, as the corpus and the Go loader see it:
+    `str`, `int`, `bool`, `any`, `grant` (true, false or a list of text),
+    a list, a map from text, or a struct of named fields."""
+    origin, args = typing.get_origin(annotation), typing.get_args(annotation)
+    if origin is typing.Annotated:
+        return _schema_of(args[0])
+    if origin in (typing.Union, types.UnionType):
+        present = [arg for arg in args if arg is not type(None)]
+        if len(present) == 1:
+            return _schema_of(present[0])
+        if set(map(typing.get_origin, present)) | set(present) >= {bool, tuple}:
+            return ("grant", None)
+        raise TypeError(f"no manifest type for {annotation}")
+    if origin in (tuple, list):
+        return ("list", _schema_of(args[0]))
+    if origin is dict:
+        return ("map", _schema_of(args[1]))
+    if annotation is Any:
+        return ("any", None)
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return (
+            "struct",
+            {
+                (field.alias or name): _schema_of(field.annotation)
+                for name, field in annotation.model_fields.items()
+            },
+        )
+    if isinstance(annotation, type) and issubclass(annotation, bool):
+        return ("bool", None)
+    if isinstance(annotation, type) and issubclass(annotation, int):
+        return ("int", None)
+    if isinstance(annotation, type) and issubclass(annotation, str):
+        return ("str", None)  # str, and every str enum
+    raise TypeError(f"no manifest type for {annotation}")
+
+
+@functools.cache
+def _manifest_type() -> Schema:
+    return _schema_of(Manifest)
+
+
+def manifest_schema() -> dict[str, str]:
+    """Every field's path and type, flat: what shared/tests/manifest_schema.json
+    holds, and what the Go loader's own derivation is held to."""
+    flat: dict[str, str] = {}
+
+    def walk(schema: Schema, path: str) -> None:
+        kind, inner = schema
+        if kind == "struct":
+            for name, field in inner.items():
+                walk(field, f"{path}.{name}" if path else name)
+        elif kind == "list":
+            walk(inner, path + "[]")
+        elif kind == "map":
+            walk(inner, path + "{}")
         else:
-            raise _refuse(value, "a merge (<<) of something that is not a mapping")
-    return merged + own
+            flat[path] = kind
+
+    walk(_manifest_type(), "")
+    return flat
 
 
-def _plain_data(node: yaml.Node | None, memo: dict[int, object] | None = None) -> object:
-    """The composed document as dicts, lists and scalars. An alias is the
-    same node composed once, so it becomes the same object."""
-    if node is None:
-        return None
+_KIND_NAMES = {"str": "text", "int": "an integer", "bool": "true or false"}
+
+
+def _typed(node: yaml.Node, schema: Schema, path: str) -> object:
+    """The node as plain data of the type the field holds, or refused,
+    naming the field. Null and empty are refused everywhere: leaving a key
+    out is how a manifest says "not set" (Q28)."""
+    kind, inner = schema
+    where = path or "<root>"
     if isinstance(node, yaml.ScalarNode):
-        return _scalar(node)
-    memo = {} if memo is None else memo
-    if id(node) in memo:
-        return memo[id(node)]
-    if isinstance(node, yaml.SequenceNode) and node.tag == _TAG + "seq":
-        items: list[object] = []
-        memo[id(node)] = items
-        items.extend(_plain_data(item, memo) for item in node.value)
-        return items
-    if isinstance(node, yaml.MappingNode) and node.tag == _TAG + "map":
-        mapping: dict[object, object] = {}
-        memo[id(node)] = mapping
-        for key, value in _pairs(node):
-            plain_key = _plain_data(key, memo)
-            if isinstance(plain_key, (dict, list)):
-                raise _refuse(key, "a mapping key that is a mapping or a list")
-            mapping[plain_key] = _plain_data(value, memo)
-        return mapping
-    raise _refuse(node, f"a value tagged {node.tag} is not plain data")
+        found, value = _scalar(node, where)
+        if found == "null":
+            raise _refuse(node, f"{where}: null or empty; leave the key out to leave it unset")
+        if kind == "grant":
+            kind = "bool"
+        if kind == "any":
+            if found == "int" and not -(2**63) <= value < 2**63:  # type: ignore[operator]
+                raise _refuse(node, f"{where}: an integer out of range")
+            return value
+        if kind in _KIND_NAMES:
+            if found != kind:
+                raise _refuse(node, f"{where}: expected {_KIND_NAMES[kind]}, written as {found}")
+            if kind == "int" and not -(2**63) <= value < 2**63:  # type: ignore[operator]
+                raise _refuse(node, f"{where}: an integer out of range")
+            return value
+        raise _refuse(
+            node, f"{where}: expected a {'mapping' if kind in ('struct', 'map') else 'list'}"
+        )
+    if isinstance(node, yaml.SequenceNode):
+        if node.tag != _TAG + "seq":
+            raise _refuse(node, f"{where}: a value tagged {node.tag} is not plain data")
+        if kind == "grant":
+            return [
+                _typed(item, ("str", None), f"{path}[{i}]") for i, item in enumerate(node.value)
+            ]
+        if kind not in ("list", "any"):
+            raise _refuse(node, f"{where}: a list where the field is not one")
+        element = inner if kind == "list" else ("any", None)
+        return [_typed(item, element, f"{path}[{i}]") for i, item in enumerate(node.value)]
+    if isinstance(node, yaml.MappingNode):
+        if node.tag != _TAG + "map":
+            raise _refuse(node, f"{where}: a value tagged {node.tag} is not plain data")
+        if kind not in ("struct", "map", "any"):
+            raise _refuse(node, f"{where}: a mapping where the field is not one")
+        out: dict[str, object] = {}
+        for name, key, value in _pairs(node, path):
+            field_path = f"{path}.{name}" if path else name
+            if kind == "struct":
+                if name not in inner:
+                    raise _refuse(key, f"{where}: unknown key {name!r}")
+                out[name] = _typed(value, inner[name], field_path)
+            else:
+                out[name] = _typed(value, inner if kind == "map" else ("any", None), field_path)
+        return out
+    raise _refuse(node, f"{where}: not plain data")
 
 
-def _reject_budget_literals(text: str, source: str) -> None:
+def typed_document(text: str, *, source: str = "culprit.yaml") -> dict[str, object]:
+    """The manifest as typed plain data, before the model's own checks:
+    what the differential corpus compares with the Go loader's."""
+    return _typed_root(_compose(text, source), source)
+
+
+def _compose(text: str, source: str) -> yaml.Node:
+    try:
+        root = yaml.compose(text, Loader=YAML12Loader)
+    except yaml.YAMLError as exc:
+        raise ManifestError(f"{source}: not valid YAML:\n{exc}") from exc
+    if root is None:
+        raise ManifestError(f"{source}: empty")
+    return root
+
+
+def _typed_root(root: yaml.Node, source: str) -> dict[str, object]:
+    try:
+        document = _typed(root, _manifest_type(), "")
+    except ManifestError as exc:
+        raise ManifestError(f"{source}: {exc}") from None
+    assert isinstance(document, dict)
+    return document
+
+
+def _reject_budget_literals(root: yaml.Node, text: str, source: str) -> None:
     """Refuses a `budgets:` value not written as plain decimal digits
     (Phase 36 part 2), reading the YAML as the Go loader (yaml.v3) reads it,
     so the two readers of one file never read two values or one load what
@@ -840,7 +1150,6 @@ def _reject_budget_literals(text: str, source: str) -> None:
     reads 454 and a string, so the form is what is checked — by
     `culprit_model.latency.budget_literal_problem`, which the Go loader's
     twin is held to with it."""
-    root = yaml.compose(text, Loader=YAML12Loader)
     if not isinstance(root, yaml.MappingNode):
         return
     _reject_repeated_keys(root, source)
@@ -932,35 +1241,28 @@ def _tagged(text: str, node: yaml.ScalarNode) -> bool:
 
 def load_manifest(text: str, *, source: str = "culprit.yaml") -> Manifest:
     """Parses and validates a manifest. Pure — no filesystem access."""
-    try:
-        # As the Go loader (yaml.v3) reads it, not as PyYAML's YAML 1.1:
-        # `yes` is a string, `0o454` a number (YAML12Loader). Composed, then
-        # built as plain data by _plain_data: PyYAML constructs nothing.
-        raw = _plain_data(yaml.compose(text, Loader=YAML12Loader))
-    except yaml.YAMLError as exc:
-        raise ManifestError(f"{source}: not valid YAML:\n{exc}") from exc
-
-    if raw is None:
-        raise ManifestError(f"{source}: empty")
-    if not isinstance(raw, dict):
-        raise ManifestError(f"{source}: expected a mapping at the top level")
-
-    # A key yaml.v3 reads and Python cannot name a field by (a !!binary or
-    # !!int key) is refused here, not left to fail as a TypeError below.
-    if any(not isinstance(key, str) for key in raw):
-        raise ManifestError(f"{source}: every top-level key must be a string")
+    # As the Go loader (yaml.v3) reads it: composed, every plain scalar
+    # resolved as yaml.v3 resolves it (YAML12Loader), then built as typed
+    # plain data — one type per field, null refused (Q28). PyYAML
+    # constructs nothing.
+    if "	" in text:
+        # yaml.v3 and PyYAML disagree on where a tab may stand; the binary
+        # refuses one anywhere, and so does this (Q28).
+        raise ManifestError(f"{source}: holds a tab character; indent and separate with spaces")
+    root = _compose(text, source)
+    # The budget's form first, from the node: a value not written as plain
+    # decimal digits is refused for its form, whatever it would type as.
+    _reject_budget_literals(root, text, source)
+    raw = _typed_root(root, source)
 
     # Before validation, not after: a credential in a field the schema
     # would reject anyway must still be reported as a credential, and a
     # credential in a field the schema accepts must never reach a model
     # instance that something might log.
     _reject_credentials(raw)
-    # After the credential scan: a credential pasted as a budget is reported
-    # as one, never as a malformed budget.
-    _reject_budget_literals(text, source)
 
     try:
-        return Manifest(**raw)
+        return Manifest.model_validate(raw)
     except ValidationError as exc:
         # Location and message only — never pydantic's default rendering,
         # which appends `input_value=...` for every error. The Phase 30

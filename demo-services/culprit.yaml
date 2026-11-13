@@ -250,3 +250,13 @@ budgets:
       presents one (docs/LIMITS.md). 300 ms is well clear of both a healthy
       answer (milliseconds, on the same Docker network) and the fault
       library's injected 800 ms.
+  - subject: "schema:inventory-db/public.products"
+    predicate: query_mean_ms_max
+    value: 20
+    why: >-
+      Phase 37 part 2. GET /products reads the first 50 of one category's
+      products in sku order, from a million seeded rows. Without an index
+      led by category, Postgres walks the sku index filtering category
+      row by row: about 100 ms a call, measured. With one on (category,
+      sku) it reads 50 entries and stops. 20 ms guards the index the list
+      route depends on, and is clear of both.

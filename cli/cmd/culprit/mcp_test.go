@@ -486,6 +486,10 @@ environments:
 // which it is — and binds it in unboundAddresses if it is an address.
 func TestEveryCatalogueInputIsClassified(t *testing.T) {
 	bound := map[string]bool{"url": true, "base_url": true, "host": true, "port": true}
+	// Supplied only by the walk; culprit_probe refuses them (walkOnlyInputs).
+	for name := range walkOnlyInputs {
+		bound[name] = true
+	}
 	notAnAddress := map[string]bool{
 		"method": true, "token": true, "token_env": true, "key": true, "package": true, "schema": true,
 		"table": true, "expect_fields": true, "expect_columns": true, "expect_audience": true,

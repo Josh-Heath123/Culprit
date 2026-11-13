@@ -213,12 +213,13 @@ jobs:
       # around the template set is refused by Postgres as read-only, and the
       # statement timeout is set; index facts, declared and live, compared
       # end to end; the demo's own database set up as the quickstart sets it
-      # up, and read by capture.
+      # up, and read by capture. Phase 37 part 2: statements and plans on a
+      # real Postgres 16 with pg_stat_statements, and on the demo's database.
       - name: The database boundary and index facts (real Postgres)
         run: |
           cd cli
-          CULPRIT_DOCKER_TESTS=1 go test ./internal/capture/dbsession -run TestASessionIsReadOnlyAtTheServer -v
-          CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run 'TestIndexesDeclaredAndLive|TestTheDemoDatabase' -v
+          CULPRIT_DOCKER_TESTS=1 go test ./internal/capture/dbsession -run 'TestASessionIsReadOnlyAtTheServer|TestStatementsAndPlansAgainstARealPostgres|TestTheGenericPlanAgainstARealPostgres' -v
+          CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run 'TestIndexesDeclaredAndLive|TestTheDemoDatabase|TestTheStatementProbesOnTheDemoDatabase' -v -timeout 20m
 
       # Every released platform, built here rather than only at tag time,
       # so a change that breaks the darwin/arm64 build is caught on the

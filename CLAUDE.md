@@ -11,10 +11,9 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 37, part 1 close-out — package isolation for the
-  HTTP client and the database session (Q27), one schema for both
-  manifest readers, the demo's generated password — on branch
-  `phase-37-closeout`, PR #40, awaiting decision on Q28. Part 1 is merged;
+- **Current phase:** 37, part 2 — statements and plans (`query_mean_ms_max`,
+  `probe.db.statement_budget`, `probe.db.plan`, strict typing in both
+  manifest readers) — on branch `phase-37-statements`; Q31 open.
   `docs/DIAGNOSTIC_PLAN.md` is complete.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core

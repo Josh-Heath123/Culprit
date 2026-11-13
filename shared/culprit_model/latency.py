@@ -50,6 +50,12 @@ CONFIDENCE = 90
 #: The predicates a budget may name, and the percentile each declares.
 #: Grown one phase at a time (P1): p50 and p95 in Phase 36.
 BUDGET_PREDICATES: dict[str, int] = {"latency_p50_ms": 50, "latency_p95_ms": 95}
+#: Phase 37 part 2: the mean execution time, in whole milliseconds, a
+#: normalised statement may take, on a table (`schema:<database>/<ns>.<table>`)
+#: or on the database's component. Apart from BUDGET_PREDICATES, which the
+#: latency rule reads as percentiles. cli/internal/model/latency.go's
+#: StatementBudgetPredicates.
+STATEMENT_BUDGET_PREDICATES: frozenset[str] = frozenset({"query_mean_ms_max"})
 #: The most requests one latency reading may record — the probe's hard cap.
 MAX_REQUESTS = 50
 #: The largest budget, in milliseconds. Not a threshold Culprit judges by:
@@ -131,10 +137,9 @@ class Budget(BaseModel):
     @field_validator("predicate")
     @classmethod
     def _predicate_is_known(cls, value: str) -> str:
-        if value not in BUDGET_PREDICATES:
-            raise ValueError(
-                f"budget predicate {value!r} is not one of {sorted(BUDGET_PREDICATES)}"
-            )
+        known = sorted({*BUDGET_PREDICATES, *STATEMENT_BUDGET_PREDICATES})
+        if value not in known:
+            raise ValueError(f"budget predicate {value!r} is not one of {known}")
         return value
 
     @field_validator("subject")

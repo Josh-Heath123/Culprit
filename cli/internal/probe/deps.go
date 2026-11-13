@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/josh-heath123/culprit/cli/internal/capture"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -31,10 +32,12 @@ type Deps struct {
 	Network  Network
 	HTTP     HTTPClient
 	Database DatabaseInspector
-	Metrics  MetricsReader
-	Config   ConfigReader
-	Secrets  SecretReader
-	Packages PackageReader
+	// Statements reads statement statistics and plans (Phase 37 part 2).
+	Statements StatementInspector
+	Metrics    MetricsReader
+	Config     ConfigReader
+	Secrets    SecretReader
+	Packages   PackageReader
 	// Now is the clock. Injected so TLS-expiry arithmetic and reading
 	// timestamps are reproducible in tests, and so SOURCE_DATE_EPOCH
 	// keeps working.
@@ -116,6 +119,20 @@ type DatabaseInspector interface {
 	// the connecting role may use, which would make a least-privilege
 	// probe report every other table as missing.
 	Columns(ctx context.Context, database, schema, table string) ([]TableColumn, error)
+}
+
+// StatementInspector reads a database's statement statistics and plans
+// (Phase 37 part 2), by the database's *name*, as DatabaseInspector does:
+// the DSN never reaches a probe. Never a row, a reset or EXPLAIN ANALYZE:
+// capture.StatsReader cannot send one.
+type StatementInspector interface {
+	// Window takes two snapshots of the database's statements, the fixed
+	// window apart, in one session. With db.plan.read granted it also
+	// plans each kept SELECT or WITH in that session, and says so.
+	Window(ctx context.Context, database string) (window capture.StatementWindow, planned bool, err error)
+	// Plan reads one statement by queryid from the database's statistics
+	// and returns its generic plan, under db.plan.read.
+	Plan(ctx context.Context, database string, queryID int64) (capture.StatementPlan, error)
 }
 
 // UnavailableError is a data source saying a probe's preconditions are

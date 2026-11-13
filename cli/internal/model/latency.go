@@ -51,6 +51,13 @@ var BudgetPredicates = map[string]int{
 	"latency_p95_ms": 95,
 }
 
+// StatementBudgetPredicates are the predicates a budget on a database may
+// name (Phase 37 part 2): the mean execution time, in whole milliseconds, a
+// normalised statement may take. On a table (`schema:<database>/<ns>.<table>`)
+// or on the database's component. Kept apart from BudgetPredicates, which
+// the latency walk reads as percentiles of a route.
+var StatementBudgetPredicates = map[string]bool{"query_mean_ms_max": true}
+
 // plainDecimal is a budget as written in culprit.yaml: plain decimal
 // digits, no sign, no leading zero.
 var plainDecimal = regexp.MustCompile(`^[1-9][0-9]*$`)

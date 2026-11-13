@@ -1368,6 +1368,41 @@
       "why": "a value with an anchor is not plain",
       "manifest": "version: 1\ncomponents:\n  - name: shop\nbudgets:\n  - subject: \"http:shop/GET /items\"\n    predicate: latency_p95_ms\n    value: &v 300\n    why: w\n",
       "reason": "a budget is written as plain decimal digits, without quotes, a tag or an alias"
+    },
+    {
+      "why": "query_mean_ms_max on a table (Phase 37 part 2)",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"schema:inventory-db/public.products\"\n    predicate: query_mean_ms_max\n    value: 50\n    why: the listing page waits on it\n",
+      "loads": 50
+    },
+    {
+      "why": "query_mean_ms_max on the database's component",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"component:inventory-db\"\n    predicate: query_mean_ms_max\n    value: 50\n    why: the listing page waits on it\n",
+      "loads": 50
+    },
+    {
+      "why": "query_mean_ms_max on a column: refused",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"schema:inventory-db/public.products.category\"\n    predicate: query_mean_ms_max\n    value: 50\n    why: the listing page waits on it\n",
+      "reason": null
+    },
+    {
+      "why": "query_mean_ms_max on a route: refused",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"http:inventory/GET /products\"\n    predicate: query_mean_ms_max\n    value: 50\n    why: the listing page waits on it\n",
+      "reason": null
+    },
+    {
+      "why": "query_mean_ms_max on a table of an undeclared database: refused",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"schema:orders-db/public.orders\"\n    predicate: query_mean_ms_max\n    value: 50\n    why: the listing page waits on it\n",
+      "reason": null
+    },
+    {
+      "why": "query_mean_ms_max on a component that is not a database: refused",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"component:inventory\"\n    predicate: query_mean_ms_max\n    value: 50\n    why: the listing page waits on it\n",
+      "reason": null
+    },
+    {
+      "why": "query_mean_ms_max written as a fraction: refused",
+      "manifest": "version: 1\ncomponents:\n  - name: inventory\n  - name: inventory-db\n    kind: database\nbudgets:\n  - subject: \"schema:inventory-db/public.products\"\n    predicate: query_mean_ms_max\n    value: 0.5\n    why: the listing page waits on it\n",
+      "reason": "a budget is written as plain decimal digits, and this value is not"
     }
   ]
 }

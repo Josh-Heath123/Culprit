@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -77,6 +78,12 @@ type ManifestComponent struct {
 	Name        string `yaml:"name"`
 	Kind        string `yaml:"kind"`
 	DisplayName string `yaml:"display_name"`
+	// Environments, Labels and MonitoredMetrics are the API's (the
+	// control plane's component record); this binary does not act on them.
+	// They are typed here so both readers read one schema (Q28).
+	Environments     []string       `yaml:"environments"`
+	Labels           map[string]any `yaml:"labels"`
+	MonitoredMetrics []string       `yaml:"monitored_metrics"`
 	// Connections give severity its graph (Phase 29). `culprit intent`
 	// ignores them; `culprit check` cannot work without them, because
 	// "does this subject lie on a request path" is the whole difference
@@ -193,42 +200,33 @@ func TopLevelKeys() []string {
 	return keys
 }
 
-// unknownTopLevelKeys lists the top-level keys of a document that no field
-// takes, including those a merge (`<<`) brings in. A key written as the
-// string "<<" rather than a merge is unknown like any other.
-func unknownTopLevelKeys(root *yaml.Node) []string {
-	known := map[string]bool{}
-	for _, key := range TopLevelKeys() {
-		known[key] = true
+// parseManifest reads one YAML document and checks it against the schema
+// (typed.go): a second document, an empty file, an unknown key at any
+// level, null, or a scalar of another type than its field's is refused.
+// It returns the document, now safe to decode, and its typed plain data.
+func parseManifest(data []byte) (*yaml.Node, map[string]any, error) {
+	if bytes.ContainsRune(data, '\t') {
+		// yaml.v3 and PyYAML disagree on where a tab may stand; both
+		// readers refuse one anywhere (Q28).
+		return nil, nil, errors.New("holds a tab character; indent and separate with spaces")
 	}
-	var unknown []string
-	var visit func(mapping *yaml.Node)
-	visit = func(mapping *yaml.Node) {
-		if mapping.Kind == yaml.AliasNode && mapping.Alias != nil {
-			mapping = mapping.Alias
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	var document yaml.Node
+	if err := decoder.Decode(&document); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, nil, errors.New("empty")
 		}
-		if mapping.Kind != yaml.MappingNode {
-			return
-		}
-		for index := 0; index+1 < len(mapping.Content); index += 2 {
-			key, value := mapping.Content[index], mapping.Content[index+1]
-			if key.Tag == "!!merge" {
-				if value.Kind == yaml.SequenceNode {
-					for _, merged := range value.Content {
-						visit(merged)
-					}
-				} else {
-					visit(value)
-				}
-				continue
-			}
-			if !known[key.Value] {
-				unknown = append(unknown, fmt.Sprintf("%q", key.Value))
-			}
-		}
+		return nil, nil, fmt.Errorf("not valid YAML: %w", err)
 	}
-	visit(root)
-	return unknown
+	var second yaml.Node
+	if err := decoder.Decode(&second); !errors.Is(err, io.EOF) {
+		return nil, nil, errors.New("holds more than one YAML document; culprit.yaml is one")
+	}
+	plain, err := typedDocument(&document)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &document, plain, nil
 }
 
 // LoadManifest parses and validates a culprit.yaml.
@@ -238,29 +236,18 @@ func LoadManifest(path string) (*Manifest, error) {
 		return nil, &ManifestError{Path: path, Message: "cannot be read: " + err.Error()}
 	}
 	var manifest Manifest
-	// One document, and only the top-level keys the API's model knows too
-	// (shared/tests/manifest_keys.json): the two readers of one file must
-	// read one schema (Phase 37 part 1 close-out). Until then a second
-	// document was read by this loader and refused by the API, and an
-	// unknown key — a mistyped `budgets:` — was silently ignored here.
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	var document yaml.Node
-	if err := decoder.Decode(&document); err != nil && !errors.Is(err, io.EOF) {
+	// One document, typed field by field as the API's loader types it
+	// (Q28): the two readers of one file read one schema, and the corpus
+	// in shared/tests/manifest_corpus.json holds them to it.
+	document, plain, err := parseManifest(data)
+	if err != nil {
+		return nil, &ManifestError{Path: path, Message: err.Error()}
+	}
+	if err := writtenEmpty(plain); err != nil {
+		return nil, &ManifestError{Path: path, Message: err.Error()}
+	}
+	if err := document.Decode(&manifest); err != nil {
 		return nil, &ManifestError{Path: path, Message: "not valid YAML: " + err.Error()}
-	}
-	var second yaml.Node
-	if err := decoder.Decode(&second); !errors.Is(err, io.EOF) {
-		return nil, &ManifestError{Path: path, Message: "holds more than one YAML document; culprit.yaml is one"}
-	}
-	if len(document.Content) > 0 {
-		if unknown := unknownTopLevelKeys(document.Content[0]); len(unknown) > 0 {
-			return nil, &ManifestError{Path: path, Message: fmt.Sprintf(
-				"unknown top-level key %s; the keys culprit.yaml takes are %s",
-				strings.Join(unknown, ", "), strings.Join(TopLevelKeys(), ", "))}
-		}
-		if err := document.Decode(&manifest); err != nil {
-			return nil, &ManifestError{Path: path, Message: "not valid YAML: " + err.Error()}
-		}
 	}
 	if manifest.Version == 0 {
 		manifest.Version = ManifestVersion
@@ -291,11 +278,57 @@ func LoadManifest(path string) (*Manifest, error) {
 	return &manifest, nil
 }
 
+// componentName is api/app/model/manifest.py's COMPONENT_NAME_PATTERN, and
+// componentKinds culprit_model.graph.ComponentKind (Q28: what one reader
+// refuses, the other refuses).
+var (
+	componentName  = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
+	componentKinds = map[string]bool{
+		"service": true, "frontend": true, "database": true, "queue": true,
+		"external_api": true, "job": true, "cache": true, "object_store": true,
+	}
+)
+
+// writtenEmpty refuses what a Go zero value cannot tell from absent: a
+// version written as 0, and a kind or criticality written as empty text.
+// Absent, each takes its default in both readers; written so, the API's
+// model refuses it, and so does this.
+func writtenEmpty(plain map[string]any) error {
+	if version, ok := plain["version"]; ok && version == int64(0) {
+		return fmt.Errorf("version: 0 is not a culprit.yaml version")
+	}
+	components, _ := plain["components"].([]any)
+	for index, item := range components {
+		component, _ := item.(map[string]any)
+		if kind, ok := component["kind"]; ok && kind == "" {
+			return fmt.Errorf("components[%d].kind: written empty; leave the key out for the default", index)
+		}
+		connections, _ := component["connections"].([]any)
+		for edge, entry := range connections {
+			connection, _ := entry.(map[string]any)
+			for _, field := range []string{"kind", "criticality"} {
+				if value, ok := connection[field]; ok && value == "" {
+					return fmt.Errorf("components[%d].connections[%d].%s: written empty; "+
+						"leave the key out for the default", index, edge, field)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (m *Manifest) validate() error {
 	seen := map[string]bool{}
 	for _, component := range m.Components {
 		if strings.TrimSpace(component.Name) == "" {
 			return fmt.Errorf("a component has no name")
+		}
+		if !componentName.MatchString(component.Name) {
+			return fmt.Errorf("component name %q: lower-case letters, digits, '.', '_' and '-', "+
+				"starting with a letter or digit, at most 63 characters", component.Name)
+		}
+		if component.Kind != "" && !componentKinds[component.Kind] {
+			return fmt.Errorf("components.%s.kind: %q is not a component kind", component.Name, component.Kind)
 		}
 		if seen[component.Name] {
 			return fmt.Errorf("duplicate component name: %s", component.Name)

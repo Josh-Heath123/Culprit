@@ -270,6 +270,10 @@ func runProbe(ctx context.Context, in probeInput) ([]model.Reading, *capability.
 		deps.Database = sources.Database()
 		deps.Config = sources.Config()
 		deps.Packages = sources.Packages()
+		deps.Statements = sources.Statements()
+	}
+	if in.Through != nil && in.Through.Statements != nil {
+		deps.Statements = in.Through.Statements
 	}
 
 	runner := probe.NewRunner(probe.Options{
