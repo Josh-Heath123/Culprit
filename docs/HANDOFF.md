@@ -64,7 +64,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **37, part 2 — Statements and plans** — `in progress`. Built; the architecture session's rulings of 2026-11-13 (Q30, the three Postgres mismatches, CI as the gate of record) are recorded in §5. Q31 is open and blocks only Q30's change. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37: "Part 2", then "Added to part 2, 2026-11-12". |
+| Current phase | **37, part 2 — Statements and plans** — `awaiting decision` (Q31). Built; CI green on `74ab042` (run 43380877940), PR #41. The architecture session's rulings of 2026-11-13 are recorded in §5 as ruled; Q30's change waits on Q31. Q32 is open and blocks nothing. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37: "Part 2", then "Added to part 2, 2026-11-12". |
 | Previous phase | **37, part 1 close-out — complete**, signed off 2026-11-12 by the architecture session. PR #40 was merged as `ee3e19e`; the pull request's runs 43287075789 and 43290346292 were green on every job, read from GitHub. Q28 and Q29 are ruled. **Phase 37 part 1 is complete.** Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-37-statements`, to be cut from `origin/main` = `ee3e19e`. Its first commit is the close-out sign-off, already in the working tree (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`; message `../phase-37-closeout-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
@@ -118,7 +118,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 36, part 2 | The walk sees slow | **complete** (PR #38 merged, `d785af4`; `main`'s push run 43250669431 green) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The library's latency fault roots at inventory-service and verifies; a wrong fix gives `not_resolved`; without budgets it is `inconclusive`. Q21 is closed. Q26 is ruled, and Q27 corrected its premise. Decisions are at the end of Phase 36 in `PERFORMANCE_PLAN.md`. |
 | 37, part 1 | Reading the database safely | **complete** (PR #39 `b3ef508`, close-out PR #40 `ee3e19e`) | **Signed off 2026-11-12** (architecture session): a read-only session refused at the server in CI; the demo's database is seeded; index facts are found both ways. Q27 ruled package isolation, built in the close-out. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 1 close-out | Package isolation; one schema for both manifest readers | **complete** (PR #40 merged, `ee3e19e`) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The audit's two attacks no longer type-check; each boundary package has one non-test file. The CodeQL alert was answered by redesign. Q28 is ruled (strict typing and a differential corpus, in part 2); Q29 is ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
-| 37, part 2 | Statements and plans | **in progress** — draft PR; Q31 open | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37: "Part 2", then "Added to part 2, 2026-11-12" at the end of the section. Step 0: `main`'s push run on `ee3e19e` green. Item 1 is Q28's strict typing, with the differential corpus. Branch `phase-37-statements` from `origin/main` = `ee3e19e`; its first commit is the close-out sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 37, part 2 | Statements and plans | **awaiting decision** (Q31) — PR #41, CI green on `74ab042` (run 43380877940); run report in §5 | **Brief (2026-11-12):** `docs/PERFORMANCE_PLAN.md` Phase 37: "Part 2", then "Added to part 2, 2026-11-12" at the end of the section. Step 0: `main`'s push run on `ee3e19e` green. Item 1 is Q28's strict typing, with the differential corpus. Branch `phase-37-statements` from `origin/main` = `ee3e19e`; its first commit is the close-out sign-off. Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 37, part 3 | The database in the walk | not started | `docs/PERFORMANCE_PLAN.md` Phase 37, "How Phase 37 is run". The brief and criteria are written at part 2's review. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
@@ -153,199 +153,181 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        37, part 1 close-out — package isolation; one schema for
-              both manifest readers
-Branch:       phase-37-closeout, from origin/main = b3ef508 (PR #39's
-              merge); 58e4f83 the part 1 sign-off, d37542e the close-out,
-              21651a8 the audits' findings, then this report. PR #40.
-Run:          2026-11-12, /next.
-Status:       AWAITING DECISION (Q28, Q29). Built; every local gate green;
-              CI green on 21651a8 (run 43287075789, every job) and every
-              PR check pass, CodeQL included, no open alert. The
-              phase-auditor: criteria 1-5, 7, 8 MET; criterion 6 met on
-              the fixture, NOT TESTABLE AS WRITTEN in one clause (Q29);
-              and the readers still split on 23 of 85 manifests it wrote,
-              which strict typing in both would close and the brief did
-              not ask for (Q28). The invariant-auditor: clean.
+Phase:        37, part 2 — statements and plans
+Branch:       phase-37-statements, from origin/main = ee3e19e; 60184f9 the
+              close-out sign-off, f1cff6f the phase, 74ab042 the audits'
+              and CI's findings, then this report. PR #41.
+Run:          2026-11-12 to 2026-11-13, /next, resumed after a context
+              clear; the architecture session's rulings of 2026-11-13
+              applied.
+Status:       AWAITING DECISION (Q31). Built; CI green on 74ab042 (run
+              43380877940), every PR check pass, no open alert. Q30's
+              change is not built: as ruled it would catch
+              probe.edge.impedance (Q31). Q32 is open and blocks nothing.
 
 STEP 0
-  main's push run 43272962537 on b3ef508: every job success (fault
-  library, e2e (none), e2e (stub), kind-capture, narration-parity);
-  deploy skipped.
-  The phase-auditor re-audited 25db425 ("the audits' findings"): every
-  item CLOSED, each red when reverted, with these left:
-  - the template set's switch had no test that failed on revert — FIXED
-    here: TestTheTemplateSetIsTheConstants (the switch lists exactly the
-    statement constants, no map of statements), red with a constant the
-    switch omits or a map;
-  - LIMITS "four today, all catalogue reads" — FIXED: three catalogue
-    reads and the Alembic version row;
-  - redaction of SQL PASSWORD misses E'…', U&'…', dollar quotes, no
-    space, a comment before the quote, and leaks the tail of '…''…' —
-    OPEN, low, same in Go and Python; outside this brief (Q29);
-  - for part 2: with pg_stat_statements preloaded server-wide, a
-    pg_read_all_stats role sees every database's statement text,
-    Culprit's migrations' CREATE ROLE … PASSWORD among them (redacted
-    today). PERMISSIONS now says so; db.stats.read's template should
-    filter to the current database's dbid (Q29).
+  main's push run 43293248631 on ee3e19e: 21 jobs success, deploy
+  skipped.
 
-WHAT WAS BUILT (work order 1-4)
-  1 Q27, package isolation (ruled 2026-11-12).
-    - internal/probe/guardedhttp: the guarded client, one non-test file
-      (client.go), the only net/http importer under internal/probe. Its
-      exported surface names no net/http, net or pgx type. internal/probe
-      keeps its names as aliases and imports no net/http.
-    - internal/capture/dbsession: the read-only, template-only session,
-      one non-test file (session.go), the only pgx importer. Its exported
-      surface names no pgx or net type. internal/capture keeps its names
-      as aliases and imports no driver.
-    - internal/boundarytest (test-only; not linked into the binary): one
-      non-test file; the exported surface by go/types over the real
-      types (export data via go list); PlantedErrors type-checks a package
-      with one more file.
-    - The network allowlist names both, as the ruling approved; the CI
-      Docker step runs the session's read-only test from its new path.
-  2 One schema for both manifest readers.
-    - API: YAML12Loader resolves plain scalars as yaml.v3 does (yes/no/
-      on/off strings, dates as written, 0454/0o454/1e3 numbers). After
-      CodeQL flagged yaml.load with a custom loader
-      (py/unsafe-deserialization, PR #40), PyYAML constructs nothing: the
-      document is composed and built as plain data from an explicit set of
-      tags; !!python/* and !!timestamp are refused as "not plain data".
-    - Go: LoadManifest refuses a second document and any top-level key not
-      in Manifest's yaml tags (held equal to the API's fields by
-      manifest_keys.json), naming it — merges, "<<" as a string and
-      !!binary keys included.
-    - shared/tests/manifest_scalar_conformance.json, 16 cases, read by
-      both.
-  3 The demo database's password: generated by bootstrap_env.py
-    (INVENTORY_DB_PASSWORD); just quickstart adds one to an older
-    .env.prod; setup_db sets the role's password every run, refuses an
-    empty one, and refuses any role or database but `inventory` (it would
-    otherwise reset whatever role the URL named). No fixed password
-    remains.
-  4 LIMITS and PERMISSIONS: what each layer (package, templates,
-    read-only session, role) holds and does not; no EXECUTE on
-    pg_stat_statements_reset (Postgres's default) and why; what
-    pg_read_all_stats reveals; the YAML splits now closed and the ones
-    still open (Q28).
+RULINGS OF 2026-11-13 (architecture session) — RULED
+  1 Q30 ratified with one change: key the fail-fixture exemption on the
+    manifest (an empty expected_from), not the probe's name; a test holds
+    every such probe to never returning fail, shown red; the exemption by
+    name for probe.db.plan removed.
+    NOT BUILT — Q31. probe.edge.impedance (Phase 31) also declares an
+    empty expected_from, returns fail at 3 standard deviations and has a
+    fail fixture, so the test as ruled is red on it. Malcolm chose to
+    escalate (2026-11-13). The exemption by name stays; probe_test.go
+    says why.
+  2 The three places the brief did not match real Postgres — accepted:
+    - Generic plans: a prepared statement explained under plan_cache_mode
+      = force_generic_plan, on the extended protocol, nothing executed.
+      The three tests are TestTheGenericPlanAgainstARealPostgres (new, in
+      CI's Docker step, Postgres 16): the session read-only before,
+      between and after every message (SHOW transaction_read_only on the
+      same session); ANALYZE never sent; a second statement appended to
+      the text refused by the server's Parse (42601), sendPlan's own guard
+      bypassed. Red when sendPlan sends EXPLAIN (ANALYZE ...): "ANALYZE
+      was sent". Its other check, that the statement's calls do not move,
+      did NOT catch that mutation (pg_stat_statements does not count an
+      EXECUTE inside EXPLAIN by default); the sent-text check holds it.
+    - The demo plan walks ix_products_sku and filters category; the test
+      asserts the filter on category.
+    - (category, sku) brings the query within budget; category alone does
+      not. Measured (the test's MEASURED lines; local, 2026-11-13; mean
+      per call against the 20 ms budget):
+        no index on category        153 ms   (159 ms in an earlier run)
+        index on category alone     153 ms   (171 ms), verdict fail
+        index on (category, sku)    0.025 ms, verdict pass
+      CI, run 43380877940 (Linux): 96.1 ms, 96.4 ms (fail), 0.014 ms.
+      Noted for part 3.
+  3 Full suites not rerun locally; CI is the gate of record. Local runs
+    were one package or one test at a time, no quickstart running.
 
-CRITERIA
-  1 The audit's two attacks no longer type-check — MET. Planted and built
-    by the auditor: internal/probe "undefined: newProbeRequest", "c.client
-    undefined (cannot refer to unexported field client)"; internal/capture
-    "undefined: openSession", "send", "statement". Both build at b3ef508.
-    TestTheAuditsAttackNoLongerTypeChecks in each package; a file using
-    only the exported surface type-checks.
-  2 One non-test file each — MET; a real second file fails
-    TestThisPackageHasOneFile in both.
-  3 Exported surface names no net/http, net or pgx type — MET; red for a
-    function, method, field, alias and connection, and the auditor's own
-    generics, callbacks, func types, channels, embedded and promoted
-    fields. Gap: a function returning the connection as `any` is not
-    caught by this test (one-file rule and review are what hold it);
-    stated in LIMITS.
-  4 Allowlist names both; probe and capture import neither — MET; red by
-    planting net/http in probe (now five import forms), pgx in capture,
-    and removing dbsession from the allowlist.
-  5 Existing tests unchanged and green — MET. Moved tests differ only in
-    package, paths and HTTPResponse→Response. Two probe tests were
-    replaced by a stricter rule (probe imports no net/http at all); its
-    red state now covers plain, aliased, sub-package, grouped blank and
-    dot imports.
-  6 Both readers agree or both refuse on yes, no, on, off, a date, 0454,
-    0o454, 1e3, ~, a second document, an unknown key — MET on the shared
-    fixture, all 16 cases, in both. "Each red on the old API loader":
-    7 red (yes, no, on, off, date, 0o454, 1e3); a second document and the
-    unknown keys were already refused by the old API and are red on the
-    old Go loader (4); 0454 and ~ were never a split and are red on
-    neither — NOT TESTABLE AS WRITTEN for those two (Q29).
-  7 No fixed demo password; fresh-clone quickstart seeds — MET: git grep
-    finds none; build_env gives a fresh 43-character password per call;
-    CI's e2e (none) and e2e (stub) ran just quickstart from a clean
-    checkout, seeding included, green on 21651a8.
-  8 LIMITS and PERMISSIONS per layer; no EXECUTE on the reset — MET,
-    checked against the code by the auditor.
-  9 Every PR check green — MET on 21651a8 (below).
+WHAT WAS BUILT (f1cff6f; the work order)
+  1 Q28: strict typing in both manifest readers — one type per field,
+    null and empty refused naming the field, untyped values keep their
+    text, unknown keys refused at every level. Go: typed.go walks yaml.v3
+    nodes against a schema derived from Manifest; API: YAML12Loader ports
+    yaml.v3's resolver and _typed builds plain data against a schema from
+    the pydantic models. shared/tests/manifest_schema.json (61 fields)
+    and manifest_corpus.json (5,684 cases: every field x 91 scalar forms,
+    48 structural variants, the close-out audit's 85 manifests). Then
+    query_mean_ms_max in both readers and the API's model.
+  2 Q29: four statistics templates, filtered to this database's dbid and
+    away from Culprit's role; text leaves the server only for SELECT,
+    WITH, INSERT, UPDATE, DELETE, MERGE. plannedStatement, made only by
+    planFromRow; sendPlan as in ruling 2.
+  3 probe.db.statement_budget (integer rule in Go and Python, shared
+    statement_conformance.json) and probe.db.plan (evidence, no
+    expectation; filter columns by name only; before 16 inconclusive).
+    culprit mcp refuses probe.db.plan, any queryid and any input to the
+    statement probe, before anything is sent.
+  4 Readings re-judged in Go, Python and POST /readings.
+  5 The demo's 20 ms query_mean_ms_max on
+    schema:inventory-db/public.products.
+  6 PROBES, PERMISSIONS, LIMITS.
 
-DELIBERATELY NOT BUILT (the brief's list)
-  No statement timing, plan or budget; no walk change; nothing outside
-  the boundaries, the readers and the demo password (auditor: no
-  query_mean, GENERIC_PLAN or pg_stat_statements code; isolate, agent,
-  mcp, worker, routers untouched). The redaction gaps and the remaining
-  reader splits are left for the architecture session, not widened into.
+FIXED AFTER THE AUDITS AND CI (74ab042)
+  - CI run 43376316313: test_probes_api counted fourteen probes. Sixteen;
+    the exact set is still held to the Go source.
+  - Four new `# type: ignore` in api/app/model/manifest.py (§6 counts an
+    ignore as a weakening) replaced by annotations and isinstance;
+    pyright 0 errors.
+  - A4: the CREATE ROLE ... PASSWORD statements ran before the window, so
+    their check could not fail. They now run inside each window, in this
+    database and another, and the test requires the reading to list them
+    as "text not kept".
+  - The MCP refusal count could not move (no budget declared, so the
+    probe returned before its source). It can now: 5 calls counted with
+    the guard removed.
+  - probeStats's version and extension gates and unloaded() had no test:
+    gates_test.go, red when either gate is changed.
+  - probe.db.plan read `culprit probe --input queryid=7` (an int) as
+    unnamed. An exact int is taken; a float is refused ("pass it as
+    text").
+  - Found running the demo test: twenty slower statements no budget
+    applies to pushed the judged one out of the 20 kept, and a window
+    within budget read inconclusive. Statements a budget applies to are
+    now kept before the rest;
+    TestStatementsWithABudgetAreKeptBeforeThoseWithout, red without it.
+  - A statement too large to judge is named in the reason.
+  - Stale GENERIC_PLAN comments corrected; README says sixteen probes.
 
-GATES (local, Windows)
-  just lint PASS · typecheck PASS · lint-imports PASS (6 kept) ·
-  check-schema-drift PASS · just test PASS (1619 passed, 6 skipped; then
-  93, 21, 37) · cli-lint PASS · cli-test PASS · check_coupled_files PASS
-  · check-no-llm-imports PASS · check-invariants PASS ·
-  check-scan-coverage PASS · extractors-test PASS · culprit check
-  --fail-on=breaks_request_path PASS · LLM_PROVIDER=none culprit check
-  PASS. After 21651a8: lint, typecheck, cli-lint, go test ./..., the
-  manifest/model and scripts suites PASS. Docker-gated tests: not run
-  locally; run in CI.
+CRITERIA (phase-auditor on f1cff6f, re-checked after 74ab042)
+  1 Nothing outside the templates reaches the database — MET (unit,
+    counted; mutations red); real server in CI.
+  2 The statement rule's fixture in Go and Python, five cases, red when
+    the comparison moves — MET.
+  3 On the demo's database: over budget without an index; the plan reads
+    products filtering category (sku index, ruling 2); within budget with
+    (category, sku) — MET locally and in CI.
+  4 A secret-looking constant leaves no trace — MET (unit; real server in
+    CI).
+  5 Without db.plan.read the plan probe refused and a table budget
+    unjudged, saying so; without pg_stat_statements both inconclusive;
+    before 16 the plan probe inconclusive — MET, the gates now tested at
+    the session too.
+  6 culprit mcp refuses, counted — MET; the count can now go red.
+  7 A disagreeing statement reading refused by Go, Python and the API —
+    MET (Go and Python mutated red; the API in CI).
+  8 Every PR check green — see CI.
+  A1 The corpus agrees — MET (5,684 cases, both readers).
+  A2 The auditor's 23 splits in the corpus — MET BY INSPECTION: the 85
+     seeds are there, and every split LIMITS@ee3e19e names is a seed with
+     its expected outcome; the test checks only the count. Not labelled.
+  A3 Loosening either reader turns it red — MET (Go 1024 cases; API 1048
+     and 48).
+  A4 CREATE ROLE ... PASSWORD in no reading while the products text is
+     kept — MET IN SUBSTANCE, NOT AS WRITTEN: the statements run inside
+     the window on the demo's database and on a Postgres 16 test
+     database, written as Culprit's migrations write them, not through
+     the quickstart's Alembic migrations, which need the control plane's
+     TimescaleDB image. For the review to reword, or to ask for the
+     quickstart itself.
+  A5 Another database's statement not read — MET (dbid pinned in unit;
+     both Docker tests in CI).
 
-CI (the merge result: origin/main = b3ef508 is the branch's base, so the
-branch is the merge result)
-  d37542e  run 43282424663  every job success; PR check CodeQL FAIL —
-           open alert #5 py/unsafe-deserialization api/app/model/
-           manifest.py (yaml.load with a SafeLoader subclass). Fixed in
-           21651a8 by not constructing through PyYAML at all, with a
-           test; not dismissed.
-  21651a8  run 43287075789  https://github.com/Josh-Heath123/Culprit/
-           actions/runs/43287075789
-    success lint, typecheck, cli, test, migration-round-trip, self-check,
-            fault-library, kind-capture, e2e (none), e2e (stub),
-            narration-parity, build ×5; skipped build / publish, deploy
+DELIBERATELY NOT BUILT
+  No walk change, no statement_budget_exceeded or missing_index, no fault
+  case, no traffic by Culprit, no reset, no EXPLAIN ANALYZE, no row read,
+  no index created by Culprit (phase-auditor: none found).
+
+CI
+  f1cff6f  run 43376316313  failure on test only (the probe count, above);
+           every other job success.
+  74ab042  run 43380877940  https://github.com/Josh-Heath123/Culprit/
+           actions/runs/43380877940 — attempt 1: e2e (none) failed before
+           its first step, "The hosted runner lost communication with the
+           server" (runner fault; narration-parity skipped behind it);
+           rerun of the failed job, attempt 2: every job success; build /
+           publish and deploy skipped.
     PR checks: every one pass or skipping — CodeQL, Analyze (go, python,
-            javascript-typescript, actions), Culprit included.
-    Code-scanning alerts open: none (pr=40, refs/pull/40/merge,
-            refs/pull/40/head all empty).
+           javascript-typescript, actions), Culprit included.
+    Code-scanning alerts open: none (pr=41, refs/pull/41/merge,
+           refs/pull/41/head all empty).
+    The branch contains origin/main = ee3e19e, so the branch is the
+    merge result.
 
 AUDITS
-  invariant-auditor (d37542e): CLEAN. Allowlist as narrow as the moved
-    code needs (dbsession: net and crypto/tls only); the YAML loader
-    constructs nothing unsafe; boundarytest not linked into the binary;
-    no test weakened. Risks fixed in 21651a8: setup_db's ALTER ROLE held
-    to `inventory`; INVENTORY_DB_PASSWORD in .env.prod.example; the
-    allowlist's stale rule-of-record comment.
-  phase-auditor (d37542e): see CRITERIA. Its findings: the readers still
-    split (Q28); criterion 6's wording (Q29); the surface test's `any`
-    gap (stated in LIMITS); the narrower red state (widened); stale
-    comments (fixed); LIMITS's false "why: 300 is a number to both"
-    (removed; the splits are now listed).
-
-DECISIONS TAKEN HERE (for review)
-  - The Go loader now refuses unknown top-level keys. Until now it ignored
-    them on purpose so an older CLI would run against a newer server's
-    manifest; the shared key list replaces that, and an older binary now
-    stops and names the key.
-  - CodeQL was answered by changing the design (compose, then build plain
-    data from a closed set of tags), not by dismissing the alert.
-  - setup_db sets the inventory role's password on every run so a
-    Postgres volume from before the generated password still works.
-
-IN THE PLAN, FOR CORRECTION
-  - Criterion 6 asks every case to be red on the old API loader; 0454 and
-    ~ never split, and the second document and unknown key split the
-    other way (refused by the old API, loaded by the old Go loader).
-    Suggested: "each case on which the readers split at b3ef508 is red
-    on the reader that split; cases that never split are pins" (Q29).
-  - "One schema" by fixture closes listed cases one at a time — the
-    denylist pattern the ruling warned against. A schema is typing too
-    (Q28).
+  invariant-auditor (f1cff6f): CLEAN. Risks: the plan mechanism differs
+    from the plan's text (ruled, 2); a stale comment (fixed); the four
+    ignores (fixed); tables outside `public` taken as public (in LIMITS);
+    the statistics session's timeout is its own 20 s plus the window, not
+    the CLI's --timeout (left; for the review).
+  phase-auditor (f1cff6f): NOT COMPLETE then — A4 could not fail, the MCP
+    count and A2 could not fail, the gates untested, the int queryid, the
+    too-large pass. All fixed in 74ab042 except A2's labels (above) and
+    SELECT ... INTO on PostgreSQL 14–15 (Q32, unverified).
 
 LEFT OPEN
-  Q28 (blocking the close-out's completion): strict typing in both
-    readers, or accept and document the splits.
-  Q29 (not blocking): criterion 6's rewording; the SQL PASSWORD
-    redaction gaps; db.stats.read's dbid filter in part 2.
-  Housekeeping for the human: the phase-auditor could not delete
-    C:\Users\flosh\AppData\Local\Temp\p37audit.SgVp (its differential
-    harness) and an old scratchpad worktree directory with long
-    node_modules paths; the invariant-auditor left a postgres:16-alpine
-    container (wizardly_keller) from a slow first start.
+  Q31 (blocks Q30's change only): impedance and the manifest-keyed
+    exemption.
+  Q32 (blocks nothing): SELECT ... INTO before PostgreSQL 16.
+  For the review: A4's wording, A2's labels, the statistics session's
+    timeout.
+  Housekeeping: the phase-auditor left files under /tmp (*.bak,
+    /tmp/audit37/); its cleanup was refused.
 ```
 
 ---

@@ -2744,9 +2744,9 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
   `sku` with a `LIMIT`; with an index on `category` alone Postgres still
   walks the `sku` index and filters every row: 153–159 ms a call with no
   index on `category` and 153–171 ms with one on `category` alone, against
-  the 20 ms budget (two local runs, 2026-11-13; CI logs each run's
-  `MEASURED` lines).
-  An index led by `category` and carrying `sku` serves it in 0.025 ms a
+  the 20 ms budget (two local runs, 2026-11-13; in CI on Linux, 96 ms and
+  96 ms; CI logs each run's `MEASURED` lines).
+  An index led by `category` and carrying `sku` serves it in 0.014–0.025 ms a
   call, measured the same way. Phase 37 part 3's fault and its fix are this index.
 
 ### What a sample is

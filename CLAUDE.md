@@ -13,7 +13,7 @@ the handoff describes where the work is. If they disagree, the handoff wins.
 
 - **Current phase:** 37, part 2 — statements and plans (`query_mean_ms_max`,
   `probe.db.statement_budget`, `probe.db.plan`, strict typing in both
-  manifest readers) — on branch `phase-37-statements`; Q31 open.
+  manifest readers) — on branch `phase-37-statements`, PR #41; awaiting decision on Q31.
   `docs/DIAGNOSTIC_PLAN.md` is complete.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core
