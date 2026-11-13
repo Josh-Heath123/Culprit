@@ -87,6 +87,11 @@ func TestTheStatisticsTemplatesReadOnlyThisDatabase(t *testing.T) {
 	if !strings.Contains(string(statsSnapshotStatement), `'^(select|with|insert|update|delete|merge)\M'`) {
 		t.Error("the snapshot keeps text other than the six statements Postgres normalises")
 	}
+	// Q32: before PostgreSQL 16 no text leaves the server at all.
+	if !strings.Contains(string(statsSnapshotStatement),
+		"WHEN current_setting('server_version_num')::int >= 160000\n\t\t                 AND s.query ~*") {
+		t.Error("the snapshot keeps text on a server before PostgreSQL 16")
+	}
 	if !strings.Contains(string(planRowStatement), `'^(select|with)\M'`) {
 		t.Error("the plan row reads text other than a SELECT or WITH")
 	}
@@ -137,5 +142,26 @@ func TestAPlannedStatementMadeElsewhereIsFound(t *testing.T) {
 	}
 	if len(plannedOutsideConstructor(t, path)) == 0 {
 		t.Fatal("a plannedStatement made outside planFromRow was not found")
+	}
+}
+
+// TestASelectIntoIsParsedButNeverPlanned: SELECT ... INTO begins with
+// SELECT but is CREATE TABLE AS. The server's description says it returns
+// no rows, and sendPlan stops there: parsed, deallocated, never explained.
+func TestASelectIntoIsParsedButNeverPlanned(t *testing.T) {
+	session := &countingSession{}
+	planned, err := planFromRow("SELECT id INTO TEMP target FROM products WHERE category = $1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sendPlan(context.Background(), session, planned); !errors.Is(err, ErrNotAQuery) {
+		t.Fatalf("sendPlan: %v, want ErrNotAQuery", err)
+	}
+	want := []string{
+		"PARSE culprit_plan: SELECT id INTO TEMP target FROM products WHERE category = $1",
+		"DEALLOCATE culprit_plan",
+	}
+	if strings.Join(session.sent, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("sent %q, want %q", session.sent, want)
 	}
 }

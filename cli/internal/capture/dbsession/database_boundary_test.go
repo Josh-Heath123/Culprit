@@ -47,7 +47,12 @@ func (s *countingSession) Prepare(_ context.Context, name, sql string) (*pgconn.
 			highest = n
 		}
 	}
-	return &pgconn.StatementDescription{Name: name, SQL: sql, ParamOIDs: make([]uint32, highest)}, nil
+	// A query describes the rows it returns; SELECT ... INTO describes none.
+	var fields []pgconn.FieldDescription
+	if !strings.Contains(strings.ToUpper(sql), " INTO ") {
+		fields = []pgconn.FieldDescription{{Name: "id"}}
+	}
+	return &pgconn.StatementDescription{Name: name, SQL: sql, ParamOIDs: make([]uint32, highest), Fields: fields}, nil
 }
 
 func (s *countingSession) Deallocate(_ context.Context, name string) error {

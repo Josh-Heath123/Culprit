@@ -194,7 +194,9 @@ const (
 // MERGE — the statements pg_stat_statements normalises, constants replaced
 // by $n. Any other text (a utility statement such as CREATE ROLE ...
 // PASSWORD '...', stored as written, or one beginning with a comment) is
-// NULL before it leaves the server (Q29 (2)).
+// NULL before it leaves the server (Q29 (2)). Before PostgreSQL 16 every
+// text is NULL (Q32): there a SELECT ... INTO is a utility statement whose
+// constants Postgres did not normalise, yet its text begins with SELECT.
 const (
 	// statsProbeStatement is the server's version and whether this
 	// database has pg_stat_statements.
@@ -204,7 +206,8 @@ const (
 	// statsSnapshotStatement is one snapshot of this database's statements.
 	statsSnapshotStatement statement = `
 		SELECT s.queryid, sum(s.calls)::bigint, sum(s.total_exec_time)::float8,
-		       max(CASE WHEN s.query ~* '^(select|with|insert|update|delete|merge)\M'
+		       max(CASE WHEN current_setting('server_version_num')::int >= 160000
+		                 AND s.query ~* '^(select|with|insert|update|delete|merge)\M'
 		                THEN s.query END)
 		FROM pg_stat_statements s
 		WHERE s.dbid = (SELECT oid FROM pg_catalog.pg_database WHERE datname = current_database())
@@ -257,6 +260,11 @@ func planFromRow(text string) (plannedStatement, error) {
 	return plannedStatement{text: text}, nil
 }
 
+// ErrNotAQuery is the refusal of a parsed statement that returns no rows
+// (a SELECT ... INTO): nothing is asked of the planner.
+var ErrNotAQuery = errors.New(
+	"refused after parsing, before planning: the statement returns no rows, so it is not a query")
+
 // ErrNotPlannable is the refusal of a text that is not one SELECT or WITH.
 var ErrNotPlannable = errors.New(
 	"refused before it was sent: only a single SELECT or WITH read from pg_stat_statements is planned")
@@ -300,6 +308,13 @@ func sendPlan(ctx context.Context, session planner, p plannedStatement) (string,
 		return "", err
 	}
 	defer func() { _ = session.Deallocate(context.Background(), planName) }()
+	// A query returns rows; the server's own description says whether this
+	// one does. SELECT ... INTO begins with SELECT and returns none: it is
+	// CREATE TABLE AS, and is not planned (found on PostgreSQL 16, Phase 37
+	// part 3). Decided by the server, not by a pattern over the text.
+	if len(description.Fields) == 0 {
+		return "", ErrNotAQuery
+	}
 	nulls := make([]string, len(description.ParamOIDs))
 	for index := range nulls {
 		nulls[index] = "NULL"
@@ -827,6 +842,9 @@ func (r StatsReader) Plan(parent context.Context, dsn string, queryID int64) (St
 	switch {
 	case errors.Is(err, ErrNotPlannable):
 		result.Unavailable = "no SELECT or WITH with that queryid in this database's statistics"
+		return result, nil
+	case errors.Is(err, ErrNotAQuery):
+		result.Unavailable = "the statement with that queryid returns no rows (a SELECT ... INTO), so it is not planned"
 		return result, nil
 	case err != nil && unloaded(err):
 		result.Unavailable = "pg_stat_statements is installed but not loaded (shared_preload_libraries)"

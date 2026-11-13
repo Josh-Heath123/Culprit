@@ -26,6 +26,11 @@ import (
 // hold (Q29 (2)).
 const TextNotKept = "text not kept: not a statement Postgres normalises"
 
+// TextWithheldBefore16 is what a reading says of every statement on a server
+// before PostgreSQL 16, where no text is kept (Q32): there a SELECT ... INTO
+// is a utility statement whose constants Postgres did not normalise.
+const TextWithheldBefore16 = "text not kept: PostgreSQL before 16 does not normalise every statement that begins with SELECT"
+
 // --- probe.db.statement_budget -----------------------------------------
 
 type dbStatementBudget struct{}
@@ -124,6 +129,8 @@ func (dbStatementBudget) Run(ctx context.Context, request Request, deps Deps) Ou
 		if statement.TextKept {
 			// The second layer, after the template's own filter.
 			fields["text"] = model.RedactCredentials(statement.Text)
+		} else if window.ServerVersion > 0 && window.ServerVersion < capture.MinimumPlanVersion {
+			fields["text"] = TextWithheldBefore16
 		} else {
 			fields["text"] = TextNotKept
 		}

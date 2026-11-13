@@ -179,3 +179,16 @@ func TestThePlanProbeTakesAQueryIDAsTextOrAnExactInt(t *testing.T) {
 		t.Errorf("a float queryid: %s (%s)", outcome.Verdict, outcome.Reason)
 	}
 }
+
+// TestTextIsWithheldBefore16AndSaysWhy (Q32): on a server before 16 the
+// session returns no text at all, and the reading says that is why.
+func TestTextIsWithheldBefore16AndSaysWhy(t *testing.T) {
+	window := capture.StatementWindow{ServerVersion: 150004,
+		Statements: []capture.StatementStats{{QueryID: 3, Calls: 1, TotalMicros: 10}}}
+	request := Request{ProbeID: model.StatementProbeID, Target: "component:inventory-db",
+		Expectation: declaredAs("component:inventory-db", "query_mean_ms_max", 50)}
+	outcome := dbStatementBudget{}.Run(context.Background(), request, Deps{Statements: fakeStatements{window: window}})
+	if text := outcome.Measured["statements"].([]any)[0].(map[string]any)["text"]; text != TextWithheldBefore16 {
+		t.Fatalf("text %v", text)
+	}
+}
