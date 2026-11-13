@@ -722,6 +722,34 @@ to the fixture, never to one language's tests. A fourth implementation
 would raise this cost again and should be weighed against emitting facts
 through one of the three that exist.
 
+## A component's schema facts are on the database it reads by `sql`
+
+Phase 37 part 3 (Q34). Every `schema:` subject names a database, and which
+one is derived from your `culprit.yaml`, not chosen by each reader:
+
+- **One `sql` edge:** the component it connects to. `orders-api` with
+  `- to: orders-db, kind: sql` has its migrations, its live tables and its
+  statement budgets all on `schema:orders-db/...`.
+- **No `sql` edge:** `<component>-db`, as before.
+- **Two or more `sql` edges:** `<component>-db` too, and nothing joins that
+  component's schema facts to either database. The migrations' facts, the
+  live capture's and a budget on either database land on different subjects,
+  so `culprit check` compares nothing across them and the walk cannot claim
+  a missing index there. Declare one `sql` edge per component that owns a
+  schema, or accept the gap.
+- **An environment's `database.name` must agree.** Where given, it must be
+  the derived name, or the manifest is refused with both names. Leave it out
+  and the derived one is used.
+- **Extractors are told the name.** The request carries `database`
+  (EXTRACTOR_PROTOCOL.md, added within protocol 1). An extractor that
+  ignores it puts its schema facts on `<component>-db`, which may join
+  nothing; one that refuses unknown request fields refuses every request
+  until it learns the field.
+- **Upgrading renames subjects.** A component whose one `sql` edge names
+  another database had its schema facts on `<component>-db` before; facts
+  stored then keep that name, and new ones are on the derived database. The
+  two do not join.
+
 ## `--export` cannot reproduce your `extract:` section
 
 The control plane does not store it. Extraction runs in the `culprit`

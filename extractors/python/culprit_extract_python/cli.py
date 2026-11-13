@@ -146,6 +146,7 @@ def run(
         capture_id=_placeholder_capture_id(),
         captured_at=datetime.now(UTC),
         extractor=EXTRACTOR_ID,
+        database=request.database or "",
     )
 
     wants = list(request.want) or sorted(SUPPORTED_WANTS)

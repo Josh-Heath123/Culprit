@@ -28,11 +28,11 @@
 <text x="16" y="461" fill="#c9d1d9" xml:space="preserve">      false                                      orders_api.main:app (rank 90)</text>
 <text x="16" y="479" fill="#c9d1d9" xml:space="preserve">      why breaks_request_path: orders-api is on the request path from web</text>
 <text x="16" y="497" fill="#c9d1d9" xml:space="preserve"></text>
-<text x="16" y="515" fill="#f85149" xml:space="preserve">  [breaks_request_path] schema:billing-api-db/public.invoices</text>
+<text x="16" y="515" fill="#f85149" xml:space="preserve">  [breaks_request_path] schema:billing-db/public.invoices</text>
 <text x="16" y="533" fill="#c9d1d9" xml:space="preserve">      billing/main:app and billing/migrations/versions disagree about columns</text>
 <text x="16" y="551" fill="#c9d1d9" xml:space="preserve">      ["created_at","id","reference","total_cen… billing/main:app public.invoices (rank 90)</text>
 <text x="16" y="569" fill="#c9d1d9" xml:space="preserve">      ["created_at","id","reference"]            billing/migrations/versions public.invoices (rank 80)</text>
-<text x="16" y="587" fill="#c9d1d9" xml:space="preserve">      why breaks_request_path: billing-api-db backs a component on the request path</text>
+<text x="16" y="587" fill="#c9d1d9" xml:space="preserve">      why breaks_request_path: billing-db backs billing-api, which is on the request path</text>
 <text x="16" y="605" fill="#c9d1d9" xml:space="preserve"></text>
 <text x="16" y="623" fill="#c9d1d9" xml:space="preserve"></text>
 <text x="16" y="641" fill="#8b949e" xml:space="preserve">Not checked (17) — these are gaps, not clean results</text>

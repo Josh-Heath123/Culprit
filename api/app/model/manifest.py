@@ -655,6 +655,34 @@ class Manifest(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _check_database_names(self) -> "Manifest":
+        """An environment's `database.name`, where given, is the component's
+        schema database (Q34): the component it connects to by its one sql
+        edge, else `<component>-db`. cli/internal/extract/databases.go is the
+        rule; this reader refuses what that one refuses (Q28)."""
+        by_name = {c.name: c for c in self.components}
+
+        def schema_database(component: str) -> str:
+            found = by_name.get(component)
+            if found is not None:
+                targets = [c.to for c in found.connections if c.kind == ConnectionKind.SQL]
+                if len(targets) == 1:
+                    return targets[0]
+            return f"{component}-db"
+
+        for environment, spec in sorted((self.environments or {}).items()):
+            for component, settings in sorted(spec.components.items()):
+                if settings.database is None or not settings.database.name.strip():
+                    continue
+                named, derived = settings.database.name.strip(), schema_database(component)
+                if named != derived:
+                    raise ValueError(
+                        f"environments.{environment}.components.{component}.database.name: "
+                        f"{named!r}, but {component}'s schema database is {derived!r}"
+                    )
+        return self
+
+    @model_validator(mode="after")
     def _check_statement_budgets(self) -> "Manifest":
         """A `query_mean_ms_max` budget (Phase 37 part 2) is on a table —
         `schema:<database>/<ns>.<table>`, no column — or on the database's

@@ -80,12 +80,20 @@ def get_stock(sku: str = "", authorization: str | None = Header(default=None)) -
 app.add_api_route(STOCK_ROUTE, get_stock, methods=["GET"])
 
 
+# The category the storefront shows when none is asked for. A request with
+# no query is how probe.http.latency times a route — its budget is on the
+# route, never on an input to it (docs/PROBES.md) — so GET /products must
+# answer one, with the same statement a filtered request runs.
+FEATURED_CATEGORY = "category-007"
+
+
 @app.get("/products")
-def list_products(category: str, limit: int = 50) -> dict:
+def list_products(category: str = FEATURED_CATEGORY, limit: int = 50) -> dict:
     """The catalogue for one category, from the service's own database
-    (Phase 37 part 1, P8). It filters on `category`, which the migrations do
-    not index: Phase 37 part 3's missing-index fault. Not on the order path:
-    POST /orders never reads it, so the fault library's walks are unchanged.
+    (Phase 37 part 1, P8), in sku order. It filters on `category`, which
+    0003 indexes as (category, sku): the fault library's database fault is
+    that index missing. Not on the order path: POST /orders never reads it,
+    so the library's order walks are unchanged.
     """
     database = engine()
     if database is None:

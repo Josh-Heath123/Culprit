@@ -54,10 +54,9 @@ from culprit_model import build
 from culprit_model.planes import ConfidenceRank, SourceKind
 from culprit_model.protocol import Predicate
 
-#: Kept identical to database.py's, because the two must produce the same
-#: subject for the same table or nothing compares. Imported rather than
-#: redefined for exactly that reason.
-from culprit_extract_python.database import DEFAULT_DATABASE_SUFFIX
+# The database part of a subject is FactBuilder.schema_database, shared
+# with database.py: the two must produce the same subject for the same
+# table or nothing compares.
 from culprit_extract_python.emit import FactBuilder
 
 
@@ -82,7 +81,7 @@ def extract_migration_schema(root: Path, builder: FactBuilder) -> list[Any]:
         return []
     leading = _leading_columns(_replay_indexes(ordered))
 
-    database = f"{builder.component}{DEFAULT_DATABASE_SUFFIX}"
+    database = builder.schema_database
     # `as_posix()`, not `str()`: an artefact path is compared and reported
     # across machines, and `migrations\versions` from a Windows run
     # naming the same file as `migrations/versions` from CI is exactly the

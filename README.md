@@ -93,7 +93,7 @@ as the finding:
 | **OBSERVED** | what actually happened when measured | `culprit probe`, and the worker's impedance scoring |
 
 Everything is a **fact** about a **subject** — `http:orders-api/GET /api/v1/orders/{}`,
-`config:billing-api/BILLING_WEBHOOK_SECRET`, `schema:billing-api-db/public.invoices` —
+`config:billing-api/BILLING_WEBHOOK_SECRET`, `schema:billing-db/public.invoices` —
 with a predicate, a value, and provenance: which file, which line, which
 extractor, and a confidence rank. Two independent sources that describe the
 same thing produce byte-identical subjects, so comparing them is a grouping,

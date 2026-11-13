@@ -9,7 +9,7 @@
       "severity": "breaks_request_path"
     },
     {
-      "subject": "schema:orders-api-db/public.order_lines",
+      "subject": "schema:orders-db/public.order_lines",
       "predicate": "columns",
       "kind": "intent_vs_configured",
       "environment": "production",

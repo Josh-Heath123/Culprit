@@ -27,7 +27,6 @@ package severity
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/model"
@@ -47,6 +46,9 @@ type Graph struct {
 	declared map[string]bool
 	// referenced is every component some other component connects to.
 	referenced map[string]bool
+	// owners is, for each schema database, the components whose schema
+	// facts are on it: the schema database rule's inverse (Q34).
+	owners map[string][]string
 }
 
 // entryKinds are component kinds a request enters the system through.
@@ -66,9 +68,16 @@ func BuildGraph(manifest *extract.Manifest) *Graph {
 		why:           map[string]string{},
 		declared:      map[string]bool{},
 		referenced:    map[string]bool{},
+		owners:        map[string][]string{},
 	}
 	if manifest == nil {
 		return graph
+	}
+	for _, component := range manifest.Components {
+		database := manifest.SchemaDatabase(component.Name)
+		if database != component.Name {
+			graph.owners[database] = append(graph.owners[database], component.Name)
+		}
 	}
 
 	outgoing := map[string][]extract.ManifestConnection{}
@@ -247,9 +256,11 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 		// whatever path uses it. Without knowing which component owns
 		// the database this stays `degrades` rather than being inflated.
 		database := parts["database"]
-		if c.graph.onRequestPath[strings.TrimSuffix(database, "-db")] {
-			return model.SeverityBreaksRequestPath, fmt.Sprintf(
-				"%s backs a component on the request path", database)
+		for _, owner := range c.graph.owners[database] {
+			if c.graph.onRequestPath[owner] {
+				return model.SeverityBreaksRequestPath, fmt.Sprintf(
+					"%s backs %s, which is on the request path", database, owner)
+			}
 		}
 		return model.SeverityDegrades, "a schema mismatch fails the queries that use it"
 

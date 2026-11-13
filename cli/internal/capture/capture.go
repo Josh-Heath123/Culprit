@@ -435,7 +435,7 @@ func (r *runState) database(ctx context.Context, component string, settings extr
 		return
 	}
 
-	database := settings.Database.DatabaseName(component)
+	database := settings.Database.DatabaseName(r.options.Manifest, component)
 	provenance := r.provenance("postgres:" + database)
 	for _, table := range schema.Tables {
 		subject, err := model.BuildSubject(model.KindSchema, model.Parts{

@@ -85,22 +85,41 @@ components:
         kind: http
         criticality: on_request_path
 
-# No `extract:` section here, deliberately (Phase 28 field 10).
+# --- Phase 37 part 3: the migrations, read as INTENT (Q33) -------------
 #
-# These three services share one uv project and one virtualenv, and each
-# imports the sibling `shared/` package. Extraction runs per component
-# with that component's own directory as the root, so importing
-# `order_service/main.py` from inside `order_service/` fails on
-# `import shared` — the extractor reports exactly that, which is honest
-# but useless. Giving all three the same root instead would attribute
-# every service's config keys to all three: a confidently wrong fact
-# rather than a missing one, which is the worse of the two.
+# One extractor, for one component, for one kind of fact: inventory-service's
+# Alembic migrations, read by the Python extractor statically. That is the
+# INTENT plane of a missing index — "the migrations declare none" — and the
+# walk cannot claim one without it.
 #
-# The repository's own root `culprit.yaml` is where extraction is
-# dogfooded — `api/` and `frontend/` are a real Python+React pair with a
-# real layout, which is what acceptance criterion 1 is about. This file
-# stays what it has always been: the demo system's *topology*, applied
-# with `just apply-model`.
+# Why only this, when this file went without `extract:` until now: these
+# three services share one uv project and import the sibling `shared/`
+# package, so *importing* a service from its own directory fails on
+# `import shared`, and rooting all three together would attribute every
+# service's config keys to all three — a confidently wrong fact. Neither
+# applies here. `--no-import` imports nothing of the demo's, and `want:
+# [db_schema]` asks only for the schema, which the migration reader replays
+# from the files with `ast`. The facts are on inventory-db, the database
+# inventory-service connects to by its one sql edge (Q34).
+#
+# Run from a clone, the command is the repository's own extractor through
+# uv. The fault library runs the same section inside the demo's containers,
+# where there is no uv: it changes only the command (cli/cmd/culprit/
+# faultlib_test.go, buildWalkBundle).
+extract:
+  extractors:
+    - name: python
+      command: ["uv", "run", "--project", "../../extractors/python", "culprit-extract-python", "--no-import"]
+      want: [db_schema]
+  components:
+    inventory-service:
+      root: inventory_service
+      extractors: [python]
+
+# The repository's own root `culprit.yaml` is where extraction is dogfooded
+# in full — `api/` and `frontend/` are a real Python+React pair with a real
+# layout. Otherwise this file is what it has always been: the demo system's
+# *topology*, applied with `just apply-model`.
 
 # --- Phase 31: probing the running demo stack -------------------------
 #
@@ -193,6 +212,37 @@ environments:
       payments-service: {}
     endpoints: *fault-endpoints
     grants: *fault-grants
+  # Phase 37 part 3: the database fault's vantage. The walk runs inside
+  # inventory-service and reads statements and plans as Culprit's own
+  # read-only role (CULPRIT_INVENTORY_STATS_DSN, in that container). No
+  # db.metadata.read: the capture verification compares holds no schema, so
+  # the index a fix adds is the change named, not a difference unexplained.
+  faults-inventory:
+    adapter: process
+    components:
+      inventory-service:
+        database: {dsn_env: CULPRIT_INVENTORY_STATS_DSN}
+    endpoints: *fault-endpoints
+    grants:
+      net.dns.resolve: true
+      net.tcp.connect: true
+      net.http.outbound: true
+      config.read.names: true
+      db.stats.read: true
+      db.plan.read: true
+  # inventory-service's database read from wherever culprit runs, with
+  # CULPRIT_INVENTORY_DSN naming a reader's connection string: its live
+  # schema (`culprit env capture local-inventory`), its statements and its
+  # plans. The database name is derived: inventory-db (Q34).
+  local-inventory:
+    adapter: process
+    components:
+      inventory-service:
+        database: {dsn_env: CULPRIT_INVENTORY_DSN}
+    grants:
+      db.metadata.read: true
+      db.stats.read: true
+      db.plan.read: true
   # `just quickstart`'s own run: the same vantage and grants as
   # faults-order, against the quickstart's demo services (same host names
   # and ports), under the name the dashboard will show.
@@ -228,6 +278,13 @@ invariants:
   # Phase 36: the route the budget below is on. The walk already asks it at
   # inventory-service (environments, health_path), but nothing declared it
   # as INTENT, so a budget there would have pointed at nothing.
+  # Phase 37 part 3: the list route, so its budget below points at a route
+  # the model declares (extraction here reads the schema only).
+  - subject: "http:inventory-service/GET /products"
+    predicate: exists
+    why: >-
+      inventory-service lists one category's products here, from its own
+      database; with no category asked for, the featured one.
   - subject: "http:inventory-service/GET /ready"
     predicate: exists
     why: >-

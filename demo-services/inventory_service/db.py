@@ -1,7 +1,7 @@
 """inventory-service's own database (Phase 37 part 1, P8).
 
-Optional: with INVENTORY_DATABASE_URL unset — the fault library's stack —
-the list route answers 503 and every other route is unchanged.
+Optional: with INVENTORY_DATABASE_URL unset the list route answers 503 and
+every other route is unchanged. The quickstart sets it.
 """
 
 import os

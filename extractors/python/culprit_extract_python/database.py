@@ -23,15 +23,9 @@ from culprit_model.protocol import Predicate
 
 from culprit_extract_python.emit import FactBuilder
 
-#: The `database` part of a `schema:` subject when the project does not
-#: say which database its tables live in.
-#:
-#: A placeholder, and an honest one: the models declare a schema, they do
-#: not declare which deployed database instance holds it. Phase 30's
-#: environment capture is what supplies a real name; until then, every
-#: schema subject from this extractor is scoped to the component that
-#: declares it, which is at least unambiguous within one system model.
-DEFAULT_DATABASE_SUFFIX = "-db"
+# The `database` part of a `schema:` subject is the orchestrator's: the
+# models declare a schema, not which database holds it, and the system
+# model says which (Q34; FactBuilder.schema_database).
 
 
 def extract_schema(builder: FactBuilder) -> list[Any]:
@@ -45,7 +39,7 @@ def extract_schema(builder: FactBuilder) -> list[Any]:
     if not tables:
         return []
 
-    database = f"{builder.component}{DEFAULT_DATABASE_SUFFIX}"
+    database = builder.schema_database
     facts: list[Any] = []
     for table in sorted(tables, key=lambda item: (item.schema or "public", item.name)):
         namespace = table.schema or "public"

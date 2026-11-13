@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/capture"
+	"github.com/josh-heath123/culprit/cli/internal/extract"
+	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
 // Phase 37 part 1: index facts, declared and live, through the real
@@ -182,10 +184,110 @@ func TestTheDemoDatabase(t *testing.T) {
 		leading = append(leading, column)
 	}
 	sort.Strings(leading)
-	if strings.Join(leading, ",") != "id,sku" {
-		t.Fatalf("the columns leading an index on products are %v; the migrations declare id and sku", leading)
+	if strings.Join(leading, ",") != "category,id,sku" {
+		t.Fatalf("the columns leading an index on products are %v; the migrations declare id, sku and (0003) category", leading)
 	}
-	if strings.Join(schema.MigrationHeads, ",") != "0002_seed_products" {
-		t.Fatalf("the demo's database is at %v, want its head 0002_seed_products", schema.MigrationHeads)
+	if strings.Join(schema.MigrationHeads, ",") != "0003_products_category_sku" {
+		t.Fatalf("the demo's database is at %v, want its head 0003_products_category_sku", schema.MigrationHeads)
+	}
+}
+
+// setUpDemoDatabase runs the demo's own setup, as the quickstart does, on a
+// throwaway Postgres, and returns a reader's DSN for the inventory database:
+// a login role with no grant at all, which is all reading the catalogue
+// needs (the migration version, behind SELECT on alembic_version, is not).
+func setUpDemoDatabase(t *testing.T) string {
+	t.Helper()
+	dsn, psql := startPostgres(t)
+	address := strings.TrimSuffix(strings.TrimPrefix(dsn, "postgresql://postgres:index-test@"), "/shop?sslmode=disable")
+	host, port, _ := strings.Cut(address, ":")
+	inventory := "postgresql://inventory:inventory-test@" + address + "/inventory?sslmode=disable"
+	setup := exec.Command("uv", "run", "--project", ".", "python", "-m", "inventory_service.setup_db")
+	setup.Dir = filepath.Join(repoRoot, "demo-services")
+	setup.Env = append(os.Environ(),
+		"INVENTORY_ADMIN_HOST="+host, "INVENTORY_ADMIN_PORT="+port, "INVENTORY_ADMIN_USER=postgres",
+		"INVENTORY_ADMIN_PASSWORD=index-test", "INVENTORY_ADMIN_DB=shop", "INVENTORY_DATABASE_URL="+inventory)
+	if out, err := setup.CombinedOutput(); err != nil {
+		t.Fatalf("the demo's database setup: %v\n%s", err, out)
+	}
+	psql("CREATE ROLE schema_reader LOGIN PASSWORD 'reader-test'")
+	return strings.Replace(inventory, "inventory:inventory-test@", "schema_reader:reader-test@", 1)
+}
+
+// TestTheDemoSchemaIsOnOneDatabase is Q34 on the demo: three readers of
+// inventory-service's schema put it on one database, the one it connects to
+// by its one sql edge (inventory-db) —
+//   - the migrations, read by the Python extractor through the demo's own
+//     extract: section (`culprit intent`, plugins on);
+//   - the live database, read by capture (`culprit env capture
+//     local-inventory`);
+//   - the statement budget on products, as the demo declares it.
+//
+// Before Q34 the first was on inventory-service-db and joined neither.
+func TestTheDemoSchemaIsOnOneDatabase(t *testing.T) {
+	if os.Getenv("CULPRIT_DOCKER_TESTS") != "1" {
+		t.Skip("NOT RUN: set CULPRIT_DOCKER_TESTS=1 to run the demo schema test (needs Docker, uv)")
+	}
+	manifestPath := filepath.Join(repoRoot, "demo-services", "culprit.yaml")
+	t.Setenv("CULPRIT_INVENTORY_DSN", setUpDemoDatabase(t))
+	category := model.MustBuildSubject(model.KindSchema, model.Parts{
+		"database": "inventory-db", "namespace": "public", "table": "products", "column": "category"})
+
+	leadsIndex := func(facts []model.Fact, plane model.Plane) map[string]any {
+		found := map[string]any{}
+		for _, fact := range facts {
+			if fact.Plane == plane && fact.Predicate == model.PredicateLeadsIndex {
+				found[fact.Subject] = fact.Value
+			}
+		}
+		return found
+	}
+
+	stdout, err := run(t, "intent", "-f", manifestPath, "--format", "json")
+	if err != nil {
+		t.Fatalf("culprit intent on the demo: %v\n%s", err, stdout)
+	}
+	var intent model.CaptureBundle
+	if err := json.Unmarshal([]byte(stdout), &intent); err != nil {
+		t.Fatalf("culprit intent printed no bundle: %v", err)
+	}
+	declared := leadsIndex(intent.Facts, model.PlaneIntent)
+	if declared[category] != true {
+		t.Errorf("the migrations: no leads_index true on %s (0003 declares (category, sku)); found %v", category, declared)
+	}
+
+	envelope := filepath.Join(t.TempDir(), "live.json")
+	if out, err := run(t, "env", "capture", "local-inventory", "-f", manifestPath, "-o", envelope); err != nil {
+		t.Fatalf("culprit env capture local-inventory: %v\n%s", err, out)
+	}
+	live, err := capture.ReadEnvelope(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configured := leadsIndex(live.Bundle.Facts, model.PlaneConfigured)
+	if configured[category] != true {
+		t.Errorf("the live database: no leads_index true on %s; found %v", category, configured)
+	}
+
+	manifest, err := extract.LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	budgeted := ""
+	for _, budget := range manifest.Budgets {
+		if model.StatementBudgetPredicates[budget.Predicate] {
+			budgeted = budget.Subject
+		}
+	}
+	_, parts, err := model.ParseSubject(budgeted)
+	if err != nil || parts["database"] != "inventory-db" {
+		t.Errorf("the statement budget is on %q, not on inventory-db", budgeted)
+	}
+
+	// The same subjects on both sides, not only the one checked above.
+	for subject := range declared {
+		if _, ok := configured[subject]; !ok {
+			t.Errorf("%s is declared by the migrations and absent from the live capture", subject)
+		}
 	}
 }

@@ -172,6 +172,11 @@ class ExtractorRequest(BaseModel):
     #: builds needs a component name, and an extractor cannot invent one
     #: that will match the system model. Recorded as a plan correction.
     component: str | None = None
+    #: The database this component's schema facts are on, derived from the
+    #: model by the orchestrator (Q34): the component it connects to by its
+    #: one sql edge, else `<component>-db`. Used verbatim in `schema:`
+    #: subjects. Absent from an older orchestrator.
+    database: str | None = None
 
 
 class ExtractorResponse(BaseModel):

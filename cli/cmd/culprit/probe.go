@@ -261,6 +261,7 @@ func runProbe(ctx context.Context, in probeInput) ([]model.Reading, *capability.
 		sources := &probe.Sources{
 			Environment: in.Environment,
 			Spec:        manifest.Environments[in.Environment],
+			Manifest:    manifest,
 			ManifestDir: filepath.Dir(resolved),
 			Grants:      grants,
 			Ledger:      ledger,

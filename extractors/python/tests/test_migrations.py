@@ -332,10 +332,11 @@ def test_a_dropped_column_takes_its_index_and_a_rename_follows(tmp_path: Path) -
 
 def test_the_demo_migrations_declare_their_indexes() -> None:
     """inventory-service's own migrations (Phase 37 part 1, P8), read as
-    the extractor reads them: `products` is led by its primary key and the
-    unique index on sku; `category`, which the list route filters on, is
-    not — Phase 37 part 3's missing-index fault. cli/cmd/culprit's
-    TestTheDemoDatabase holds the live side to the same two columns."""
+    the extractor reads them, on the database the orchestrator names for it
+    (inventory-db, by its one sql edge: Q34): `products` is led by its
+    primary key, the unique index on sku and, since 0003, (category, sku).
+    The fault library's database fault is 0003 missing. cli/cmd/culprit's
+    TestTheDemoDatabase holds the live side to the same three columns."""
     from datetime import UTC, datetime
     from uuid import uuid4
 
@@ -347,6 +348,7 @@ def test_the_demo_migrations_declare_their_indexes() -> None:
         capture_id=uuid4(),
         captured_at=datetime(2026, 11, 12, tzinfo=UTC),
         extractor="test",
+        database="inventory-db",
     )
     leads = {
         fact.subject: fact.value
@@ -355,11 +357,11 @@ def test_the_demo_migrations_declare_their_indexes() -> None:
     }
     from culprit_model import build
 
-    declared = {"id": True, "sku": True, "category": False, "name": False, "price_cents": False}
+    declared = {"id": True, "sku": True, "category": True, "name": False, "price_cents": False}
     assert leads == {
         build(
             "schema",
-            database="inventory-service-db",
+            database="inventory-db",
             namespace="public",
             table="products",
             column=column,

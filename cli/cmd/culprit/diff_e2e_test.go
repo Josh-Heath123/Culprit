@@ -114,11 +114,11 @@ func TestEnvironmentDiffAgainstRealContainers(t *testing.T) {
 	// table) and 3 (twice — the digest and the tag it came from), and
 	// nothing else.
 	want := map[string]string{
-		"intent_vs_configured | config:orders-api/JWT_SECRET_KEY | exists | production":         "breaks_request_path",
-		"intent_vs_configured | component:orders-api | migration_head | production":             "breaks_request_path",
-		"intent_vs_configured | schema:orders-api-db/public.order_lines | columns | production": "breaks_request_path",
-		"env_vs_env | image:orders-api | digest | staging":                                      "degrades",
-		"env_vs_env | image:orders-api | reference | staging":                                   "degrades",
+		"intent_vs_configured | config:orders-api/JWT_SECRET_KEY | exists | production":     "breaks_request_path",
+		"intent_vs_configured | component:orders-api | migration_head | production":         "breaks_request_path",
+		"intent_vs_configured | schema:orders-db/public.order_lines | columns | production": "breaks_request_path",
+		"env_vs_env | image:orders-api | digest | staging":                                  "degrades",
+		"env_vs_env | image:orders-api | reference | staging":                               "degrades",
 	}
 	for key, severity := range want {
 		if got[key] != severity {
@@ -190,8 +190,8 @@ func TestEnvironmentDiffAgainstRealContainers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("capture with a least-privilege role: %v", err)
 	}
-	if !strings.Contains(probed, "schema:orders-api-db/public.order_lines ") ||
-		!strings.Contains(probed, "schema:orders-api-db/public.orders ") {
+	if !strings.Contains(probed, "schema:orders-db/public.order_lines ") ||
+		!strings.Contains(probed, "schema:orders-db/public.orders ") {
 		t.Errorf("a least-privilege role lost tables from the schema:\n%s", probed)
 	}
 	if strings.Contains(probed, "migration_head") ||
