@@ -1517,6 +1517,223 @@ step 0 confirms it.
 - No N+1 (that is Phase 39).
 - Nothing for Phase 38.
 
+**Architecture review of part 3, items 1–3, 2026-11-13 — merged as `1d20322`
+(PR #42); part 3 continues. Q33 ruled; Q34 raised and ruled.**
+
+PR #42 was merged with Q33 open, the fourth merge past an open question. It
+was safe for the same reason as the others: the work is additive.
+`cli/testdata/faultlib/expected.json` and `results.json` are byte-identical
+to `1b2496b`, and the database pass runs only when nothing was found below the
+entry.
+
+**What was verified, and how.** The link to Malcolm's computer was down, and
+GitHub's API is not reachable from the architecture session's workspace, so
+this review did not read the pull request's check runs. Malcolm reports PR #42
+green. The run report records run 43439643068 green on `ffd7bf1`. On the merge
+commit `1d20322`, in the workspace, this review ran:
+
+- ruff, pyright, `lint-imports` and the `scripts/check_*` gates;
+- the Python unit tests (api with `shared/`, worker, mcp_server, both
+  extractors);
+- gofmt, `go vet ./...` and `go test ./...` with Go 1.27;
+- the CI step's five `dbsession` Postgres tests, on PostgreSQL 16 and on a
+  PostgreSQL 15.10 built from source, and `cmd/culprit`'s index and
+  demo-database tests.
+
+All are green. The fault library, the Python tests that start Postgres, and the
+compose, kind, migration round-trip and image builds need registry images and
+did not run here. So step 0 of the next run reads, by id, `main`'s push run on
+`1d20322` and PR #42's last run.
+
+**The CI repair (`ffd7bf1`) is accepted.** The cause is right: the official
+image's first-boot server answers on the socket, then restarts. The fix is
+right too: all four helpers now wait for `pg_isready -h 127.0.0.1`, rather than
+retrying.
+
+**Item 1 was never reported.** The run that built it stopped on the red CI
+before it wrote §5. Checked here instead:
+
+- **Q31.**
+  - With Go's `ValidateFor` made to accept any verdict, two tests go red:
+    `TestReadingsAreHeldToTheirProbesDeclaredVerdicts` and
+    `TestAnUndeclaredVerdictNeverLeavesTheRunner`.
+  - With Python's `validate_for` made to accept any verdict,
+    `test_readings_are_held_to_their_probes_declared_verdicts` goes red.
+  - The API's refusal is a Postgres-backed test, so it is checked in CI only.
+  - The fixture gate names no probe. The exemption keyed on a name is gone.
+- **Q32.** `TestNoTextIsKeptBeforePostgres16` is green on 15.10. On 16, a
+  statement whose server-side description has no fields is refused before
+  planning (`ErrNotAQuery`). The server decides that, not a pattern over the
+  text, which is the right shape.
+- **A2.** The splits are checked by label
+  (`TestTheAuditorsSplitsAreReadAsRecorded`). There are 25 labels, but the
+  brief said 23. The next report says which two were added, and why.
+- **The deadline.** `TestAWindowCutShortIsUnavailable` is green.
+
+**Item 2 is accepted, and its finding matters.** The isolate tests gave
+`probe.db.plan` a hand-built manifest that discriminated `missing_index`. The
+real manifest declared nothing, and placement had no case for either kind, so
+the binary would never have run the pass. That is pattern 1 and pattern 8 in
+one. The fix has the right shape: a test over the real catalogue and placement,
+shown red without the declaration.
+
+**Item 3 is accepted.** The recommendation is derived from the plan. The demo's
+plan gives `public.products (category, sku)`.
+
+**Q33 — ruled: (a), with three corrections.** INTENT is the migrations' own,
+read by the reader that exists, through the plugin path `diagnose` already
+has. (b) is rejected: it would be a second reader of the same files in a second
+language (pattern 9). (c) is rejected too: it is a person's assertion standing
+in for the migrations', and it is wrong the moment `0003` lands.
+
+1. **Static and scoped.** The demo's `culprit.yaml` gains an `extract:`
+   section for `inventory-service` only. It runs the Python extractor with
+   `--no-import` and `want: [db_schema]`. With `--no-import`, nothing of the
+   demo's is imported, so `import shared` cannot break it. Rewrite the
+   manifest's comment that explains why it had no `extract:` section, to say
+   why this one is safe. The migration chain is read with `ast` either way.
+
+   Checked on `1d20322`: `culprit intent` with such a section gives
+   `leads_index` false on `category`, and true on `id` and `sku`. That is, on
+   the wrong subjects; see Q34.
+2. **The fault is planted in the tree as well as the database.** The walk reads
+   INTENT from source, so the fault must exist in the source the walk reads.
+   - **At the fault:** the tree holds `0001`–`0002`, and the database is at
+     `0002`.
+   - **The known fix:** a commit that adds `0003`, with the database upgraded
+     to it.
+   - **The wrong fix:** a commit that adds a `category`-only migration, applied.
+
+   With `0003` in the tree and the database at `0002`, INTENT and CONFIGURED
+   disagree. That is a migration not applied, a different fault. The pass
+   rightly leaves `missing_index` unexplored there. It is not this case, and
+   it is not built here; LIMITS says so.
+3. **One code path in the library.** The library's walks run the demo
+   manifest's extractors for every case, so `--no-plugins` leaves the library.
+   - The harness makes the extractor runnable in the walk's container. How is
+     the harness's choice, stated in the report.
+   - The walk reads the committed `extract:` section, changed only where the
+     container forces it. The report names any such difference.
+   - For the existing cases, `expected.json` is unchanged. `results.json`
+     changes for them only in fields the report lists, each explained.
+
+The agent still skips plugins on a production host. A missing index found under
+the agent is therefore partial, for want of migration INTENT, and LIMITS says
+so. Carrying INTENT extracted in CI to an agent is named future work; it is not
+built.
+
+**Q34 — the schema database name. Raised by this review, and ruled.** Found
+while checking (a): `culprit intent` names the demo's columns
+`schema:inventory-service-db/public.products.*`. Two readers name a component's
+database `<component>-db`: the Python extractor always, and Go's
+`DatabaseSpec.DatabaseName` when an environment gives no `name`. But the walk,
+the budget (`schema:inventory-db/public.products`) and the graph all say
+`inventory-db`. Q33's option (a), as raised, would therefore have joined
+nothing, and the walk would have stayed partial.
+
+The same split runs through the repository's manifests. Of the 14 components
+there that connect to a database by `sql`, 13 have a graph database that
+differs from the default subject name. That includes Culprit's own:
+`culprit-api` and `culprit-worker` both connect to `culprit-db`, yet
+`culprit.yaml` names the schema `culprit-api-db`. Severity finds a database's
+owner by trimming `-db`, a fourth copy of the convention.
+
+Ruling: one rule, in one Go function, derived from the model.
+
+- **The rule:**
+  - A component's schema database is the database component it connects to by
+    its one `sql` edge.
+  - With no such edge, it is `<component>-db`, as today.
+  - With two or more, it is `<component>-db`, and LIMITS says the walk cannot
+    join that component's schema facts to either database.
+- **Environments:** an environment's `database.name`, where given, must equal
+  the rule's name. Otherwise the manifest is refused, with both names given.
+- **Extractors:** the orchestrator passes the name to each extractor in its
+  request. This changes `docs/EXTRACTOR_PROTOCOL.md` and both request models.
+  The Python extractor uses the name it is given, and falls back to
+  `<component>-db` only when an older orchestrator sends none.
+- **Severity:** its owner lookup is the inverse of the same rule, not a suffix
+  trim.
+
+This renames schema subjects across fixtures, goldens and Culprit's own
+self-check, which is the point. The run lists every subject whose database
+changed. Putting `culprit-api`'s and `culprit-worker`'s facts on one database
+may surface a divergence in the self-check. If it does, escalate it; do not
+suppress it.
+
+**Part 3, continued — brief and criteria, 2026-11-13.** Part 3's decisions
+above stand, as amended by Q33 and Q34. Its earlier criteria not yet met carry
+forward.
+
+**Work order.**
+0. Confirm `main`'s push run on `1d20322` and PR #42's last run, each green,
+   by id. Then commit the review: apply `../phase-37-3-review.patch` and
+   commit with `../phase-37-3-review.txt`.
+1. **Q34: one database name.** This is its own commit, before anything that
+   depends on it. It covers the rule and its function, the protocol field,
+   the extractor, severity's owner lookup, and environment names held to the
+   rule. It renames subjects in the fixtures and goldens, and lists every
+   subject renamed.
+2. **The demo.** This item adds:
+   - `0003` `(category, sku)`;
+   - the static, scoped `extract:` section (Q33 (1));
+   - the p95 budget on `GET /products`, saying how it was chosen;
+   - the load generator's traffic on it;
+   - the database in the faults stack.
+3. **The library's database fault.**
+   - The fault is planted in the tree and the database (Q33 (2)), with the
+     known fix and the wrong fix as commits.
+   - The library runs the extractors (Q33 (3)).
+   - Then come `expected.json`, `results.json` and the README's number, still
+     labelled as planted faults.
+   - Shard the job if it passes 15 minutes, with the coverage proof first.
+4. **The documents:**
+   - the README tour: a database finding;
+   - PROBES and PERMISSIONS;
+   - `EXTRACTOR_PROTOCOL.md`;
+   - LIMITS: the entry rule, the four planes, the unused-index case, an
+     unapplied migration, what a `background` database leaves unasked, the
+     system's own traffic as the measurement, the database rule's two-edge
+     case, and the agent without migration INTENT.
+
+**Acceptance criteria (part 3, continued).**
+- **Q34:**
+  - a test of the rule: no `sql` edge, one, two; an environment name that
+    agrees, and one that is refused;
+  - `culprit intent` on the demo, from a fresh clone, names
+    `schema:inventory-db/public.products.category`;
+  - one test holds three things to the same database for the demo: the
+    `leads_index` from the migrations, the `leads_index` from the live
+    capture, and the budget's subject. It goes red, shown, when the extractor
+    ignores the name it is sent;
+  - severity finds an owner whose database is not `<owner>-db`;
+  - every renamed subject is listed in the report;
+  - the self-check is green, or any divergence it surfaces is escalated.
+- **Q33:**
+  - the demo's `extract:` section is `--no-import` and `want: [db_schema]`,
+    for `inventory-service` only;
+  - the library's walks run it;
+  - existing cases: `expected.json` is unchanged, and any change to their
+    `results.json` is listed and explained.
+- **In CI, on Linux, the library's database fault:**
+  - diagnoses `missing_index` on `category`, complete, citing all four planes
+    and recommending `(category, sku)`;
+  - is `verified` after the commit that adds `0003`;
+  - is `not_resolved` after the `category`-only commit.
+- **The healthy stack:** the quickstart at `0003` is within both budgets.
+- **A2:** the report says why there are 25 labels where the brief said 23.
+- **CI:** every pull-request check is green. The fault-library job takes 15
+  minutes or less, or is sharded with its coverage proof. `LLM_PROVIDER=none`
+  changes nothing.
+
+**Do NOT implement in part 3, continued.** The earlier list stands, and in
+addition:
+- no Go reader for Alembic files (Q33 (b));
+- no `leads_index` asserted in `culprit.yaml` (Q33 (c));
+- no `--intent` flag, and no INTENT carried to an agent;
+- no new manifest field for a component's database, since it is derived;
+- no walk hypothesis for an unapplied migration.
+
 ---
 
 ### Phase 38 — Bounds: what the browser downloads, and what a list returns
