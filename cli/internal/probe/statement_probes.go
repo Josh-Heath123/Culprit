@@ -104,6 +104,7 @@ func (dbStatementBudget) Run(ctx context.Context, request Request, deps Deps) Ou
 	type entry struct {
 		fields map[string]any
 		over   bool
+		judged bool
 		total  int64
 		id     int64
 	}
@@ -145,13 +146,19 @@ func (dbStatementBudget) Run(ctx context.Context, request Request, deps Deps) Ou
 			fields["budget_on"] = budgetOn
 			over = statement.TotalMicros > int64(budget)*1000*statement.Calls
 		}
-		entries = append(entries, entry{fields, over, statement.TotalMicros, statement.QueryID})
+		entries = append(entries, entry{fields, over, budget > 0, statement.TotalMicros, statement.QueryID})
 	}
-	// Over budget first, then by time in the window: what is kept judges
-	// as the whole window does (LIMITS).
+	// Over budget first, then the other statements a budget applies to,
+	// then by time in the window: what is kept judges as the whole window
+	// does (LIMITS). Without the second key, twenty slower statements with
+	// no budget could push every judged one out, and a window within budget
+	// would read as inconclusive (found in CI's demo test, 2026-11-13).
 	sort.SliceStable(entries, func(i, j int) bool {
 		if entries[i].over != entries[j].over {
 			return entries[i].over
+		}
+		if entries[i].judged != entries[j].judged {
+			return entries[i].judged
 		}
 		if entries[i].total != entries[j].total {
 			return entries[i].total > entries[j].total
@@ -181,6 +188,10 @@ func (dbStatementBudget) Run(ctx context.Context, request Request, deps Deps) Ou
 	verdict, reason, err := model.JudgeStatements(measured)
 	if err != nil {
 		return inconclusive("the window's measurement is not the rule's input: " + err.Error())
+	}
+	if tooLarge > 0 {
+		reason += fmt.Sprintf("; %d statement(s) too large for a reading's count were not judged "+
+			"(more than %d calls or µs in the window)", tooLarge, maxReadingCount)
 	}
 	if len(tableBudgets) > 0 && !planned {
 		reason += "; a table's budget was not applied: db.plan.read is not granted (or the " +
@@ -224,13 +235,12 @@ func (dbPlan) Manifest() model.ProbeManifest {
 
 func (dbPlan) Run(ctx context.Context, request Request, deps Deps) Outcome {
 	database := databaseOf(request.Target)
-	raw, ok := stringInput(request.Inputs, "queryid")
-	if !ok {
+	queryID, named, whole := queryIDInput(request.Inputs)
+	if !named {
 		return inconclusive("no statement was named: the walk passes the queryid of one it read")
 	}
-	queryID, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return inconclusive("the queryid is not a whole number")
+	if !whole {
+		return inconclusive("the queryid is not a whole number held exactly; pass it as text")
 	}
 	if deps.Statements == nil {
 		return inconclusive("no database client is available to this agent")
@@ -251,7 +261,7 @@ func (dbPlan) Run(ctx context.Context, request Request, deps Deps) Outcome {
 		return inconclusive("the planner's answer could not be read")
 	}
 	return pass(map[string]any{
-		"queryid":            raw,
+		"queryid":            strconv.FormatInt(queryID, 10),
 		"nodes":              nodes,
 		"tables":             planTables(nodes),
 		"server_version_num": plan.ServerVersion,
@@ -357,4 +367,27 @@ func planTables(nodes []map[string]any) []string {
 		tables = []string{}
 	}
 	return tables
+}
+
+// queryIDInput reads the plan probe's queryid. The walk passes it as text;
+// `culprit probe --input queryid=123` passes an int, which is exact. A
+// float is refused, since a 64-bit queryid does not survive one (the
+// phase-auditor found the int refused as unnamed, 2026-11-13).
+func queryIDInput(inputs map[string]any) (queryID int64, named, whole bool) {
+	switch value := inputs["queryid"].(type) {
+	case string:
+		if value == "" {
+			return 0, false, false
+		}
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		return parsed, true, err == nil
+	case int:
+		return int64(value), true, true
+	case int64:
+		return value, true, true
+	case nil:
+		return 0, false, false
+	default:
+		return 0, true, false
+	}
 }

@@ -122,3 +122,60 @@ func TestAPlanKeepsNoConstant(t *testing.T) {
 		t.Fatalf("filter columns %v, want category and name (and not category from inside a string)", columns)
 	}
 }
+
+// TestStatementsWithABudgetAreKeptBeforeThoseWithout: twenty-five slower
+// statements no budget applies to do not push the one a table budget judges
+// out of the reading. Before this rule the window read as inconclusive, "no
+// call to a statement with a budget fell in the window", though it was
+// within budget (found in CI's demo test, 2026-11-13).
+func TestStatementsWithABudgetAreKeptBeforeThoseWithout(t *testing.T) {
+	window := slowProducts()
+	window.Statements[0].TotalMicros = 5000
+	for i := int64(100); i < 125; i++ {
+		window.Statements = append(window.Statements, capture.StatementStats{QueryID: i, Calls: 1, TotalMicros: 900000})
+	}
+	request := Request{ProbeID: model.StatementProbeID, Target: "component:inventory-db",
+		Related: []model.Fact{tableBudget(50)}}
+	outcome := dbStatementBudget{}.Run(context.Background(), request,
+		Deps{Statements: fakeStatements{window: window, planned: true}})
+	statements := outcome.Measured["statements"].([]any)
+	if outcome.Verdict != model.VerdictPass || statements[0].(map[string]any)["queryid"] != "7" {
+		t.Fatalf("%s (%s), first kept %v", outcome.Verdict, outcome.Reason, statements[0])
+	}
+}
+
+// TestAStatementTooLargeToJudgeIsNamedInTheReason: a statement whose counts
+// exceed a reading's bound is not judged, and the reason says so, so a pass
+// over the rest is not read as a pass over everything (phase-auditor,
+// 2026-11-13).
+func TestAStatementTooLargeToJudgeIsNamedInTheReason(t *testing.T) {
+	window := slowProducts()
+	window.Statements = append(window.Statements, capture.StatementStats{QueryID: 8, Calls: 1, TotalMicros: 3_000_000_000})
+	request := Request{ProbeID: model.StatementProbeID, Target: "component:inventory-db",
+		Expectation: declaredAs("component:inventory-db", "query_mean_ms_max", 500)}
+	outcome := dbStatementBudget{}.Run(context.Background(), request,
+		Deps{Statements: fakeStatements{window: window, planned: true}})
+	if outcome.Measured["statements_too_large"] != 1 || !strings.Contains(outcome.Reason, "1 statement(s) too large") {
+		t.Fatalf("%s: %s (%v too large)", outcome.Verdict, outcome.Reason, outcome.Measured["statements_too_large"])
+	}
+}
+
+// TestThePlanProbeTakesAQueryIDAsTextOrAnExactInt: `culprit probe --input
+// queryid=7` arrives as an int and is planned; a float is refused, since a
+// 64-bit queryid does not survive one (phase-auditor, 2026-11-13).
+func TestThePlanProbeTakesAQueryIDAsTextOrAnExactInt(t *testing.T) {
+	deps := Deps{Statements: fakeStatements{plan: capture.StatementPlan{PlanJSON: seqScanPlan,
+		TableColumns: map[string][]string{"public.products": {"id", "category", "name"}}}}}
+	for _, queryID := range []any{"7", 7, int64(7)} {
+		outcome := dbPlan{}.Run(context.Background(), Request{ProbeID: model.PlanProbeID,
+			Target: "component:inventory-db", Inputs: map[string]any{"queryid": queryID}}, deps)
+		if outcome.Verdict != model.VerdictPass || outcome.Measured["queryid"] != "7" {
+			t.Errorf("queryid %#v: %s (%s)", queryID, outcome.Verdict, outcome.Reason)
+		}
+	}
+	outcome := dbPlan{}.Run(context.Background(), Request{ProbeID: model.PlanProbeID,
+		Target: "component:inventory-db", Inputs: map[string]any{"queryid": 7.0}}, deps)
+	if outcome.Verdict != model.VerdictInconclusive || !strings.Contains(outcome.Reason, "pass it as text") {
+		t.Errorf("a float queryid: %s (%s)", outcome.Verdict, outcome.Reason)
+	}
+}

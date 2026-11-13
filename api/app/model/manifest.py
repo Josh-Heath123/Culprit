@@ -842,7 +842,7 @@ class YAML12Loader(yaml.SafeLoader):
     close-out).
     """
 
-    def resolve(self, kind, value, implicit):  # type: ignore[override]
+    def resolve(self, kind: Any, value: Any, implicit: Any) -> Any:
         if kind is yaml.ScalarNode:
             if implicit[0]:
                 return _TAG + _v3_resolve(value)[0]
@@ -939,8 +939,8 @@ def _scalar(node: yaml.ScalarNode, path: str) -> tuple[str, object]:
     if short not in ("int", "float", "bool", "null"):
         raise _refuse(node, f"{path}: a value tagged {node.tag} is not plain data")
     kind, value = _v3_resolve(node.value)
-    if short == "float" and kind == "int":
-        return "float", float(value)  # type: ignore[arg-type]
+    if short == "float" and kind == "int" and isinstance(value, int):
+        return "float", float(value)
     if kind != short:
         raise _refuse(node, f"{path}: the text cannot be read as !!{short}")
     return kind, value
@@ -1065,13 +1065,13 @@ def _typed(node: yaml.Node, schema: Schema, path: str) -> object:
         if kind == "grant":
             kind = "bool"
         if kind == "any":
-            if found == "int" and not -(2**63) <= value < 2**63:  # type: ignore[operator]
+            if found == "int" and isinstance(value, int) and not -(2**63) <= value < 2**63:
                 raise _refuse(node, f"{where}: an integer out of range")
             return value
         if kind in _KIND_NAMES:
             if found != kind:
                 raise _refuse(node, f"{where}: expected {_KIND_NAMES[kind]}, written as {found}")
-            if kind == "int" and not -(2**63) <= value < 2**63:  # type: ignore[operator]
+            if kind == "int" and isinstance(value, int) and not -(2**63) <= value < 2**63:
                 raise _refuse(node, f"{where}: an integer out of range")
             return value
         raise _refuse(

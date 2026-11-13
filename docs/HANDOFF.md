@@ -80,6 +80,7 @@ is never reused.
 | # | Question | Raised | Blocks |
 |---|---|---|---|
 | 31 | **Q30's ruling, keyed on the manifest, would catch `probe.edge.impedance`.** The ruling: a probe whose `expected_from` is empty is exempt from the fail fixture, and a test holds every such probe to never returning fail. But `probe.edge.impedance` (Phase 31) also declares no expectation plane: impedance is OBSERVED against its own history. It returns `fail` at 3σ or more, and it has a fail fixture. As ruled, the new test is red on it. Options: (a) a probe with an empty `expected_from` and no fail fixture is held to never failing (keyed on manifest and fixtures, no names); (b) a manifest property marking evidence-only probes, in Go, Python and the catalogue mirror; (c) impedance stops failing, which reverses Phase 31. Until ruled, the exemption by name for `probe.db.plan` stays. | 2026-11-13, Phase 37 part 2 | Q30's change only, not the phase's other work |
+| 32 | **`SELECT … INTO` before PostgreSQL 16.** On 14 and 15 it is a utility statement (`CREATE TABLE AS`) whose constants Postgres did not normalise, yet its text begins with `SELECT`, so the six-statement rule (Q29 (2)) would keep it, with only `redact_credentials` behind it. Raised by the phase-auditor and not verified on a PostgreSQL 15 server. Options: keep text only on 16 and later, raise the statement probe's floor to 16, or verify on 15 first. Stated in LIMITS. | 2026-11-13, Phase 37 part 2 | Nothing |
 
 ---
 

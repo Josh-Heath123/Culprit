@@ -3,15 +3,18 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/model"
+	"github.com/josh-heath123/culprit/cli/internal/probe"
 )
 
 // Phase 37 part 2's criteria on the demo's own database (P8), in CI: the
@@ -55,6 +58,9 @@ budgets:
     why: the demo's own budget on the list route's table
 `
 
+// migrationRoles numbers the roles trafficDuring creates.
+var migrationRoles int64
+
 const (
 	migrationPassword = "culprit-migration-role-password-not-a-secret"
 	productsQuery     = "SELECT sku, name, price_cents FROM products WHERE category = 'category-7' ORDER BY sku LIMIT 50"
@@ -96,14 +102,23 @@ func runSQL(t *testing.T, container, user, password, database, sql string) error
 	return err
 }
 
-// trafficDuring runs the products query as inventory-service's role, and a
-// statement in the other database, until stop is closed.
+// trafficDuring runs, until stop is closed and inside the window:
+//   - the products query as inventory-service's role;
+//   - a statement in the other database;
+//   - CREATE ROLE ... PASSWORD, as Culprit's migrations create their roles,
+//     in this database and in the other, once per window (one each: more would
+//     crowd the fast products statement out of the 20 a reading keeps).
+//
+// The role statements must fall inside the window: run before it, their
+// calls do not move and the window drops them unread, so a check on them
+// would hold even with no text filter (phase-auditor, 2026-11-13).
 func trafficDuring(t *testing.T, container string, stop <-chan struct{}) *sync.WaitGroup {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		batch := strings.Repeat(productsQuery+";", 5)
+		rolesMade := false
 		for {
 			select {
 			case <-stop:
@@ -112,6 +127,15 @@ func trafficDuring(t *testing.T, container string, stop <-chan struct{}) *sync.W
 			}
 			_ = runSQL(t, container, "inventory", "inventory-test", "inventory", batch)
 			_ = runSQL(t, container, "postgres", "index-test", "shop", "SELECT 4242 AS other_database_marker")
+			for _, database := range []string{"shop", "inventory"} {
+				if rolesMade {
+					break
+				}
+				n := atomic.AddInt64(&migrationRoles, 1)
+				_ = runSQL(t, container, "postgres", "index-test", database,
+					fmt.Sprintf("CREATE ROLE migration_role_%d LOGIN PASSWORD '%s'", n, migrationPassword))
+			}
+			rolesMade = true
 		}
 	}()
 	return &wg
@@ -137,14 +161,6 @@ func TestTheStatementProbesOnTheDemoDatabase(t *testing.T) {
 		CREATE ROLE culprit_reader LOGIN PASSWORD 'reader-test' IN ROLE pg_read_all_stats;
 		GRANT SELECT ON products TO culprit_reader;`); err != nil {
 		t.Fatal(err)
-	}
-	// As Culprit's own migrations create their roles, in the server's other
-	// database and in this one.
-	for _, database := range []string{"shop", "inventory"} {
-		if err := runSQL(t, container, "postgres", "index-test", database,
-			"CREATE ROLE migration_role_"+database+" LOGIN PASSWORD '"+migrationPassword+"'"); err != nil {
-			t.Fatal(err)
-		}
 	}
 	t.Setenv("CULPRIT_TEST_INVENTORY_STATS_DSN",
 		"postgresql://culprit_reader:reader-test@"+address+"/inventory?sslmode=disable")
@@ -211,9 +227,33 @@ func TestTheStatementProbesOnTheDemoDatabase(t *testing.T) {
 
 	before := window("without an index")
 	statement := products(before)
+	// The CREATE ROLE ... PASSWORD statements ran inside the window, so the
+	// reading lists them, by queryid and timings, with their text not kept:
+	// the check on the password above is not vacuous.
+	unkept := 0
+	statements, _ := before.Measured["statements"].([]any)
+	for _, item := range statements {
+		if entry, _ := item.(map[string]any); entry["text"] == probe.TextNotKept {
+			unkept++
+		}
+	}
+	if unkept == 0 {
+		t.Fatalf("no statement in the window was listed without its text; the role statements were not read: %s", noSecret(before))
+	}
 	measured := func(label string, s map[string]any) {
-		calls, _ := s["calls"].(float64)
-		total, _ := s["total_us"].(float64)
+		number := func(value any) float64 {
+			switch v := value.(type) {
+			case int:
+				return float64(v)
+			case int64:
+				return float64(v)
+			case float64:
+				return v
+			}
+			t.Fatalf("not a number in the reading: %#v", value)
+			return 0
+		}
+		calls, total := number(s["calls"]), number(s["total_us"])
 		mean := 0.0
 		if calls > 0 {
 			mean = total / calls / 1000

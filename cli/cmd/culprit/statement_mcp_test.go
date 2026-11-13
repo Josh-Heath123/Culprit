@@ -40,6 +40,11 @@ environments:
       db.stats.read: true
       db.plan.read: true
       db.metadata.read: true
+budgets:
+  - subject: "component:inventory-db"
+    predicate: query_mean_ms_max
+    value: 50
+    why: so the statement probe reaches its source when it runs, and the count can move
 `
 
 type countingStatements struct{ calls atomic.Int64 }
@@ -95,5 +100,11 @@ func TestCulpritProbeRefusesWhatOnlyTheWalkMayName(t *testing.T) {
 		"environment": "production", "probes": []string{"probe.db.statement_budget"}})
 	if result.IsError {
 		t.Fatalf("the statement probe with no input was refused: %s", result.Structured)
+	}
+	// And it reached the source: the count above is one that can move
+	// (phase-auditor, 2026-11-13: without a budget the probe returned
+	// before its source, and the count stayed 0 with the guard removed).
+	if calls := statements.calls.Load(); calls == 0 {
+		t.Fatal("the statement probe that ran never reached the statement source, so the zero above proves nothing")
 	}
 }

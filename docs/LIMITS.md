@@ -2692,10 +2692,15 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
   Two slow calls in the window can fail a statement; the reading says how
   many calls there were.
 - **20 statements kept.** A reading keeps at most 20, those over budget
-  first, then by time in the window, and counts the rest — so the kept
-  integers always judge as the whole window does. A statement whose calls
-  or total time in the window pass 2,147,483,647 (about 36 minutes of
-  execution) is not judged, and is counted.
+  first, then the others a budget applies to, then by time in the window,
+  and counts the rest — so the kept integers always judge as the whole
+  window does. (Without the middle key, twenty slower statements no budget
+  applies to pushed the judged one out, and a window within budget read as
+  inconclusive; found in CI on 2026-11-13.) Statements no budget applies to
+  are kept only as room allows. A statement whose calls or total time in
+  the window pass 2,147,483,647 (about 36 minutes of execution) is not
+  judged: it is counted, and the reason names how many, so a pass over the
+  rest does not read as a pass over everything.
 - **Resets and evictions.** A reset of the statistics, or a statement
   evicted from them, during the window makes the reading inconclusive.
   Without `pg_stat_statements_info` (PostgreSQL before 14) neither can be
@@ -2709,6 +2714,13 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
   quotes, a comment before the quote and the tail after a doubled `''`.
   Those forms reach redaction only in statements the six-statement rule
   already drops.
+- **`SELECT … INTO` before PostgreSQL 16 (not verified).** On 14 and 15,
+  `SELECT … INTO t` is a utility statement (`CREATE TABLE AS`), and
+  Postgres normalised no utility statement's constants before 16. Its text
+  begins with `SELECT`, so the six-statement rule would keep it with its
+  constants, and only `redact_credentials` stands between those constants
+  and the reading. This has not been run on a PostgreSQL 15 server (§3,
+  Q32).
 - **Which tables a statement reads takes a plan.** A table's budget applies
   only with `db.plan.read`; without it only the database's budget does, and
   the reading says a table's went unjudged. The plan's tables are read
@@ -2730,9 +2742,12 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
   (it is, by default, in `public`).
 - **The demo's index is `(category, sku)`.** The list route orders by
   `sku` with a `LIMIT`; with an index on `category` alone Postgres still
-  walks the `sku` index and filters every row, about 100 ms a call, measured.
-  An index led by `category` and carrying `sku` serves it in a few
-  milliseconds. Phase 37 part 3's fault and its fix are this index.
+  walks the `sku` index and filters every row: 153–159 ms a call with no
+  index on `category` and 153–171 ms with one on `category` alone, against
+  the 20 ms budget (two local runs, 2026-11-13; CI logs each run's
+  `MEASURED` lines).
+  An index led by `category` and carrying `sku` serves it in 0.025 ms a
+  call, measured the same way. Phase 37 part 3's fault and its fix are this index.
 
 ### What a sample is
 

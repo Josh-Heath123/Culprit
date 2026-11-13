@@ -15,8 +15,8 @@ import (
 // Part 2's boundary (PERFORMANCE_PLAN.md, Phase 37 part 2): the one text
 // that is not a template is a SELECT or WITH read back from
 // pg_stat_statements, in a plannedStatement only planFromRow makes, sent by
-// sendPlan inside EXPLAIN (GENERIC_PLAN, FORMAT JSON) through the extended
-// protocol. Everything else is refused before it leaves, and counted.
+// sendPlan as a prepared statement explained under plan_cache_mode =
+// force_generic_plan, through the extended protocol (ruled 2026-11-13). Everything else is refused before it leaves, and counted.
 
 // TestOnlyAPlannableTextReachesThePlanner: an arbitrary statement, EXPLAIN
 // ANALYZE, a reset, a second statement appended to a planned one and a

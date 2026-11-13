@@ -352,7 +352,9 @@ func openSession(ctx context.Context, dsn string) (*pgx.Conn, error) {
 	config.RuntimeParams["statement_timeout"] = "10000"
 	config.RuntimeParams["application_name"] = "culprit-capture"
 	// A prepared statement is planned without its parameters' values
-	// (sendPlan); nothing else this session sends is prepared.
+	// (sendPlan). pgx prepares the templates too, under its default
+	// statement cache, so they are planned generically as well; that
+	// changes how they are planned, never what they read.
 	config.RuntimeParams["plan_cache_mode"] = "force_generic_plan"
 	conn, err := pgx.ConnectConfig(ctx, config)
 	if err != nil {
@@ -515,7 +517,8 @@ type StatementStats struct {
 	// (SELECT, WITH, INSERT, UPDATE, DELETE, MERGE); TextKept says so.
 	Text     string
 	TextKept bool
-	// PlanJSON is EXPLAIN (GENERIC_PLAN, FORMAT JSON)'s answer, when the
+	// PlanJSON is the generic plan sendPlan reads (EXPLAIN (FORMAT JSON) of
+	// the prepared statement under force_generic_plan), when the
 	// window was asked to plan and the statement is a SELECT or a WITH.
 	PlanJSON string
 }
@@ -559,7 +562,9 @@ type StatsReader struct {
 // part 2: "not configurable, and the walk's deadline cuts it").
 const StatementWindowLength = 30 * time.Second
 
-// MinimumPlanVersion is PostgreSQL 16, the first with GENERIC_PLAN.
+// MinimumPlanVersion is PostgreSQL 16: the brief's floor for the plan
+// probe, set when GENERIC_PLAN was the mechanism and kept as ruled on
+// 2026-11-13; force_generic_plan is older, but 16 is what CI holds it to.
 const MinimumPlanVersion = 160000
 
 // minimumStatsVersion is PostgreSQL 14, the first with
