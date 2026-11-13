@@ -124,9 +124,9 @@ type DatabaseSpec struct {
 	// holding the connection string. Never the connection string.
 	DSNEnv string `yaml:"dsn_env"`
 	// Name is the `database` part of every `schema:` subject this
-	// produces. Defaults to `<component>-db`, which is what the Python
-	// extractor uses on the INTENT side — so the default is what makes
-	// the two planes' schema subjects meet.
+	// produces. Optional: where given it must be the component's schema
+	// database (Q34, databases.go), the name the extractors are sent on the
+	// INTENT side — so the two planes' schema subjects meet.
 	Name string `yaml:"name"`
 }
 
@@ -205,8 +205,8 @@ func (c EnvironmentComponent) WorkloadFor(component string) string {
 // which validateEnvironments holds equal to the schema database rule (Q34),
 // or, when none is given, the rule's own.
 func (d DatabaseSpec) DatabaseName(m *Manifest, component string) string {
-	if strings.TrimSpace(d.Name) != "" {
-		return d.Name
+	if named := strings.TrimSpace(d.Name); named != "" {
+		return named
 	}
 	return m.SchemaDatabase(component)
 }

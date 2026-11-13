@@ -26,6 +26,11 @@ type corpusSpec struct {
 	Forms      []string          `json:"forms"`
 	Structural map[string]string `json:"structural"`
 	Seeds      map[string]string `json:"seeds"`
+	// Pairs are manifests in which one form fills every <<form>> at once,
+	// crossed with every form; their other placeholders take their
+	// defaults (Q34: a name held equal to another is still read in every
+	// form).
+	Pairs map[string]string `json:"pairs"`
 	// ClosedSplits are the close-out phase-auditor's splits, each labelled
 	// with what each reader did at d37542e (A2, 2026-11-13).
 	ClosedSplits map[string]string `json:"closeout_splits"`
@@ -65,6 +70,15 @@ func corpusCases(spec corpusSpec) map[string]string {
 	}
 	for name, text := range spec.Seeds {
 		cases["seed "+name] = text
+	}
+	for pair, template := range spec.Pairs {
+		for _, form := range spec.Forms {
+			text := template
+			for name, value := range spec.Defaults {
+				text = strings.ReplaceAll(text, "<<"+name+">>", value)
+			}
+			cases["pair "+pair+" = "+form] = strings.ReplaceAll(text, "<<form>>", form)
+		}
 	}
 	return cases
 }

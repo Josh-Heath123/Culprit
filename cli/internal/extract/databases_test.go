@@ -86,6 +86,14 @@ func TestAnEnvironmentsDatabaseNameIsHeldToTheRule(t *testing.T) {
 		t.Errorf("DatabaseName with no name given: %q, want the rule's shop-store, not shop-db", got)
 	}
 
+	padded, err := LoadManifest(writeManifest(t, environment(`" shop-store "`)))
+	if err != nil {
+		t.Fatalf("the rule's own name, padded, was refused: %v", err)
+	}
+	if got := padded.Environments["local"].Components["shop"].Database.DatabaseName(padded, "shop"); got != "shop-store" {
+		t.Errorf("DatabaseName with a padded name: %q, want it trimmed as validation trims it", got)
+	}
+
 	_, err = LoadManifest(writeManifest(t, environment("shop-db")))
 	if err == nil {
 		t.Fatal("database.name shop-db was accepted, though shop's one sql edge is to shop-store")

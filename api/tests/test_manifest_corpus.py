@@ -27,7 +27,8 @@ CORPUS = Path(__file__).resolve().parents[2] / "shared" / "tests" / "manifest_co
 
 def corpus_cases(spec: dict) -> dict[str, str]:
     """Every case's id and text. A field case replaces one placeholder with
-    the form and every other with its default."""
+    the form and every other with its default; a pair case is described
+    where it is built."""
     cases: dict[str, str] = {}
     for field in spec["defaults"]:
         for form in spec["forms"]:
@@ -39,6 +40,14 @@ def corpus_cases(spec: dict) -> dict[str, str]:
         cases[f"structural {name}"] = text
     for name, text in spec["seeds"].items():
         cases[f"seed {name}"] = text
+    # A pair fills every <<form>> with one form at once, its other
+    # placeholders with their defaults (Q34).
+    for pair, template in spec.get("pairs", {}).items():
+        for form in spec["forms"]:
+            text = template
+            for name, default in spec["defaults"].items():
+                text = text.replace(f"<<{name}>>", default)
+            cases[f"pair {pair} = {form}"] = text.replace("<<form>>", form)
     return cases
 
 

@@ -193,10 +193,12 @@ func TestTheDemoDatabase(t *testing.T) {
 }
 
 // setUpDemoDatabase runs the demo's own setup, as the quickstart does, on a
-// throwaway Postgres, and returns inventory's owner DSN.
+// throwaway Postgres, and returns a reader's DSN for the inventory database:
+// a login role with no grant at all, which is all reading the catalogue
+// needs (the migration version, behind SELECT on alembic_version, is not).
 func setUpDemoDatabase(t *testing.T) string {
 	t.Helper()
-	dsn, _ := startPostgres(t)
+	dsn, psql := startPostgres(t)
 	address := strings.TrimSuffix(strings.TrimPrefix(dsn, "postgresql://postgres:index-test@"), "/shop?sslmode=disable")
 	host, port, _ := strings.Cut(address, ":")
 	inventory := "postgresql://inventory:inventory-test@" + address + "/inventory?sslmode=disable"
@@ -208,7 +210,8 @@ func setUpDemoDatabase(t *testing.T) string {
 	if out, err := setup.CombinedOutput(); err != nil {
 		t.Fatalf("the demo's database setup: %v\n%s", err, out)
 	}
-	return inventory
+	psql("CREATE ROLE schema_reader LOGIN PASSWORD 'reader-test'")
+	return strings.Replace(inventory, "inventory:inventory-test@", "schema_reader:reader-test@", 1)
 }
 
 // TestTheDemoSchemaIsOnOneDatabase is Q34 on the demo: three readers of

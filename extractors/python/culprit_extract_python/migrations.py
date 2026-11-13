@@ -54,9 +54,9 @@ from culprit_model import build
 from culprit_model.planes import ConfidenceRank, SourceKind
 from culprit_model.protocol import Predicate
 
-#: Kept identical to database.py's, because the two must produce the same
-#: subject for the same table or nothing compares. Imported rather than
-#: redefined for exactly that reason.
+# The database part of a subject is FactBuilder.schema_database, shared
+# with database.py: the two must produce the same subject for the same
+# table or nothing compares.
 from culprit_extract_python.emit import FactBuilder
 
 
