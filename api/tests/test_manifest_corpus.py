@@ -20,6 +20,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 CORPUS = Path(__file__).resolve().parents[2] / "shared" / "tests" / "manifest_corpus.json"
 
 
@@ -125,9 +127,19 @@ def test_the_api_reads_every_corpus_case_as_recorded() -> None:
 
 
 def test_the_auditors_splits_are_in_the_corpus() -> None:
-    """The close-out phase-auditor's 85 manifests, its 23 splits among
-    them, are cases of their own."""
+    """The close-out phase-auditor's 85 manifests are cases of their own."""
     assert len(_spec()["seeds"]) == 85
+
+
+@pytest.mark.parametrize("name", sorted(_spec()["closeout_splits"]))
+def test_each_auditor_split_is_read_as_recorded(name: str) -> None:
+    """A2 (2026-11-13): each split the close-out phase-auditor found is a
+    seed labelled with what each reader did at d37542e, and the API now
+    gives the recorded outcome for it. Checked by label, not by a count."""
+    spec = _spec()
+    label = spec["closeout_splits"][name]
+    assert label.startswith("at d37542e "), label
+    assert outcome(spec["seeds"][name]) == spec["expect"][f"seed {name}"], label
 
 
 if __name__ == "__main__" and "--write" in sys.argv:

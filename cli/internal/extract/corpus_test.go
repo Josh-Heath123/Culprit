@@ -26,7 +26,10 @@ type corpusSpec struct {
 	Forms      []string          `json:"forms"`
 	Structural map[string]string `json:"structural"`
 	Seeds      map[string]string `json:"seeds"`
-	Expect     map[string]string `json:"expect"`
+	// ClosedSplits are the close-out phase-auditor's splits, each labelled
+	// with what each reader did at d37542e (A2, 2026-11-13).
+	ClosedSplits map[string]string `json:"closeout_splits"`
+	Expect       map[string]string `json:"expect"`
 }
 
 func loadCorpus(t *testing.T) corpusSpec {
@@ -240,6 +243,29 @@ func TestPythonRepr(t *testing.T) {
 	} {
 		if got := pythonRepr(value); got != want {
 			t.Errorf("pythonRepr(%v) = %s, want %s", value, got, want)
+		}
+	}
+}
+
+// TestTheAuditorsSplitsAreReadAsRecorded (A2, 2026-11-13): each split the
+// close-out phase-auditor found is a seed, labelled with what each reader
+// did at d37542e, and this reader now gives the recorded outcome for it.
+// Checked by label, not by a count.
+func TestTheAuditorsSplitsAreReadAsRecorded(t *testing.T) {
+	spec := loadCorpus(t)
+	if len(spec.ClosedSplits) == 0 {
+		t.Fatal("the corpus labels no split")
+	}
+	directory := t.TempDir()
+	for name, label := range spec.ClosedSplits {
+		text, ok := spec.Seeds[name]
+		expect, recorded := spec.Expect["seed "+name]
+		if !ok || !recorded || !strings.HasPrefix(label, "at d37542e ") {
+			t.Errorf("split %s (%q): seed %v, recorded %v", name, label, ok, recorded)
+			continue
+		}
+		if got := corpusOutcome(t, directory, text); got != expect {
+			t.Errorf("split %s (%s): recorded %s, read %s", name, label, expect, got)
 		}
 	}
 }
