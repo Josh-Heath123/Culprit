@@ -155,7 +155,10 @@ func TestTheStatementProbesOnTheDemoDatabase(t *testing.T) {
 	setup.Dir = filepath.Join(repoRoot, "demo-services")
 	setup.Env = append(os.Environ(),
 		"INVENTORY_ADMIN_HOST="+host, "INVENTORY_ADMIN_PORT="+port, "INVENTORY_ADMIN_USER=postgres",
-		"INVENTORY_ADMIN_PASSWORD=index-test", "INVENTORY_ADMIN_DB=shop", "INVENTORY_DATABASE_URL="+inventory)
+		"INVENTORY_ADMIN_PASSWORD=index-test", "INVENTORY_ADMIN_DB=shop", "INVENTORY_DATABASE_URL="+inventory,
+		// The database as 0002 left it, before 0003 indexes (category, sku):
+		// this test builds that index itself, below (Phase 37 part 3).
+		"INVENTORY_MIGRATION_TARGET=0002_seed_products")
 	if out, err := setup.CombinedOutput(); err != nil {
 		t.Fatalf("the demo's database setup: %v\n%s", err, out)
 	}

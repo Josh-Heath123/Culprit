@@ -335,8 +335,12 @@ services:
     restart: unless-stopped
     environment:
       ORDER_SERVICE_URL: http://order-service:8001
+      # Phase 37 part 3: the list route's traffic, which Culprit's statement
+      # window measures (it sends none of its own).
+      INVENTORY_SERVICE_URL: http://inventory-service:8002
     depends_on:
       - order-service
+      - inventory-service
     profiles: ["demo"]
 
 volumes:

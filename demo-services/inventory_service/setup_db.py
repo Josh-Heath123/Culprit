@@ -10,7 +10,10 @@ never by Culprit:
    create the `pg_stat_statements` extension in that database — an
    extension that is not trusted, so only a superuser may create it.
 2. As the database's owner (INVENTORY_DATABASE_URL): apply the service's
-   own Alembic migrations, which create and seed `products`.
+   own Alembic migrations, which create and seed `products` and (0003)
+   index it. To head, or to INVENTORY_MIGRATION_TARGET when it is set: the
+   tests that need the database as an earlier revision left it (Phase 37
+   part 3's missing index is the database at 0002).
 
 Idempotent: a second run changes nothing. The role's password is set on
 every run to the one INVENTORY_DATABASE_URL carries, which the quickstart
@@ -86,9 +89,10 @@ def main() -> None:
     with _connect_as_admin(dbname=database) as connection:
         connection.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
 
+    target = os.environ.get("INVENTORY_MIGRATION_TARGET", "") or "head"
     config = Config(str(Path(__file__).with_name("alembic.ini")))
-    command.upgrade(config, "head")
-    print(f"inventory-service's database {database} is at head, owned by {role}")
+    command.upgrade(config, target)
+    print(f"inventory-service's database {database} is at {target}, owned by {role}")
 
 
 if __name__ == "__main__":
