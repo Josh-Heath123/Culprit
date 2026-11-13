@@ -95,6 +95,8 @@ func builtIn() []Probe {
 		authPropagation{},
 		dbConnect{},
 		dbSchemaConformance{},
+		dbStatementBudget{},
+		dbPlan{},
 		configPresent{},
 		depVersion{},
 		edgeImpedance{},

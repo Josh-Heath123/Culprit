@@ -195,6 +195,9 @@ func (r *Runner) runOne(ctx context.Context, request Request) []model.Reading {
 			alsoConflicts = append(alsoConflicts, also.Conflicts)
 		}
 	}
+	if request.Related == nil {
+		request.Related = r.expectations.Related(manifest, request)
+	}
 
 	outcome := probe.Run(runCtx, request, r.deps)
 	grants := union(manifest.Capabilities, r.held(used.List()))

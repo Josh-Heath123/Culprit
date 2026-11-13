@@ -234,6 +234,9 @@ func (r Reading) Validate() error {
 	if r.ExpiresAt != nil && r.ExpiresAt.Before(r.TakenAt) {
 		return fmt.Errorf("reading from %q expires before it was taken", r.ProbeID)
 	}
+	if err := r.validateStatements(); err != nil {
+		return err
+	}
 	if err := r.validateLatency(); err != nil {
 		return err
 	}

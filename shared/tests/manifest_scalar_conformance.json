@@ -45,9 +45,9 @@
       "max_probes": 300
     },
     {
-      "why": "1e3: a number, 1000; a string to YAML 1.1",
+      "why": "1e3: a float, and max_probes holds an integer: refused by both (Q28, one type per field)",
       "manifest": "version: 1\ncomponents:\n  - name: shop\nisolation:\n  max_probes: 1e3\n",
-      "max_probes": 1000
+      "refused": "max_probes"
     },
     {
       "why": "~: null, so a budget with no why",

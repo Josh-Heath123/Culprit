@@ -137,7 +137,8 @@ and the Alembic migration version — through the connection string in the
 variable `dsn_env` names, in the shell Culprit runs in. The session is
 opened read-only, with a statement timeout.
 
-**What it sends:** four fixed statements and nothing else. What holds
+**What it sends:** four fixed statements and nothing else (the four
+statistics statements are `db.stats.read`'s, below). What holds
 that is four layers, each holding something different (docs/LIMITS.md,
 "What Culprit sends a database, and what holds it"):
 
@@ -176,25 +177,51 @@ database lacks, or the reverse.
 
 ### `db.stats.read`
 
-**Phase 37 part 1: declared, used by nothing yet.** Part 2's statement
-probe will use it. It will let Culprit read the database's own statistics
-— `pg_stat_statements` (each normalised statement's call count and time),
-`pg_stat_user_tables` and `pg_stat_user_indexes` (how each table and
-index is scanned). Statement text in `pg_stat_statements` is normalised
-— constants replaced by placeholders — and every piece of it passes
-through the same credential redaction as every other piece of text
-before it goes anywhere. Culprit never resets these statistics: that is a
-write. Implies no other capability.
+**Used by `probe.db.statement_budget`** (Phase 37 part 2). It reads the
+database's own statistics through three fixed statements, in one
+read-only session:
+
+- the server's version, and whether this database has the
+  `pg_stat_statements` extension;
+- `pg_stat_statements_info` — the time the statistics were last reset and
+  how many statements have been evicted, so a window they changed in is
+  not trusted;
+- `pg_stat_statements`, twice, 30 seconds apart: each statement's
+  `queryid`, call count and total execution time, **for the connected
+  database only** (its `dbid`), **never for the role Culprit connects
+  as**, and its text **only when the text begins with `SELECT`, `WITH`,
+  `INSERT`, `UPDATE`, `DELETE` or `MERGE`**. Postgres stores those
+  statements with every constant replaced by `$n`; any other statement —
+  a `CREATE ROLE … PASSWORD '…'`, kept as written, or one beginning with a
+  comment — leaves the server with no text at all. What text does leave
+  passes through the same credential redaction as every other text
+  (docs/LIMITS.md lists what that redaction misses).
+
+Culprit never resets these statistics: that is a write. Implies no other
+capability.
 
 ### `db.plan.read`
 
-**Phase 37 part 1: declared, used by nothing yet.** Part 2's plan probe
-will use it. It will let Culprit ask the planner how it would run one
-statement — `EXPLAIN (GENERIC_PLAN, FORMAT JSON)` and nothing else, which
-plans without executing anything. `EXPLAIN ANALYZE`, which runs the
-statement, is refused before it is sent. It does not imply
-`db.rows.read`, and no capability implies it (a test grants each
-capability alone and finds every other withheld).
+**Used by `probe.db.plan`, and by `probe.db.statement_budget` to know
+which tables a statement reads** (Phase 37 part 2). It asks the planner how
+it would run one statement, and nothing else:
+
+- the statement's text is read back from `pg_stat_statements` in the same
+  session, chosen by `queryid` — never text a caller gave — and only a
+  single `SELECT` or `WITH` is planned;
+- it is parsed as a prepared statement (one protocol message, which
+  carries exactly one statement and runs none), explained with
+  `EXPLAIN (FORMAT JSON) EXECUTE` under `plan_cache_mode =
+  force_generic_plan` — a plan built without the parameters' values — and
+  deallocated;
+- the columns of the database's tables are read from the catalogue, to name
+  the columns a plan's filter uses without keeping the filter.
+
+`EXPLAIN ANALYZE`, which runs the statement, cannot be sent: it is not a
+template, and the planned text must begin with `SELECT` or `WITH`. The
+session is read-only. It does not imply `db.rows.read`, and no capability
+implies it (a test grants each capability alone and finds every other
+withheld). Before PostgreSQL 16 it is not used, and the reading says so.
 
 ### The recommended database role, and what it reveals
 

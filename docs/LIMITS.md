@@ -1035,12 +1035,19 @@ Four layers, each holding something different (Q27, ruled 2026-11-12):
   code added to `dbsession` can do anything the driver can, which is why it
   is one file and a test fails if a second appears.
 - **The templates.** Inside the package, the statements it can send are a
-  closed set — four today: three catalogue reads and the Alembic version
-  row — checked by a `switch` that must list exactly the template
-  constants (a test fails on a constant the switch does not list, or on a
-  map of statements another file could extend). Anything else, an
-  `EXPLAIN ANALYZE` included, is refused before it leaves, and a test
-  counts what reaches the driver.
+  closed set — eight since Phase 37 part 2: three catalogue reads, the
+  Alembic version row, and four reads of `pg_stat_statements` and its
+  info, each filtered to this database and away from Culprit's own role —
+  checked by a `switch` that must list exactly the template constants (a
+  test fails on a constant the switch does not list, or on a map of
+  statements another file could extend). Anything else, an `EXPLAIN
+  ANALYZE` and `pg_stat_statements_reset()` included, is refused before it
+  leaves, and a test counts what reaches the driver. The one text that is
+  not a template is a `SELECT` or `WITH` read back from
+  `pg_stat_statements` in the same session, which only a statistics row
+  can make into a statement to plan: it is parsed as a prepared statement
+  — one statement, none run — and explained without its parameters'
+  values. A second statement appended to it is refused before it is sent.
 - **The read-only session.** Every session is opened with
   `default_transaction_read_only = on` and a ten-second
   `statement_timeout`, so Postgres itself refuses a write (a test against a
@@ -2622,26 +2629,44 @@ added to one is added to both; an older binary reading a newer manifest
 names the key it does not know and stops. Within a section, fields the
 binary does not read are still ignored.
 
-**What still splits (open, Q28).** The readers resolve a scalar alike; they
-do not yet *type* it alike. The binary decodes into Go types, which take a
-scalar of another kind as its text or convert it, and the API into
-pydantic models, which refuse some kinds and coerce others. The close-out's
-audit fed both 85 manifests and 23 still split, among them:
+**One type per field (Q28, Phase 37 part 2).** Every field of
+`culprit.yaml` has one type, written down once
+(`shared/tests/manifest_schema.json`), and both readers accept a value only
+when its YAML 1.2 tag is that type — before either model sees it. What that
+refuses, in both, that one of them used to load:
 
-- a text field written as something else — `why: true`, `why: 300`,
-  `why: 1.5`, a component `name: 0454`: text to the binary, refused by the
-  API. Quote a value that does not look like text;
-- a fraction in a whole-number field — `max_probes: 1.5`,
-  `timeout_ms: 1500.7`: truncated by the binary, refused by the API;
-- `max_probes: ~`, `budgets: ~`, an empty file or one of comments alone:
-  loaded by the binary, refused by the API;
-- the reverse — `max_probes: "5"`, `enabled: 1`, `version: "1"`,
-  `version: true`: coerced and loaded by the API, refused by the binary;
-- an untyped value (an invariant's `value:`): a date is a date to the
-  binary and text to the API.
+- text written as something else — `why: true`, `why: 300`, a component
+  `name: 0454`. Quote a value that is text but does not look like it;
+- a number of the wrong kind — `max_probes: 1.5`, `max_probes: 1e3`
+  (a float), `max_probes: "5"` (text), `enabled: 1`, `version: "1"`;
+- null or empty anywhere — `budgets: ~`, `display_name:` with nothing
+  after it, an empty file, a file of comments alone. Leave a key out to
+  leave it unset;
+- `version: 0`, and a component's `kind` or a connection's `kind` or
+  `criticality` written as empty text — the binary used to read each as
+  "not set";
+- a tab character anywhere in the file: the two YAML libraries disagree on
+  where one may stand, so neither takes one. Indent and separate with
+  spaces;
+- an unknown key at any level, not only the top, naming it;
+- any tag but the core ones — `!!binary`, `!!timestamp`, `!!set`,
+  `!!python/…` — as not plain data.
 
-Closing these is strict typing in both readers, which is wider than the
-close-out's brief; it is put to the architecture session as Q28.
+A field with no fixed type (an invariant's `value:`, a component's
+`labels:`) takes any core scalar, list or mapping, and a date in one is its
+text, as written, in both. The rules each reader held alone are now held by
+both: a component name is lower-case letters, digits, `.`, `_` and `-`, its
+`kind` is one of the closed set; an environment's exec entry must be on its
+allowlist, a `process` environment names one component, `env_command` and
+`packages` name an exec entry; an invariant has a `why`, a suppression's
+`expires` is `YYYY-MM-DD`, a subject is canonical.
+
+What holds this is a corpus, not a list of cases:
+`shared/tests/manifest_corpus.json` crosses every field with 91 scalar forms
+and adds 48 structural variants and the close-out audit's 85 manifests —
+5,684 files — and both readers' tests require the same outcome on every one
+(equal typed JSON, or both refusing). A form not in the corpus is not
+proven; the corpus is regenerated, not edited, when a rule changes.
 
 In `culprit.yaml` the value is written as **plain decimal digits**,
 unquoted, with no sign and no leading zero: `300`. Every other form is
@@ -2651,6 +2676,78 @@ alias. The two readers now read those alike (`0454` is octal 300 to both,
 as Go reads it), but a budget written `0454` means 454 to most people who
 write one, so the form rule stays. An `x-culprit-budget` in an OpenAPI document is read by the
 binary alone, as a number.
+
+## Statement budgets and plans
+
+Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
+
+- **A fixed 30-second window.** Two snapshots of `pg_stat_statements`, 30
+  seconds apart, in one session; not configurable, and a walk's deadline
+  cuts it. A statement nobody called in those 30 seconds is not judged:
+  with no call to a budgeted statement in the window the reading is
+  inconclusive. Culprit sends no traffic of its own.
+- **A mean of few calls is a mean of few calls.** The rule is the mean time
+  per call against the budget, with no interval: `pg_stat_statements`
+  keeps no per-call samples, so a band would be a number Culprit chose.
+  Two slow calls in the window can fail a statement; the reading says how
+  many calls there were.
+- **20 statements kept.** A reading keeps at most 20, those over budget
+  first, then the others a budget applies to, then by time in the window,
+  and counts the rest — so the kept integers always judge as the whole
+  window does. (Without the middle key, twenty slower statements no budget
+  applies to pushed the judged one out, and a window within budget read as
+  inconclusive; found in CI on 2026-11-13.) Statements no budget applies to
+  are kept only as room allows. A statement whose calls or total time in
+  the window pass 2,147,483,647 (about 36 minutes of execution) is not
+  judged: it is counted, and the reason names how many, so a pass over the
+  rest does not read as a pass over everything.
+- **Resets and evictions.** A reset of the statistics, or a statement
+  evicted from them, during the window makes the reading inconclusive.
+  Without `pg_stat_statements_info` (PostgreSQL before 14) neither can be
+  seen, so the statement probe is inconclusive there, saying so.
+- **Text kept for six statements only.** A statement's text is kept when
+  it begins with `SELECT`, `WITH`, `INSERT`, `UPDATE`, `DELETE` or `MERGE`,
+  which Postgres stores with constants replaced by `$n`; any other is
+  listed by `queryid`, "text not kept". Kept text passes through
+  `redact_credentials` as a second layer, and that redaction is a pattern,
+  not a parser: in a SQL `PASSWORD` it misses `E'…'`, `U&'…'`, dollar
+  quotes, a comment before the quote and the tail after a doubled `''`.
+  Those forms reach redaction only in statements the six-statement rule
+  already drops.
+- **`SELECT … INTO` before PostgreSQL 16 (not verified).** On 14 and 15,
+  `SELECT … INTO t` is a utility statement (`CREATE TABLE AS`), and
+  Postgres normalised no utility statement's constants before 16. Its text
+  begins with `SELECT`, so the six-statement rule would keep it with its
+  constants, and only `redact_credentials` stands between those constants
+  and the reading. This has not been run on a PostgreSQL 15 server (§3,
+  Q32).
+- **Which tables a statement reads takes a plan.** A table's budget applies
+  only with `db.plan.read`; without it only the database's budget does, and
+  the reading says a table's went unjudged. The plan's tables are read
+  without schema names from Postgres's non-verbose plan, so a table is taken
+  to be in `public`; a budget on a same-named table in another schema is
+  not matched to it.
+- **A generic plan, not the plan a call got.** The plan probe asks for the
+  plan Postgres would use for any value of the statement's parameters. A
+  call whose own value makes a different plan cheaper may have run another
+  way. It needs `SELECT` on the tables a statement reads (Postgres plans
+  only what the role could run), and PostgreSQL 16; before 16 it is
+  inconclusive.
+- **Filter columns are names, not expressions.** A plan's filter is read
+  for the table's own column names, written bare or double-quoted outside
+  any string, and dropped; a column referred to only through a function or
+  an alias the planner prints otherwise is not named.
+- **`pg_stat_statements` where the session can see it.** The view is read
+  by its bare name, so the extension must be in the role's `search_path`
+  (it is, by default, in `public`).
+- **The demo's index is `(category, sku)`.** The list route orders by
+  `sku` with a `LIMIT`; with an index on `category` alone Postgres still
+  walks the `sku` index and filters every row: 153–159 ms a call with no
+  index on `category` and 153–171 ms with one on `category` alone, against
+  the 20 ms budget (two local runs, 2026-11-13; in CI on Linux, 96 ms and
+  96 ms; CI logs each run's `MEASURED` lines).
+  An index led by `category` and carrying `sku` serves it in 0.014–0.025 ms a
+  call, measured the same way. Phase 37 part 3's fault and its fix are this index.
 
 ### What a sample is
 

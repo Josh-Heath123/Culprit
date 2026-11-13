@@ -661,7 +661,7 @@ Not counted either: the library's deliberate wrong and partial fixes, which chec
 | Command | Covers |
 |---|---|
 | `just test` | everything below that needs no cluster: the api, worker and MCP server suites (with the repository's own scripts and the shared model's conformance tests), `go test` across the CLI, and both extractors. Needs Docker for Postgres |
-| `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all fourteen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
+| `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all sixteen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
 | `just extractors-test` | the Python and Node extractors |
 | `just self-check` | `culprit check` on this repository: **no divergences, 1,023 facts across 451 subjects**, and 9 gaps listed |
 | `just self-check-coverage` | the 368 subjects only one source describes — places where a mistake would go uncaught |

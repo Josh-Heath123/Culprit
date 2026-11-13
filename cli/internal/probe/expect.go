@@ -114,6 +114,33 @@ func (e *Expectations) Resolve(manifest model.ProbeManifest, request Request) Re
 	return first
 }
 
+// Related is, for a manifest producing a statement-budget predicate, every
+// INTENT fact under it on a table of the target's database:
+// schema:<database>/<namespace>.<table>, no column. A statement is judged by
+// the strictest budget of the tables its plan reads (Phase 37 part 2).
+func (e *Expectations) Related(manifest model.ProbeManifest, request Request) []model.Fact {
+	if e == nil || manifest.ExpectedFrom != model.PlaneIntent {
+		return nil
+	}
+	database := calleeOfTarget(request.Target)
+	var related []model.Fact
+	for _, produced := range manifest.Produces {
+		if !model.StatementBudgetPredicates[produced.Predicate] {
+			continue
+		}
+		for _, fact := range e.byPredicate[produced.Predicate] {
+			kind, parts, err := model.ParseSubject(fact.Subject)
+			if fact.Plane != model.PlaneIntent || err != nil || kind != model.KindSchema ||
+				parts["database"] != database || parts["column"] != "" {
+				continue
+			}
+			related = append(related, fact)
+		}
+	}
+	sort.SliceStable(related, func(i, j int) bool { return related[i].Subject < related[j].Subject })
+	return related
+}
+
 // resolveOne finds the expectation for one produced predicate.
 func (e *Expectations) resolveOne(plane model.Plane, produced model.Produces, request Request) Resolution {
 
@@ -305,6 +332,10 @@ func MeasuredSubject(template string, request Request) (model.SubjectKind, model
 			return "", nil, "no configuration key was named"
 		}
 		return kind, model.Parts{"component": component, "key": key}, ""
+	case model.KindComponent:
+		// A table's or a connection's database, as a component: a
+		// statement budget on the database (Phase 37 part 2).
+		return kind, model.Parts{"name": component}, ""
 	case model.KindDep:
 		name, ok := stringInput(request.Inputs, "package")
 		if !ok {

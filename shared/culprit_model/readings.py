@@ -49,6 +49,7 @@ from culprit_model.facts import Provenance
 from culprit_model.latency import LATENCY_PROBE_ID, LatencyShapeError, judge
 from culprit_model.planes import Plane
 from culprit_model.redaction import looks_like_credential, redact_credentials
+from culprit_model.statements import STATEMENT_PROBE_ID, judge_statements
 from culprit_model.subjects import SubjectError
 from culprit_model.subjects import parse as parse_subject
 
@@ -277,6 +278,32 @@ class Reading(BaseModel):
             raise ValueError(
                 f"a latency reading says {self.verdict.value}, but its own samples and budget "
                 f"give {verdict}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _a_statement_verdict_is_its_integers(self) -> "Reading":
+        """Phase 37 part 2: a probe.db.statement_budget reading's verdict is
+        re-judged from its own integers (culprit_model.statements)."""
+        if self.probe_id != STATEMENT_PROBE_ID or self.verdict is Verdict.REFUSED:
+            return self
+        if "statements" not in self.measured:
+            if self.verdict is not Verdict.INCONCLUSIVE:
+                raise ValueError(
+                    f"a {self.verdict.value} statement reading must carry the statements "
+                    "it was judged on"
+                )
+            return self
+        try:
+            verdict, _ = judge_statements(self.measured)
+        except LatencyShapeError as exc:
+            raise ValueError(
+                f"a statement reading's measurement is not the rule's input: {exc}"
+            ) from None
+        if verdict != self.verdict.value:
+            raise ValueError(
+                f"a statement reading says {self.verdict.value}, "
+                f"but its own integers give {verdict}"
             )
         return self
 

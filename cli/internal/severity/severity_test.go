@@ -25,7 +25,7 @@ components:
         kind: message
         criticality: background
   - name: search-indexer
-    kind: worker
+    kind: job
 `
 
 func load(t *testing.T, text string) *extract.Manifest {

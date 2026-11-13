@@ -141,7 +141,8 @@ func (m *Manifest) validateBudgets() error {
 			return &PolicyError{Message: where +
 				": `why` is required. A budget nobody explained is one nobody can safely change."}
 		}
-		if _, known := model.BudgetPredicates[budget.Predicate]; !known {
+		_, latency := model.BudgetPredicates[budget.Predicate]
+		if !latency && !model.StatementBudgetPredicates[budget.Predicate] {
 			return &PolicyError{Message: fmt.Sprintf(
 				"%s: predicate %q is not one of %s", where, budget.Predicate,
 				strings.Join(budgetPredicateNames(), ", "))}
@@ -160,13 +161,52 @@ func (m *Manifest) validateBudgets() error {
 		if err := checkSubject(where, budget.Subject); err != nil {
 			return err
 		}
+		if !latency {
+			if err := m.checkStatementBudgetSubject(where, budget.Subject); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// checkStatementBudgetSubject holds a `query_mean_ms_max` budget to what it
+// can be about (Phase 37 part 2): a table, `schema:<database>/<ns>.<table>`
+// with no column, or the database's own component — and either way a
+// component this file declares as a database. api/app/model/manifest.py
+// holds the same rule.
+func (m *Manifest) checkStatementBudgetSubject(where, subject string) error {
+	kind, parts, err := model.ParseSubject(subject)
+	if err != nil {
+		return &PolicyError{Message: where + ": `subject` is not a subject URI"}
+	}
+	var database string
+	switch kind {
+	case model.KindSchema:
+		if parts["column"] != "" {
+			return &PolicyError{Message: where +
+				": a statement budget is on a table or a database, not on a column"}
+		}
+		database = parts["database"]
+	case model.KindComponent:
+		database = parts["name"]
+	default:
+		return &PolicyError{Message: where + ": a statement budget is on a table " +
+			"(schema:<database>/<namespace>.<table>) or on a database component"}
+	}
+	if component, ok := m.componentNamed(database); !ok || component.Kind != "database" {
+		return &PolicyError{Message: fmt.Sprintf(
+			"%s: %s is not a component of kind database in this file", where, database)}
 	}
 	return nil
 }
 
 func budgetPredicateNames() []string {
-	names := make([]string, 0, len(model.BudgetPredicates))
+	names := make([]string, 0, len(model.BudgetPredicates)+len(model.StatementBudgetPredicates))
 	for name := range model.BudgetPredicates {
+		names = append(names, name)
+	}
+	for name := range model.StatementBudgetPredicates {
 		names = append(names, name)
 	}
 	sort.Strings(names)

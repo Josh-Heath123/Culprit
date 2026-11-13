@@ -66,6 +66,12 @@ type Request struct {
 	// returns one Outcome per fact in Outcome.Also, in this order; every
 	// other probe ignores them.
 	AlsoExpected []model.Fact
+	// Related are further declarations a probe judges against beyond its
+	// measured subject: for probe.db.statement_budget, every statement
+	// budget on a table of the target's database (Phase 37 part 2: a
+	// statement is judged by the strictest budget of the tables it reads).
+	// Set by the runner; every other probe ignores them.
+	Related []model.Fact
 	// NoExpectation says why no expectation was found, so a probe's
 	// inconclusive reason can name what it looked for. Set by the runner.
 	NoExpectation string

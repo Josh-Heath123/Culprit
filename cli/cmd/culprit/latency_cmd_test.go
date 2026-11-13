@@ -88,7 +88,7 @@ func TestALatencyProbeListedTwiceOverMCPRunsOnce(t *testing.T) {
 // from a source scan (by reflection) would change (Q25, Phase 36 re-audit).
 func TestCulpritMcpServesTheBuiltInCatalogue(t *testing.T) {
 	served, built := catalogue().IDs(), probe.BuiltIn().IDs()
-	if len(served) != 14 || strings.Join(served, ",") != strings.Join(built, ",") {
+	if len(served) != 16 || strings.Join(served, ",") != strings.Join(built, ",") {
 		t.Fatalf("culprit serves %v, BuiltIn registers %v", served, built)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/capability"
+	"github.com/josh-heath123/culprit/cli/internal/capture"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -68,7 +69,7 @@ func grantEverything(t *testing.T) *capability.Ledger {
 	for _, name := range []string{
 		"net.dns.resolve", "net.tcp.connect", "net.tls.inspect",
 		"net.http.outbound", "db.metadata.read", "config.read.names",
-		"repo.read", "telemetry.metrics.read",
+		"repo.read", "telemetry.metrics.read", "db.stats.read", "db.plan.read",
 	} {
 		enabled := true
 		raw[name] = capability.Raw{Enabled: &enabled}
@@ -268,6 +269,34 @@ func cases() []probeCase {
 			Deps{Database: fakeDatabase{columnsErr: errBoom}, Now: clock},
 			model.VerdictInconclusive, nil},
 
+		// --- probe.db.statement_budget (Phase 37 part 2) ---
+		{"statements within their budget", "probe.db.statement_budget", componentTarget, nil,
+			Deps{Statements: fakeStatements{window: capture.StatementWindow{Statements: []capture.StatementStats{
+				{QueryID: 7, Calls: 5, TotalMicros: 200000, Text: "SELECT 1", TextKept: true}}}}, Now: clock},
+			model.VerdictPass, declaredAs(componentTarget, "query_mean_ms_max", 50)},
+		{"a statement over its budget", "probe.db.statement_budget", componentTarget, nil,
+			Deps{Statements: fakeStatements{window: capture.StatementWindow{Statements: []capture.StatementStats{
+				{QueryID: 7, Calls: 5, TotalMicros: 260000}}}}, Now: clock},
+			model.VerdictFail, declaredAs(componentTarget, "query_mean_ms_max", 50)},
+		{"statistics reset during the window", "probe.db.statement_budget", componentTarget, nil,
+			Deps{Statements: fakeStatements{window: capture.StatementWindow{Reset: true, Statements: []capture.StatementStats{
+				{QueryID: 7, Calls: 5, TotalMicros: 260000}}}}, Now: clock},
+			model.VerdictInconclusive, declaredAs(componentTarget, "query_mean_ms_max", 50)},
+		{"no pg_stat_statements", "probe.db.statement_budget", componentTarget, nil,
+			Deps{Statements: fakeStatements{window: capture.StatementWindow{
+				Unavailable: "pg_stat_statements is not installed in this database"}}, Now: clock},
+			model.VerdictInconclusive, declaredAs(componentTarget, "query_mean_ms_max", 50)},
+
+		// --- probe.db.plan (Phase 37 part 2): evidence, no fail ---
+		{"a generic plan", "probe.db.plan", componentTarget, map[string]any{"queryid": "7"},
+			Deps{Statements: fakeStatements{plan: capture.StatementPlan{PlanJSON: seqScanPlan,
+				TableColumns: map[string][]string{"public.products": {"id", "category", "name"}}}}, Now: clock},
+			model.VerdictPass, nil},
+		{"a server before PostgreSQL 16", "probe.db.plan", componentTarget, map[string]any{"queryid": "7"},
+			Deps{Statements: fakeStatements{plan: capture.StatementPlan{
+				Unavailable: "PostgreSQL 15 is before 16"}}, Now: clock},
+			model.VerdictInconclusive, nil},
+
 		// --- probe.config.present ---
 		{"required key is set", "probe.config.present", componentTarget,
 			map[string]any{"key": "JWT_SECRET_KEY"},
@@ -403,8 +432,28 @@ func TestEveryProbeHasAllThreeVerdictFixtures(t *testing.T) {
 	required := []model.Verdict{
 		model.VerdictPass, model.VerdictFail, model.VerdictInconclusive,
 	}
+	// evidenceOnly are probes the plan defines as evidence with no
+	// expectation and no finding of their own, so no fail exists to fixture
+	// (Phase 37 part 2: probe.db.plan). Q30 was ruled on 2026-11-13 to key
+	// this on an empty expected_from instead of a name, but
+	// probe.edge.impedance also declares none and does fail, so the change
+	// waits on Q31 and the name stays until then. Each must
+	// declare no expectation plane, and its pass and inconclusive fixtures
+	// are still required.
+	evidenceOnly := map[string]bool{model.PlanProbeID: true}
 	for _, id := range BuiltIn().IDs() {
+		if evidenceOnly[id] {
+			if probe, _ := BuiltIn().Get(id); probe.Manifest().ExpectedFrom != "" {
+				t.Errorf("%s is listed as evidence only but declares an expectation plane", id)
+			}
+			if covered[id][model.VerdictFail] {
+				t.Errorf("%s is evidence only, yet a fixture gives it a fail", id)
+			}
+		}
 		for _, verdict := range required {
+			if verdict == model.VerdictFail && evidenceOnly[id] {
+				continue
+			}
 			if !covered[id][verdict] {
 				t.Errorf("probe %s has no %s fixture. Field 13 requires all three; "+
 					"the inconclusive case is mandatory because a probe that cannot "+
@@ -418,7 +467,8 @@ func TestBuiltInCatalogueRegistersEveryCoreProbe(t *testing.T) {
 	catalogue := BuiltIn()
 	want := []string{
 		"probe.auth.propagation", "probe.auth.token_shape", "probe.config.present",
-		"probe.db.connect", "probe.db.schema_conformance", "probe.dep.version",
+		"probe.db.connect", "probe.db.plan", "probe.db.schema_conformance",
+		"probe.db.statement_budget", "probe.dep.version",
 		"probe.edge.impedance", "probe.http.latency", "probe.http.reachable",
 		"probe.http.route_conformance", "probe.http.schema_conformance",
 		"probe.net.dns_resolve", "probe.net.tcp_connect", "probe.net.tls_validity",

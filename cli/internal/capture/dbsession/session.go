@@ -15,7 +15,10 @@ package dbsession
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"net"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -184,15 +187,139 @@ const (
 		ORDER BY n.nspname, c.relname, a.attname`
 )
 
+// The statistics templates (Phase 37 part 2), under db.stats.read and
+// db.plan.read. Each reads only the connected database's statements
+// (`dbid`), never Culprit's own role's (Q29 (3)), and keeps a statement's
+// text only when it begins with SELECT, WITH, INSERT, UPDATE, DELETE or
+// MERGE — the statements pg_stat_statements normalises, constants replaced
+// by $n. Any other text (a utility statement such as CREATE ROLE ...
+// PASSWORD '...', stored as written, or one beginning with a comment) is
+// NULL before it leaves the server (Q29 (2)).
+const (
+	// statsProbeStatement is the server's version and whether this
+	// database has pg_stat_statements.
+	statsProbeStatement statement = `
+		SELECT current_setting('server_version_num')::int,
+		       EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_stat_statements')`
+	// statsSnapshotStatement is one snapshot of this database's statements.
+	statsSnapshotStatement statement = `
+		SELECT s.queryid, sum(s.calls)::bigint, sum(s.total_exec_time)::float8,
+		       max(CASE WHEN s.query ~* '^(select|with|insert|update|delete|merge)\M'
+		                THEN s.query END)
+		FROM pg_stat_statements s
+		WHERE s.dbid = (SELECT oid FROM pg_catalog.pg_database WHERE datname = current_database())
+		  AND s.userid <> (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user)
+		  AND s.queryid IS NOT NULL
+		GROUP BY s.queryid`
+	// statsInfoStatement is the view's own reset time and eviction count:
+	// a change between two snapshots means a delta cannot be trusted.
+	statsInfoStatement statement = `SELECT dealloc, stats_reset FROM pg_stat_statements_info`
+	// planRowStatement is one statement's text, by queryid, from this
+	// database, and only when it is a SELECT or a WITH: the one text that
+	// becomes a plannedStatement.
+	planRowStatement statement = `
+		SELECT max(s.query)
+		FROM pg_stat_statements s
+		WHERE s.queryid = $1
+		  AND s.dbid = (SELECT oid FROM pg_catalog.pg_database WHERE datname = current_database())
+		  AND s.userid <> (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user)
+		  AND s.query ~* '^(select|with)\M'`
+)
+
 // isTemplate reports whether s is one of the constants above: a switch,
 // not a map, so no other file in the package can add a statement to the
 // set at run time (the Phase 37 part 1 audit added one from an init()).
 func isTemplate(s statement) bool {
 	switch s {
-	case columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement:
+	case columnsStatement, alembicExistsStatement, alembicVersionStatement, leadingColumnsStatement,
+		statsProbeStatement, statsSnapshotStatement, statsInfoStatement, planRowStatement:
 		return true
 	}
 	return false
+}
+
+// plannedStatement is the one non-constant text this binary ever sends
+// (Phase 37 part 2, "Decisions — where the fields predate the build"): a
+// statement read back from pg_stat_statements in the same session, chosen by
+// queryid, never by an input. Only planFromRow makes one, from a statistics
+// row, and only for a single SELECT or WITH.
+type plannedStatement struct{ text string }
+
+// plannable is a SELECT or WITH, from its first character: a leading
+// comment, a space or any other statement is not.
+var plannable = regexp.MustCompile(`(?i)^(select|with)\b`)
+
+// planFromRow is the only constructor of a plannedStatement.
+func planFromRow(text string) (plannedStatement, error) {
+	if !plannable.MatchString(text) || strings.Contains(text, ";") {
+		return plannedStatement{}, ErrNotPlannable
+	}
+	return plannedStatement{text: text}, nil
+}
+
+// ErrNotPlannable is the refusal of a text that is not one SELECT or WITH.
+var ErrNotPlannable = errors.New(
+	"refused before it was sent: only a single SELECT or WITH read from pg_stat_statements is planned")
+
+// planner is what sendPlan needs of a session; *pgx.Conn is one, and tests
+// count what reaches it.
+type planner interface {
+	querier
+	Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error)
+	Deallocate(ctx context.Context, name string) error
+}
+
+// planName is the one prepared statement a session ever holds.
+const planName = "culprit_plan"
+
+// sendPlan is the other function that hands a statement to the driver,
+// and the only one that sends a text that is not a template. It returns
+// the planner's generic plan for p and executes nothing:
+//
+//  1. p's text is parsed as a named prepared statement — a protocol Parse,
+//     which carries exactly one statement and runs none;
+//  2. EXPLAIN (FORMAT JSON) EXECUTE culprit_plan(NULL, ...) asks for its
+//     plan. The session's plan_cache_mode is force_generic_plan
+//     (openSession), so the plan is built without the parameters' values:
+//     a filter reads `category = $1`, never NULL folded to false. EXPLAIN
+//     without ANALYZE runs nothing. The EXECUTE's text is fixed but for the
+//     count of NULLs, which is the statement's parameter count;
+//  3. the prepared statement is deallocated.
+//
+// (Phase 37's decisions name EXPLAIN (GENERIC_PLAN, ...) over the extended
+// protocol. Over the extended protocol every $n must be bound, and a bound
+// value is folded as a constant, so GENERIC_PLAN there plans for NULL: the
+// first real-Postgres run showed a one-time filter of false. This is the
+// generic plan the decision asks for, every message still extended.)
+func sendPlan(ctx context.Context, session planner, p plannedStatement) (string, error) {
+	if !plannable.MatchString(p.text) || strings.Contains(p.text, ";") {
+		return "", ErrNotPlannable
+	}
+	description, err := session.Prepare(ctx, planName, p.text)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = session.Deallocate(context.Background(), planName) }()
+	nulls := make([]string, len(description.ParamOIDs))
+	for index := range nulls {
+		nulls[index] = "NULL"
+	}
+	explain := "EXPLAIN (FORMAT JSON) EXECUTE " + planName
+	if len(nulls) > 0 {
+		explain += "(" + strings.Join(nulls, ", ") + ")"
+	}
+	rows, err := session.Query(ctx, explain)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	var plan string
+	if rows.Next() {
+		if err := rows.Scan(&plan); err != nil {
+			return "", err
+		}
+	}
+	return plan, rows.Err()
 }
 
 // ErrNotATemplate is send's refusal of a statement outside templates.
@@ -224,6 +351,11 @@ func openSession(ctx context.Context, dsn string) (*pgx.Conn, error) {
 	config.RuntimeParams["default_transaction_read_only"] = "on"
 	config.RuntimeParams["statement_timeout"] = "10000"
 	config.RuntimeParams["application_name"] = "culprit-capture"
+	// A prepared statement is planned without its parameters' values
+	// (sendPlan). pgx prepares the templates too, under its default
+	// statement cache, so they are planned generically as well; that
+	// changes how they are planned, never what they read.
+	config.RuntimeParams["plan_cache_mode"] = "force_generic_plan"
 	conn, err := pgx.ConnectConfig(ctx, config)
 	if err != nil {
 		return nil, classify(ctx, err)
@@ -370,6 +502,343 @@ func (r PostgresReader) Read(parent context.Context, dsn string) (Schema, error)
 		}
 	}
 	return schema, nil
+}
+
+// --- Statements and plans (Phase 37 part 2) ----------------------------
+
+// StatementStats is one normalised statement over a window: the change in
+// its call count and in its total execution time, in whole microseconds,
+// converted once from pg_stat_statements' milliseconds at reading.
+type StatementStats struct {
+	QueryID     int64
+	Calls       int64
+	TotalMicros int64
+	// Text is set only when the statement is one Postgres normalises
+	// (SELECT, WITH, INSERT, UPDATE, DELETE, MERGE); TextKept says so.
+	Text     string
+	TextKept bool
+	// PlanJSON is the generic plan sendPlan reads (EXPLAIN (FORMAT JSON) of
+	// the prepared statement under force_generic_plan), when the
+	// window was asked to plan and the statement is a SELECT or a WITH.
+	PlanJSON string
+}
+
+// StatementWindow is what two snapshots of one session give.
+type StatementWindow struct {
+	Statements []StatementStats
+	// Reset is a reset of the statistics, or an eviction from them,
+	// between the two snapshots: no delta of the window can be trusted.
+	Reset bool
+	// Unavailable says why nothing was measured: no pg_stat_statements in
+	// this database, or a server too old for it. Empty when measured.
+	Unavailable   string
+	ServerVersion int
+	// TableColumns are each table's columns, "namespace.table", when the
+	// window was planned: how a plan's filter is read without storing it.
+	TableColumns map[string][]string
+}
+
+// StatementPlan is one statement's generic plan.
+type StatementPlan struct {
+	PlanJSON      string
+	Unavailable   string
+	ServerVersion int
+	TableColumns  map[string][]string
+}
+
+// StatsReader reads statement statistics and plans, each in one
+// read-only session. Never a row of an application table, never a reset,
+// never EXPLAIN ANALYZE.
+type StatsReader struct {
+	Timeout time.Duration
+	// Span is the time between the two snapshots: 30 seconds, fixed by
+	// the plan; settable for tests.
+	Span time.Duration
+	// Wait waits out the window; nil waits on a timer, cut by ctx.
+	Wait func(ctx context.Context, d time.Duration) error
+}
+
+// StatementWindowLength is the window, fixed (PERFORMANCE_PLAN.md, Phase 37
+// part 2: "not configurable, and the walk's deadline cuts it").
+const StatementWindowLength = 30 * time.Second
+
+// MinimumPlanVersion is PostgreSQL 16: the brief's floor for the plan
+// probe, set when GENERIC_PLAN was the mechanism and kept as ruled on
+// 2026-11-13; force_generic_plan is older, but 16 is what CI holds it to.
+const MinimumPlanVersion = 160000
+
+// minimumStatsVersion is PostgreSQL 14, the first with
+// pg_stat_statements_info, without which a reset cannot be seen.
+const minimumStatsVersion = 140000
+
+type snapshotRow struct {
+	calls  int64
+	micros int64
+	text   *string
+}
+
+func readSnapshot(ctx context.Context, conn querier) (map[int64]snapshotRow, error) {
+	rows, err := send(ctx, conn, statsSnapshotStatement)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]snapshotRow{}
+	for rows.Next() {
+		var queryID, calls int64
+		var total float64
+		var text *string
+		if err := rows.Scan(&queryID, &calls, &total, &text); err != nil {
+			return nil, err
+		}
+		// Converted once, here, to whole microseconds (P2: integers from
+		// the reading on).
+		out[queryID] = snapshotRow{calls: calls, micros: int64(math.Round(total * 1000)), text: text}
+	}
+	return out, rows.Err()
+}
+
+func readInfo(ctx context.Context, conn querier) (int64, time.Time, error) {
+	rows, err := send(ctx, conn, statsInfoStatement)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	defer rows.Close()
+	var dealloc int64
+	var reset time.Time
+	if rows.Next() {
+		if err := rows.Scan(&dealloc, &reset); err != nil {
+			return 0, time.Time{}, err
+		}
+	}
+	return dealloc, reset, rows.Err()
+}
+
+// probeStats reads the server version and whether pg_stat_statements is
+// here, and says why not when it cannot be used.
+func probeStats(ctx context.Context, conn querier, minimum int) (int, string, error) {
+	rows, err := send(ctx, conn, statsProbeStatement)
+	if err != nil {
+		return 0, "", err
+	}
+	defer rows.Close()
+	var version int
+	var present bool
+	if rows.Next() {
+		if err := rows.Scan(&version, &present); err != nil {
+			return 0, "", err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, "", err
+	}
+	switch {
+	case !present:
+		return version, "pg_stat_statements is not installed in this database", nil
+	case version < minimum:
+		return version, fmt.Sprintf("PostgreSQL %d is before %d", version/10000, minimum/10000), nil
+	}
+	return version, "", nil
+}
+
+// unloaded is pg_stat_statements present but not preloaded: its view
+// refuses to be read (SQLSTATE 55000).
+func unloaded(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "55000"
+}
+
+func (r StatsReader) wait(ctx context.Context, d time.Duration) error {
+	if r.Wait != nil {
+		return r.Wait(ctx, d)
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (r StatsReader) session(parent context.Context, dsn string, extra time.Duration) (context.Context, context.CancelFunc, *pgx.Conn, error) {
+	timeout := r.Timeout
+	if timeout == 0 {
+		timeout = 20 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout+extra)
+	conn, err := openSession(ctx, dsn)
+	if err != nil {
+		cancel()
+		return nil, nil, nil, err
+	}
+	return ctx, cancel, conn, nil
+}
+
+// Window takes two snapshots of this database's statements, the window
+// apart, in one session, and returns each statement's change. With plan,
+// it then asks the planner, in the same session, for each kept SELECT or
+// WITH's generic plan, and reads the tables' columns.
+func (r StatsReader) Window(parent context.Context, dsn string, plan bool) (StatementWindow, error) {
+	window := r.Span
+	if window == 0 {
+		window = StatementWindowLength
+	}
+	ctx, cancel, conn, err := r.session(parent, dsn, window)
+	if err != nil {
+		return StatementWindow{}, err
+	}
+	defer cancel()
+	defer conn.Close(context.Background())
+
+	version, missing, err := probeStats(ctx, conn, minimumStatsVersion)
+	if err != nil {
+		return StatementWindow{}, classify(ctx, err)
+	}
+	result := StatementWindow{ServerVersion: version, Unavailable: missing}
+	if missing != "" {
+		return result, nil
+	}
+	deallocBefore, resetBefore, err := readInfo(ctx, conn)
+	if err == nil {
+		var before map[int64]snapshotRow
+		before, err = readSnapshot(ctx, conn)
+		if err == nil {
+			if err = r.wait(ctx, window); err == nil {
+				var after map[int64]snapshotRow
+				after, err = readSnapshot(ctx, conn)
+				if err == nil {
+					deallocAfter, resetAfter, infoErr := readInfo(ctx, conn)
+					err = infoErr
+					result.Reset = deallocAfter != deallocBefore || !resetAfter.Equal(resetBefore)
+					for queryID, now := range after {
+						then := before[queryID]
+						calls, micros := now.calls-then.calls, now.micros-then.micros
+						if calls < 0 || micros < 0 {
+							result.Reset = true
+							continue
+						}
+						if calls == 0 {
+							continue
+						}
+						stats := StatementStats{QueryID: queryID, Calls: calls, TotalMicros: micros}
+						if now.text != nil {
+							stats.Text, stats.TextKept = *now.text, true
+						}
+						result.Statements = append(result.Statements, stats)
+					}
+				}
+			}
+		}
+	}
+	if err != nil {
+		if unloaded(err) {
+			result.Unavailable = "pg_stat_statements is installed but not loaded (shared_preload_libraries)"
+			return result, nil
+		}
+		return StatementWindow{}, classify(ctx, err)
+	}
+	sort.Slice(result.Statements, func(i, j int) bool {
+		a, b := result.Statements[i], result.Statements[j]
+		if a.TotalMicros != b.TotalMicros {
+			return a.TotalMicros > b.TotalMicros
+		}
+		return a.QueryID < b.QueryID
+	})
+	if plan && version >= MinimumPlanVersion {
+		for index := range result.Statements {
+			if json, err := planOne(ctx, conn, result.Statements[index].QueryID); err == nil {
+				result.Statements[index].PlanJSON = json
+			}
+		}
+		if result.TableColumns, err = tableColumns(ctx, conn); err != nil {
+			return StatementWindow{}, classify(ctx, err)
+		}
+	}
+	return result, nil
+}
+
+// planOne reads one statement by queryid, in this session, and plans it.
+func planOne(ctx context.Context, conn planner, queryID int64) (string, error) {
+	rows, err := send(ctx, conn, planRowStatement, queryID)
+	if err != nil {
+		return "", err
+	}
+	var text *string
+	if rows.Next() {
+		err = rows.Scan(&text)
+	}
+	rows.Close()
+	if err == nil {
+		err = rows.Err()
+	}
+	if err != nil {
+		return "", err
+	}
+	if text == nil {
+		return "", ErrNotPlannable
+	}
+	planned, err := planFromRow(*text)
+	if err != nil {
+		return "", err
+	}
+	return sendPlan(ctx, conn, planned)
+}
+
+func tableColumns(ctx context.Context, conn querier) (map[string][]string, error) {
+	rows, err := send(ctx, conn, columnsStatement, excludedSchemas)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var namespace, table, column string
+		var nullable bool
+		if err := rows.Scan(&namespace, &table, &column, &nullable); err != nil {
+			return nil, err
+		}
+		key := namespace + "." + table
+		out[key] = append(out[key], column)
+	}
+	return out, rows.Err()
+}
+
+// Plan reads the statement queryID names from this database's statistics,
+// in one session, and returns its generic plan. Before PostgreSQL 16, or
+// without pg_stat_statements, Unavailable says why.
+func (r StatsReader) Plan(parent context.Context, dsn string, queryID int64) (StatementPlan, error) {
+	ctx, cancel, conn, err := r.session(parent, dsn, 0)
+	if err != nil {
+		return StatementPlan{}, err
+	}
+	defer cancel()
+	defer conn.Close(context.Background())
+	version, missing, err := probeStats(ctx, conn, MinimumPlanVersion)
+	if err != nil {
+		return StatementPlan{}, classify(ctx, err)
+	}
+	result := StatementPlan{ServerVersion: version, Unavailable: missing}
+	if missing != "" {
+		return result, nil
+	}
+	plan, err := planOne(ctx, conn, queryID)
+	switch {
+	case errors.Is(err, ErrNotPlannable):
+		result.Unavailable = "no SELECT or WITH with that queryid in this database's statistics"
+		return result, nil
+	case err != nil && unloaded(err):
+		result.Unavailable = "pg_stat_statements is installed but not loaded (shared_preload_libraries)"
+		return result, nil
+	case err != nil:
+		return StatementPlan{}, classify(ctx, err)
+	}
+	result.PlanJSON = plan
+	if result.TableColumns, err = tableColumns(ctx, conn); err != nil {
+		return StatementPlan{}, classify(ctx, err)
+	}
+	return result, nil
 }
 
 // withoutDriverSuffix turns SQLAlchemy's `postgresql+asyncpg://` into the

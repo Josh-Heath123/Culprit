@@ -1,0 +1,371 @@
+{
+  "why": [
+    "The statement rule (Phase 37 part 2): integer comparison of a window's total execution time against budget_ms * 1000 * calls, per statement. cli/internal/model/statements.go (JudgeStatements) and shared/culprit_model/statements.py (judge_statements) give each case's verdict and reason, or both refuse its shape (error)."
+  ],
+  "cases": [
+    {
+      "why": "over budget: 5 calls, 260 ms in all, against 50 ms",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 5,
+            "total_us": 260000,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "verdict": "fail",
+      "reason": "statement 101 is over its 50 ms budget: 260000 µs over 5 call(s) in the window, more than 50 ms each"
+    },
+    {
+      "why": "within budget",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 5,
+            "total_us": 200000,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "102",
+            "calls": 3,
+            "total_us": 3000
+          }
+        ]
+      },
+      "verdict": "pass",
+      "reason": "every one of 1 budgeted statement(s) called in the window is within its budget"
+    },
+    {
+      "why": "the integer boundary: exactly the budget is within it",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 7,
+            "total_us": 350000,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "verdict": "pass",
+      "reason": "every one of 1 budgeted statement(s) called in the window is within its budget"
+    },
+    {
+      "why": "the integer boundary: one microsecond over is over",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 7,
+            "total_us": 350001,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "verdict": "fail",
+      "reason": "statement 101 is over its 50 ms budget: 350001 µs over 7 call(s) in the window, more than 50 ms each"
+    },
+    {
+      "why": "no calls in the window",
+      "measured": {
+        "reset_during_window": false,
+        "statements": []
+      },
+      "verdict": "inconclusive",
+      "reason": "no call to a statement with a budget fell in the window"
+    },
+    {
+      "why": "calls only to statements with no budget",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "102",
+            "calls": 9,
+            "total_us": 9000000
+          }
+        ]
+      },
+      "verdict": "inconclusive",
+      "reason": "no call to a statement with a budget fell in the window"
+    },
+    {
+      "why": "a reset during the window",
+      "measured": {
+        "reset_during_window": true,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 5,
+            "total_us": 260000,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "verdict": "inconclusive",
+      "reason": "pg_stat_statements was reset, or a statement evicted from it, during the window, so no change over it can be trusted"
+    },
+    {
+      "why": "a second statement over, after one within",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 2,
+            "total_us": 1000,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "103",
+            "calls": 1,
+            "total_us": 90000,
+            "budget_ms": 80
+          }
+        ]
+      },
+      "verdict": "fail",
+      "reason": "statement 103 is over its 80 ms budget: 90000 µs over 1 call(s) in the window, more than 80 ms each"
+    },
+    {
+      "why": "the largest counts the rule takes",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 2147483647,
+            "total_us": 2147483647,
+            "budget_ms": 60000
+          }
+        ]
+      },
+      "verdict": "pass",
+      "reason": "every one of 1 budgeted statement(s) called in the window is within its budget"
+    },
+    {
+      "why": "a statement with no calls is not a statement of the window",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 0,
+            "total_us": 0,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "error": true
+    },
+    {
+      "why": "a fractional total",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 1,
+            "total_us": 1.5,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "error": true
+    },
+    {
+      "why": "a budget of 0",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 1,
+            "total_us": 10,
+            "budget_ms": 0
+          }
+        ]
+      },
+      "error": true
+    },
+    {
+      "why": "a count past 2^31-1",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "101",
+            "calls": 2147483648,
+            "total_us": 10,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "error": true
+    },
+    {
+      "why": "more than 20 statements",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": "0",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "1",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "2",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "3",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "4",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "5",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "6",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "7",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "8",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "9",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "10",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "11",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "12",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "13",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "14",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "15",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "16",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "17",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "18",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "19",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          },
+          {
+            "queryid": "20",
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "error": true
+    },
+    {
+      "why": "a queryid that is a number, not text",
+      "measured": {
+        "reset_during_window": false,
+        "statements": [
+          {
+            "queryid": 101,
+            "calls": 1,
+            "total_us": 1,
+            "budget_ms": 50
+          }
+        ]
+      },
+      "error": true
+    },
+    {
+      "why": "a missing reset flag",
+      "measured": {
+        "statements": []
+      },
+      "error": true
+    }
+  ]
+}
