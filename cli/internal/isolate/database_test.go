@@ -286,7 +286,7 @@ func TestWithoutMigrationFactsTheIndexIsNotClaimedMissing(t *testing.T) {
 	world := &dbWorld{overMS: 96, nodes: sortWalk(), indexes: []any{index(sortIndex, "sku")}}
 	inv := dbWalk(t, world, []model.Fact{tableBudget()})
 	h := hypothesisOn(inv, KindMissingIndex, categoryColumn)
-	if h == nil || h.Status != model.HypothesisUnexplored || !strings.Contains(h.Reason, "--intent") {
+	if h == nil || h.Status != model.HypothesisUnexplored || !strings.Contains(h.Reason, "nothing extracted the migrations") {
 		t.Fatalf("%+v", h)
 	}
 	if inv.Diagnosis.Complete || inv.Diagnosis.RootSubject != productsTable {

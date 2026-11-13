@@ -392,8 +392,9 @@ func (w *Walk) explain(ctx context.Context, entry, database, table, queryID stri
 		finding.says += fmt.Sprintf("; a live index leads %s (%s), and the plan does not use it", c, strings.Join(leading, ", "))
 	case intent == "unknown":
 		w.markUnexplored(h, fmt.Sprintf(
-			"no migration facts say whether an index leads %s.%s: the walk was given no INTENT for it "+
-				"(culprit diagnose --intent, from culprit intent with plugins)", table, c), planID)
+			"no migration facts say whether an index leads %s.%s: nothing extracted the migrations, so the "+
+				"walk has no INTENT for it (the Python extractor plugin reads them; --no-plugins, or no "+
+				"extract: section that reaches them, leaves them unread)", table, c), planID)
 		found.partial = append(found.partial, couldNotCheck(*h))
 	case intent == "declared":
 		w.markUnexplored(h, fmt.Sprintf(
