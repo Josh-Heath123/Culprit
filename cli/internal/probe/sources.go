@@ -42,6 +42,9 @@ import (
 type Sources struct {
 	Environment string
 	Spec        extract.EnvironmentSpec
+	// Manifest derives each component's schema database (Q34); nil gives
+	// each component <component>-db.
+	Manifest    *extract.Manifest
 	ManifestDir string
 	Grants      capability.Grants
 	Ledger      *capability.Ledger
@@ -336,7 +339,7 @@ func (d *databaseSource) dsnFor(name string) (string, error) {
 		if settings.Database == nil {
 			continue
 		}
-		if component != name && settings.Database.DatabaseName(component) != name {
+		if component != name && settings.Database.DatabaseName(d.s.Manifest, component) != name {
 			continue
 		}
 		dsn, ok := d.s.LookupEnv(settings.Database.DSNEnv)

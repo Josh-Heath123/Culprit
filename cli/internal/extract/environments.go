@@ -201,12 +201,14 @@ func (c EnvironmentComponent) WorkloadFor(component string) string {
 	return component
 }
 
-// DatabaseName returns the schema-subject database name.
-func (d DatabaseSpec) DatabaseName(component string) string {
+// DatabaseName returns the schema-subject database name: the name given,
+// which validateEnvironments holds equal to the schema database rule (Q34),
+// or, when none is given, the rule's own.
+func (d DatabaseSpec) DatabaseName(m *Manifest, component string) string {
 	if strings.TrimSpace(d.Name) != "" {
 		return d.Name
 	}
-	return component + "-db"
+	return m.SchemaDatabase(component)
 }
 
 func (m *Manifest) validateEnvironments() error {
@@ -302,6 +304,16 @@ func (m *Manifest) validateEnvironments() error {
 					// is the connection string itself.
 					return fmt.Errorf("%s.database.dsn_env: must be the *name* of an environment "+
 						"variable holding the connection string, never the connection string", at)
+				}
+				// Q34: the name, where given, is the one the model derives,
+				// or the live schema would be on a database the migrations
+				// and the budgets are not.
+				if named := strings.TrimSpace(database.Name); named != "" {
+					if derived := m.SchemaDatabase(component); named != derived {
+						return fmt.Errorf("%s.database.name: %q, but %s's schema database is %q "+
+							"(the database it connects to by its one sql edge, else %s-db); "+
+							"give that name or leave name out", at, named, component, derived, component)
+					}
 				}
 			}
 			if endpoint := settings.Endpoint; endpoint != nil {

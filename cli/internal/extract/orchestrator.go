@@ -194,6 +194,10 @@ func Run(parent context.Context, options Options) (model.CaptureBundle, error) {
 				Want:        specWants,
 				Environment: nil, // INTENT is environment-independent (§0.2)
 				Component:   target.Component,
+				// Q34: the database this component's schema facts are on,
+				// derived from the model, so an extractor's subjects join
+				// the live capture's and the budgets'.
+				Database: options.Manifest.SchemaDatabase(target.Component),
 			}, timeout)
 
 			// A plugin's facts are re-stamped with this run's capture id

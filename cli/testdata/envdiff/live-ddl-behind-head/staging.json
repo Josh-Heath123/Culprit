@@ -26,7 +26,7 @@
     },
     {
       "plane": "CONFIGURED",
-      "subject": "schema:orders-api-db/public.orders",
+      "subject": "schema:orders-db/public.orders",
       "predicate": "columns",
       "environment": "staging",
       "provenance": {
@@ -49,7 +49,7 @@
     },
     {
       "plane": "CONFIGURED",
-      "subject": "schema:orders-api-db/public.orders.cancelled_at",
+      "subject": "schema:orders-db/public.orders.cancelled_at",
       "predicate": "nullable",
       "environment": "staging",
       "provenance": {
@@ -65,7 +65,7 @@
     },
     {
       "plane": "CONFIGURED",
-      "subject": "schema:orders-api-db/public.alembic_version",
+      "subject": "schema:orders-db/public.alembic_version",
       "predicate": "columns",
       "environment": "staging",
       "provenance": {
@@ -83,7 +83,7 @@
     },
     {
       "plane": "CONFIGURED",
-      "subject": "schema:orders-api-db/public.order_lines",
+      "subject": "schema:orders-db/public.order_lines",
       "predicate": "columns",
       "environment": "staging",
       "provenance": {

@@ -140,7 +140,7 @@ environments:
           # on alembic_version, so the capture says the migration version
           # was not read rather than guessing it.
           dsn_env: API_READER_DATABASE_URL
-          name: culprit-api-db
+          name: culprit-db
 
   # Phase 31.1: probing a local `just quickstart` stack from the host, which
   # is how that phase's criteria 3 and 4 are demonstrated — the quickstart's
@@ -153,7 +153,7 @@ environments:
   # infra/.env.prod (host 127.0.0.1, port 55432). The DSN is read from that
   # variable by name and never appears in a reading:
   #
-  #   culprit probe 'schema:culprit-api-db/public.users' -f culprit.yaml \
+  #   culprit probe 'schema:culprit-db/public.users' -f culprit.yaml \
   #       --env quickstart -p probe.db.schema_conformance
   quickstart:
     adapter: process
@@ -164,4 +164,4 @@ environments:
       culprit-api:
         database:
           dsn_env: CULPRIT_QUICKSTART_DSN
-          name: culprit-api-db
+          name: culprit-db

@@ -307,6 +307,39 @@ def test_run_returns_a_response_even_when_everything_fails(tmp_path: Path) -> No
     assert response.skipped, "an empty directory must still report why it yielded nothing"
 
 
+def test_schema_subjects_use_the_database_the_orchestrator_sends(tmp_path: Path) -> None:
+    """Q34: the orchestrator derives a component's schema database from the
+    model and sends it; the extractor uses it verbatim. Only a request from
+    an older orchestrator, which sends none, falls back to <component>-db."""
+    from culprit_model.protocol import ExtractorRequest, Want
+
+    versions = tmp_path / "migrations" / "versions"
+    versions.mkdir(parents=True)
+    (versions / "0001_items.py").write_text(
+        'revision = "0001"\n'
+        "down_revision = None\n"
+        "import sqlalchemy as sa\n"
+        "from alembic import op\n"
+        "def upgrade():\n"
+        '    op.create_table("items", sa.Column("id", sa.Integer(), primary_key=True),\n'
+        '                    sa.Column("category", sa.String(), nullable=False))\n',
+        encoding="utf-8",
+    )
+
+    def databases(sent: str | None) -> set[str]:
+        response = run(
+            ExtractorRequest(
+                root=str(tmp_path), want=(Want.DB_SCHEMA,), component="shop", database=sent
+            ),
+            allow_import=False,
+        )
+        assert response.facts, response.skipped
+        return {fact.subject.split("/", 1)[0] for fact in response.facts}
+
+    assert databases("shop-store") == {"schema:shop-store"}
+    assert databases(None) == {"schema:shop-db"}
+
+
 def test_a_project_with_no_sqlalchemy_reports_the_gap() -> None:
     """The other half of schema extraction: an honest skip.
 

@@ -187,6 +187,11 @@ const databaseProbeFixture = `version: 1
 components:
   - name: orders-api
     kind: service
+    connections:
+      - to: orders-db
+        kind: sql
+  - name: orders-db
+    kind: database
 environments:
   staging:
     adapter: process

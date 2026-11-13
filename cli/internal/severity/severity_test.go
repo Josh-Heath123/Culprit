@@ -3,6 +3,7 @@ package severity_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/josh-heath123/culprit/cli/internal/extract"
@@ -103,6 +104,57 @@ func TestSeverityComesFromTheGraph(t *testing.T) {
 				t.Error("no reason given")
 			}
 		})
+	}
+}
+
+// TestASchemaDatabaseIsOwnedByTheModelsRule: a schema divergence on a
+// database breaks the request path when a component on it has that database
+// as its schema database (Q34) — here orders-api, whose database is
+// orders-store, not orders-api-db. The old suffix trim found no owner.
+func TestASchemaDatabaseIsOwnedByTheModelsRule(t *testing.T) {
+	loaded := load(t, `version: 1
+components:
+  - name: web
+    kind: frontend
+    connections:
+      - to: orders-api
+        kind: http
+        criticality: on_request_path
+  - name: orders-api
+    kind: service
+    connections:
+      - to: orders-store
+        kind: sql
+        criticality: on_request_path
+      - to: reporting
+        kind: message
+        criticality: background
+  - name: orders-store
+    kind: database
+  - name: reporting
+    kind: job
+    connections:
+      - to: reports-store
+        kind: sql
+        criticality: background
+  - name: reports-store
+    kind: database
+`)
+	classifier := severity.NewClassifier(loaded, model.CaptureBundle{})
+	for _, c := range []struct {
+		database string
+		want     model.Severity
+		mention  string
+	}{
+		{"orders-store", model.SeverityBreaksRequestPath, "orders-api"},
+		{"reports-store", model.SeverityDegrades, ""},
+		{"orders-api-db", model.SeverityDegrades, ""},
+	} {
+		table := subject(t, model.KindSchema, model.Parts{"database": c.database, "namespace": "public", "table": "orders"})
+		got, reason := classifier.Classify(model.Divergence{Subject: table})
+		if got != c.want || !strings.Contains(reason, c.mention) {
+			t.Errorf("%s: %s (%s), want %s naming %q", c.database, got, reason, c.want, c.mention)
+		}
 	}
 }
 

@@ -121,6 +121,11 @@ type ExtractorRequest struct {
 	// extractor cannot invent one that will match the system model.
 	// Recorded as a plan correction.
 	Component string `json:"component,omitempty"`
+	// Database is the database the component's schema facts are on,
+	// derived from the model (Q34): the component it connects to by its
+	// one sql edge, else <component>-db. An extractor uses it verbatim in
+	// schema: subjects. Absent from an older orchestrator.
+	Database string `json:"database,omitempty"`
 }
 
 // ExtractorResponse is what an extractor writes to stdout (field 7):

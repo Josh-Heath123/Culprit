@@ -25,7 +25,7 @@
     },
     {
       "plane": "INTENT",
-      "subject": "schema:orders-api-db/public.orders",
+      "subject": "schema:orders-db/public.orders",
       "predicate": "columns",
       "value": [
         "cancelled_at",
@@ -47,7 +47,7 @@
     },
     {
       "plane": "INTENT",
-      "subject": "schema:orders-api-db/public.order_lines",
+      "subject": "schema:orders-db/public.order_lines",
       "predicate": "columns",
       "value": [
         "id",
@@ -67,7 +67,7 @@
     },
     {
       "plane": "INTENT",
-      "subject": "schema:orders-api-db/public.orders.cancelled_at",
+      "subject": "schema:orders-db/public.orders.cancelled_at",
       "predicate": "nullable",
       "value": true,
       "provenance": {

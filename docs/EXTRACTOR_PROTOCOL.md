@@ -39,7 +39,8 @@ Written to your stdin, as one JSON object:
   "want": ["http_routes", "db_schema", "config_keys",
            "client_calls", "test_assertions", "dependencies"],
   "environment": null,
-  "component": "orders-api"
+  "component": "orders-api",
+  "database": "orders-db"
 }
 ```
 
@@ -50,6 +51,14 @@ Written to your stdin, as one JSON object:
 | `want` | The classes of fact being asked for. Answer the ones you can; skip the rest. |
 | `environment` | `null` for `INTENT` extraction. A named environment only when capturing what a live environment is configured to do. **In protocol 1 it is always `null`** — do not go looking for a running system. |
 | `component` | The component name these facts are about. Use it verbatim when building subject URIs; it is what makes your facts comparable with everyone else's. |
+| `database` | The database this component's schema facts are on: the `database` part of every `schema:` subject you build. The orchestrator derives it from the system model — the component this one connects to by its one `sql` edge, else `<component>-db` (Q34) — so your schema facts join the live capture's and the budgets'. Use it verbatim. Added within protocol 1 and optional: an older orchestrator sends none, and only then fall back to `<component>-db`. |
+
+**On request fields added within a version.** `database` was added to
+protocol 1 (Phase 37). An extractor that ignores it still answers, with its
+schema facts on `<component>-db`, which may join nothing. An extractor that
+refuses unknown fields — the reference Python one does — refuses every
+request that carries it until it learns the field, so it must be updated
+with the orchestrator.
 
 ### The `want` vocabulary
 

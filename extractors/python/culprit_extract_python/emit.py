@@ -35,6 +35,16 @@ class FactBuilder:
     app_target: str = ""
     #: Collected as readers go, so the caller can report both halves.
     problems: list[str] = field(default_factory=list)
+    #: The database the orchestrator says this component's schema facts
+    #: are on (Q34). Empty only from an older orchestrator.
+    database: str = ""
+
+    @property
+    def schema_database(self) -> str:
+        """The `database` part of this component's `schema:` subjects: the
+        name the orchestrator derived from the model, or, from an older
+        orchestrator that sends none, `<component>-db`."""
+        return self.database or f"{self.component}-db"
 
     def fact(
         self,

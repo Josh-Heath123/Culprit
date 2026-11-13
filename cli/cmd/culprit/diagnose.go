@@ -409,7 +409,7 @@ func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, age
 ) *probe.Runner {
 	ledger := capability.NewLedger(grants)
 	sources := &probe.Sources{
-		Environment: environment, Spec: manifest.Environments[environment],
+		Environment: environment, Spec: manifest.Environments[environment], Manifest: manifest,
 		ManifestDir: filepath.Dir(manifestPath), Grants: grants, Ledger: ledger,
 		Runner: capture.ExecRunner{Timeout: timeout}, Reader: capture.PostgresReader{Timeout: timeout},
 		Stats: capture.StatsReader{Timeout: timeout},

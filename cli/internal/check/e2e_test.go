@@ -117,7 +117,7 @@ func TestTheDemoRepositoryProducesTheExpectedFindings(t *testing.T) {
 	t.Run("an ORM column absent from the migration head", func(t *testing.T) {
 		// `billing/models.py` declares invoices.total_cents; the two
 		// migrations create id, created_at and reference and nothing else.
-		finding, ok := byKey["schema:billing-api-db/public.invoices | columns"]
+		finding, ok := byKey["schema:billing-db/public.invoices | columns"]
 		if !ok {
 			t.Fatalf("not found among:\n%s", list(report.Result.Divergences))
 		}

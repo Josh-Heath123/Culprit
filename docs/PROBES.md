@@ -314,7 +314,7 @@ than the code declares.
 
 ```
 # Is every declared column of this table really there?
-culprit probe 'schema:culprit-api-db/public.users' --env quickstart     -p probe.db.schema_conformance
+culprit probe 'schema:culprit-db/public.users' --env quickstart     -p probe.db.schema_conformance
 
 # Is this declared route really served? (the api's own port, published on
 # 127.0.0.1:18000 by infra/docker-compose.probe-demo.yml; through the
