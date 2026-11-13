@@ -312,6 +312,7 @@ def test_schema_subjects_use_the_database_the_orchestrator_sends(tmp_path: Path)
     model and sends it; the extractor uses it verbatim. Only a request from
     an older orchestrator, which sends none, falls back to <component>-db."""
     from culprit_model.protocol import ExtractorRequest, Want
+    from culprit_model.subjects import parse
 
     versions = tmp_path / "migrations" / "versions"
     versions.mkdir(parents=True)
@@ -334,10 +335,10 @@ def test_schema_subjects_use_the_database_the_orchestrator_sends(tmp_path: Path)
             allow_import=False,
         )
         assert response.facts, response.skipped
-        return {fact.subject.split("/", 1)[0] for fact in response.facts}
+        return {parse(fact.subject)[1]["database"] for fact in response.facts}
 
-    assert databases("shop-store") == {"schema:shop-store"}
-    assert databases(None) == {"schema:shop-db"}
+    assert databases("shop-store") == {"shop-store"}
+    assert databases(None) == {"shop-db"}
 
 
 def test_a_project_with_no_sqlalchemy_reports_the_gap() -> None:
