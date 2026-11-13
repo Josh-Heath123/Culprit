@@ -19,6 +19,7 @@ not run anything — see `_run_probe`.
 from datetime import UTC, datetime
 
 import structlog
+from culprit_model.readings import UndeclaredVerdict, validate_for
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,6 +71,18 @@ async def create_readings(
             status_code=403,
             detail="every reading must name the agent that signed the request",
         )
+    # Q31: a reading is held to the verdicts its probe declares. A probe this
+    # build's catalogue does not describe (a plugin's) has no declaration
+    # here to hold it to; the binary that ran it held it to its own (LIMITS).
+    for reading in payload.readings:
+        manifest = catalogue.get(reading.probe_id)
+        if manifest is None:
+            continue
+        try:
+            validate_for(reading, manifest)
+        except UndeclaredVerdict as exc:
+            logger.warning("readings_refused_undeclared_verdict", probe=reading.probe_id)
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         stored = await store_readings(session, payload.readings)
     except RejectedByDatabase as exc:

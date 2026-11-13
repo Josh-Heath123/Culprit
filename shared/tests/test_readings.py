@@ -16,7 +16,9 @@ from culprit_model.readings import (
     Evidence,
     ProbeManifest,
     Reading,
+    UndeclaredVerdict,
     Verdict,
+    validate_for,
 )
 from pydantic import ValidationError
 
@@ -83,6 +85,7 @@ def test_no_probe_may_declare_mutate() -> None:
             version=1,
             effect=Effect.MUTATE,
             timeout_ms=1000,
+            verdicts=(Verdict.PASS, Verdict.INCONCLUSIVE),
         )
 
 
@@ -139,3 +142,28 @@ def test_redaction_holds_to_the_shared_cases(case: dict) -> None:
 
     assert redact_credentials(case["text"]) == case["redacted"]
     assert looks_like_credential(case["text"]) is case["credential"]
+
+
+_MANIFESTS = {case["id"]: case for case in FIXTURE["manifests_accepted"]}
+
+
+@pytest.mark.parametrize(
+    "case", FIXTURE["readings_against_manifests"], ids=lambda c: c["why"][:40]
+)
+def test_readings_are_held_to_their_probes_declared_verdicts(case: dict) -> None:
+    """Q31: a reading whose verdict its probe did not declare is refused,
+    as Go's Reading.ValidateFor refuses it."""
+    manifest = ProbeManifest.model_validate(_MANIFESTS[case["manifest"]])
+    raw = dict(FIXTURE["readings_accepted"][0]["reading"])
+    raw.update(
+        probe_id=case.get("probe_id") or case["manifest"],
+        verdict=case["verdict"],
+        reason="as the fixture says",
+        grants_used=[],
+    )
+    reading = Reading.model_validate(raw)
+    if case["accepted"]:
+        validate_for(reading, manifest)
+    else:
+        with pytest.raises(UndeclaredVerdict):
+            validate_for(reading, manifest)

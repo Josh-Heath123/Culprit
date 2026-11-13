@@ -221,6 +221,10 @@ func cases() []probeCase {
 			map[string]any{"token": goodToken},
 			Deps{Now: clock},
 			model.VerdictInconclusive, nil},
+		{"a token_env read without config.inspect.values", "probe.auth.token_shape", authTarget,
+			map[string]any{"token_env": "ORDER_TOKEN"},
+			Deps{Secrets: &fakeSecrets{}, Now: clock},
+			model.VerdictRefused, nil},
 
 		// --- probe.auth.propagation ---
 		{"credential survives the hop", "probe.auth.propagation", authTarget,
@@ -417,49 +421,102 @@ func TestProbeVerdicts(t *testing.T) {
 	}
 }
 
-// TestEveryProbeHasAllThreeVerdictFixtures is field 13 as a gate rather
-// than a checklist. A probe added to the catalogue without a pass, a fail
-// and an inconclusive fixture fails here, by name.
-func TestEveryProbeHasAllThreeVerdictFixtures(t *testing.T) {
+// refusedCases is a refused fixture for every probe whose manifest needs a
+// capability: the runner refuses it, before running it, when the ledger
+// grants nothing. Generated from the manifests rather than written per
+// probe, because the refusal is the runner's, the same for every probe; a
+// probe that declares refused without a capability (token_shape, refused
+// by its secret source) has its own fixture in cases().
+func refusedCases() []probeCase {
+	var refused []probeCase
+	for _, manifest := range BuiltIn().Manifests() {
+		if len(manifest.Capabilities) == 0 {
+			continue
+		}
+		refused = append(refused, probeCase{
+			name: manifest.ID + " with nothing granted", probeID: manifest.ID,
+			target: "component:inventory-service", inputs: map[string]any{},
+			deps: Deps{Now: fixedClock()}, want: model.VerdictRefused,
+		})
+	}
+	return refused
+}
+
+func TestEveryProbeIsRefusedWithNothingGranted(t *testing.T) {
+	grants, err := capability.Parse(map[string]capability.Raw{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range refusedCases() {
+		runner := NewRunner(Options{Ledger: capability.NewLedger(grants), Deps: testCase.deps})
+		readings := runner.Run(context.Background(), []Request{{
+			ProbeID: testCase.probeID, Target: testCase.target, Environment: "staging",
+			Inputs: testCase.inputs,
+		}})
+		if len(readings) != 1 || readings[0].Verdict != model.VerdictRefused {
+			t.Errorf("%s: %+v", testCase.name, readings)
+		}
+	}
+}
+
+// TestEveryDeclaredVerdictHasAFixture is field 13 as a gate rather than a
+// checklist, keyed on what each probe declares (Q31, 2026-11-13): one
+// fixture for each verdict a probe's manifest lists, and no fixture for a
+// verdict it does not. No probe is named here. Every probe declares
+// inconclusive (model.ProbeManifest.Validate), so the inconclusive fixture
+// stays mandatory: a probe that cannot admit uncertainty is a probe that
+// guesses.
+func TestEveryDeclaredVerdictHasAFixture(t *testing.T) {
 	covered := map[string]map[model.Verdict]bool{}
-	for _, testCase := range cases() {
+	for _, testCase := range append(cases(), refusedCases()...) {
 		if covered[testCase.probeID] == nil {
 			covered[testCase.probeID] = map[model.Verdict]bool{}
 		}
 		covered[testCase.probeID][testCase.want] = true
 	}
-
-	required := []model.Verdict{
-		model.VerdictPass, model.VerdictFail, model.VerdictInconclusive,
+	for _, manifest := range BuiltIn().Manifests() {
+		for _, verdict := range manifest.Verdicts {
+			if !covered[manifest.ID][verdict] {
+				t.Errorf("probe %s declares %s but has no %s fixture", manifest.ID, verdict, verdict)
+			}
+		}
+		for verdict := range covered[manifest.ID] {
+			if !manifest.Declares(verdict) {
+				t.Errorf("a fixture expects %s from probe %s, which does not declare it", verdict, manifest.ID)
+			}
+		}
 	}
-	// evidenceOnly are probes the plan defines as evidence with no
-	// expectation and no finding of their own, so no fail exists to fixture
-	// (Phase 37 part 2: probe.db.plan). Q30 was ruled on 2026-11-13 to key
-	// this on an empty expected_from instead of a name, but
-	// probe.edge.impedance also declares none and does fail, so the change
-	// waits on Q31 and the name stays until then. Each must
-	// declare no expectation plane, and its pass and inconclusive fixtures
-	// are still required.
-	evidenceOnly := map[string]bool{model.PlanProbeID: true}
-	for _, id := range BuiltIn().IDs() {
-		if evidenceOnly[id] {
-			if probe, _ := BuiltIn().Get(id); probe.Manifest().ExpectedFrom != "" {
-				t.Errorf("%s is listed as evidence only but declares an expectation plane", id)
-			}
-			if covered[id][model.VerdictFail] {
-				t.Errorf("%s is evidence only, yet a fixture gives it a fail", id)
-			}
-		}
-		for _, verdict := range required {
-			if verdict == model.VerdictFail && evidenceOnly[id] {
-				continue
-			}
-			if !covered[id][verdict] {
-				t.Errorf("probe %s has no %s fixture. Field 13 requires all three; "+
-					"the inconclusive case is mandatory because a probe that cannot "+
-					"admit uncertainty is a probe that guesses.", id, verdict)
-			}
-		}
+}
+
+// failingEvidence is a probe that declares no fail and returns one anyway.
+type failingEvidence struct{}
+
+func (failingEvidence) Manifest() model.ProbeManifest {
+	return model.ProbeManifest{
+		ID: "probe.test.failing_evidence", Version: 1, Verdicts: evidenceVerdicts,
+		Effect: model.EffectObserve, Capabilities: []string{}, TimeoutMS: 1000,
+	}
+}
+
+func (failingEvidence) Run(context.Context, Request, Deps) Outcome {
+	return fail(map[string]any{}, "a fail this probe did not declare")
+}
+
+// TestAnUndeclaredVerdictNeverLeavesTheRunner: a probe that returns a
+// verdict its manifest does not list produces an inconclusive reading
+// naming the bug, never the verdict.
+func TestAnUndeclaredVerdictNeverLeavesTheRunner(t *testing.T) {
+	catalogue := NewCatalogue()
+	if err := catalogue.register(failingEvidence{}); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(Options{Catalogue: catalogue, Ledger: grantEverything(t), Deps: Deps{Now: fixedClock()}})
+	readings := runner.Run(context.Background(), []Request{{
+		ProbeID: "probe.test.failing_evidence", Target: "component:inventory-service", Environment: "staging",
+	}})
+	if len(readings) != 1 || readings[0].Verdict != model.VerdictInconclusive ||
+		!strings.Contains(readings[0].Reason, "declares only") {
+		t.Fatalf("%+v", readings)
 	}
 }
 

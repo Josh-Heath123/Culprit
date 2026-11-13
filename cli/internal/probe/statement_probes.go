@@ -35,6 +35,7 @@ func (dbStatementBudget) Manifest() model.ProbeManifest {
 		// A literal, held equal to model.StatementProbeID by
 		// TestTheStatementProbesAreTheOnesTheRuleJudges.
 		ID:           "probe.db.statement_budget",
+		Verdicts:     allVerdicts,
 		Version:      1,
 		Effect:       model.EffectInspect,
 		Capabilities: []string{"db.stats.read"},
@@ -211,6 +212,7 @@ type dbPlan struct{}
 func (dbPlan) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:           "probe.db.plan",
+		Verdicts:     evidenceVerdicts,
 		Version:      1,
 		Effect:       model.EffectInspect,
 		Capabilities: []string{"db.plan.read"},

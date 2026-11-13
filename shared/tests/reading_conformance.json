@@ -38,7 +38,8 @@
       "expected_from": "CONFIGURED",
       "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "tcp_connects"}],
       "discriminates": [],
-      "cost": "cheap"
+      "cost": "cheap",
+      "verdicts": ["pass", "fail", "inconclusive", "refused"]
     },
     {
       "id": "probe.edge.impedance",
@@ -49,46 +50,67 @@
       "expected_from": null,
       "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "impedance"}],
       "discriminates": [],
-      "cost": "cheap"
-    }
+      "cost": "cheap",
+      "verdicts": ["pass", "fail", "inconclusive", "refused"]
+    },
+    {"id": "probe.db.plan", "version": 1, "effect": "inspect", "capabilities": ["db.plan.read"], "timeout_ms": 20000, "expected_from": null, "produces": [], "discriminates": [], "cost": "cheap", "verdicts": ["pass", "inconclusive", "refused"]},
+    {"id": "probe.auth.token_shape", "version": 3, "effect": "inspect", "capabilities": [], "timeout_ms": 2000, "expected_from": "INTENT", "produces": [], "discriminates": [], "cost": "cheap", "verdicts": ["pass", "fail", "inconclusive", "refused"]}
   ],
   "manifests_rejected": [
     {
       "why": "effect: mutate fails manifest validation, section 2.6, no exceptions",
       "manifest": {
         "id": "probe.db.truncate", "version": 1, "effect": "mutate",
-        "capabilities": [], "timeout_ms": 1000
+        "capabilities": [], "timeout_ms": 1000,
+        "verdicts": ["pass", "fail", "inconclusive"]
       }
     },
     {
       "why": "a probe id must be probe.<group>.<name>",
       "manifest": {
         "id": "tcp_connect", "version": 1, "effect": "inspect",
-        "capabilities": [], "timeout_ms": 1000
+        "capabilities": [], "timeout_ms": 1000,
+        "verdicts": ["pass", "fail", "inconclusive"]
       }
     },
     {
       "why": "a reading cannot be its own expectation - baseline is not truth",
       "manifest": {
         "id": "probe.net.ping", "version": 1, "effect": "inspect",
-        "capabilities": [], "timeout_ms": 1000, "expected_from": "OBSERVED"
+        "capabilities": [], "timeout_ms": 1000, "expected_from": "OBSERVED",
+        "verdicts": ["pass", "fail", "inconclusive"]
       }
     },
     {
       "why": "timeout must be positive - a zero timeout is a probe that cannot run",
       "manifest": {
         "id": "probe.net.ping", "version": 1, "effect": "inspect",
-        "capabilities": [], "timeout_ms": 0
+        "capabilities": [], "timeout_ms": 0,
+        "verdicts": ["pass", "fail", "inconclusive"]
       }
     },
     {
       "why": "no *.write capability exists to be named",
       "manifest": {
         "id": "probe.db.write_row", "version": 1, "effect": "inspect",
-        "capabilities": ["db.rows.write"], "timeout_ms": 1000
+        "capabilities": ["db.rows.write"], "timeout_ms": 1000,
+        "verdicts": ["pass", "fail", "inconclusive", "refused"]
       }
     },
-    {"why": "discriminates names a hypothesis kind the isolation walk does not know", "manifest": {"id": "probe.net.tcp_connect", "version": 1, "effect": "inspect", "capabilities": ["net.tcp.connect"], "timeout_ms": 2000, "expected_from": "CONFIGURED", "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "tcp_connects"}], "discriminates": ["it_feels_slow"], "cost": "cheap"}}
+    {"why": "discriminates names a hypothesis kind the isolation walk does not know", "manifest": {"id": "probe.net.tcp_connect", "version": 1, "effect": "inspect", "capabilities": ["net.tcp.connect"], "timeout_ms": 2000, "expected_from": "CONFIGURED", "produces": [{"subject_template": "connection:{from}->{to}", "predicate": "tcp_connects"}], "discriminates": ["it_feels_slow"], "cost": "cheap", "verdicts": ["pass", "fail", "inconclusive", "refused"]}},
+    {"why": "a probe lists the verdicts it can return (Q31)", "manifest": {"id": "probe.net.ping", "version": 1, "effect": "inspect", "capabilities": [], "timeout_ms": 1000}},
+    {"why": "an empty verdict list declares nothing a probe could return", "manifest": {"id": "probe.net.ping", "version": 1, "effect": "inspect", "capabilities": [], "timeout_ms": 1000, "verdicts": []}},
+    {"why": "a verdict outside the four", "manifest": {"id": "probe.net.ping", "version": 1, "effect": "inspect", "capabilities": [], "timeout_ms": 1000, "verdicts": ["pass", "inconclusive", "maybe"]}},
+    {"why": "a verdict declared twice", "manifest": {"id": "probe.net.ping", "version": 1, "effect": "inspect", "capabilities": [], "timeout_ms": 1000, "verdicts": ["pass", "pass", "inconclusive"]}},
+    {"why": "every probe declares inconclusive - a probe that cannot admit uncertainty is a probe that guesses", "manifest": {"id": "probe.net.ping", "version": 1, "effect": "inspect", "capabilities": [], "timeout_ms": 1000, "verdicts": ["pass", "fail"]}},
+    {"why": "a probe that needs a capability declares refused, which the runner returns when it is not granted", "manifest": {"id": "probe.net.tcp_connect", "version": 1, "effect": "inspect", "capabilities": ["net.tcp.connect"], "timeout_ms": 2000, "verdicts": ["pass", "fail", "inconclusive"]}}
+  ],
+  "readings_against_manifests": [
+    {"why": "a fail from a probe that declares fail", "accepted": true, "manifest": "probe.net.tcp_connect", "verdict": "fail"},
+    {"why": "a pass from a probe that declares no fail", "accepted": true, "manifest": "probe.db.plan", "verdict": "pass"},
+    {"why": "a refused from a probe that declares refused", "accepted": true, "manifest": "probe.db.plan", "verdict": "refused"},
+    {"why": "a fail from a probe that declares no fail is refused (Q31)", "accepted": false, "manifest": "probe.db.plan", "verdict": "fail"},
+    {"why": "a reading checked against another probe's manifest is refused", "accepted": false, "manifest": "probe.edge.impedance", "verdict": "pass", "probe_id": "probe.net.tcp_connect"}
   ],
   "readings_accepted": [
     {

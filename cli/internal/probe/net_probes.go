@@ -21,7 +21,8 @@ type dnsResolve struct{}
 
 func (dnsResolve) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID: "probe.net.dns_resolve",
+		ID:       "probe.net.dns_resolve",
+		Verdicts: allVerdicts,
 		// No Discriminates: a name that resolves says nothing about whether a
 		// connection opens. probe.net.tcp_connect resolves the name too, so it
 		// alone rules out connection_unreachable (found in Phase 32's first run).
@@ -74,6 +75,7 @@ type tcpConnect struct{}
 func (tcpConnect) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.net.tcp_connect",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisConnectionUnreachable},
 		Version:       1,
 		Effect:        model.EffectInspect,
@@ -137,6 +139,7 @@ type tlsValidity struct{}
 func (tlsValidity) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.net.tls_validity",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisTLSInvalid},
 		Version:       1,
 		Effect:        model.EffectInspect,

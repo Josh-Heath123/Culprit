@@ -19,6 +19,7 @@ type configPresent struct{}
 func (configPresent) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.config.present",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisConfigMissing},
 		// Version 2 (Phase 31.1): measured against `required`, the
 		// predicate the config extractors emit for a key the code reads
@@ -107,7 +108,8 @@ type depVersion struct{}
 
 func (depVersion) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID: "probe.dep.version",
+		ID:       "probe.dep.version",
+		Verdicts: allVerdicts,
 		// Version 2 (Phase 31.1): the expected version comes from the
 		// declared dependency when no expect_version is given, and a
 		// declared *constraint* is reported as such rather than compared
@@ -237,8 +239,9 @@ type edgeImpedance struct{}
 
 func (edgeImpedance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID:      "probe.edge.impedance",
-		Version: 1,
+		ID:       "probe.edge.impedance",
+		Verdicts: allVerdicts,
+		Version:  1,
 		// observe, not inspect: this reads telemetry that already exists
 		// rather than touching the system under test at all.
 		Effect:       model.EffectObserve,

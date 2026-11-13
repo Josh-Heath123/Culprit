@@ -30,6 +30,7 @@ type httpReachable struct{}
 func (httpReachable) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.http.reachable",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisComponentFails},
 		Version:       1,
 		Effect:        model.EffectInterrogate,
@@ -96,6 +97,7 @@ type httpRouteConformance struct{}
 func (httpRouteConformance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.http.route_conformance",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisContractMismatch},
 		// Version 2 (Phase 31.1): the produced predicate is `exists`, the
 		// predicate every route extractor emits, rather than
@@ -230,6 +232,7 @@ type httpSchemaConformance struct{}
 func (httpSchemaConformance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.http.schema_conformance",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisContractMismatch},
 		Version:       1,
 		Effect:        model.EffectInterrogate,

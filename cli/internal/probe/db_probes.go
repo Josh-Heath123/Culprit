@@ -23,6 +23,7 @@ type dbConnect struct{}
 func (dbConnect) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
 		ID:            "probe.db.connect",
+		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisDatabaseUnreachable},
 		// Version 2 (Phase 31.1): no `dsn` input. Which database is named
 		// by the target; how to reach it is culprit.yaml's `dsn_env`, read
@@ -65,7 +66,8 @@ type dbSchemaConformance struct{}
 
 func (dbSchemaConformance) Manifest() model.ProbeManifest {
 	return model.ProbeManifest{
-		ID: "probe.db.schema_conformance",
+		ID:       "probe.db.schema_conformance",
+		Verdicts: allVerdicts,
 		// Version 2 (Phase 31.1): no `dsn` input, the table may be named
 		// by a schema: target, and the expected columns come from the
 		// declaring facts (the migrations, the ORM) when no expect_columns
