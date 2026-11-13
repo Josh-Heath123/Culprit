@@ -11,8 +11,8 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 37, part 3 — the database in the walk — on branch
-  `phase-37-walk`, PR #42 (draft); items 1–3 built, awaiting decision on Q33.
+- **Current phase:** 37, part 3, continued — on branch `phase-37-index`,
+  PR #43; Q34 built, item 2 partly built, awaiting decision on Q35.
   `docs/DIAGNOSTIC_PLAN.md` is complete.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core

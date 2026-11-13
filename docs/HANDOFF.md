@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **37, part 3, continued — one database name; the demo's index; the library's database fault** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37, "Part 3, continued". Step 0: `main`'s push run on `1d20322` and PR #42's last run green, each read by id (the review could not read them). |
+| Current phase | **37, part 3, continued — one database name; the demo's index; the library's database fault** — `awaiting decision` (**Q35**, blocking items 2–4). Item 1 (Q34) built; item 2 partly built. PR #43 (draft). Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 37, "Part 3, continued". Step 0: `main`'s push run on `1d20322` and PR #42's last run green, each read by id (the review could not read them). |
 | Previous phase | **37, part 3, items 1–3 — merged as `1d20322` (PR #42) and reviewed 2026-11-13** by the architecture session. Items 1–3 are accepted; part 3 continues. Q33 is ruled: (a), static and scoped, with the fault planted in the tree as well as the database. Q34 (one schema database name, derived from the model) was raised by the review and ruled. The review reproduced CI on `1d20322` in its workspace, everything that runs without registry images, all green. Recorded at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-37-index`, to be cut from `origin/main` = `1d20322`. Its first commit is the part 3 review: `git apply ../phase-37-3-review.patch`, then `git commit -F ../phase-37-3-review.txt` (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
-| Blocking questions | None. |
+| Blocking questions | **Q35** — the demo's missing index does not make its statement slow for any category it has. |
 
 ---
 
@@ -79,7 +79,8 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q33 and Q34 were ruled on 2026-11-13 (`PERFORMANCE_PLAN.md`, end of Phase 37, "Architecture review of part 3, items 1–3"). Q33: (a), with the Python extractor run with `--no-import` and `want: [db_schema]` for `inventory-service` only; the fault is planted in the tree as well as the database; the library's walks run the extractors. Q34: a component's schema database is the one it connects to by its one `sql` edge (else `<component>-db`); environment names are held to it; extractors are told it; severity uses its inverse. | | |
+| Q35 | **The demo's missing index does not make the list route's statement slow, except for a category with no products.** Measured on the faults stack, PostgreSQL 16, a million seeded rows, the route's statement (`WHERE category = $1 ORDER BY sku LIMIT 50`). At `0002` Postgres plans exactly what `missing_index` diagnoses — it walks `ix_products_sku` for the order and filters `category` row by row — but the seed interleaves categories (`n % 200`), so every seeded category has a match every ~200 skus and the walk stops after ~10,000 entries: **0.8 ms** for `category-007` and for `category-199`, inside the 20 ms budget. Only a category with **no** products walks the whole index: **73 ms**. Part 2's measurement ("about 100 ms a call", the demo budget's `why`, and the sign-off's "(category, sku) brings the statement within budget, which category alone does not") used `category = 'category-7'`, which the seed never writes (it writes `category-007`). For the empty category the brief's three outcomes hold, measured by `TestTheStatementProbesOnTheDemoDatabase` this run: **75.9 ms** at `0002` (fail), **68.7 ms** with a `category`-only index (fail: `not_resolved`), **0.010 ms** with `(category, sku)` (pass: `verified`); EXPLAIN shows the `category`-only index unused for it (78 ms). Under the brief's traffic — the load generator across the seeded categories — the statement is within budget without any index, so the fault is never observed. Options: **(a)** the demo's traffic also asks for categories that exist in the storefront and have no products yet (new categories), enough of it that the window's mean is over the budget, and the featured category of a bare `GET /products` is one of them — the fault becomes "listing an empty category walks the whole sku index"; the numbers above stand; **(b)** a new data migration re-seeds categories in contiguous sku blocks, so a category's rows sit behind every earlier category's — the index becomes `0004`, and whether a `category`-only index then stays unused (the wrong fix's `not_resolved`) is unmeasured; **(c)** something else the architecture session prefers. Not decided here: it is the fault the library plants. Raised 2026-11-13, Phase 37 part 3, continued, item 2. | 2026-11-13 | **Blocking**: items 2 (the `GET /products` budget, the faults stack's database), 3 and 4. |
+| — | Q33 and Q34 were ruled on 2026-11-13 (`PERFORMANCE_PLAN.md`, end of Phase 37, "Architecture review of part 3, items 1–3"). Q33: (a), with the Python extractor run with `--no-import` and `want: [db_schema]` for `inventory-service` only; the fault is planted in the tree as well as the database; the library's walks run the extractors. Q34: a component's schema database is the one it connects to by its one `sql` edge (else `<component>-db`); environment names are held to it; extractors are told it; severity uses its inverse. | | |
 
 ---
 
@@ -118,7 +119,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 37, part 1 | Reading the database safely | **complete** (PR #39 `b3ef508`, close-out PR #40 `ee3e19e`) | **Signed off 2026-11-12** (architecture session): a read-only session refused at the server in CI; the demo's database is seeded; index facts are found both ways. Q27 ruled package isolation, built in the close-out. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 1 close-out | Package isolation; one schema for both manifest readers | **complete** (PR #40 merged, `ee3e19e`) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The audit's two attacks no longer type-check; each boundary package has one non-test file. The CodeQL alert was answered by redesign. Q28 is ruled (strict typing and a differential corpus, in part 2); Q29 is ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 2 | Statements and plans | **complete when `main`'s push run on `1b2496b` is green** (PR #41 merged) | **Signed off 2026-11-13** (architecture session): every check on the pull request was green, read from GitHub. The generic plan comes from a prepared statement under `force_generic_plan` (the brief was wrong). `(category, sku)` brings the statement within budget, which `category` alone does not. Q28's corpus holds 5,684 manifests. Q31 and Q32 are ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
-| 37, part 3 | The database in the walk | items 1–3 **merged** (PR #42, `1d20322`); the rest **not started** | **Reviewed 2026-11-13** (architecture session): items 1–3 accepted; Q33 ruled; Q34 raised and ruled. **Brief (2026-11-13):** `docs/PERFORMANCE_PLAN.md` Phase 37, "Part 3, continued" at the end of the section: its work order, criteria and what not to build. Step 0: `main`'s push run on `1d20322` and PR #42's last run green, by id. Branch `phase-37-index` from `origin/main` = `1d20322`; its first commit is the review (`../phase-37-3-review.patch`, message `../phase-37-3-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 37, part 3 | The database in the walk | items 1–3 **merged** (PR #42, `1d20322`); continued: Q34 built, item 2 partly built, **awaiting decision** (Q35) | **Reviewed 2026-11-13** (architecture session): items 1–3 accepted; Q33 ruled; Q34 raised and ruled. **Brief (2026-11-13):** `docs/PERFORMANCE_PLAN.md` Phase 37, "Part 3, continued" at the end of the section: its work order, criteria and what not to build. Step 0: `main`'s push run on `1d20322` and PR #42's last run green, by id. Branch `phase-37-index` from `origin/main` = `1d20322`; its first commit is the review (`../phase-37-3-review.patch`, message `../phase-37-3-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 38 | Bounds: what the browser downloads, and what a list returns | not started | `docs/PERFORMANCE_PLAN.md` Phase 38. "How Phase 38 is run" is written at the review before it. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
 
@@ -152,84 +153,168 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        37, part 3 — the database in the walk
-Branch:       phase-37-walk, from origin/main = 1b2496b. PR #42 (draft).
-Run:          2026-11-13: CI repair on PR #42, then items 2 and 3.
-Status:       AWAITING DECISION (Q33, blocking items 4-6). Items 1-3
-              built. CI green on ffd7bf1 (run 43439643068); the later
-              commits' run is recorded on the pull request.
+Phase:        37, part 3, continued — one database name; the demo's index;
+              the library's database fault
+Branch:       phase-37-index, from origin/main = 1d20322. 3bd5eb1 the
+              review (applied cleanly), 252ae28 Q34, 1327410 item 2 in
+              part, ee7d0bf and 0a4b223 fixes, then this report. PR #43.
+Run:          2026-11-13, /next.
+Status:       AWAITING DECISION (Q35, blocking items 2-4). Item 1 (Q34)
+              built and audited; item 2 built in part. CI green on
+              ee7d0bf (run 43473708115, every job); the later commits'
+              run is on the pull request.
 
 STEP 0
-  main's push run 43395786047 on 1b2496b: success.
+  main's push run 43446256013 on 1d20322: success (deploy skipped).
+  PR #42's last run 43442473110 on 5ee22a1: success (publish, deploy
+  skipped). Both read by id.
 
-CI REPAIR — PR #42 red on 1cfd133 (run 43401573511)
-  Failing job: cli. TestTheGenericPlanAgainstARealPostgres: the first
-  `psql -h 127.0.0.1` was refused ("connection refused") just after the
-  container came up. Cause: the official image's first-boot server
-  listens on the Unix socket only and is restarted after its setup, so
-  the readiness check, which ran psql over the socket, could pass on that
-  temporary server. Not a runner or download failure, and not the code
-  under test.
-  Fix (ffd7bf1): the four helpers that start a test Postgres
-  (dbsession's two, cmd/culprit's statements and indexes tests) wait for
-  `pg_isready -h 127.0.0.1`, which answers only once the final server
-  listens on TCP. No gate changed. Run 43439643068 on ffd7bf1: every job
-  success (deploy and publish skipped); every PR check pass or skipping;
-  no open code-scanning alert (pr=42, refs/pull/42/merge and /head all
-  empty). origin/main was already in the branch, so that run tested the
-  merge result.
+ITEM 1 — Q34, ONE DATABASE NAME (252ae28, ee7d0bf, 0a4b223)
+  The rule: extract.Manifest.SchemaDatabase (cli/internal/extract/
+  databases.go). The target of a component's one sql edge, else
+  <component>-db (two or more edges: <component>-db, nothing joins).
+  - Environments: database.name, where given, must equal it, or the
+    manifest is refused naming both; DatabaseName takes the manifest and
+    keeps no <component>-db of its own. The API's reader refuses the same
+    (_check_database_names, Q28).
+  - Extractors: the orchestrator sends `database` (Go and Python request
+    models, EXTRACTOR_PROTOCOL.md). The Python extractor uses it, and
+    falls back to <component>-db only when none is sent. The reference
+    extractor's request model forbids unknown fields, so it refused every
+    request carrying `database` until it learned the field: an extractor
+    must be updated with the orchestrator (EXTRACTOR_PROTOCOL.md, LIMITS).
+  - Severity: owners are the rule's inverse, not a suffix trim; shown
+    red on the old code.
+  - probe.Sources carries the manifest, so the probes' DSN lookup uses it.
+  The corpus: its base named shop's database `shop` while shop's one sql
+  edge is to `db`, so every case would have been refused; the base now
+  names `db` and was re-recorded. The invariant audit then found the
+  re-recorded corpus no longer showed the readers type database.name's
+  forms alike (the equality refuses all but two forms first). The corpus
+  gained `pairs`: one form names the database component, the sql edge,
+  calls_to and database.name at once, in every form; 16 are accepted,
+  among them yes, no, on, off, inf, 1e999 and dates. Go and Python agree
+  on all 5,775 cases.
 
-ITEM 2 — the database pass, the two hypotheses, the join (ffba326)
-  internal/isolate/database.go. Runs only when the error and latency
-  passes found no root strictly below the entry; asks the databases the
-  entry connects to by an edge of any kind. statement_budget_exceeded on
-  the budget's subject; missing_index on the column, supported only when
-  the four planes agree, citing the statement and plan readings; a live
-  index the plan does not use roots at the budget. No INTENT, or INTENT
-  that disagrees, leaves missing_index unexplored and the diagnosis
-  partial.
-  Found and fixed while finishing it: the isolate tests gave
-  probe.db.plan a hand-built manifest discriminating missing_index, but
-  the real manifest declared nothing and the binary's placement had no
-  case for either kind, so the binary would never have run the pass.
-  probe.db.plan (version 2) now declares missing_index; placement puts
-  both probes inside the entry, as database_unreachable is placed.
-  TestTheDatabasePassIsPlacedWithTheRealCatalogue holds the real
-  catalogue and placement to it; it is red without the declaration
-  (shown). The plan's live-index query is checked against a real
-  Postgres (key, INCLUDE, partial and expression indexes) inside
-  TestTheGenericPlanAgainstARealPostgres, which CI already runs.
-  A reason string named a `culprit diagnose --intent` flag that does not
-  exist; it now says what is true, and its test asserts that.
+  RENAMED SUBJECTS (every one)
+  - This repository (culprit.yaml: culprit-api's one sql edge is to
+    culprit-db): 317 schema subjects on 33 tables, culprit-api-db ->
+    culprit-db — agent_allowances, agent_audit_log, agent_nonces,
+    agent_pairing_codes, agent_tasks, agents, ai_change_records,
+    anomalies, api_keys, architecture_decisions, captures, components,
+    configured_facts, connections, contracts, divergences,
+    fault_edge_readings, fault_edges, hypotheses, incident_anomalies,
+    incident_candidates, incident_change_links, intent_facts,
+    invariant_violations, investigation_readings, investigations,
+    narrations, observed_service_edges, postmortems, raw_events,
+    readings, users, verifications, each with its columns.
+    culprit.yaml's two database.name entries follow.
+  - cli/testdata/demo: orders-api-db -> orders-db (orders: 6 columns,
+    order_lines: 4), billing-api-db -> billing-db (invoices: 4): 17
+    subjects. In the check e2e key, the diff e2e expectations, README's
+    example and docs/captures/check.svg (regenerated by
+    `just readme-captures`; probe.svg changed only its ephemeral port and
+    was not committed).
+  - cli/testdata/envdiff/{live-ddl-behind-head,clean-environments}:
+    orders-api-db -> orders-db.
+  - docs/PROBES.md's example: culprit-api-db -> culprit-db.
+  - Left as they are: fixtures whose component has no sql edge
+    (faults/column-not-migrated, capture tests), literal subjects in unit
+    tests and conformance files (no manifest behind them), and
+    docs/demos/phase-29.md and phase-30.md, which are transcripts of what
+    those phases printed.
+  Self-check: green, "No divergences. 1712 fact(s) compared across 630
+  subject(s)". It cannot show a disagreement between culprit-api and
+  culprit-worker on culprit-db: culprit-worker has no extract root, so it
+  contributes no schema facts (phase-auditor).
 
-ITEM 3 — the recommendation, derived from the plan
-  recommendIndex: the filtered columns no index condition serves, then
-  the walked index's columns, each once. The demo's plan gives
-  public.products (category, sku). TestTheRecommendationIsDerivedFromThePlan.
+ITEM 2 — THE DEMO, IN PART (1327410)
+  Built: 0003_products_category_sku, (category, sku); setup_db's
+  INVENTORY_MIGRATION_TARGET (part 2's statement test now pins 0002, the
+  database before 0003); the static, scoped extract: section (Q33 (1))
+  with its comment rewritten; an `exists` invariant for GET /products;
+  environments faults-inventory (the fault's vantage: stats and plan, no
+  db.metadata.read, so verification's capture holds no schema the fix
+  changes) and local-inventory (live schema, statements, plans); the load
+  generator's products traffic; the extractor's demo-migration test and
+  TestTheDemoDatabase at the 0003 head.
+  GET /products now answers a request with no query, for the featured
+  category: probe.http.latency refuses a URL with a query by design (the
+  budget is on the route, never on an input), and the route required
+  ?category=, so no budget on it could be judged. A demo change, not a
+  product one; the architecture session may prefer another.
+  Not built: the GET /products latency budget (its value rests on the
+  fault's time; see Q35) and the faults stack's database. The latter is
+  written — Postgres 16 with pg_stat_statements, the demo's setup job,
+  Culprit's culprit_reader (pg_read_all_stats, SELECT on products) as a
+  one-shot, products-only traffic — and saved outside the repository as
+  ../phase-37-index-faults-stack.patch, because it needs item 3's harness
+  (healthy() recreates every service, which would reseed a million rows
+  per case). Brought up by hand: 32 s from cold, seeded, at 0003.
 
-CRITERIA ON RECORDED READINGS (go test ./internal/isolate, no network)
-  four planes -> missing_index on category, citing each       PASS
-  unused live index -> statement_budget_exceeded, plan+index  PASS
-  no plan -> partial, names db.plan.read                      PASS
-  no budget -> database named unbudgeted                      PASS
-  error root below the entry -> no database asked             PASS
-  window cut by the deadline -> unexplored                    PASS
+STOPPED AT — Q35 (blocking)
+  On that stack, at 0002, the route's statement takes 0.8 ms for any
+  seeded category: the plan is the missing-index plan, but the seed
+  interleaves categories, so the sku walk stops after ~10,000 entries.
+  Only a category with no products is slow (73 ms). Part 2's "about 100
+  ms" was measured on category-7, which the seed never writes. Numbers
+  and options in §3.
 
-LOCAL GATES (Windows, on ffba326 + this commit)
-  go build, go vet ./..., gofmt, just cli-lint: clean.
-  go test: isolate, model, probe, capture/..., verify, cmd/culprit: ok.
-  Docker: dbsession's five CI tests, ok.
-  shared tests (through api's env): 617 passed. frontend npm test: 19/19.
-  just check-invariants, check-no-llm-imports: clean.
-  Not run locally: just fault-library, e2e, migration round-trip (CI).
+CRITERIA (part 3, continued)
+  Q34 — test of the rule (none, one, two edges; name agrees, refused)  PASS
+  Q34 — culprit intent on the demo, fresh clone, names
+        schema:inventory-db/public.products.category                PASS
+  Q34 — three things on one database for the demo
+        (TestTheDemoSchemaIsOnOneDatabase, Docker, in CI), red when
+        the extractor ignores the name (shown, twice)                PASS
+  Q34 — severity finds an owner not named <owner>-db                 PASS
+  Q34 — every renamed subject listed                                 PASS (above)
+  Q34 — the self-check green, or a divergence escalated              PASS (caveat above)
+  Q33 — extract: is --no-import, want [db_schema], inventory-service PASS
+  Q33 — the library's walks run it                                   NOT RUN (Q35)
+  Q33 — existing expected.json unchanged, results.json listed        NOT RUN (Q35)
+  The library's database fault: missing_index complete, verified,
+        not_resolved                                                 NOT RUN (Q35)
+  The healthy stack: the quickstart at 0003 within both budgets      NOT RUN (Q35:
+        the GET /products budget is not declared; the statement at 0003
+        is 0.010 ms against 20 ms in TestTheStatementProbesOnTheDemoDatabase)
+  A2 — why 25 labels where the brief said 23                         ANSWERED: rerunning
+        the close-out auditor's own harness at d37542e gives 25 (1b358a9).
+        One, inv_value_huge, differs only past six significant digits —
+        the harness's float formatting, labelled so. Which other the
+        report left out cannot be recovered; all 25 kept and checked by
+        label: budgets_null, comment_only, comp_name_int, empty_doc,
+        inv_value_1e3, inv_value_date, inv_value_huge, inv_value_list,
+        mp_float_frac, mp_int_tag_str, mp_null, mp_quoted, mp_true,
+        probe_enabled_1, probe_enabled_str, probe_timeout_float,
+        version_str, version_true, why_float, why_inf, why_int,
+        why_octal, why_python_tag, why_timestamp_tag, why_true.
+  CI green, fault library <= 15 min or sharded                       PARTLY: green on
+        ee7d0bf; the job took 11m42s on 1d20322. The database fault will
+        add several 30 s windows and will need sharding (item 3).
+  LLM_PROVIDER=none changes nothing                                  unchanged (no
+        narration path touched; the fault-library job runs with none).
 
-STOPPED AT — Q33 (blocking)
-  The database fault's criterion ("missing_index on category, complete")
-  needs migration INTENT inside the fault library's walk, and nothing
-  supplies it there: only the Python extractor plugin emits leads_index,
-  the demo's culprit.yaml has no extract: section, and the library runs
-  --no-plugins. Options and a recommendation are in §3. Items 4-6 wait
-  on it.
+AUDITS
+  phase-auditor (Q34, Q33 (1)): six of seven PASS by execution; the
+    seventh was this list. Both readers refused a disagreeing name on its
+    own manifests, from a fresh clone.
+  invariant-auditor (252ae28..ee7d0bf): CLEAN, 0 violations. Four risks,
+    all fixed in 0a4b223: the corpus coverage (pairs), the three-way test
+    capturing as the owner (now a grantless reader), DatabaseName
+    untrimmed, two stale comments.
+
+LOCAL GATES (Windows)
+  go vet ./..., gofmt, just cli-lint, go test ./...: clean.
+  Docker: TestIndexesDeclaredAndLive, TestTheDemoDatabase,
+  TestTheDemoSchemaIsOnOneDatabase, TestTheStatementProbesOnTheDemoDatabase,
+  the dbsession tests: pass.
+  api + shared: 1143 passed; scripts/tests: 554; extractors/python: 38;
+  just lint, typecheck, lint-imports, check-invariants,
+  check-no-llm-imports, check-schema-drift, check-scan-coverage: clean.
+  CI caught one thing local runs missed: the subject-construction gate
+  (scripts/tests) on a literal subject prefix in a new extractor test;
+  fixed in ee7d0bf without touching the gate.
 ```
 
 ## §6. Escalate to the architecture session when
