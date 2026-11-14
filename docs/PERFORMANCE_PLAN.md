@@ -1734,6 +1734,128 @@ addition:
 - no new manifest field for a component's database, since it is derived;
 - no walk hypothesis for an unapplied migration.
 
+**Architecture review of part 3, continued (item 1 and part of item 2),
+2026-11-14 — merged as `883e9b2` (PR #43); Q35 ruled.**
+
+PR #43 was merged with Q35 open, the fifth merge past an open question. It was
+safe again, because the work is additive. Read by id from GitHub's API:
+
+- PR #43's last run, 43477090668 on `56a3101`: success.
+- `main`'s push run 43497617319 on `883e9b2`: success on every job, including
+  the fault library (737 s), with `deploy` skipped.
+- The one red run, 43470136367 on `252ae28`, was the subject-construction gate
+  catching a literal prefix in a new test. It was fixed in `ee7d0bf` without
+  touching the gate. That is pattern 3 done right.
+
+**Item 1 (Q34) is accepted.** `culprit intent` on the demo, run by this review,
+names `schema:inventory-db/public.products.*`. `SchemaDatabase` is the one rule,
+and severity's suffix trim is gone. The run's two findings are recorded:
+
+- The corpus's base manifest broke the rule itself.
+- The reference extractor refused requests carrying an unknown field.
+
+The second is a protocol fact worth keeping: an extractor must be updated with
+its orchestrator (LIMITS).
+
+The self-check caveat stands, and is noted rather than acted on:
+`culprit-worker` has no extract root, so Culprit's own self-check cannot show a
+disagreement between it and `culprit-api` on `culprit-db`. Giving the worker a
+root is not part of Phase 37.
+
+**Item 2, as far as it went, is accepted.**
+- **A bare `GET /products` answers for the featured category.** This is right:
+  a budget is on the route, never on an input, and the latency probe refuses a
+  URL with a query by design.
+- **The faults stack's database** is written and kept outside the repository
+  until item 3's harness can avoid reseeding per case. That is the right
+  ordering.
+- **A2's 25 labels** are explained and accepted.
+
+**Q35 — ruled: (a). The fault is listing a category with no products.**
+Reproduced by this review on PostgreSQL 16, with the demo's seed and the
+route's statement. Medians of five runs:
+
+| Index state | Seeded category (`category-007`, `category-199`) | Category with no products |
+|---|---|---|
+| None | 0.7 ms (any seeded category) | 77.8 ms generic, 73.5 ms custom |
+| `category` only | 0.7 ms (unused) | 76.4 ms generic, 73.5 ms custom (unused) |
+| `(category, sku)` | 0.02 ms | 0.006 ms |
+
+With no index on `category`, the plan is the one `missing_index` diagnoses:
+the planner walks `ix_products_sku` and filters `category` row by row. Under
+generic and custom plans alike, it estimates 5,000 rows for any category,
+because the 200 categories are equally common. So an index on `category`
+alone goes unused for a category with no products.
+
+This is a real and common pathology: an `ORDER BY … LIMIT` over a filter with
+no index serving it is fast for values that are common, and walks the whole
+index for a value that is rare or absent. A category launched on the
+storefront before it is stocked is the ordinary way that happens. So the
+demo's fault is that one, and every number above stands.
+
+**This also corrects the part 2 sign-off.** It accepted "about 100 ms a call"
+and "`(category, sku)` brings it within budget, which `category` alone does
+not". Both were measured on `category-7`, which the seed never writes. The
+conclusion was right, but for a category with no products, not for the
+categories the demo serves. This is pattern 8 on the architecture session's
+own review: measure on the inputs the system actually receives.
+
+(b) is not taken. Reseeding the categories in contiguous sku blocks means
+rewriting landed migrations, either `0002`'s data or `0003`'s number, and the
+wrong fix's `not_resolved` would rest on an unmeasured plan.
+
+What (a) means for the demo:
+
+1. **The featured category is a new one with no products.** For example
+   `category-200`, named in the demo's code and never seeded. The healthy
+   head (`0003`) answers it in microseconds.
+2. **The demo's products traffic is deterministic.** It alternates the bare
+   `GET /products` (the featured category) with the seeded categories in
+   turn. Roughly half its calls are then the empty category, and a window's
+   mean is about 38 ms at `0002`, about 37 ms with `category` alone, and
+   about 0.02 ms at `0003`. The library's outcome must not rest on
+   `random.choice`.
+3. **The statement budget stays at 20 ms.** Its `why` is rewritten with the
+   real mechanism and the numbers above.
+4. **`GET /products`'s p95 budget is chosen from measurement:** the healthy
+   p95 at most half of it, and the fault's p95 at least twice it. The `why`
+   says how it was chosen.
+5. **The docstrings of `0002` and `0003` are corrected where they state
+   something false.** `0002` claims a sequential scan; `0003` claims it fixes
+   any category. Their data and DDL do not change. The report lists both
+   edits.
+6. **LIMITS gains the shape of this finding:** a missing index under
+   `ORDER BY … LIMIT` shows only for rare or absent values. The statement's
+   mean over a window sees it only when such calls are a large enough share
+   of the traffic.
+
+**Part 3, the rest — brief and criteria, 2026-11-14.** "Part 3, continued"
+stands as amended by Q35. Its criteria not yet met carry forward unchanged.
+
+**Work order.**
+0. Confirm `main`'s push run on `883e9b2` (43497617319, green per this
+   review), then commit the review: `git apply ../phase-37-3c-review.patch`
+   and `git commit -F ../phase-37-3c-review.txt`.
+1. **Item 2, the rest:**
+   - Q35's demo changes (1)–(5);
+   - the `GET /products` p95 budget;
+   - the faults stack's database, from `../phase-37-index-faults-stack.patch`.
+2. **Item 3:** the library's database fault, as briefed, with the deterministic
+   traffic. Shard the job with its coverage proof if it passes 15 minutes. It
+   took 12 m 17 s on `883e9b2` before this fault.
+3. **Item 4:** the documents, with Q35's LIMITS entry.
+
+**Acceptance criteria added by Q35.**
+- **At `0002` on the faults stack in CI:** the statement window's mean is at
+  least 30 ms (1.5 times the budget), and the route's p95 at least twice its
+  budget.
+- **At `0003`:** the mean is under 2 ms, and the p95 at most half the budget.
+- **With `category` alone:** the window's mean is still over 20 ms, so the
+  outcome is `not_resolved`, and the plan still filters `category` on
+  `ix_products_sku`.
+- **Determinism:** the outcomes are the same across two runs of the library's
+  database case. The report shows both.
+
 ---
 
 ### Phase 38 — Bounds: what the browser downloads, and what a list returns
