@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **38, part 1 — bundles: the build reader, `bundle_gzip_bytes_max` in `culprit check`, Culprit's own frontend under a budget in CI** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 38: "How Phase 38 is run" (P6 amended: a built-in Go reader) and "Part 1 — bundles". Step 0: `main`'s push run 44076102588 on `4619099` green. |
+| Current phase | **38, part 1 — bundles: the build reader, `bundle_gzip_bytes_max` in `culprit check`, Culprit's own frontend under a budget in CI** — `complete`, awaiting review. PR #45. CI green on `3ab98ed` (run 44088509299, every job and PR check). The finding's shape decided with the human mid-run; two of the run's decisions for the review (§5). Report: §5. |
 | Previous phase | **37 — the database in the walk — signed off 2026-11-17** (PR #39–#44; part 3, the rest, merged as `4619099`). PR #44's last run 44072232611 green on every job, both fault-library shards included; the database shard reproduced `results.json` twice. Q36 accepted as applied; the wrong fix recorded as an action is accepted (Q20). Recorded at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-38-bundles`, to be cut from `origin/main` = `4619099`. Its first commit is the review: `git apply ../phase-37-signoff.patch`, then `git commit -F ../phase-37-signoff.txt` (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. |
+| Branch | `phase-38-bundles`, from `origin/main` = `4619099`; the sign-off `9b330f3`, then this run's commits through `3ab98ed` and the report. PR #45. `shared/uv.lock` not staged. |
 | Blocking questions | None. |
 
 ---
@@ -119,7 +119,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 37, part 1 close-out | Package isolation; one schema for both manifest readers | **complete** (PR #40 merged, `ee3e19e`) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The audit's two attacks no longer type-check; each boundary package has one non-test file. The CodeQL alert was answered by redesign. Q28 is ruled (strict typing and a differential corpus, in part 2); Q29 is ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 2 | Statements and plans | **complete when `main`'s push run on `1b2496b` is green** (PR #41 merged) | **Signed off 2026-11-13** (architecture session): every check on the pull request was green, read from GitHub. The generic plan comes from a prepared statement under `force_generic_plan` (the brief was wrong). `(category, sku)` brings the statement within budget, which `category` alone does not. Q28's corpus holds 5,684 manifests. Q31 and Q32 are ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 3 | The database in the walk | **complete** (PR #42 `1d20322`, PR #43 `883e9b2`, PR #44 `4619099`) | **Signed off 2026-11-17** (architecture session): PR #44's last run 44072232611 green, read from GitHub; existing test faults unchanged; Q35's criteria met in CI over two runs; Q36 applied. Phase 37 is complete. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
-| 38, part 1 | Bundles | not started | **Brief (2026-11-17):** `docs/PERFORMANCE_PLAN.md` Phase 38, "How Phase 38 is run" and "Part 1 — bundles": its work order, criteria and what not to build. P6 is amended: a built-in Go reader, not the Node extractor (protocol 1 is INTENT only). Step 0: `main`'s push run 44076102588 on `4619099` green. Branch `phase-38-bundles` from `origin/main` = `4619099`; its first commit is the review (`../phase-37-signoff.patch`, message `../phase-37-signoff.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 38, part 1 | Bundles | **complete, awaiting review** (PR #45; CI green on `3ab98ed`, run 44088509299) | **Brief (2026-11-17):** `docs/PERFORMANCE_PLAN.md` Phase 38, "How Phase 38 is run" and "Part 1 — bundles". The over-budget finding is its own type, not a Divergence (decided with the human, 2026-11-17). Report: §5. |
 | 38, part 2 | Lists | not started | Brief written at part 1's review. Decided already ("How Phase 38 is run"): a list route is bounded only where a bound is declared (`maxItems` in the spec, or `response_items_max`); no paging-parameter names. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
 
@@ -153,192 +153,164 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        37, part 3, the rest — the demo's empty category; the
-              library's database fault; Q36; the documents
-Branch:       phase-37-library, from origin/main = 883e9b2. 1f47027 the
-              review, then 7de3689 (item 2), 641c92c and c6edc64
-              (item 3), 41da346 (item 4), 5be8abd (Q36), 99d06c5,
-              7395537, 91d9a6c, 5d5d9df, 9a305f9, then this report. PR #44.
-Run:          2026-11-17, resumed from a working tree the last session
-              left uncommitted (16 modified, 3 new files); kept whole.
-Status:       COMPLETE pending review. CI green on 9a305f9 (run
-              44067449151: every job, every PR check, no open alert);
-              the database shard rerun once, results.json reproduced
-              both times. Nothing blocking.
+Phase:        38, part 1 — bundles: the build reader, bundle_gzip_bytes_max
+              in culprit check, Culprit's own frontend under a budget in CI
+Branch:       phase-38-bundles, from origin/main = 4619099. 9b330f3 the
+              sign-off (applied cleanly), then dbf5aa8 (item 1), 55b4977
+              (item 3), 0754484 (items 2, 5), 8eb7aff (items 4, 5),
+              9558dc4 (item 6), 94594a9 (item 7), ef9b016 (the audits),
+              3ab98ed (the guard's fix), then this report. PR #45.
+Run:          2026-11-17, /next.
+Status:       COMPLETE pending review. CI green on 3ab98ed (run 44088509299:
+              every job, every PR check, no open alert). One interface
+              decision taken with the human mid-run (the finding's shape);
+              two of the run's own for the review (below). Nothing blocking.
 
 STEP 0
-  main's push run 43497617319 on 883e9b2: success on every job, deploy
-  skipped. Read by id.
+  main's push run 44076102588 on 4619099: success on every job, deploy
+  skipped. In progress when first read; waited for, then read by id.
 
-THIS MACHINE
-  The faults stack was taken down with its volumes (docker compose down
-  -v) before anything else; nothing of this branch's was left running.
-  The fault library was not run here: CI is its gate (two shards).
-  TestDiagnoseFindsASlowComponentAndVerifyJudgesItsFix, alone on the
-  quiet machine: PASS, 19.5 s.
-  One container was run by hand, with the human's go-ahead, for the
-  README tour's step 5 (postgres:16-alpine), and removed afterwards.
-  The invariant auditor ran an api test selection that probably started
-  a Postgres testcontainer briefly; nothing was left running. The one
-  container still up (studysensei-db-1) is another project's.
+DECIDED WITH THE HUMAN, 2026-11-17 — THE FINDING'S SHAPE
+  The brief says an entry over budget is "a finding of severity degrades,
+  in every format check writes", not what kind. A check finding is a
+  Divergence, whose two sides share one predicate in Go and in
+  culprit_model.facts, and POST /divergences/captures validates that; a
+  budget (bundle_gzip_bytes_max, INTENT) and a measured size
+  (bundle_gzip_bytes, OBSERVED) do not. Asked; answered: a finding of its
+  own type (diverge.BundleFinding), counted by --fail-on, in every
+  format, the Divergence model untouched.
 
-Q36 — RULED MID-RUN (2026-11-14, architecture session), NOT A QUESTION
-  demo-services/culprit.yaml loses inventory-service -> order-service and
-  payments-service -> order-service. Neither service has an HTTP client;
-  the edges were copied in Phase 27 from the old undirected adjacency.
-  The "four-edge adjacency" comment now says each edge is a call the code
-  makes. 635870479f4e (the backfill) is untouched; apply-model removes
-  the two edges from a database that has them (they are culprit_yaml's).
-  - expected.json: missing-index is complete; statement_contains "no
-    index serves category"; remediation_contains "public.products
-    (category, sku)"; the Q36 note is gone. Same relations, rubric and
-    edges as the partial record: the database tree does not depend on
-    completeness.
-  - Existing cases: expected.json unchanged, and no result changed. All
-    walk POST /orders from order-service, and the walk never followed the
-    two edges (an edge back to a component already reached is not in the
-    request-path tree).
-  - What counts the demo's edges: nothing. No test, e2e spec or graph
-    code counts them; api/tests/test_model_migration.py's four pairs are
-    the backfill's history and stay. Four places cited the back edge as
-    present: LIMITS (two), a comment in isolate.go and one in
-    isolate_test.go; all now say "until Q36".
-  - TestASlowEntryOverAMissingIndexIsComplete pins the new shape without
-    Docker: an entry over its own route budget on server time, one
-    background sql edge, four planes: complete, the same three edges.
-  - One expectation changed because of Q36, found by CI: the database
-    case's rubric discriminated is false, not true (9a305f9). It holds
-    only when a reading rules out a competing hypothesis, and with no
-    other branch on inventory-service's path none competes, as in
-    network-partition. The first run (44064202665, fault-library (2))
-    failed on that one assertion, in both subtests, and on nothing
-    else; my record had carried true over from the partial case
-    unchecked, and the unit test above asserts root and completeness,
-    not the rubric.
+FOR THE REVIEW — TWO DECISIONS OF THIS RUN
+  1. The unbudgeted surface (Phase 36) is no longer switched on by a
+     manifest whose only budgets are bundle budgets: otherwise the root
+     culprit.yaml's one bundle budget lists all 138 API routes as having
+     no latency budget. Every other budget switches it on as before; my
+     first cut (8eb7aff) also left out statement budgets, which both
+     auditors flagged as beyond what the run could change, and ef9b016
+     put it back (test pins it).
+  2. vite_manifest may not hold a `..` segment (both readers, corpus):
+     otherwise a culprit.yaml in a pull request could point check at
+     files outside the checkout (invariant-auditor). The cost: a frontend
+     beside culprit.yaml's directory cannot be declared from it (LIMITS).
 
-ITEM 2 — Q35'S DEMO (7de3689)
-  (1) FEATURED_CATEGORY = category-200, never seeded.
-  (2) The products traffic alternates a bare GET /products with each
-      seeded category in turn (itertools.cycle); no random.choice.
-  (3) The 20 ms statement budget stays; its why states the mechanism
-      and Q35's numbers.
-  (4) GET /products: latency_p95_ms 30, from measurement on the faults
-      stack (p95 3.1 ms at 0003, 108.5 ms at 0002; 100 timed requests
-      from inside inventory-service with the traffic running). The why
-      says so; test_manifest_budgets asserts it is declared.
-  (5) Docstrings, data and DDL unchanged:
-      - 0002_seed_products: "reading one category by a sequential
-        scan ... tens to hundreds of milliseconds" replaced by the real
-        mechanism: interleaved categories, the sku walk stopping early
-        for a seeded category and walking the whole index for an empty
-        one; not a sequential scan.
-      - 0003_index_products_category_sku: "Phase 37 part 2 measured it
-        within the 20 ms statement budget, where an index on category
-        alone is not" replaced: the fault is an empty category (~75 ms),
-        this index takes it to ~0.006 ms, and category alone goes unused.
-  The faults stack's database, from ../phase-37-index-faults-stack.patch.
+ITEM 1 — CARRIED (dbf5aa8)
+  TestAShardKeepsTheOtherShardsResults runs every shard and checks
+  scenarios: red on a merge that kept shard 1's cases fresh ("shard 2
+  merged 1 faults and 1 scenarios, committed 9 and 6"). The library's
+  route budgets are found by subject (latencyBudgetLocator);
+  TestTheLibrarysRoutesHaveTheirBudgets resolves both without Docker.
 
-ITEM 3 — THE LIBRARY'S DATABASE FAULT (641c92c, c6edc64, 99d06c5, 7395537)
-  - Planted in the database (0002) and the walk's tree (0001-0002);
-    the extractor runs in every walk (Q33 (3)).
-  - Known fix commit:1327410 (adds 0003), applied: verified.
-  - Wrong fix: a category-only migration, in the tree and applied:
-    not_resolved on probe.db.statement_budget. DEVIATION from Q33 (2)'s
-    wording, which says "a commit": it is named
-    action:added and applied a migration indexing products on category
-    alone, because that migration is in no commit of the repository's
-    history, and naming one would be the Q20 lie. The architecture
-    session may prefer otherwise.
-  - Walk fix (641c92c): planNodes read only []any, so a live walk saw no
-    plan node; it reads the probe's []map[string]any too. Test red on
-    the old code (shown).
-  - The wrong fix's migration moved from cli/testdata/faultlib/ to
-    demo-services/faults/ (99d06c5): check-scan-coverage found neither
-    lint reached it. No root or exemption changed; 316 of 316.
-  - test_no_fault_library_record_names_a_commit (Q20) failed once
-    1327410 was named. Rewritten narrower, not dropped:
-    test_only_the_database_fault_names_a_commit asserts the commits
-    named are exactly [missing-index: commit:1327410], and six actions.
-  - results.json gains missing-index (complete, verified) and
-    missing-index-wrong-fix (complete, not_resolved). Written by hand
-    from expected.json, because the library does not run here; CI's
-    `git diff --exit-code` on it is what proves it. README's number:
-    7 of 7 verified, 9 planted, a schema row; still labelled planted.
-  - Two shards: database cases in shard 2, the rest in shard 1.
-    TestTheFaultLibraryShardsCoverEveryCaseOnce: every case in exactly
-    one shard, and the workflow's matrix is [1, 2].
+ITEM 2 — WHERE A BUILD IS (0754484)
+  components[].build.vite_manifest, both readers, strictly typed;
+  required, relative (no `/`, `\`, drive letter, `..` segment). The
+  environment name `build` reserved, both readers. manifest_schema.json
+  has 62 fields. Corpus: 14 structural cases added; re-recorded through
+  the API, 5,880 cases; the 990 changed hashes are field cases, whose base
+  gained build:; no outcome flipped (invariant-auditor compared old and
+  new). dump_manifest carries build: whole: the root manifest did not
+  load after a round trip without it (test).
 
-ITEM 4 — THE DOCUMENTS (41da346, 91d9a6c, 5d5d9df)
-  LIMITS ("The database in the walk": the entry rule, background edges
-  said outright, partial, own traffic, Q35's shape, four planes, the
-  unused index, the unapplied migration, the derived recommendation, the
-  agent without migration INTENT; the two-edge rule was already there);
-  PROBES ("In the walk"); PERMISSIONS; EXTRACTOR_PROTOCOL (db_schema
-  says which columns lead an index, leads_index true and false);
-  README's probe section and the tour's step 5.
-  Tour step 5 was run before it was written (Windows, Git Bash): a
-  million products, pgbench on an empty category (75 ms a call);
-  diagnose COMPLETE, root schema:db/public.products.category,
-  recommending (category, sku); verify VERIFIED. What the run taught:
-  the sql edge is background and no db.metadata.read is granted, as in
-  faults-inventory (else probe.db.connect is asked and refused); pgbench
-  starts through sh -c (Git Bash rewrites a bare /tmp path).
+ITEM 3 — THE SUBJECT (55b4977)
+  bundle:<component>/<entry>, Go and Python, held to
+  subject_conformance.json (3 build, 4 build-error, 2 parse-error cases);
+  the subject-construction gate knows it. The Node extractor's subjects
+  are unchanged (its conformance test reads component, http, dep only).
 
-CRITERIA (Q35 and the carried part 3, continued)
-  Two runs of the database shard on 9a305f9, run 44067449151: job
-  133988085395 (attempt 1) and job 133994469135 (attempt 2, gh run
-  rerun --job). Figures are job 1 / job 2.
-  At 0002: statement mean >= 30 ms, route p95 >= 2x budget     PASS:
-    p95 98.0 / 96.6 ms; means 42.6, 42.2 / 41.1, 41.6 ms
-  At 0003: mean < 2 ms, p95 <= half the budget                  PASS:
-    p95 4.0 / 3.2 ms; four means 0.099-0.104 / 0.096-0.098 ms
-  Category alone: mean > 20 ms, not_resolved, plan still on
-    ix_products_sku                                             PASS:
-    four means 41.7-42.3 / 40.6-41.8 ms; plan check passed
-  missing_index complete, verified, not_resolved                PASS, both
-  Determinism: same outcomes across two runs                    PASS: both
-    jobs pass missing-index (complete, root category, (category, sku),
-    verified) and missing-index-wrong-fix (not_resolved), and both
-    jobs' "The committed results are this run's" step (git diff
-    --exit-code on results.json) succeeded.
-  Q33: the library's walks run the extractor                    PASS (CI:
-    the migrations' INTENT is one of the four planes the root needs)
-  Existing expected.json unchanged, results.json changes listed PASS (above)
-  CI green, fault library <= 15 min per shard                   PASS:
-    shard 1 11m18s, shard 2 10m39s (44067449151)
-  The healthy stack: the quickstart at 0003 within both budgets NOT RUN:
-    nothing gates it and the quickstart was not run on this machine.
-    The faults stack at 0003 is held to both in CI (the second line).
-  LLM_PROVIDER=none changes nothing                             PASS: the
-    self-check is identical with it; the fault-library jobs run with none.
+ITEMS 4, 5 — THE READER AND THE BUDGET (8eb7aff, ef9b016)
+  cli/internal/extract/build.go: OBSERVED facts in `build` per entry,
+  bundle_raw_bytes, bundle_gzip_bytes (the entry, its static-import
+  closure, their css; each file once; dynamicImports and assets out;
+  compress/gzip BestCompression, summed) and bundle_largest_chunks (three,
+  by gzipped size). Names and sizes only. Refused, never read: a path
+  out of the output directory, a file over 256 MiB. Vite 5 and Vite 4
+  manifest locations. --only applies.
+  bundle_gzip_bytes_max: whole bytes, 1 to 1,000,000,000 (a time
+  budget's 60,000 and "milliseconds" did not fit); on a bundle: subject
+  of a component that declares a build, or refused.
+  The judge (diverge/bundles.go): strictly over is a degrades finding
+  naming the three largest files; at or under, nothing; a budget on an
+  entry the build lacks, Not checked. Rendered in text, JSON
+  (bundles_over_budget, omitted when none), SARIF (annotated on
+  culprit.yaml) and JUnit; check.CountFailing counts it.
+
+ITEM 6 — CULPRIT'S OWN FRONTEND (9558dc4, ef9b016, 3ab98ed)
+  vite.config.ts build.manifest: true. Root culprit.yaml: culprit-web's
+  build and 200,000 bytes on bundle:culprit-web/index.html, measured at
+  167,686 (JS 144,625, CSS 23,061), about 19% headroom, the why says so.
+  The self-check job builds culprit-web (schema dump, types, npm run
+  build), gates --fail-on=degrades, and then fails if the budget went
+  unjudged (a Not checked line fails no --fail-on: phase-auditor).
+  The guard's first version broke the workflow file: ef9b016's run
+  44087916059 failed with no job started (a newline inside a string).
+  Fixed in 3ab98ed, with scripts/tests/test_bundle_guard.py (red on
+  ef9b016's file, 4 of 4).
+  The self-check today: no divergences, 1,713 facts across 631 subjects
+  (one fact and one subject more, the budget), 9 gaps, the bundle within
+  budget; so --fail-on=degrades changes nothing now. The mutation: 150,000
+  turned it red locally (exit 1, the entry and both files named);
+  restored, green. The phase-auditor reproduced it at 100,000. The guard,
+  by hand: red with frontend/dist moved away, green with it.
+
+ITEM 7 — THE DOCUMENTS (94594a9, ef9b016)
+  README: bundle budgets in CI (manifest, build-then-check steps, what
+  counts, and that a Not checked line fails no --fail-on by itself); the
+  self-check row. LIMITS, "Bundle budgets": Vite only; undeclared not
+  checked; build first; initial download (dynamic imports and assets
+  out); the gzip measure against Vite's printout (146.76 kB, Culprit
+  144,625 B for the same JS) and brotli; strictly over; its own finding,
+  untouched by suppressions and overrides; bounds; `build` reserved;
+  containment on the path as written (a symlink is followed); the
+  manifest inside the repository. `culprit check --help` says it.
+
+CRITERIA
+  Fixtures: over budget with its three largest files, all 4 formats  PASS
+  Fixtures: under budget nothing; at the budget nothing; one over    PASS
+  Fixtures: missing manifest, missing entry: Not checked, 4 formats  PASS
+  Fixtures: a static import counted, a dynamic one not               PASS
+  Determinism: the same fixture, identical facts twice               PASS
+  Contents never kept (secret-looking strings in a chunk)            PASS
+  Readers and corpus: field, kind, predicate; `build` refused        PASS
+  Culprit's frontend in CI: built and judged                         PASS (CI:
+    "culprit-web's bundle budget was judged", no divergences, 44088509299)
+  The mutation turns the self-check red, then restored               PASS (local;
+    the CI job judges within budget; the red side was not pushed)
+  Unchanged elsewhere: every existing fixture and golden             PASS
+  CI green on the merge result                                       PASS
+  LLM_PROVIDER=none changes nothing                                  PASS (self-check
+    output identical; the CI job runs with none)
+
+NOT BUILT (as the brief says)
+  No Node extractor change, no protocol change, no other bundler, no
+  brotli, nothing of part 2, no browser.
 
 AUDITS
-  invariant-auditor (1f47027..91d9a6c): CLEAN. The test rewrite is a
-    narrowing; the move changed no root or exemption; no case can fall
-    out of both shards. Risks: the wrong fix's wording (above);
-    TestAShardKeepsTheOtherShardsResults checks shard 1 only; the
-    route's budget locator budgets[2] depends on order (fails loudly).
-  phase-auditor: every local criterion MET; field 17 not built; CI
-    criteria NOT RUN HERE until this run. Its findings were fixed in
-    5d5d9df (a stale test comment; the background sentence), and the
-    quickstart criterion is recorded NOT RUN above.
+  phase-auditor (9b330f3..94594a9): every locally runnable criterion MET;
+    "Do NOT implement" respected. Risks acted on in ef9b016: the gate
+    going quiet; the dead check.Report.Build; the statement-budget side
+    effect. Left: the text headline still opens "No divergences." above
+    a bundle finding, and JSON summary.degrades counts divergences only
+    (bundles_over_budget has its own count).
+  invariant-auditor (9b330f3..94594a9): CLEAN. Risks acted on in
+    ef9b016: `..` in vite_manifest; no size cap; the statement budgets.
+    Left, in LIMITS: symlinks followed (sizes only); --only can hide a
+    budget, as it scopes everything else.
 
-LOCAL GATES (Windows, before 5d5d9df, which is comments and LIMITS)
-  just lint, typecheck, lint-imports, check-schema-drift,
-  check-scan-coverage, check_coupled_files --base origin/main: clean.
-  just test: 1697 passed, 1 failed (the Q20 test, rewritten in 7395537,
-  then 6 passed). just self-check: no divergences, 1712 facts across
-  630 subjects. `culprit check` with LLM_PROVIDER=none: identical.
+LOCAL GATES (Windows)
+  just lint, typecheck, lint-imports, check-schema-drift, cli-lint,
+  check-scan-coverage, check-no-llm-imports, check-invariants,
+  check_coupled_files: clean. just test (on 94594a9): 1711 + 93 + 21 + 38
+  passed, Go included. After the audits: the touched Go packages, the
+  manifest and corpus tests (129), test_bundle_guard (4): pass.
 
 CI
-  44064202665 on 5d5d9df: red on fault-library (2) only, on the rubric
-    (above); every other job green.
-  44067449151 on 9a305f9: success on every job; deploy and publish
-    skipped. fault-library (1) 11m18s, (2) 10m39s; attempt 2 of (2)
-    10m36s. Every check on PR #44 pass or skipping (CodeQL and its four
-    analyses included); no open code-scanning alert (queried by pr=44,
-    refs/pull/44/merge, refs/pull/44/head). main had not moved
-    (883e9b2), so the branch was the merge result.
+  44084724027 on 94594a9: success on every job (the self-check built
+    culprit-web and judged it within budget).
+  44087916059 on ef9b016: failure, no job started (the guard's YAML).
+  44088509299 on 3ab98ed: success on every job; deploy and publish
+    skipped; fault-library (1) 10m58s, (2) 10m50s. Every check on PR #45
+    pass or skipping (CodeQL and its four analyses included); no open
+    code-scanning alert (pr=45, refs/pull/45/merge, refs/pull/45/head).
+    main had not moved (4619099), so the branch was the merge result.
   This report's own commit runs on the pull request after it.
 ```
 
