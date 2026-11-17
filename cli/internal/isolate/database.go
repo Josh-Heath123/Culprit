@@ -266,11 +266,22 @@ type planNodeReading struct {
 	filtered, servedBy []string
 }
 
+// planNodes reads a plan reading's nodes in either form: as the probe builds
+// them in this process (probe.ParsePlan's []map[string]any), or decoded from
+// JSON ([]any), as a recorded reading holds them.
 func planNodes(reading model.Reading) []planNodeReading {
+	var entries []map[string]any
+	switch raw := reading.Measured["nodes"].(type) {
+	case []map[string]any:
+		entries = raw
+	case []any:
+		for _, item := range raw {
+			entry, _ := item.(map[string]any)
+			entries = append(entries, entry)
+		}
+	}
 	var nodes []planNodeReading
-	raw, _ := reading.Measured["nodes"].([]any)
-	for _, item := range raw {
-		entry, _ := item.(map[string]any)
+	for _, entry := range entries {
 		node := planNodeReading{}
 		node.relation, _ = entry["relation"].(string)
 		node.index, _ = entry["index"].(string)

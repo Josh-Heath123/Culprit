@@ -40,7 +40,10 @@ type dbWorld struct {
 	planVerdict model.Verdict
 	planReason  string
 	nodes       []any
-	indexes     []any
+	// planNodes, when set, are the nodes in the probe's own in-process
+	// form (probe.ParsePlan's []map[string]any), in place of nodes.
+	planNodes []map[string]any
+	indexes   []any
 	// failing names components whose reachability probe fails.
 	failing map[string]bool
 	ran     []string
@@ -83,6 +86,9 @@ func (d *dbWorld) Run(_ context.Context, request Request) model.Reading {
 		reading.Measured = map[string]any{
 			"queryid": queryID, "nodes": d.nodes, "tables": []any{products},
 			"indexes": map[string]any{products: d.indexes}, "server_version_num": 160004,
+		}
+		if d.planNodes != nil {
+			reading.Measured["nodes"] = d.planNodes
 		}
 	default:
 		_, parts, _ := model.ParseSubject(request.Target)
@@ -184,6 +190,26 @@ func TestFourPlanesGiveAMissingIndex(t *testing.T) {
 	want := productsTable + " -[propagates_to]-> " + component(shop) + "\n" + productsTable + " -[caused_by]-> " + categoryColumn
 	if got := edgesOf(inv); !strings.Contains(got, want) {
 		t.Errorf("tree:\n%s\nwant it to hold:\n%s", got, want)
+	}
+}
+
+// TestAPlanReadingAsTheProbeBuildsItIsRead: the plan probe keeps its nodes
+// as probe.ParsePlan returns them, []map[string]any, and the walk reads that
+// reading in the same process, never decoded from JSON. Found by the fault
+// library: the walk read []any only, saw no node, and said the plan "reads
+// the table without an index" while the reading said the opposite.
+func TestAPlanReadingAsTheProbeBuildsItIsRead(t *testing.T) {
+	var nodes []map[string]any
+	for _, node := range sortWalk() {
+		nodes = append(nodes, node.(map[string]any))
+	}
+	world := &dbWorld{overMS: 96, planNodes: nodes, indexes: []any{index(sortIndex, "sku"), index("products_pkey", "id")}}
+	inv := dbWalk(t, world, []model.Fact{tableBudget(), migrationsSay(false)})
+	if inv.Diagnosis.RootSubject != categoryColumn || !inv.Diagnosis.Complete {
+		t.Fatalf("root %s complete %v: %s", inv.Diagnosis.RootSubject, inv.Diagnosis.Complete, inv.Diagnosis.Statement)
+	}
+	if !strings.Contains(inv.Diagnosis.Remediation, "public.products (category, sku)") {
+		t.Errorf("remediation: %s", inv.Diagnosis.Remediation)
 	}
 }
 
