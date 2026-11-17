@@ -4,7 +4,7 @@ Revision ID: 0003_products_category
 Revises: 0002_seed_products
 
 The fault library's wrong fix for its database fault (Phase 37 part 3,
-cli/cmd/culprit/faultlib_test.go): an index on `category` alone, the
+cli/cmd/culprit/faultlib_database_test.go): an index on `category` alone, the
 obvious fix and not the right one. For a category with no products the
 planner estimates 5,000 rows, as for any category, and keeps walking
 `ix_products_sku` for the order, so this index goes unused and the read

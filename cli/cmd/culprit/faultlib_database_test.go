@@ -53,7 +53,7 @@ const (
 var (
 	demoService           = filepath.Join(repoRoot, "demo-services", "inventory_service")
 	pythonExtractor       = filepath.Join(repoRoot, "extractors", "python", "culprit_extract_python")
-	categoryOnlyMigration = filepath.Join("..", "..", "testdata", "faultlib", "0003_products_category.py")
+	categoryOnlyMigration = filepath.Join(repoRoot, "demo-services", "faults", "0003_products_category.py")
 )
 
 // The demo manifest's extractor command, as committed, and as the walk's

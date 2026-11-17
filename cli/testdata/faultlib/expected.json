@@ -343,7 +343,7 @@
       "name": "missing-index-wrong-fix",
       "fault": "missing-index",
       "apply": "index-category-only",
-      "how": "a migration indexing products on category alone, added to the tree and applied (cli/testdata/faultlib/0003_products_category.py); the planner does not use it for a category with no products",
+      "how": "a migration indexing products on category alone, added to the tree and applied (demo-services/faults/0003_products_category.py); the planner does not use it for a category with no products",
       "change": [
         "action:added and applied a migration indexing products on category alone"
       ],
