@@ -197,6 +197,24 @@ def test_fastapi_routes_come_from_the_running_app() -> None:
     assert ranks == {90}, "runtime introspection is rank 90 (§2.4)"
 
 
+def test_fastapi_list_routes_are_listed_from_the_running_app() -> None:
+    """Phase 38 part 2: the spec's list, by culprit_model.lists.response_list
+    over app.openapi(). GET /api/v1/orders answers list[OrderOut] with no
+    maxItems, so its bound is null; no other route answers a list."""
+    pytest.importorskip("fastapi")
+    response, _ = run_subprocess(
+        FASTAPI_FIXTURE, ["http_routes"], "orders-api", "--app", "orders_api.main:app"
+    )
+    lists = {
+        fact["subject"]: fact for fact in response["facts"] if fact["predicate"] == "response_list"
+    }
+    route = build("http", component="orders-api", method="GET", path="/api/v1/orders")
+    assert set(lists) == {route}
+    assert lists[route]["value"] == {"max_items": None}
+    assert lists[route]["plane"] == "INTENT"
+    assert lists[route]["provenance"]["confidence_rank"] == 90
+
+
 def test_fastapi_request_body_becomes_an_aspect_subject() -> None:
     pytest.importorskip("fastapi")
     response, _ = run_subprocess(

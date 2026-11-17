@@ -743,6 +743,41 @@ if the budget goes unjudged (the root `culprit.yaml`, and the self-check
 job); the limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "Bundle
 budgets".
 
+**List budgets.** How many items a route may answer is declared too, and
+only declared: Culprit never infers a bound from a parameter's name. A
+bound is `maxItems` on the list in your OpenAPI spec, or a budget, with
+`at:` pointing at the list when the response wraps it:
+
+```yaml
+budgets:
+  - subject: "http:inventory-service/GET /products"
+    predicate: response_items_max
+    value: 50                        # whole items
+    at: /products                    # a JSON pointer; leave it out for a top-level array
+    why: the storefront shows one page
+```
+
+Both OpenAPI readers (a committed spec, and your running FastAPI app's
+`app.openapi()`) record each route's list: a 2xx JSON response that is an
+array, or an object with exactly one array property. Once you declare any
+budget, `culprit check` lists the **unbounded surface** beside the
+unbudgeted one: list routes with no `maxItems` and no `response_items_max`.
+It is a list to read, never a finding. `probe.http.response_items` sends
+one GET, with no query and no credential, and counts the list: over the
+bound fails, within it passes, and a response it cannot count (not 2xx,
+not JSON, no array at `at:`) is inconclusive and says why. It keeps the
+count, never an item. On the demo:
+
+```bash
+culprit probe "http:inventory-service/GET /products" -p probe.http.response_items \
+  --input base_url=http://inventory-service:8002 -f demo-services/culprit.yaml --env faults
+```
+
+The fault library runs exactly this in CI, inside the faults stack, and
+it passes: the probe asks for the default page, of the storefront's
+featured category, which is empty by design (step 5). The limits are in
+[`docs/LIMITS.md`](docs/LIMITS.md), "List budgets".
+
 **Databases.** A component's database is reached through a variable you
 name, never a connection string in the file:
 
@@ -843,9 +878,9 @@ Not counted either: the library's deliberate wrong and partial fixes, which chec
 | Command | Covers |
 |---|---|
 | `just test` | everything below that needs no cluster: the api, worker and MCP server suites (with the repository's own scripts and the shared model's conformance tests), `go test` across the CLI, and both extractors. Needs Docker for Postgres |
-| `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all sixteen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
+| `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all seventeen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
 | `just extractors-test` | the Python and Node extractors |
-| `just self-check` | `culprit check` on this repository, failing on `degrades`: **no divergences, 1,713 facts across 631 subjects**, 9 gaps listed, and the dashboard's first load within its 200,000-byte gzip budget (run `just frontend-build` first, or the budget is "Not checked") |
+| `just self-check` | `culprit check` on this repository, failing on `degrades`: **no divergences, 1,753 facts across 631 subjects**, 9 gaps listed, and the dashboard's first load within its 200,000-byte gzip budget (run `just frontend-build` first, or the budget is "Not checked") |
 | `just self-check-coverage` | the 368 subjects only one source describes — places where a mistake would go uncaught |
 | `just cli-test-docker`, `just cli-test-kind` | environment capture against real Compose projects and a kind cluster |
 | `just check-migration-round-trip` | every migration upgrades, downgrades and upgrades again against a real database with rows in it |

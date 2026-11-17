@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **38, part 1 — bundles: the build reader, `bundle_gzip_bytes_max` in `culprit check`, Culprit's own frontend under a budget in CI** — `complete`, awaiting review. PR #45. CI green on `3ab98ed` (run 44088509299, every job and PR check). The finding's shape decided with the human mid-run; two of the run's decisions for the review (§5). Report: §5. |
-| Previous phase | **37 — the database in the walk — signed off 2026-11-17** (PR #39–#44; part 3, the rest, merged as `4619099`). PR #44's last run 44072232611 green on every job, both fault-library shards included; the database shard reproduced `results.json` twice. Q36 accepted as applied; the wrong fix recorded as an action is accepted (Q20). Recorded at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
+| Current phase | **38, part 2 — lists: `response_items_max` with `at:`, `response_list` from both OpenAPI readers, `probe.http.response_items`, the unbounded surface; Q37** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 38, "Part 2 — lists". Step 0: `main`'s push run 44152778399 on `3d9fb33` (rerun fault-library (2) once if only Q37's precondition failed). |
+| Previous phase | **38, part 1 — bundles — merged as `3d9fb33` (PR #45) and signed off 2026-11-17.** Run 44088509299 green on every job; the report's commit `2dacfc8` green on attempt 2 of run 44091691574 (attempt 1: Q37). The finding's own type, bundle-only budgets not switching on the unbudgeted surface, no `..` in `vite_manifest`, and the unjudged-budget guard are accepted. Q37 ruled: the demo's budgets move to 10 ms (statement) and 25 ms (route p95); the preconditions stay. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-38-bundles`, from `origin/main` = `4619099`; the sign-off `9b330f3`, then this run's commits through `3ab98ed` and the report. PR #45. `shared/uv.lock` not staged. |
+| Branch | `phase-38-lists`, to be cut from `origin/main` = `3d9fb33`. Its first commit is the review: `git apply ../phase-38-1-review.patch`, then `git commit -F ../phase-38-1-review.txt` (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`). Open a draft pull request and mark it ready when the run report is committed. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
 | Blocking questions | None. |
 
 ---
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Phase 37's questions (Q25–Q36) are ruled and recorded at the end of their phases in the plans. | | |
+| — | None open. Q37 (the planted database fault's margin) was raised at PR #45 and ruled on 2026-11-17 (`PERFORMANCE_PLAN.md`, end of Phase 38, "Architecture review of part 1"): the demo's statement budget 10 ms and route p95 budget 25 ms; the preconditions' multipliers unchanged. | | |
 
 ---
 
@@ -119,8 +119,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 37, part 1 close-out | Package isolation; one schema for both manifest readers | **complete** (PR #40 merged, `ee3e19e`) | **Signed off 2026-11-12** (architecture session): every check on the pull request was green, read from GitHub. The audit's two attacks no longer type-check; each boundary package has one non-test file. The CodeQL alert was answered by redesign. Q28 is ruled (strict typing and a differential corpus, in part 2); Q29 is ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 2 | Statements and plans | **complete when `main`'s push run on `1b2496b` is green** (PR #41 merged) | **Signed off 2026-11-13** (architecture session): every check on the pull request was green, read from GitHub. The generic plan comes from a prepared statement under `force_generic_plan` (the brief was wrong). `(category, sku)` brings the statement within budget, which `category` alone does not. Q28's corpus holds 5,684 manifests. Q31 and Q32 are ruled. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 37, part 3 | The database in the walk | **complete** (PR #42 `1d20322`, PR #43 `883e9b2`, PR #44 `4619099`) | **Signed off 2026-11-17** (architecture session): PR #44's last run 44072232611 green, read from GitHub; existing test faults unchanged; Q35's criteria met in CI over two runs; Q36 applied. Phase 37 is complete. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
-| 38, part 1 | Bundles | **complete, awaiting review** (PR #45; CI green on `3ab98ed`, run 44088509299) | **Brief (2026-11-17):** `docs/PERFORMANCE_PLAN.md` Phase 38, "How Phase 38 is run" and "Part 1 — bundles". The over-budget finding is its own type, not a Divergence (decided with the human, 2026-11-17). Report: §5. |
-| 38, part 2 | Lists | not started | Brief written at part 1's review. Decided already ("How Phase 38 is run"): a list route is bounded only where a bound is declared (`maxItems` in the spec, or `response_items_max`); no paging-parameter names. |
+| 38, part 1 | Bundles | **complete** (PR #45, `3d9fb33`) | **Signed off 2026-11-17** (architecture session): run 44088509299 green on every job, read from GitHub; the report's commit green on attempt 2 of 44091691574. Decisions accepted; Q37 ruled. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
+| 38, part 2 | Lists | not started | **Brief (2026-11-17):** `docs/PERFORMANCE_PLAN.md` Phase 38, "Part 2 — lists": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44152778399 on `3d9fb33`. Branch `phase-38-lists` from `origin/main` = `3d9fb33`; its first commit is the review (`../phase-38-1-review.patch`, message `../phase-38-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 | 39 | N+1, where it can be seen cleanly | not started | `docs/PERFORMANCE_PLAN.md` Phase 39. "How Phase 39 is run" is written at the review before it. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not

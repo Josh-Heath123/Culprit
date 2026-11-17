@@ -65,14 +65,15 @@ def _go_manifests() -> dict[str, tuple[str, int]]:
 
 
 def test_the_catalogue_file_parses_as_probe_manifests() -> None:
-    """Every entry is a valid `ProbeManifest`, and there are sixteen.
+    """Every entry is a valid `ProbeManifest`, and there are seventeen
+    (Phase 38 part 2 added probe.http.response_items, one GET: cheap).
 
     Validity is not a formality: `ProbeManifest` refuses `effect: mutate`
     and refuses `expected_from: OBSERVED`, so a mirror that parses is a
     mirror that cannot describe a probe which writes, or one that claims a
     reading is its own expectation.
     """
-    assert len(catalogue.CATALOGUE) == 16
+    assert len(catalogue.CATALOGUE) == 17
     for manifest in catalogue.CATALOGUE:
         assert isinstance(manifest, ProbeManifest)
         assert manifest.effect is not Effect.MUTATE
@@ -140,7 +141,7 @@ def test_the_catalogue_is_served(client: TestClient) -> None:
     response = client.get("/probes")
     assert response.status_code == 200, response.text
     probes = response.json()["probes"]
-    assert len(probes) == 16
+    assert len(probes) == 17
     assert {probe["id"] for probe in probes} == set(_go_manifests())
 
 

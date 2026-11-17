@@ -99,6 +99,7 @@ from is the next section.
 | `probe.dep.version` (v2) | `package`, or a `dep:` target; optional `expect_version` | inspect | `repo.read`, plus the packages command on `process.exec.allowlist` | INTENT (`version`) | the installed version differs from a declared **exact pin**, or is absent |
 | `probe.edge.impedance` | *none* | observe | `telemetry.metrics.read` | *none* | the connection's latency or error rate is ≥ 3 standard deviations from its own history |
 | `probe.http.latency` | `url`, or an `http:` target + `base_url` | interrogate (metered) | `net.http.outbound` | INTENT (`latency_p95_ms`, `latency_p50_ms`) | the declared budget's percentile is over budget at 90% confidence; one reading per budget on the route (below) |
+| `probe.http.response_items` | `url`, or an `http:` target + `base_url` | interrogate | `net.http.outbound` | INTENT (`response_items_max`) | the list at the budget's `at:` holds more items than its bound (below) |
 
 Inputs are supplied with `--input key=value`, repeated. A list input
 (`expect_fields`, `expect_columns`) is built by repeating the same key:
@@ -209,6 +210,39 @@ The slow reading's setup and server times then tell the connection from
 the component (LIMITS, "Latency in the walk"). The walk's remaining wall
 clock is the probe's deadline. `culprit verify` runs it again, once per
 round for both of a route's readings.
+
+## Lists against a bound — `probe.http.response_items`
+
+Phase 38 part 2. How many items a route answers is a finding only against
+a declared bound: a `response_items_max` budget in `culprit.yaml`, with
+`at:`, the JSON pointer of the list in the response (`/products` in
+`{"category": ..., "products": [...]}`), or the top-level array when it is
+left out.
+
+- **What it sends:** one `GET`, through the same guarded client and under
+  the same refusals as `probe.http.latency`: a `GET` route only, the url
+  on the budget's own route with no query, fragment or userinfo, no
+  header (so no credential), and no redirect followed.
+- **What it reads:** the body, up to the 1 MiB every probe reads, decoded
+  only to find the array at `at:` and take its length.
+- **What it keeps:** `url`, `method`, `at`, `status`, and either `items`
+  (the count) or `not_counted` (why not). Never an item, a key or a value.
+- **Verdicts:** `pass` at or under the bound; `fail` over it, naming the
+  count; `inconclusive` when the answer is not 2xx (a redirect included),
+  is not JSON, is over 1 MiB, or holds no array at `at:`, each saying so;
+  `refused` without `net.http.outbound`. The verdict is a pure function of
+  the reading (`model.JudgeResponseItems`, `culprit_model.lists`), and a
+  reading whose verdict is not its own count's is refused in Go and at the
+  API.
+
+It is run from `culprit probe` against a budgeted route. It is not a
+hypothesis in the walk, and the fault library plants no list fault: what
+an unbounded list costs is Phase 39's question.
+
+```
+culprit probe "http:inventory-service/GET /products" -p probe.http.response_items \
+    --input base_url=http://inventory-service:8002 --env faults
+```
 
 ## Statements and plans — `probe.db.statement_budget`, `probe.db.plan`
 

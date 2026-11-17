@@ -2780,6 +2780,14 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
   2026-11-14). The demo's featured category, `category-200`, is a new one
   with no products, and its products traffic alternates it with the seeded
   categories, so a window's mean is about half the empty category's time.
+  That time is the machine's speed, not the fault's: the window's mean
+  without the index has measured 28.2 to 63.8 ms across CI's runners and 46
+  to 133 ms on a developer's machine, and the route's p95 68.4 ms at the
+  least. So the demo's budgets sit near health, not near the fault: 10 ms
+  for the statement and 25 ms for the route's p95 (Q37, 2026-11-17; they
+  were 20 and 30 ms, and one runner's fault came within the library's
+  margin of them). A runner faster still would need a larger table, not a
+  looser test.
   (Part 2's "about 100 ms a call" was measured on `category-7`, which the
   seed never writes: an empty category, by accident.)
 
@@ -3047,3 +3055,48 @@ limits.
   like the 60 s bound on a time.
 - **The environment name `build` is reserved** for what a build measured,
   and a manifest declaring an environment of that name is refused.
+
+## List budgets
+
+Phase 38 part 2. A list route is bounded only where a bound is declared:
+`maxItems` on the list in an OpenAPI spec, or a `response_items_max`
+budget in `culprit.yaml`. Culprit never infers a bound from a
+paging-parameter's name, so a route that pages by `?limit=` and declares
+no bound is listed as unbounded.
+
+- **Which routes are lists.** A route's list is read from its first 2xx
+  response in sorted order (`200` before `201` before `2XX`), its first
+  JSON media type (`application/json`, or a type ending `+json`), after
+  local `$ref`s: an array at the top level, or an object with **exactly
+  one** array-typed property, an envelope. A route with two or more array
+  properties is not listed, nor is a nullable array written as a type
+  list (`type: [array, "null"]`) or an `anyOf` (an `Optional[list[...]]`
+  in a FastAPI model, or a list behind `allOf`), a `$ref` out of the
+  document, a response with no JSON media type, or a list only on a non-2xx
+  response. Such a route is in neither the spec's lists nor the unbounded
+  surface; budget it by hand with `at:` if it matters.
+- **Envelopes.** An envelope's list is found by the spec rule above; the
+  probe finds it by the budget's `at:`, which you write. A budget with the
+  wrong `at:` is inconclusive ("no array at /products"), never a pass.
+- **`maxItems`** counts as a bound only as a whole number from 0 to
+  2^31 - 1; anything else (`"50"`, `1.5`, `true`) is no bound.
+- **The unbounded surface** is listed only once `budgets:` declares a
+  budget that is not a bundle budget, beside the unbudgeted surface, and
+  only when it has a route. It is never a finding and fails no
+  `--fail-on`.
+- **What the probe cannot reach.** It sends no credential and no query: a
+  route that needs a token answers 401, and one whose list needs a query
+  cannot be asked for it, so either is inconclusive. A route that
+  redirects is inconclusive: no redirect is followed. A body over 1 MiB is
+  inconclusive, not counted. A path parameter needs `--input url=` with a
+  concrete path, as for `probe.http.latency`.
+- **One page, as asked with no query.** The probe counts what the route
+  answers to a bare `GET`. A route that answers more when asked (the
+  demo's `GET /products` answers up to 200 with `?limit=200`) is held to
+  its bound only for its default answer.
+- **Bounds.** A `response_items_max` budget is 1 to 1,000,000 items, on a
+  `GET` route's `http:` subject; `at:` is at most 256 bytes, starts with
+  `/`, and escapes `~` and `/` as `~0` and `~1`. `at:` on any other budget
+  is refused.
+- **Not in the walk.** No hypothesis uses the probe, and the fault library
+  plants no list fault: what an unbounded list costs is Phase 39's.

@@ -102,6 +102,8 @@ func builtIn() []Probe {
 		edgeImpedance{},
 		// Phase 36 part 1.
 		httpLatency{},
+		// Phase 38 part 2.
+		httpResponseItems{},
 	}
 }
 

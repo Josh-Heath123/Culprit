@@ -144,6 +144,107 @@
         "taken_at": "2026-09-12T10:00:00Z", "agent_id": "culprit-cli",
         "grants_used": []
       }
+    },
+    {
+      "why": "a list reading at its bound passes (Phase 38 part 2)",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "pass",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/products",
+          "status": 200,
+          "items": 50
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        }
+      }
+    },
+    {
+      "why": "a list reading over its bound fails",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "fail",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/products",
+          "status": 200,
+          "items": 51
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        },
+        "reason": "the list at /products holds 51 items, over its bound of 50"
+      }
+    },
+    {
+      "why": "a list reading that could not count is inconclusive",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "inconclusive",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/products",
+          "status": 404,
+          "not_counted": "status"
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        },
+        "reason": "the route answered 404, not 2xx, so no list was counted"
+      }
+    },
+    {
+      "why": "a list reading that sent nothing is inconclusive",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "inconclusive",
+        "measured": {},
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "reason": "no budget was found"
+      }
     }
   ],
   "readings_rejected": [
@@ -203,6 +304,138 @@
         "verdict": "pass", "measured": {}, "evidence": [],
         "taken_at": "2026-09-12T10:00:00Z", "expires_at": "2026-09-12T09:00:00Z",
         "agent_id": "culprit-cli"
+      }
+    },
+    {
+      "why": "a list reading over its bound cannot pass",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "pass",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/products",
+          "status": 200,
+          "items": 51
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        }
+      }
+    },
+    {
+      "why": "a list reading within its bound cannot fail",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "fail",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/products",
+          "status": 200,
+          "items": 3
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        },
+        "reason": "over"
+      }
+    },
+    {
+      "why": "a list reading that counted nothing cannot pass",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "pass",
+        "measured": {},
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        }
+      }
+    },
+    {
+      "why": "a list reading cannot be both counted and not",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "inconclusive",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/products",
+          "status": 200,
+          "items": 3,
+          "not_counted": "not_json"
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        },
+        "reason": "x"
+      }
+    },
+    {
+      "why": "a list reading's pointer is its budget's",
+      "reading": {
+        "probe_id": "probe.http.response_items",
+        "probe_version": 1,
+        "target": "http:inventory-service/GET /products",
+        "environment": "faults",
+        "verdict": "pass",
+        "measured": {
+          "url": "http://inventory-service:8000/products",
+          "method": "GET",
+          "at": "/other",
+          "status": 200,
+          "items": 3
+        },
+        "evidence": [],
+        "taken_at": "2026-11-17T10:00:00Z",
+        "agent_id": "culprit-cli",
+        "grants_used": [
+          "net.http.outbound"
+        ],
+        "expected": {
+          "response_items_max": 50,
+          "at": "/products"
+        }
       }
     }
   ]

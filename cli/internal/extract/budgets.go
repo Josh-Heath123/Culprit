@@ -39,6 +39,12 @@ type Budget struct {
 	// Why is required, as for an invariant: a budget nobody explained is
 	// one nobody can safely change.
 	Why string `yaml:"why"`
+	// At is where a response_items_max budget's list is in the response,
+	// a JSON pointer such as /products; nil (left out) is the top level.
+	// A pointer, so `at: ""` is written, and refused, rather than read as
+	// left out: the API refuses it (the corpus found the split).
+	// Phase 38 part 2: valid on that predicate only.
+	At *string `yaml:"at"`
 
 	// literalProblem is why value, as written, is not plain decimal digits
 	// (model.BudgetLiteralProblem), or "". Set when the entry is read from
@@ -144,7 +150,8 @@ func (m *Manifest) validateBudgets() error {
 		_, latency := model.BudgetPredicates[budget.Predicate]
 		statement := model.StatementBudgetPredicates[budget.Predicate]
 		bundle := model.BundleBudgetPredicates[budget.Predicate]
-		if !latency && !statement && !bundle {
+		list := model.ListBudgetPredicates[budget.Predicate]
+		if !latency && !statement && !bundle && !list {
 			return &PolicyError{Message: fmt.Sprintf(
 				"%s: predicate %q is not one of %s", where, budget.Predicate,
 				strings.Join(budgetPredicateNames(), ", "))}
@@ -172,6 +179,33 @@ func (m *Manifest) validateBudgets() error {
 			if err := m.checkBundleBudgetSubject(where, budget.Subject); err != nil {
 				return err
 			}
+		}
+		if err := checkListBudget(where, budget, list); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkListBudget holds a `response_items_max` budget (Phase 38 part 2) to
+// what can be counted: a GET route's http: subject, since the probe sends
+// GET only, with `at:`, when written, a JSON pointer. `at:` on any other
+// budget is refused. api/app/model/manifest.py holds the same rule.
+func checkListBudget(where string, budget Budget, list bool) error {
+	if !list {
+		if budget.At != nil {
+			return &PolicyError{Message: where + ": `at` is only for a response_items_max budget"}
+		}
+		return nil
+	}
+	kind, parts, err := model.ParseSubject(budget.Subject)
+	if err != nil || kind != model.KindHTTP || parts["method"] != "GET" {
+		return &PolicyError{Message: where +
+			": a list budget is on a GET route (http:<component>/GET <path>), the only kind a probe counts"}
+	}
+	if budget.At != nil {
+		if problem := model.JSONPointerProblem(*budget.At); problem != "" {
+			return &PolicyError{Message: where + ": " + problem}
 		}
 	}
 	return nil
@@ -233,7 +267,7 @@ func (m *Manifest) checkBundleBudgetSubject(where, subject string) error {
 
 func budgetPredicateNames() []string {
 	names := make([]string, 0,
-		len(model.BudgetPredicates)+len(model.StatementBudgetPredicates)+len(model.BundleBudgetPredicates))
+		len(model.BudgetPredicates)+len(model.StatementBudgetPredicates)+len(model.BundleBudgetPredicates)+len(model.ListBudgetPredicates))
 	for name := range model.BudgetPredicates {
 		names = append(names, name)
 	}
@@ -241,6 +275,9 @@ func budgetPredicateNames() []string {
 		names = append(names, name)
 	}
 	for name := range model.BundleBudgetPredicates {
+		names = append(names, name)
+	}
+	for name := range model.ListBudgetPredicates {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -258,11 +295,21 @@ func BudgetFacts(
 	facts := make([]model.Fact, 0, len(manifest.Budgets))
 	for index, budget := range manifest.Budgets {
 		value, _ := budgetValue(budget.Value, model.BudgetMax(budget.Predicate))
+		var factValue any = value
+		if model.ListBudgetPredicates[budget.Predicate] {
+			// The bound and where the list is, together: the probe needs
+			// both, and they are one declaration.
+			at := ""
+			if budget.At != nil {
+				at = *budget.At
+			}
+			factValue = model.ListBudgetValue(value, at)
+		}
 		fact := model.Fact{
 			Plane:     model.PlaneIntent,
 			Subject:   budget.Subject,
 			Predicate: budget.Predicate,
-			Value:     value,
+			Value:     factValue,
 			Provenance: model.Provenance{
 				SourceKind:     model.SourceAssertion,
 				Extractor:      BudgetExtractor,

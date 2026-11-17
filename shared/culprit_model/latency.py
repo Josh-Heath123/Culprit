@@ -36,8 +36,17 @@ import re
 from math import comb
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
+from culprit_model.lists import LIST_BUDGET_PREDICATES, MAX_LIST_ITEMS, json_pointer_problem
 from culprit_model.subjects import SubjectError, SubjectKind
 from culprit_model.subjects import build as build_subject
 from culprit_model.subjects import parse as parse_subject
@@ -132,14 +141,23 @@ class Budget(BaseModel):
     #: Required, as for an invariant: a budget nobody explained is one
     #: nobody can safely change.
     why: str = Field(min_length=1)
+    #: Phase 38 part 2: where a response_items_max budget's list is in the
+    #: response, a JSON pointer; None (left out) is the top level. Valid on
+    #: that predicate only.
+    at: StrictStr | None = None
 
     @field_validator("value", mode="before")
     @classmethod
     def _value_is_whole_milliseconds(cls, value: Any, info: ValidationInfo) -> int:
         # Bytes for a bundle budget (Phase 38 part 1), milliseconds for
         # every other; `predicate` is declared, and so validated, first.
-        bundle = info.data.get("predicate") in BUNDLE_BUDGET_PREDICATES
-        maximum, unit = (MAX_BUNDLE_BYTES, "bytes") if bundle else (MAX_BUDGET_MS, "milliseconds")
+        predicate = info.data.get("predicate")
+        if predicate in BUNDLE_BUDGET_PREDICATES:
+            maximum, unit = MAX_BUNDLE_BYTES, "bytes"
+        elif predicate in LIST_BUDGET_PREDICATES:
+            maximum, unit = MAX_LIST_ITEMS, "items"
+        else:
+            maximum, unit = MAX_BUDGET_MS, "milliseconds"
         try:
             return _int(value, "a budget", minimum=1, maximum=maximum)
         except LatencyShapeError as exc:
@@ -149,7 +167,12 @@ class Budget(BaseModel):
     @classmethod
     def _predicate_is_known(cls, value: str) -> str:
         known = sorted(
-            {*BUDGET_PREDICATES, *STATEMENT_BUDGET_PREDICATES, *BUNDLE_BUDGET_PREDICATES}
+            {
+                *BUDGET_PREDICATES,
+                *STATEMENT_BUDGET_PREDICATES,
+                *BUNDLE_BUDGET_PREDICATES,
+                *LIST_BUDGET_PREDICATES,
+            }
         )
         if value not in known:
             raise ValueError(f"budget predicate {value!r} is not one of {known}")
@@ -166,6 +189,25 @@ class Budget(BaseModel):
         if rebuilt != value:
             raise ValueError(f"budget subject {value!r} is not in canonical form ({rebuilt!r})")
         return value
+
+    @model_validator(mode="after")
+    def _a_list_budget_is_on_a_get_route(self) -> "Budget":
+        """A response_items_max budget is on a GET route, the only kind a
+        probe counts, and `at:` is a JSON pointer; `at:` on any other budget
+        is refused. cli/internal/extract/budgets.go holds the same rule."""
+        if self.predicate not in LIST_BUDGET_PREDICATES:
+            if self.at is not None:
+                raise ValueError("`at` is only for a response_items_max budget")
+            return self
+        kind, parts = parse_subject(self.subject)
+        if kind != SubjectKind.HTTP or parts.get("method") != "GET":
+            raise ValueError(
+                "a list budget is on a GET route (http:<component>/GET <path>), "
+                "the only kind a probe counts"
+            )
+        if self.at is not None and (problem := json_pointer_problem(self.at)) is not None:
+            raise ValueError(problem)
+        return self
 
 
 # ---- the rule ------------------------------------------------------------------

@@ -74,6 +74,9 @@ func BudgetMax(predicate string) int {
 	if BundleBudgetPredicates[predicate] {
 		return MaxBundleBytes
 	}
+	if ListBudgetPredicates[predicate] {
+		return MaxListItems
+	}
 	return MaxBudgetMS
 }
 
@@ -81,6 +84,9 @@ func BudgetMax(predicate string) int {
 func BudgetUnit(predicate string) string {
 	if BundleBudgetPredicates[predicate] {
 		return "bytes"
+	}
+	if ListBudgetPredicates[predicate] {
+		return "items"
 	}
 	return "milliseconds"
 }

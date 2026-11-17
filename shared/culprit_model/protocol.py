@@ -81,6 +81,9 @@ class Predicate(StrEnum):
     REQUEST_SCHEMA = "request_schema"
     RESPONSE_SCHEMA = "response_schema"
     STATUS_CODES = "status_codes"
+    #: The route's list in its 2xx JSON response (Phase 38 part 2), by
+    #: culprit_model.lists.response_list: {"max_items": int | None}.
+    RESPONSE_LIST = "response_list"
     #: A `schema:` subject's column list, or one column's type/nullability.
     COLUMNS = "columns"
     COLUMN_TYPE = "column_type"

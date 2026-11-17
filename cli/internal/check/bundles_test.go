@@ -2,6 +2,7 @@ package check_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,6 +101,25 @@ func TestAnEntryOverItsBudgetIsAFindingInEveryFormat(t *testing.T) {
 	if len(result.Result.Divergences) != 0 {
 		t.Errorf("a bundle over budget was also a divergence: %+v", result.Result.Divergences)
 	}
+	// Phase 38 part 2: the headline counts the bundle, and the JSON
+	// summary's failing count includes it.
+	rendered := renderAll(t, result)
+	if strings.Contains(rendered["text"], "No divergences.") ||
+		!strings.HasPrefix(rendered["text"], "1 finding(s): 1 bundle(s) over budget, no divergences.") {
+		t.Errorf("the text headline does not count the bundle:\n%s", rendered["text"])
+	}
+	var summary struct {
+		Summary struct {
+			Open, Degrades, Failing int
+			Bundles                 int `json:"bundles_over_budget"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(rendered["json"]), &summary); err != nil {
+		t.Fatal(err)
+	}
+	if s := summary.Summary; s.Failing != 1 || s.Bundles != 1 || s.Open != 0 || s.Degrades != 0 {
+		t.Errorf("summary: %+v, want failing 1, bundles_over_budget 1, open 0, degrades 0", s)
+	}
 }
 
 func TestAnEntryWithinItsBudgetReportsNothing(t *testing.T) {
@@ -116,6 +136,9 @@ func TestAnEntryWithinItsBudgetReportsNothing(t *testing.T) {
 	}
 	if got := check.CountFailing(result.Result, model.SeverityCosmetic); got != 0 {
 		t.Errorf("--fail-on any counts %d", got)
+	}
+	if text := renderAll(t, result)["text"]; !strings.HasPrefix(text, "No divergences.") {
+		t.Errorf("a clean run's headline changed:\n%s", text)
 	}
 	// The unbudgeted surface is routes no latency budget holds to a time;
 	// a bundle budget alone does not switch it on.

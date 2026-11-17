@@ -302,6 +302,9 @@ func (r Reading) Validate() error {
 	if err := r.validateLatency(); err != nil {
 		return err
 	}
+	if err := r.validateList(); err != nil {
+		return err
+	}
 	for _, item := range r.Evidence {
 		if !item.Redacted && LooksLikeCredential(item.Value) {
 			return fmt.Errorf(

@@ -1,0 +1,79 @@
+# Phase 38 part 2: a recorded spec of list routes, bounded, unbounded and
+# budgeted (the budget is in the test's culprit.yaml), with the routes the
+# rule does not list. YAML on purpose: its `200:` keys are integers to a
+# YAML reader, and the reader must see the "200" a JSON spec has.
+openapi: 3.0.3
+info: {title: shop, version: "1"}
+paths:
+  /products:
+    get:
+      responses:
+        200:
+          description: one page of a category
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProductPage"}
+  /orders:
+    get:
+      responses:
+        200:
+          description: every order, unpaged
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/Order"}}
+  /tags:
+    get:
+      responses:
+        "200":
+          description: every tag, budgeted in culprit.yaml
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tags: {type: array, items: {type: string}}
+                  count: {type: integer}
+  /report:
+    get:
+      responses:
+        200:
+          description: two lists, so not listed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows: {type: array, items: {type: string}}
+                  totals: {type: array, items: {type: integer}}
+  /health:
+    get:
+      responses:
+        200:
+          description: no list
+          content:
+            application/json:
+              schema: {type: object, properties: {status: {type: string}}}
+  /errors:
+    get:
+      responses:
+        200:
+          description: no JSON
+          content:
+            text/plain:
+              schema: {type: string}
+        500:
+          description: a list only on failure
+          content:
+            application/json:
+              schema: {type: array, items: {type: string}}
+components:
+  schemas:
+    Order: {type: object, properties: {id: {type: integer}}}
+    ProductPage:
+      type: object
+      properties:
+        products:
+          type: array
+          maxItems: 50
+          items: {type: string}
+        category: {type: string}

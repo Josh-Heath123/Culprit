@@ -43,9 +43,9 @@ const (
 	// The head's own migration file, absent from the tree at the fault.
 	demoHeadMigration = "0003_index_products_category_sku.py"
 	// The budgets the demo's culprit.yaml declares, which Q35's criteria
-	// are stated against.
-	productsStatementBudgetMs = 20.0
-	productsRouteBudgetMs     = 30.0
+	// are stated against (Q37 moved them from 20 and 30 ms).
+	productsStatementBudgetMs = 10.0
+	productsRouteBudgetMs     = 25.0
 	// The bundle's own copy of the migrations: where extraction reads them.
 	bundleMigrations = "/tmp/walk/inventory_service/migrations/versions/"
 )

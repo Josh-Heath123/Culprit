@@ -33,7 +33,10 @@ because it has a silent-wrong-answer failure mode:
    `probe.http.latency` carries every sample and its budget, so the verdict
    is a pure function of the reading (`culprit_model.latency.judge`), and a
    reading that disagrees with it cannot be built — here, in Go, and so at
-   the API wherever a reading arrives.
+   the API wherever a reading arrives. A `probe.db.statement_budget`
+   reading (Phase 37 part 2) and a `probe.http.response_items` reading
+   (Phase 38 part 2, `culprit_model.lists.judge_response_items`) are held
+   the same way.
 
 The `readings` table (migration `c07a5f31d8e4`) already carries every
 field below; Phase 31 populates it for the first time.
@@ -47,6 +50,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from culprit_model.capabilities import Capability
 from culprit_model.facts import Provenance
 from culprit_model.latency import LATENCY_PROBE_ID, LatencyShapeError, judge
+from culprit_model.lists import RESPONSE_ITEMS_PROBE_ID, ListShapeError, judge_response_items
 from culprit_model.planes import Plane
 from culprit_model.redaction import looks_like_credential, redact_credentials
 from culprit_model.statements import STATEMENT_PROBE_ID, judge_statements
@@ -332,6 +336,32 @@ class Reading(BaseModel):
             raise ValueError(
                 f"a statement reading says {self.verdict.value}, "
                 f"but its own integers give {verdict}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _a_list_verdict_is_its_count(self) -> "Reading":
+        """Phase 38 part 2: a probe.http.response_items reading's verdict is
+        re-judged from its own count and bound (culprit_model.lists)."""
+        if self.probe_id != RESPONSE_ITEMS_PROBE_ID or self.verdict is Verdict.REFUSED:
+            return self
+        if "items" not in self.measured and "not_counted" not in self.measured:
+            # Nothing was sent or nothing came back: only "could not tell".
+            if self.verdict is not Verdict.INCONCLUSIVE:
+                raise ValueError(
+                    f"a {self.verdict.value} list reading must carry the count it was judged on"
+                )
+            return self
+        try:
+            verdict, _ = judge_response_items(self.measured, self.expected or {})
+        except ListShapeError as exc:
+            raise ValueError(
+                f"a list reading's measurement is not the rule's input: {exc}"
+            ) from None
+        if verdict != self.verdict.value:
+            raise ValueError(
+                f"a list reading says {self.verdict.value}, "
+                f"but its own count and bound give {verdict}"
             )
         return self
 

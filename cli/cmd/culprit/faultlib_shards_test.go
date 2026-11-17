@@ -260,4 +260,8 @@ func TestTheLibrarysRoutesHaveTheirBudgets(t *testing.T) {
 			t.Errorf("%s: locator %q", route.subject, locator)
 		}
 	}
+	// Phase 38 part 2: and the list route its list budget.
+	if locator := budgetLocator(t, productsRoute.subject, "response_items_max"); !strings.HasPrefix(locator, "budgets[") {
+		t.Errorf("GET /products: list budget locator %q", locator)
+	}
 }
