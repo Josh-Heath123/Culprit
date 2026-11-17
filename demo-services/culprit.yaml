@@ -34,12 +34,17 @@
 # metric seen" (Phase 14) is already right for the demo services' small,
 # known metric set.
 #
-# The edges reproduce exactly the four-edge adjacency that
-# api/migrations/versions/635870479f4e_create_service_registry.py
-# backfills on a live database — order-service is connected to both
-# inventory-service and payments-service, and each of those back to
-# order-service. Stored per direction because a connection is directed;
-# see docs/SELF_HOSTED_PLAN.md Phase 14's schema section.
+# Each edge is a call the code makes: order-service calls inventory-service
+# and payments-service (order_service/main.py), and inventory-service reads
+# its own database. Neither inventory-service nor payments-service calls
+# anything over HTTP, so neither has an edge back to order-service. Until
+# Q36 (2026-11-14) this file kept those two, copied from the undirected
+# adjacency api/migrations/versions/635870479f4e_create_service_registry.py
+# backfills; they were false INTENT, not a design choice. The migration is
+# history and still backfills them on a fresh database; `apply-model`
+# removes them, because they are culprit_yaml's and this file no longer
+# lists them. A connection is directed; see docs/SELF_HOSTED_PLAN.md
+# Phase 14's schema section.
 version: 1
 components:
   - name: order-service
@@ -63,14 +68,10 @@ components:
       # list route (GET /products) reads it; POST /orders — the fault
       # library's symptom — never does, so the edge is not on that request
       # path, and the walk from an order is unchanged. Phase 37 part 3
-      # walks from the list route. (Listed first: `apply-model --export`
-      # writes connections in name order.)
+      # walks from the list route.
       - to: inventory-db
         kind: sql
         criticality: background
-      - to: order-service
-        kind: http
-        criticality: on_request_path
 
   - name: inventory-db
     kind: database
@@ -80,10 +81,6 @@ components:
     kind: service
     display_name: Payments Service
     monitored_metrics: []
-    connections:
-      - to: order-service
-        kind: http
-        criticality: on_request_path
 
 # --- Phase 37 part 3: the migrations, read as INTENT (Q33) -------------
 #

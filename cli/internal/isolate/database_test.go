@@ -213,6 +213,62 @@ func TestAPlanReadingAsTheProbeBuildsItIsRead(t *testing.T) {
 	}
 }
 
+// slowEntryWorld is dbWorld with the entry's own route timed by
+// latencyWorld: the demo's list route, over its p95 budget because of the
+// statement under it.
+type slowEntryWorld struct {
+	db      *dbWorld
+	latency *latencyWorld
+}
+
+func (s *slowEntryWorld) Run(ctx context.Context, request Request) model.Reading {
+	return s.RunSet(ctx, request)[0]
+}
+
+func (s *slowEntryWorld) RunSet(ctx context.Context, request Request) []model.Reading {
+	if request.ProbeID == model.LatencyProbeID {
+		return s.latency.RunSet(ctx, request)
+	}
+	return []model.Reading{s.db.Run(ctx, request)}
+}
+
+// TestASlowEntryOverAMissingIndexIsComplete is the demo's shape after Q36
+// (2026-11-14): the entry calls nothing on the request path, its own route
+// is over its p95 budget on the server's time, and the four planes say the
+// index is missing. The entry's slowness is the statement's propagation,
+// so the diagnosis is complete and recommends the index. Before Q36 the
+// demo declared inventory-service -> order-service, and the same fault was
+// partial.
+func TestASlowEntryOverAMissingIndexIsComplete(t *testing.T) {
+	db := &dbWorld{overMS: 96, nodes: sortWalk(), indexes: []any{index(sortIndex, "sku"), index("products_pkey", "id")}}
+	world := &slowEntryWorld{db: db, latency: &latencyWorld{timings: map[string]timing{shop: {setup: 1, server: 400}}}}
+	facts := append(budgetsOn(shop), tableBudget(), migrationsSay(false))
+	components := []Component{{Name: shop, Kind: "service"}, {Name: shopDB, Kind: "database"}}
+	connections := []Connection{{From: shop, To: shopDB, Kind: "sql", OnRequestPath: false}}
+	manifests := append(dbManifests(), model.ProbeManifest{
+		ID: model.LatencyProbeID, Version: 1, Discriminates: []string{KindLatencyBudgetExceeded}, Cost: model.CostMetered})
+	walk := New(components, connections, facts, manifests, world,
+		openPlacement{vantage: shop}, Options{Environment: "simulated", Now: func() time.Time { return clock }})
+	inv := diagnose(t, walk, shop)
+
+	if inv.Diagnosis.RootSubject != categoryColumn || !inv.Diagnosis.Complete {
+		t.Fatalf("root %s complete %v: %s", inv.Diagnosis.RootSubject, inv.Diagnosis.Complete, inv.Diagnosis.Statement)
+	}
+	if world.latency.runs == nil {
+		t.Error("the entry's route budget was never measured")
+	}
+	if !strings.Contains(inv.Diagnosis.Statement, "no index serves category") {
+		t.Errorf("statement: %s", inv.Diagnosis.Statement)
+	}
+	if !strings.Contains(inv.Diagnosis.Remediation, "public.products (category, sku)") {
+		t.Errorf("remediation: %s", inv.Diagnosis.Remediation)
+	}
+	want := productsTable + " -[propagates_to]-> " + component(shop) + "\n" + productsTable + " -[caused_by]-> " + categoryColumn
+	if got := edgesOf(inv); !strings.Contains(got, want) {
+		t.Errorf("tree:\n%s\nwant it to hold:\n%s", got, want)
+	}
+}
+
 // TestALiveIndexThePlanDoesNotUseRootsAtTheBudget: an index leads category,
 // but the plan walks the sku index for the order and filters category row
 // by row. Not a missing index: the root is the statement's budget, with the

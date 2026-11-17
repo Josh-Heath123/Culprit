@@ -1733,8 +1733,8 @@ audience, issuer and expiry do.
 ## The walk follows one branch, and edges back up the path are ignored
 
 The request path is a tree built breadth first from the entry: an edge
-back to a component already reached (the demo declares
-`inventory-service -> order-service`) is not followed, because a request
+back to a component already reached (the demo declared
+`inventory-service -> order-service` until Q36) is not followed, because a request
 entering at the entry does not travel it. At a fan-out the walk descends
 into the first failing child in name order. **It stops at the first root it
 can establish and does not look for a second, independent fault**: a second
@@ -2943,9 +2943,10 @@ these are its limits.
   the entry calls a component the walk cannot probe from the vantage (no
   `health_path`), or one with no latency budget, the diagnosis names the
   database root and says what it could not check, and gives no
-  recommendation. The demo's database fault is partial for exactly this
-  reason today: its model says inventory-service calls order-service (§3,
-  Q36).
+  recommendation. A false edge in the model is enough: the demo's database
+  fault was partial while its model said inventory-service calls
+  order-service, which the code never did. Q36 (2026-11-14) removed that
+  edge and payments-service's, and the same fault is now complete.
 - **The system's own traffic is the measurement.** The walk sends no
   statement and no request to make traffic. A statement nobody calls in the
   30-second window is not judged, so a fault in a statement that runs

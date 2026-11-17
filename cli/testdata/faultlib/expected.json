@@ -257,7 +257,7 @@
       "environment": "faults-inventory",
       "root_subject": "schema:inventory-db/public.products.category",
       "root_kind": "missing_index",
-      "complete": false,
+      "complete": true,
       "relations": [
         "caused_by",
         "propagates_to",
@@ -274,8 +274,9 @@
         "schema:inventory-db/public.products -[propagates_to]-> component:inventory-service",
         "schema:inventory-db/public.products -[caused_by]-> schema:inventory-db/public.products.category"
       ],
-      "statement_contains": "whether a request at order-service fails could not be established",
-      "note": "Phase 37 part 3. The root is the missing index on category, supported by four planes: the statement over its 20 ms budget, the plan filtering category on ix_products_sku, no live index leading category, and the migrations (extracted from the planted tree) declaring none. Partial, not complete, and so with no remediation, because the demo's model says inventory-service calls order-service on the request path (the reverse edge Phase 27 kept from the old four-edge adjacency): from inventory-service the walk cannot probe order-service, which has no /ready, and neither order-service nor payments-service declares a latency budget. Raised as Q36 (docs/HANDOFF.md); with those edges removed the same case is complete and recommends public.products (category, sku). A GET symptom is replayed by a probe, so its attestation is reproduced.",
+      "statement_contains": "no index serves category",
+      "remediation_contains": "public.products (category, sku)",
+      "note": "Phase 37 part 3. The root is the missing index on category, supported by four planes: the statement over its 20 ms budget, the plan filtering category on ix_products_sku, no live index leading category, and the migrations (extracted from the planted tree) declaring none. inventory-service calls nothing on the request path, so its own route over its 30 ms p95 budget is the statement's propagation, the diagnosis is complete, and it recommends public.products (category, sku). A GET symptom is replayed by a probe, so its attestation is reproduced.",
       "attestation": "reproduced",
       "fix": {
         "how": "the commit that adds 0003, (category, sku), with the database upgraded to it",

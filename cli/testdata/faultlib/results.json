@@ -48,6 +48,12 @@
       "root_subject": "component:order-service",
       "complete": false,
       "verdict": "inconclusive"
+    },
+    {
+      "name": "missing-index",
+      "root_subject": "schema:inventory-db/public.products.category",
+      "complete": true,
+      "verdict": "verified"
     }
   ],
   "scenarios": [
@@ -80,6 +86,12 @@
       "root_subject": "http:inventory-service/GET /stock",
       "complete": true,
       "verdict": "inconclusive"
+    },
+    {
+      "name": "missing-index-wrong-fix",
+      "root_subject": "schema:inventory-db/public.products.category",
+      "complete": true,
+      "verdict": "not_resolved"
     }
   ]
 }

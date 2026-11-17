@@ -644,9 +644,9 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
 
 ## Accuracy, on faults we planted
 
-**6 of 6 planted faults verified fixed** (100%), of 8 faults planted: 6 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
+**7 of 7 planted faults verified fixed** (100%), of 9 faults planted: 7 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
 
-**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 6 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
+**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 7 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
 
 **Method.** Each fault in the library (`cli/testdata/faultlib/`) is planted in the demo stack, diagnosed by `culprit diagnose` from inside a service, its known fix is applied, and `culprit verify` measures every reading again, twice, and compares the environment with the record of it taken at diagnosis. An outcome is the verification of a **complete** diagnosis; its fault class is the subject kind of the diagnosis's root. Per class, `verified` is counted against the decided outcomes (every verdict but inconclusive), and inconclusive is reported beside it, never folded in. A `verified` outcome shows that the fix for the root the walk diagnosed was seen to fix what it saw failing; a fault diagnosed at the wrong root would be counted under that root's class, so this measures diagnosis-then-fix, not whether every diagnosis named the true cause. `GET /outcomes/accuracy` counts verifications recorded through the control plane the same way, with the same function, and says for each count whether its faults were planted or real.
 
@@ -657,10 +657,11 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
 | `config` | `config` | 1 | 1 | 1 | 0 |
 | `connection` | `network-partition` | 1 | 1 | 1 | 0 |
 | `http` | `contract` | 1 | 1 | 1 | 0 |
+| `schema` | `missing-index` | 1 | 1 | 1 | 0 |
 
 Not counted, because the walk's diagnosis was partial — an outcome is the verification of a complete one: `auth-audience-ungranted` (inconclusive); `latency-unbudgeted` (inconclusive).
 
-Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `latency-wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive).
+Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `latency-wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive); `missing-index-wrong-fix` (not_resolved).
 
 <!-- accuracy:end -->
 
