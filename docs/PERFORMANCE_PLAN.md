@@ -2113,6 +2113,189 @@ this plan.
   (part 2);
 - no browser, and nothing about fetch waterfalls (§0.5).
 
+**Architecture review of part 1, 2026-11-17 — merged as `3d9fb33` (PR #45).
+Part 1 is signed off. Q37 ruled.**
+
+**CI.** Read by id from GitHub's API:
+- PR #45's run 44088509299 on `3ab98ed`: success on every job.
+- The report's own commit, `2dacfc8`, run 44091691574: success on attempt 2.
+  Attempt 1 failed the database case's precondition in fault-library (2)
+  (Q37 below). Every other job passed.
+- `main`'s push run 44152778399 on `3d9fb33` was in progress at sign-off.
+  Part 2's step 0 confirms it.
+
+**Accepted:**
+- **The finding's shape** (decided with Malcolm mid-run): a `BundleFinding`
+  of its own type, with the `Divergence` model left untouched. A budget and a
+  measured size are not two sides of one predicate, and
+  `POST /divergences/captures` validates that they are. Counting it in
+  `--fail-on` and writing it in every format is what the brief asked.
+- **Bundle-only budgets no longer switch on the unbudgeted surface.** Without
+  this, one bundle budget listed all 138 API routes as missing a latency
+  budget. Statement budgets still switch it on, as before, and a test pins
+  that.
+- **No `..` segment in `vite_manifest`,** in both readers and the corpus.
+  This is the invariant auditor's catch, and it is right: a pull request's
+  `culprit.yaml` must not point `check` at files outside the checkout
+  (pattern 2). The cost is recorded in LIMITS.
+- **The guard that fails the self-check when the budget goes unjudged.** A
+  "Not checked" line fails no `--fail-on`, so without the guard, a build
+  that went missing in CI would leave the gate silently green (pattern 1).
+  The phase auditor found the gap. That the guard's first version broke the
+  workflow file, and was then tested (`test_bundle_guard.py`), is also
+  right.
+- **Culprit's own budget:** 200,000 bytes, measured at 167,686, about 19%
+  headroom. The `why` says so.
+
+**Carried into part 2, as small items:**
+- The text headline still opens "No divergences." above a bundle finding. It
+  should count every kind of finding it reports.
+- JSON's `summary.degrades` counts divergences only. Give the summary one
+  count of failing findings that includes bundles, and keep
+  `bundles_over_budget`.
+
+**Q37 — the planted database fault's margin. Raised at PR #45; ruled.**
+
+The database case's precondition requires the walk's statement mean to be at
+least 1.5 times the 20 ms budget. On one runner it measured 29.1 and 28.2 ms.
+Elsewhere it has measured 41–43 ms in CI, 51 and 63 ms on reruns, and 46–133
+ms on Malcolm's machine. The route's p95 on that runner was 68.4 ms, against a
+precondition of at least 60.
+
+The spread comes from hardware speed, not from slow runners. The fault's cost
+is a walk of the whole `ix_products_sku` index for the empty category, which
+takes about 55 ms on a fast runner and over 120 ms on a slow one. The mix of
+traffic is fixed at half empty-category calls, so the mean is about half the
+walk. A faster machine therefore brings the fault closer to an absolute budget.
+
+The healthy side has no such problem. At `0003` the statement mean is
+0.1–0.96 ms, and the route's p95 is 3–8 ms. The budgets were simply set too
+close to the fault and far from health.
+
+Ruling: move the budgets, not the preconditions.
+- **The statement budget** on `schema:inventory-db/public.products` goes from
+  20 ms to 10 ms. The fault's smallest measured mean, 28.2 ms, is then 2.8
+  times the budget, and almost twice the 15 ms precondition. Health stays
+  under 2 ms.
+- **The `GET /products` p95 budget** goes from 30 ms to 25 ms. The fault's
+  smallest p95, 68.4 ms, then clears the 50 ms precondition by 37%. The
+  slowest healthy p95, 7.9 ms on Malcolm's machine, clears the 12.5 ms
+  precondition by the same margin.
+- **The multipliers stay** (at least 1.5 times and at least 2 times at the
+  fault, and under 2 ms and at most half at health). Lowering them would be
+  weakening the gate. A stricter declared budget is not.
+- **Both `why`s** state the measured spread across runners.
+- **The wrong fix stays `not_resolved`.** Its mean tracks the fault's.
+
+If a runner ever brings the p95 within 37% of its precondition again, the
+next step is a larger table, not a looser test. This is pattern 8 once more:
+a margin measured on one machine is not a margin across CI's runners.
+Measure the spread first.
+
+**Part 2 — lists. Brief and criteria, 2026-11-17.**
+
+**What the code holds today.** Nothing reads a response's schema.
+- `openapi.go` keeps a route's status codes and its request body only.
+- The Python extractor reads `app.openapi()` (rank 90), and Go reads
+  committed specs (rank 80). These are two readers of the same documents.
+- The demo's `extract:` section is static and limited to `db_schema` (Q33),
+  so the demo declares no routes.
+
+The brief follows from that.
+
+**Decisions.**
+1. **Where the probe finds the list: declared on the budget,** as the plan
+   says ("top level, or at a declared JSON pointer").
+   - A `response_items_max` budget may carry `at:`, a JSON pointer such as
+     `/products`. With no `at:`, the list is the top-level array.
+   - `at:` is valid on this predicate only. Both readers type it strictly,
+     and the corpus covers it.
+   - The probe needs no spec, so it works wherever a route can be fetched.
+2. **The spec's lists: one new INTENT fact, from both OpenAPI readers.** On
+   the route's subject, the predicate `response_list` takes the value
+   `{"max_items": <whole number or null>}`.
+   - **When it is emitted:** for the route's 2xx JSON response, when the
+     schema, after resolving local `$ref`s, is an array at the top level, or
+     an object with exactly one array-typed property.
+   - **When it is not:** with two or more array properties, nothing is
+     emitted, and LIMITS says such routes are not listed.
+   - **Held to one generated corpus:** both readers must give the same
+     answer over a generated conformance corpus of response schemas. It
+     covers top level; an envelope; `$ref`; `maxItems` present and absent;
+     two arrays; and an array on a non-2xx response only. This is pattern 9,
+     and it is how the subject conformance and the manifest corpus were held.
+3. **The unbounded surface,** listed beside the unbudgeted surface, never
+   reported as a finding. It lists every route with a `response_list` fact
+   whose `max_items` is null, and no `response_items_max` budget.
+4. **`probe.http.response_items`.**
+   - **What it sends:** one `GET`, under the same refusals as
+     `probe.http.latency`: no query, no credential, the guarded HTTP client.
+   - **What it counts:** the items of the array at the budget's `at:`.
+   - **What it keeps:** the count only. Never an item, a key or a value.
+   - **Declared verdicts (Q31):** `pass` (count within the bound), `fail`
+     (over the bound), and `inconclusive` (no array at `at:`, a body that is
+     not JSON, or a non-2xx answer), each with a reason.
+   - **Where it runs:** from `culprit probe`, against budgeted routes. It is
+     not a hypothesis in the walk. §2's hypotheses do not include one, and
+     Phase 39 will decide what an unbounded list costs.
+5. **The demo.** `GET /products` gets `response_items_max: 50`, `at:
+   /products` (the route answers 50 at most), and the README shows it
+   probed. This stays a pass. No library fault is added for lists.
+
+**Work order.**
+0. **Commit the review first.** Confirm `main`'s push run 44152778399 on
+   `3d9fb33`, by id. If fault-library (2) failed there on the database
+   case's precondition alone, rerun that job once, and record both attempts:
+   that is Q37's evidence, fixed in item 1. Then
+   `git apply ../phase-38-1-review.patch` and
+   `git commit -F ../phase-38-1-review.txt`.
+1. **Q37:**
+   - the demo's budgets: 10 ms for the statement, 25 ms for the route's p95;
+   - their `why`s, giving the measured spread;
+   - the library's constants;
+   - the README and LIMITS numbers.
+2. **The carried items:** the text headline, and the JSON summary's failing
+   count.
+3. **The manifest:** `response_items_max` with `at:`, in both readers and the
+   corpus.
+4. **The spec's lists:** `response_list` in both OpenAPI readers, with the
+   conformance corpus.
+5. **The probe and its judgement,** in `culprit probe`.
+6. **The unbounded surface.**
+7. **The demo's list budget, and the documents:**
+   - README, PROBES and LIMITS;
+   - in LIMITS: routes with two or more arrays, a response the probe cannot
+     reach without a credential or a query, and envelopes.
+
+**Acceptance criteria.**
+- **Against a fake server:** a route answering more items than its bound
+  fails; within the bound it passes. A response that is not JSON, has no
+  array at `at:`, or is not 2xx is `inconclusive`, saying why. `at:` on an
+  envelope is shown working.
+- **Values are never kept:** the reading's `measured` holds a count only.
+  Shown by a test whose items hold secret-looking strings and keys.
+- **The spec:** both readers agree over the generated response-schema corpus.
+  A mutation in either reader is shown red.
+- **The unbounded surface,** over a recorded spec holding bounded, unbounded
+  and budgeted list routes, names exactly the array routes with no declared
+  bound (the criterion as amended in "How Phase 38 is run").
+- **The demo:** `culprit probe` on the faults stack passes `GET /products`
+  at 50 items.
+- **Q37:** the database case's preconditions hold, and the run reports the
+  margins.
+- **Unchanged elsewhere:** every existing golden, apart from the headline
+  and summary changes, each listed.
+- **CI** is green on the merge result, and `LLM_PROVIDER=none` changes
+  nothing.
+
+**Do NOT implement in part 2:**
+- no paging-parameter names;
+- no hypothesis in the walk for lists, and no fault in the library for
+  them;
+- no credential sent by any probe;
+- no item value, key or sample kept anywhere;
+- no N+1 (Phase 39).
+
 ---
 
 ### Phase 39 — N+1, where it can be seen cleanly
