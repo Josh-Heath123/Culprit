@@ -420,6 +420,10 @@ class EnvironmentSpec(BaseModel):
     #: Phase 32: where the isolation walk reaches each component from the
     #: vantage `culprit diagnose` runs at. Not acted on here either.
     endpoints: dict[str, EndpointEnvSpec] = Field(default_factory=dict)
+    #: Phase 39: nothing but Culprit talks to this environment's databases
+    #: while a probe measures them; probe.db.statements_per_request sends
+    #: its GET only here. Not acted on by the control plane either.
+    isolated: bool = False
 
     @model_validator(mode="after")
     def _check_grants(self) -> "EnvironmentSpec":

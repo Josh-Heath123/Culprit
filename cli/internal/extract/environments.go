@@ -72,6 +72,12 @@ type EnvironmentSpec struct {
 	// component culprit runs inside; the walk needs to reach all of them.
 	// A component's own endpoint: is used when it has no entry here.
 	Endpoints map[string]EndpointSpec `yaml:"endpoints"`
+	// Isolated declares that nothing but Culprit talks to this
+	// environment's databases while a probe measures them (Phase 39): the
+	// one condition under which probe.db.statements_per_request sends its
+	// GET. It reaches a probe through the runner, never as an input, and a
+	// quiet window checks it before anything is sent.
+	Isolated bool `yaml:"isolated"`
 }
 
 // ComposeSpec locates a Compose project.
