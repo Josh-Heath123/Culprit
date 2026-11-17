@@ -61,6 +61,21 @@ type faultExpectation struct {
 	// RootKind, when set, is the kind of the supported hypothesis on the
 	// root subject (Phase 36 part 2: latency_budget_exceeded).
 	RootKind string `json:"root_kind"`
+	// Symptom, when set, is this fault's symptom in place of the library's:
+	// the database fault is seen on the list route, not on an order
+	// (Phase 37 part 3).
+	Symptom string `json:"symptom"`
+	// RemediationContains, when set, must appear in the diagnosis's
+	// remediation: the change the walk recommends.
+	RemediationContains string `json:"remediation_contains"`
+}
+
+// symptom is the fault's own symptom, or the library's.
+func (f faultExpectation) symptom(library string) string {
+	if f.Symptom != "" {
+		return f.Symptom
+	}
+	return library
 }
 
 // injection is the fault injected and fixed.
@@ -120,6 +135,9 @@ type faultStack struct {
 	env    []string
 	good   string
 	walkIn string // a host directory holding the linux binary and culprit.yaml
+	// tree is the demo's source the walk reads, as the fault planted it:
+	// which of inventory-service's migrations the bundle holds (Q33 (2)).
+	tree demoTree
 	// secrets are every token minted and the secret that signed them. None
 	// may appear anywhere in what `culprit diagnose` prints.
 	secrets []string
@@ -138,50 +156,88 @@ func TestTheFaultLibrary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stack := startFaultStack(t)
+	// CULPRIT_FAULT_LIBRARY_SHARD=<k> runs shard k of faultLibraryShards
+	// only (the CI job's matrix); unset, every case runs.
+	shard, err := shardFromEnvironment(os.Getenv("CULPRIT_FAULT_LIBRARY_SHARD"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	byName := map[string]faultExpectation{}
+	for _, fault := range library.Faults {
+		byName[fault.Name] = fault
+	}
+	runs := func(name string) bool { return shard == 0 || shardOf(library, name) == shard }
+
+	stack := startFaultStack(t)
 	results := faultResults{
 		Why: "Written by TestTheFaultLibrary (CULPRIT_FAULT_LIBRARY_RESULTS): each planted fault, " +
 			"diagnosed, its known fix applied and verified; and each scenario, a deliberate wrong or " +
 			"partial fix. scripts/accuracy_readme.py renders the README's number from this file.",
 	}
 	for _, fault := range library.Faults {
-		byName[fault.Name] = fault
+		if !runs(fault.Name) {
+			continue
+		}
 		t.Run(fault.Name, func(t *testing.T) {
 			stack.t = t
-			inv, restore := stack.injectAndDiagnose(library.Symptom, fault)
+			inv, restore := stack.injectAndDiagnose(fault.symptom(library.Symptom), fault)
 			defer restore()
 			// Phase 36 part 1: the demo's latency budget, measured by the
 			// probe alone: it fails under the fault and passes once it is
 			// cleared. Part 2's walk uses the same budget.
 			if fault.Name == "latency" {
-				stack.measureLatency(fault, model.VerdictFail)
+				stack.measureLatency(fault, readyRoute, model.VerdictFail)
+			}
+			// Phase 37 part 3 (Q35): at 0002 the list route's p95 is at least
+			// twice its budget, and the statement's mean in the walk's window
+			// at least 1.5 times its own.
+			if fault.Name == "missing-index" {
+				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictFail), ">=", 2)
+				stack.checkStatementMean(investigationReadings(inv), ">=", 1.5*productsStatementBudgetMs)
 			}
 			// Phase 34: the loop closed. Apply the known fix, then verify
 			// from the same vantage with the change named.
 			state := stack.keepState(fault.Vantage)
 			stack.applyFix(fault.injection(), restore)
 			if fault.Name == "latency" {
-				stack.measureLatency(fault, model.VerdictPass)
+				stack.measureLatency(fault, readyRoute, model.VerdictPass)
+			}
+			if fault.Name == "missing-index" {
+				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictPass), "<=", 0.5)
 			}
 			verification := stack.verify(fault, inv, state, fault.Fix.Change)
 			stack.checkVerification(verification, inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
+			if fault.Name == "missing-index" {
+				// At 0003 the statement's mean is under 2 ms, in both of
+				// verification's windows.
+				stack.checkStatementMean(rerunReadings(verification), "<", 2)
+			}
 			results.Faults = append(results.Faults, resultOf(fault.Name, inv, verification))
 		})
 	}
 	for _, scenario := range library.Scenarios {
+		if !runs("verify/" + scenario.Name) {
+			continue
+		}
 		t.Run("verify/"+scenario.Name, func(t *testing.T) {
 			stack.t = t
 			fault, ok := byName[scenario.Fault]
 			if !ok {
 				t.Fatalf("scenario %s names fault %s, which the library does not have", scenario.Name, scenario.Fault)
 			}
-			inv, restore := stack.injectAndDiagnose(library.Symptom, fault)
+			inv, restore := stack.injectAndDiagnose(fault.symptom(library.Symptom), fault)
 			defer restore()
 			state := stack.keepState(fault.Vantage)
 			stack.applyScenario(scenario.Apply)
 			verification := stack.verify(fault, inv, state, scenario.Change)
 			stack.checkVerification(verification, inv, scenario.Verdict, scenario.ReasonContains)
+			if scenario.Apply == "index-category-only" {
+				// Q35: with category alone the mean is still over the 20 ms
+				// budget, and the plan still filters category on the sku index.
+				reran := rerunReadings(verification)
+				stack.checkStatementMean(reran, ">", productsStatementBudgetMs)
+				stack.checkPlanFiltersOnSkuIndex(reran)
+			}
 			results.Scenarios = append(results.Scenarios, resultOf(scenario.Name, inv, verification))
 		})
 	}
@@ -191,10 +247,10 @@ func TestTheFaultLibrary(t *testing.T) {
 	// it: culprit_diagnose, the fix applied, culprit_verify. The right fix
 	// is verified; the wrong one is not_resolved. Not results the README
 	// counts: the faults above are.
-	for _, loop := range []struct{ name, apply, verdict, reason string }{
-		{name: "auth-audience", verdict: "verified"},
-		{name: "wrong-fix", apply: "remint-wrong-audience", verdict: "not_resolved", reason: "probe.auth.token_shape"},
-	} {
+	for _, loop := range mcpLoops {
+		if !runs("mcp/" + loop.name) {
+			continue
+		}
 		t.Run("mcp/"+loop.name, func(t *testing.T) {
 			stack.t = t
 			fault := byName["auth-audience"]
@@ -211,8 +267,19 @@ func TestTheFaultLibrary(t *testing.T) {
 		})
 	}
 	// Phase 34 part 2: the results the README's number is rendered from —
-	// only when every case passed, so a failed run never writes them.
+	// only when every case passed, so a failed run never writes them. A
+	// shard writes its own cases' entries and keeps the committed ones for
+	// every other case, so the job's diff holds each shard to its own.
 	if path := os.Getenv("CULPRIT_FAULT_LIBRARY_RESULTS"); path != "" && !t.Failed() {
+		if shard != 0 {
+			committed, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if results, err = mergeShardResults(library, shard, results, committed); err != nil {
+				t.Fatal(err)
+			}
+		}
 		// Not HTML-escaped: a subject's arrow is written as itself, so a
 		// person reading the committed file sees what the README cites.
 		var encoded bytes.Buffer
@@ -269,6 +336,22 @@ func (stack *faultStack) injectAndWalk(symptom string, fault faultExpectation,
 	t := stack.t
 	t.Helper()
 	stack.healthy()
+	if fault.injection() == "missing-index" {
+		// The list route answers on the healthy stack and under the fault,
+		// which slows it without failing it. A GET, sent from inside
+		// inventory-service as a user's would arrive.
+		if status := stack.listProducts(); status != 200 {
+			t.Fatalf("GET /products on the healthy stack answered %d, want 200", status)
+		}
+		restore := once(stack.inject(fault.injection()))
+		if status := stack.listProducts(); status != 200 {
+			t.Fatalf("GET /products with the database at 0002 answered %d, want 200", status)
+		}
+		inv := walk(symptom, fault)
+		stack.record(fault, inv, record)
+		checkDiagnosis(t, fault, inv)
+		return inv, restore
+	}
 	// The symptom is real before the walk is asked about it: the
 	// order succeeds on the healthy stack and fails under the fault
 	// (latency slows it down without failing it). Harness, not a
@@ -287,16 +370,20 @@ func (stack *faultStack) injectAndWalk(symptom string, fault faultExpectation,
 	}
 
 	inv := walk(symptom, fault)
-	// CULPRIT_FAULT_LIBRARY_RECORD=<dir> keeps each real
-	// investigation — the API's round-trip test posts the audience
-	// one (api/tests/data/), so it is tested on what the walk wrote,
-	// not on something written by hand to look like it.
+	stack.record(fault, inv, record)
+	checkDiagnosis(t, fault, inv)
+	return inv, restore
+}
+
+// record keeps a real investigation when CULPRIT_FAULT_LIBRARY_RECORD=<dir>
+// names where: the API's round-trip test posts the audience one
+// (api/tests/data/), so it is tested on what the walk wrote, not on
+// something written by hand to look like it.
+func (stack *faultStack) record(fault faultExpectation, inv model.Investigation, record bool) {
 	if dir := os.Getenv("CULPRIT_FAULT_LIBRARY_RECORD"); dir != "" && record {
 		encoded, _ := json.MarshalIndent(inv, "", "  ")
 		_ = os.WriteFile(filepath.Join(dir, fault.Name+".json"), append(encoded, '\n'), 0o644)
 	}
-	checkDiagnosis(t, fault, inv)
-	return inv, restore
 }
 
 // once makes an undo safe to call twice: a fix that is the undo runs it,
@@ -363,6 +450,9 @@ func checkDiagnosis(t *testing.T, want faultExpectation, inv model.Investigation
 	}
 	if want.StatementContains != "" && !strings.Contains(d.Statement, want.StatementContains) {
 		t.Errorf("the statement does not say %q: %s", want.StatementContains, d.Statement)
+	}
+	if want.RemediationContains != "" && !strings.Contains(d.Remediation, want.RemediationContains) {
+		t.Errorf("the remediation does not say %q: %s", want.RemediationContains, d.Remediation)
 	}
 	if got := string(inv.Symptom.Attestation.Kind); got != want.Attestation {
 		t.Errorf("symptom attestation %s, want %s", got, want.Attestation)
@@ -477,8 +567,13 @@ func (s *faultStack) placeOrder() int {
 	return status
 }
 
+// The demo services only, never their dependencies: inventory-service's
+// database is set up once per stack (a million seeded rows), and the
+// database fault's own undo puts it back at the head.
 func (s *faultStack) healthy() {
-	s.compose(s.withToken(s.good), "up", "-d", "--force-recreate")
+	s.tree = treeHead
+	s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "--no-deps",
+		"order-service", "inventory-service", "payments-service")
 	s.waitFor("order-service", "http://inventory-service:8002/ready", "http://payments-service:8003/ready",
 		"http://order-service:8001/health")
 }
@@ -527,7 +622,7 @@ func (s *faultStack) inject(name string) func() {
 		s.iptables("-A " + rule)
 		return func() { s.iptables("-D " + rule) }
 	case "contract":
-		s.compose(s.withToken(s.good, "CONTRACT_FAULT=stock-route-renamed"), "up", "-d", "--force-recreate", "inventory-service")
+		s.compose(s.withToken(s.good, "CONTRACT_FAULT=stock-route-renamed"), "up", "-d", "--force-recreate", "--no-deps", "inventory-service")
 		s.waitFor("order-service", "http://inventory-service:8002/ready")
 		return func() {}
 	case "config":
@@ -541,6 +636,12 @@ func (s *faultStack) inject(name string) func() {
 	case "latency":
 		s.post("order-service", "http://inventory-service:8002/admin/fault/latency", `{"delay_ms": 800, "duration_s": 300}`)
 		return func() { s.send("order-service", "DELETE", "http://inventory-service:8002/admin/fault", "") }
+	case "missing-index":
+		// Planted in the database and in the tree (Q33 (2)): the database
+		// at 0002, and the walk's tree holding 0001-0002 only.
+		s.alembic("downgrade", demoFaultRevision)
+		s.tree = treeFault
+		return s.restoreDatabase
 	}
 	s.t.Fatalf("the fault library has no injection for %q", name)
 	return nil
@@ -558,11 +659,13 @@ func (s *faultStack) iptables(rule string) {
 func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Investigation {
 	s.t.Helper()
 	container := s.container(fault.Vantage)
-	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
-	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
+	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
+	s.copyBundle(container)
+	// The demo manifest's extractors run on every walk (Q33 (3)): no
+	// --no-plugins anywhere in the library's walks.
 	command := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
 		"-f", fault.manifest(), "--env", fault.Environment, "--from", fault.Vantage,
-		"--no-plugins", "--format", "json", "--agent-id", "fault-library", "--state-dir", containerState)
+		"--format", "json", "--agent-id", "fault-library", "--state-dir", containerState)
 	output, err := command.Output()
 	if err != nil {
 		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != exitFindings {
@@ -579,7 +682,7 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	// format, on any fault.
 	text, _ := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
 		"-f", fault.manifest(), "--env", fault.Environment, "--from", fault.Vantage,
-		"--no-plugins", "--format", "text", "--state-dir", containerState).Output()
+		"--format", "text", "--state-dir", containerState).Output()
 	for _, secret := range s.secrets {
 		for format, printed := range map[string][]byte{"json": output, "text": text} {
 			if strings.Contains(string(printed), secret) {
@@ -590,14 +693,24 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	return inv
 }
 
-// measureLatency runs probe.http.latency on inventory-service's GET /ready
-// from the fault's vantage, against the budget the demo's culprit.yaml
-// declares (Phase 36 part 1), and checks its verdict.
-func (s *faultStack) measureLatency(fault faultExpectation, want model.Verdict) {
+// budgetedRoute is a route probe.http.latency times, and the locator of
+// the budget the demo's culprit.yaml declares for it.
+type budgetedRoute struct{ subject, locator string }
+
+var (
+	readyRoute    = budgetedRoute{"http:inventory-service/GET /ready", "budgets[0]"}
+	productsRoute = budgetedRoute{"http:inventory-service/GET /products", "budgets[2]"}
+)
+
+// measureLatency runs probe.http.latency on one of inventory-service's
+// routes from the fault's vantage, against the budget the demo's
+// culprit.yaml declares (Phase 36 part 1), checks its verdict and returns
+// the reading.
+func (s *faultStack) measureLatency(fault faultExpectation, route budgetedRoute, want model.Verdict) model.Reading {
 	s.t.Helper()
 	container := s.container(fault.Vantage)
 	output, err := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "probe",
-		"http:inventory-service/GET /ready", "-p", model.LatencyProbeID,
+		route.subject, "-p", model.LatencyProbeID,
 		"--input", "base_url=http://inventory-service:8002",
 		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment,
 		"--no-plugins", "--format", "json", "--agent-id", "fault-library").Output()
@@ -614,19 +727,20 @@ func (s *faultStack) measureLatency(fault faultExpectation, want model.Verdict) 
 	}
 	reading := result.Readings[0]
 	if reading.Verdict != want {
-		s.t.Errorf("probe.http.latency on GET /ready: %s, want %s: %s", reading.Verdict, want, reading.Reason)
+		s.t.Errorf("probe.http.latency on %s: %s, want %s: %s", route.subject, reading.Verdict, want, reading.Reason)
 	}
 	if err := reading.Validate(); err != nil {
 		s.t.Errorf("the latency reading does not validate: %v", err)
 	}
-	if reading.ExpectedSource == nil || reading.ExpectedSource.Locator != "budgets[0]" {
+	if reading.ExpectedSource == nil || reading.ExpectedSource.Locator != route.locator {
 		s.t.Errorf("the reading was not measured against the demo's budget: %+v", reading.ExpectedSource)
 	}
+	return reading
 }
 
 // buildWalkBundle cross-compiles the binary for the containers and puts it
-// beside the demo's culprit.yaml, in a directory of its own so extraction
-// scans nothing else.
+// beside the demo's culprit.yaml and the tree its extract: section reads,
+// in a directory of its own so extraction scans nothing else.
 func buildWalkBundle(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "walk")
@@ -642,17 +756,27 @@ func buildWalkBundle(t *testing.T) string {
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building the linux binary: %v\n%s", err, output)
 	}
-	manifest, err := os.ReadFile(demoManifest)
+	raw, err := os.ReadFile(demoManifest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "culprit.yaml"), manifest, 0o644); err != nil {
+	// The committed manifest, changed only where the container forces it:
+	// the extractor's command (Q33 (3)). Its extract: section reads
+	// inventory_service, beside it in the bundle, with the extractor's
+	// package beside that.
+	text, err := containerManifest(strings.ReplaceAll(string(raw), "\r\n", "\n"))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "culprit.yaml"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := bundleTree(dir); err != nil {
+		t.Fatalf("copying the tree the walk reads: %v", err)
 	}
 	// The demo's manifest with no budgets: the latency fault walked where
 	// nothing declares how fast is fast (Phase 36 part 2). The budgets are
 	// the manifest's last section.
-	text := strings.ReplaceAll(string(manifest), "\r\n", "\n")
 	cut := strings.Index(text, "\nbudgets:\n")
 	if cut < 0 {
 		t.Fatal("the demo's culprit.yaml has no budgets: section to take out")
@@ -712,7 +836,9 @@ func (s *faultStack) applyFix(name string, restore func()) {
 	case "config":
 		s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "payments-service")
 		s.waitFor("order-service", "http://payments-service:8003/ready")
-	case "network-partition", "error-rate", "latency":
+	case "network-partition", "error-rate", "latency", "missing-index":
+		// The database fault's undo is its known fix: the commit that adds
+		// 0003, with the database upgraded to it.
 		restore()
 	default:
 		s.t.Fatalf("the fault library has no fix for %q", name)
@@ -720,7 +846,7 @@ func (s *faultStack) applyFix(name string, restore func()) {
 }
 
 func (s *faultStack) fixContract() {
-	s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "inventory-service")
+	s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "--no-deps", "inventory-service")
 	s.waitFor("order-service", "http://inventory-service:8002/ready")
 }
 
@@ -741,6 +867,13 @@ func (s *faultStack) applyScenario(apply string) {
 	case "fix-contract-break-payments":
 		s.fixContract()
 		s.post("order-service", "http://payments-service:8003/admin/fault/error-rate", `{"rate": 1.0, "duration_s": 300}`)
+	case "index-category-only":
+		// The wrong fix, from the library's own test data: a migration
+		// indexing category alone, in the tree and applied.
+		s.docker(nil, "cp", categoryOnlyMigration,
+			s.container("inventory-service")+":/app/inventory_service/migrations/versions/")
+		s.alembic("upgrade", categoryOnlyRevision)
+		s.tree = treeCategoryOnly
 	case "fix-contract-change-order-config":
 		s.fixContract()
 		// A config key order-service did not have: a change on another
@@ -764,7 +897,7 @@ func (s *faultStack) verify(fault faultExpectation, inv model.Investigation, sta
 	container := s.restoreForVerify(fault, state)
 
 	arguments := []string{"exec", container, "/tmp/walk/culprit", "verify", inv.ID,
-		"-f", fault.manifest(), "--no-plugins", "--format", "json", "--agent-id", "fault-library",
+		"-f", fault.manifest(), "--format", "json", "--agent-id", "fault-library",
 		"--state-dir", containerState, "--from", fault.Vantage}
 	for _, change := range changes {
 		arguments = append(arguments, "--change", change)
@@ -798,11 +931,10 @@ func (s *faultStack) restoreForVerify(fault faultExpectation, state string) stri
 	s.t.Helper()
 	container := s.container(fault.Vantage)
 	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
-	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
+	s.copyBundle(container)
 	s.docker(nil, "cp", state, container+":"+containerState)
 	owner := strings.TrimSpace(s.docker(nil, "exec", container, "sh", "-c", "echo $(id -u):$(id -g)"))
 	s.docker(nil, "exec", "-u", "0", container, "chown", "-R", owner, containerState)
-	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
 	return container
 }
 
@@ -816,7 +948,7 @@ func (s *faultStack) restoreForVerify(fault faultExpectation, state string) stri
 func (s *faultStack) mcpInContainer(container, vantage string) *mcpClient {
 	s.t.Helper()
 	command := exec.Command("docker", "exec", "-i", container, "/tmp/walk/culprit", "mcp",
-		"-f", "/tmp/walk/culprit.yaml", "--from", vantage, "--no-plugins", "--agent-id", "fault-library",
+		"-f", "/tmp/walk/culprit.yaml", "--from", vantage, "--agent-id", "fault-library",
 		"--state-dir", containerState)
 	stdin, err := command.StdinPipe()
 	if err != nil {
@@ -846,8 +978,7 @@ func (s *faultStack) diagnoseThroughMCP(symptom string, fault faultExpectation) 
 	s.t.Helper()
 	container := s.container(fault.Vantage)
 	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk", containerState)
-	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
-	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
+	s.copyBundle(container)
 	client := s.mcpInContainer(container, fault.Vantage)
 	result := client.call("culprit_diagnose", map[string]any{"symptom": symptom, "environment": fault.Environment})
 	s.noSecretIn("culprit_diagnose", result.Structured)

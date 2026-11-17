@@ -3,13 +3,19 @@
 Revision ID: 0002_seed_products
 Revises: 0001_create_products
 
-One million products in 200 categories, generated in the database itself
-and identical on every run (no randomness). The size is chosen so that
-reading one category by a sequential scan — the whole table, about 80 MB —
-takes tens to hundreds of milliseconds, while the same read through an
-index on `category` touches only that category's 5,000 rows and takes well
-under a millisecond: a gap wider than any statement budget Phase 37 part 3
-will declare, on a laptop or a CI runner alike.
+One million products in 200 categories (category-000 to category-199),
+generated in the database itself and identical on every run (no
+randomness). Categories are interleaved: product n is in category n % 200,
+so every category has a product every 200 skus.
+
+That interleaving decides what a missing index costs (Q35, measured on
+PostgreSQL 16). GET /products reads the first 50 of one category in sku
+order. With no index led by `category`, Postgres walks `ix_products_sku`
+for the order and filters `category` row by row: for a seeded category it
+finds 50 matches within ~10,000 entries and stops (under a millisecond);
+for a category with no products it walks the whole index (about 75 ms).
+An index on `category` alone goes unused for that read, because the
+planner estimates 5,000 rows for any category. Not a sequential scan.
 """
 
 from alembic import op

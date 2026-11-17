@@ -40,7 +40,10 @@ type dbWorld struct {
 	planVerdict model.Verdict
 	planReason  string
 	nodes       []any
-	indexes     []any
+	// planNodes, when set, are the nodes in the probe's own in-process
+	// form (probe.ParsePlan's []map[string]any), in place of nodes.
+	planNodes []map[string]any
+	indexes   []any
 	// failing names components whose reachability probe fails.
 	failing map[string]bool
 	ran     []string
@@ -83,6 +86,9 @@ func (d *dbWorld) Run(_ context.Context, request Request) model.Reading {
 		reading.Measured = map[string]any{
 			"queryid": queryID, "nodes": d.nodes, "tables": []any{products},
 			"indexes": map[string]any{products: d.indexes}, "server_version_num": 160004,
+		}
+		if d.planNodes != nil {
+			reading.Measured["nodes"] = d.planNodes
 		}
 	default:
 		_, parts, _ := model.ParseSubject(request.Target)
@@ -177,6 +183,82 @@ func TestFourPlanesGiveAMissingIndex(t *testing.T) {
 		if !strings.Contains(inv.Diagnosis.Statement, want) {
 			t.Errorf("the statement does not say %q: %s", want, inv.Diagnosis.Statement)
 		}
+	}
+	if !strings.Contains(inv.Diagnosis.Remediation, "public.products (category, sku)") {
+		t.Errorf("remediation: %s", inv.Diagnosis.Remediation)
+	}
+	want := productsTable + " -[propagates_to]-> " + component(shop) + "\n" + productsTable + " -[caused_by]-> " + categoryColumn
+	if got := edgesOf(inv); !strings.Contains(got, want) {
+		t.Errorf("tree:\n%s\nwant it to hold:\n%s", got, want)
+	}
+}
+
+// TestAPlanReadingAsTheProbeBuildsItIsRead: the plan probe keeps its nodes
+// as probe.ParsePlan returns them, []map[string]any, and the walk reads that
+// reading in the same process, never decoded from JSON. Found by the fault
+// library: the walk read []any only, saw no node, and said the plan "reads
+// the table without an index" while the reading said the opposite.
+func TestAPlanReadingAsTheProbeBuildsItIsRead(t *testing.T) {
+	var nodes []map[string]any
+	for _, node := range sortWalk() {
+		nodes = append(nodes, node.(map[string]any))
+	}
+	world := &dbWorld{overMS: 96, planNodes: nodes, indexes: []any{index(sortIndex, "sku"), index("products_pkey", "id")}}
+	inv := dbWalk(t, world, []model.Fact{tableBudget(), migrationsSay(false)})
+	if inv.Diagnosis.RootSubject != categoryColumn || !inv.Diagnosis.Complete {
+		t.Fatalf("root %s complete %v: %s", inv.Diagnosis.RootSubject, inv.Diagnosis.Complete, inv.Diagnosis.Statement)
+	}
+	if !strings.Contains(inv.Diagnosis.Remediation, "public.products (category, sku)") {
+		t.Errorf("remediation: %s", inv.Diagnosis.Remediation)
+	}
+}
+
+// slowEntryWorld is dbWorld with the entry's own route timed by
+// latencyWorld: the demo's list route, over its p95 budget because of the
+// statement under it.
+type slowEntryWorld struct {
+	db      *dbWorld
+	latency *latencyWorld
+}
+
+func (s *slowEntryWorld) Run(ctx context.Context, request Request) model.Reading {
+	return s.RunSet(ctx, request)[0]
+}
+
+func (s *slowEntryWorld) RunSet(ctx context.Context, request Request) []model.Reading {
+	if request.ProbeID == model.LatencyProbeID {
+		return s.latency.RunSet(ctx, request)
+	}
+	return []model.Reading{s.db.Run(ctx, request)}
+}
+
+// TestASlowEntryOverAMissingIndexIsComplete is the demo's shape after Q36
+// (2026-11-14): the entry calls nothing on the request path, its own route
+// is over its p95 budget on the server's time, and the four planes say the
+// index is missing. The entry's slowness is the statement's propagation,
+// so the diagnosis is complete and recommends the index. Before Q36 the
+// demo declared inventory-service -> order-service, and the same fault was
+// partial.
+func TestASlowEntryOverAMissingIndexIsComplete(t *testing.T) {
+	db := &dbWorld{overMS: 96, nodes: sortWalk(), indexes: []any{index(sortIndex, "sku"), index("products_pkey", "id")}}
+	world := &slowEntryWorld{db: db, latency: &latencyWorld{timings: map[string]timing{shop: {setup: 1, server: 400}}}}
+	facts := append(budgetsOn(shop), tableBudget(), migrationsSay(false))
+	components := []Component{{Name: shop, Kind: "service"}, {Name: shopDB, Kind: "database"}}
+	connections := []Connection{{From: shop, To: shopDB, Kind: "sql", OnRequestPath: false}}
+	manifests := append(dbManifests(), model.ProbeManifest{
+		ID: model.LatencyProbeID, Version: 1, Discriminates: []string{KindLatencyBudgetExceeded}, Cost: model.CostMetered})
+	walk := New(components, connections, facts, manifests, world,
+		openPlacement{vantage: shop}, Options{Environment: "simulated", Now: func() time.Time { return clock }})
+	inv := diagnose(t, walk, shop)
+
+	if inv.Diagnosis.RootSubject != categoryColumn || !inv.Diagnosis.Complete {
+		t.Fatalf("root %s complete %v: %s", inv.Diagnosis.RootSubject, inv.Diagnosis.Complete, inv.Diagnosis.Statement)
+	}
+	if world.latency.runs == nil {
+		t.Error("the entry's route budget was never measured")
+	}
+	if !strings.Contains(inv.Diagnosis.Statement, "no index serves category") {
+		t.Errorf("statement: %s", inv.Diagnosis.Statement)
 	}
 	if !strings.Contains(inv.Diagnosis.Remediation, "public.products (category, sku)") {
 		t.Errorf("remediation: %s", inv.Diagnosis.Remediation)

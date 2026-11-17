@@ -65,7 +65,7 @@ with the orchestrator.
 | Want | What it means |
 |---|---|
 | `http_routes` | HTTP endpoints this component *serves*. |
-| `db_schema` | Tables and columns the code expects, and the migration revision it heads at. Not a reading of any live database. |
+| `db_schema` | Tables and columns the code expects, and the migration revision it heads at. Not a reading of any live database. Where you can tell which columns lead an index, say so for every column of the table with `leads_index`, `true` or `false`, on the column's `schema:` subject: `false` is the INTENT plane of a missing index (Phase 37 part 3), and `culprit diagnose` claims a missing index only when the migrations say `false`. If you cannot tell, emit no `leads_index` at all rather than guess; the walk then says nothing extracted the migrations. |
 | `config_keys` | Configuration keys this component reads. **Names and shapes only** — see §6. |
 | `client_calls` | HTTP endpoints this component *calls*. |
 | `test_assertions` | Which parts of the surface the test suite exercises — `exercised_by_test`, not the status codes asserted. See below. |

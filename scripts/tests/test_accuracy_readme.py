@@ -91,15 +91,32 @@ def test_scenarios_are_listed_and_not_counted() -> None:
     assert ": 2 outcomes," in section
 
 
-def test_no_fault_library_record_names_a_commit() -> None:
+def test_only_the_database_fault_names_a_commit() -> None:
     """Q20: a runtime fix is an action, in words; no record says "commit"
-    for something that was not one."""
+    for something that was not one. Q33 (Phase 37 part 3): the database
+    fault's known fix is a commit, 1327410, the one that added the demo's
+    0003 (category, sku) migration, applied. It is the only commit any
+    record names; its wrong fix, a migration that is not in the
+    repository's history, is an action."""
     expected = json.loads(
         (accuracy.ROOT / "cli" / "testdata" / "faultlib" / "expected.json").read_text("utf-8")
     )
+    commits = [
+        (f["name"], c)
+        for f in expected["faults"]
+        for c in f.get("fix", {}).get("change", [])
+        if c.startswith("commit:")
+    ]
+    commits += [
+        (s["name"], c)
+        for s in expected["scenarios"]
+        for c in s["change"]
+        if c.startswith("commit:")
+    ]
+    assert commits == [("missing-index", "commit:1327410")]
     named = [c for f in expected["faults"] for c in f.get("fix", {}).get("change", [])]
     named += [c for s in expected["scenarios"] for c in s["change"]]
-    assert not [c for c in named if c.startswith("commit:")]
     # The three runtime fixes, the latency fix again for its no-budgets
-    # walk, and the wrong latency fix (Phase 36 part 2).
-    assert len([c for c in named if c.startswith("action:")]) == 5
+    # walk, the wrong latency fix (Phase 36 part 2), and the database
+    # fault's wrong fix (Phase 37 part 3).
+    assert len([c for c in named if c.startswith("action:")]) == 6

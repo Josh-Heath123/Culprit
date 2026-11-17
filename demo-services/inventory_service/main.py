@@ -84,7 +84,14 @@ app.add_api_route(STOCK_ROUTE, get_stock, methods=["GET"])
 # no query is how probe.http.latency times a route — its budget is on the
 # route, never on an input to it (docs/PROBES.md) — so GET /products must
 # answer one, with the same statement a filtered request runs.
-FEATURED_CATEGORY = "category-007"
+#
+# It is a new category, launched on the storefront before it is stocked:
+# 0002 seeds category-000 to category-199, never this one. That is the
+# demo's database fault (Q35): without an index led by `category`, Postgres
+# walks `ix_products_sku` for the order and filters row by row, which stops
+# early for a seeded category (one every ~200 skus) and walks the whole
+# index for a category with no products.
+FEATURED_CATEGORY = "category-200"
 
 
 @app.get("/products")
@@ -92,7 +99,8 @@ def list_products(category: str = FEATURED_CATEGORY, limit: int = 50) -> dict:
     """The catalogue for one category, from the service's own database
     (Phase 37 part 1, P8), in sku order. It filters on `category`, which
     0003 indexes as (category, sku): the fault library's database fault is
-    that index missing. Not on the order path: POST /orders never reads it,
+    that index missing, seen on a category with no products, such as the
+    featured one. Not on the order path: POST /orders never reads it,
     so the library's order walks are unchanged.
     """
     database = engine()

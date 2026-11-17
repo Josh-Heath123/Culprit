@@ -322,9 +322,9 @@ func TestAnAudienceMismatchIsTheRootNotTheEdge(t *testing.T) {
 	connections := []Connection{
 		{From: "order-service", To: "inventory-service", Kind: "http", OnRequestPath: true},
 		{From: "order-service", To: "payments-service", Kind: "http", OnRequestPath: true},
-		// The demo declares edges back up the path too. A request entering
-		// at order-service never travels them, and a walk that followed
-		// them let a pass at inventory rule out the whole system.
+		// Edges back up the path, as the demo declared until Q36. A request
+		// entering at order-service never travels them, and a walk that
+		// followed them let a pass at inventory rule out the whole system.
 		{From: "inventory-service", To: "order-service", Kind: "http", OnRequestPath: true},
 		{From: "payments-service", To: "order-service", Kind: "http", OnRequestPath: true},
 	}

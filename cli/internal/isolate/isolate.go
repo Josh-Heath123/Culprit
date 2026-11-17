@@ -149,8 +149,8 @@ type Walk struct {
 	connected map[string][]Connection
 	// children is the request-path tree rooted at the entry: each
 	// component's edges to components first reached through it. A model
-	// may declare an edge back up the path (the demo's inventory-service
-	// -> order-service); a request entering at the entry does not travel
+	// may declare an edge back up the path (the demo did, inventory-service
+	// -> order-service, until Q36); a request entering at the entry does not travel
 	// it, and following it turned "a pass at inventory rules out what is
 	// below inventory" into "rules out the whole system" (found by the
 	// fault library's first run).

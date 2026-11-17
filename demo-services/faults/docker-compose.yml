@@ -1,7 +1,9 @@
-# Phase 32's fault library: the three demo services and nothing else — no
-# API, worker or database, because the isolation walk runs in the binary
-# and reads nothing but the services (DIAGNOSTIC_PLAN.md Phase 32, "How
-# Phase 32 is run"). Driven by cli/cmd/culprit/faultlib_test.go
+# Phase 32's fault library: the three demo services and nothing of Culprit's
+# — no API or worker, because the isolation walk runs in the binary and
+# reads nothing but the system (DIAGNOSTIC_PLAN.md Phase 32, "How Phase 32
+# is run"). Since Phase 37 part 3 the system includes inventory-service's
+# own database, set up as the quickstart sets it up, and products traffic
+# for the statement window to measure. Driven by cli/cmd/culprit/faultlib_test.go
 # (`just fault-library`, and its own CI job); not meant to be run by hand,
 # though it can be:
 #
@@ -47,7 +49,90 @@ services:
       EXPECTED_AUDIENCE: inventory-service
       DEMO_TOKEN_SECRET: ${DEMO_TOKEN_SECRET:?the fault library mints this}
       CONTRACT_FAULT: ${CONTRACT_FAULT:-}
+      INVENTORY_DATABASE_URL: postgresql://inventory:faults-inventory-password@postgres:5432/inventory
+      # Phase 37 part 3: Culprit's own read-only role, which the walk run
+      # inside this container reads statements and plans as (the demo's
+      # culprit.yaml, environments.faults-inventory). Never the
+      # application's role.
+      CULPRIT_INVENTORY_STATS_DSN: postgresql://culprit_reader:faults-reader-password@postgres:5432/inventory
+    depends_on:
+      culprit-reader-setup:
+        condition: service_completed_successfully
 
   payments-service:
     <<: *demo
     command: uvicorn payments_service.main:app --host 0.0.0.0 --port 8003
+
+  # ---- inventory-service's database (Phase 37 part 3) ------------------------
+  #
+  # Set up once per stack, as `just quickstart` sets it up: the demo's own
+  # setup job creates the inventory role and database and applies the
+  # migrations to head (0003). The database fault downgrades it to 0002 and
+  # each fix upgrades it again; the harness does that, never Culprit. Not
+  # recreated by the healthy layer, so the million seeded rows are seeded
+  # once.
+  postgres:
+    image: postgres:16-alpine
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    environment:
+      POSTGRES_PASSWORD: faults-postgres-password
+    healthcheck:
+      # Over TCP, not the socket: the image's first-boot server listens on
+      # the socket only and is then restarted.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  inventory-db-setup:
+    <<: *demo
+    command: python -m inventory_service.setup_db
+    environment:
+      INVENTORY_ADMIN_HOST: postgres
+      INVENTORY_ADMIN_USER: postgres
+      INVENTORY_ADMIN_PASSWORD: faults-postgres-password
+      INVENTORY_ADMIN_DB: postgres
+      INVENTORY_DATABASE_URL: postgresql://inventory:faults-inventory-password@postgres:5432/inventory
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Culprit's reader, as an operator would grant it (docs/PERMISSIONS.md):
+  # pg_read_all_stats for the statement window, SELECT on products so a
+  # statement can be planned. It reads no row: the plan is never executed.
+  culprit-reader-setup:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: faults-postgres-password
+    command:
+      - psql
+      - "-h"
+      - postgres
+      - "-U"
+      - postgres
+      - "-d"
+      - inventory
+      - "-v"
+      - ON_ERROR_STOP=1
+      - "-c"
+      - >-
+        DO $$$$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'culprit_reader') THEN
+        CREATE ROLE culprit_reader LOGIN PASSWORD 'faults-reader-password' IN ROLE pg_read_all_stats;
+        END IF; END $$$$;
+        GRANT SELECT ON products TO culprit_reader;
+    depends_on:
+      inventory-db-setup:
+        condition: service_completed_successfully
+
+  # The list route's traffic and nothing else: the order faults are judged
+  # on POST /orders placed by the harness, which this must not disturb.
+  load-generator:
+    <<: *demo
+    command: python load_generator.py
+    environment:
+      INVENTORY_SERVICE_URL: http://inventory-service:8002
+      LOAD_GEN_RATE_RPS: "0"
+      LOAD_GEN_PRODUCTS_RPS: "2"
+    depends_on:
+      - inventory-service

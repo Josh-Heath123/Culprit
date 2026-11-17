@@ -385,8 +385,8 @@ a compromised agent or control plane can and cannot do.
 
 ## Usage: one project, end to end
 
-This is the project the `diff` and `probe` captures above were made from. It takes five minutes
-and needs the CLI built as above. `CULPRIT_HOME` is your clone of this
+This is the project the `diff` and `probe` captures above were made from. It takes five minutes,
+and step 5 three more with Docker, and needs the CLI built as above. `CULPRIT_HOME` is your clone of this
 repository, so `culprit.yaml` can find the Python extractor.
 
 ```bash
@@ -539,6 +539,145 @@ the `time.sleep(0.4)` out, restart it, and `culprit verify <id> --from web
 declared: Culprit never decides on your behalf how fast is fast. `kill %1`
 when you are done.
 
+**5. Let the walk find a missing index.** This step needs Docker and takes
+about three minutes. A Postgres with `pg_stat_statements` holds a million
+products in 200 categories, indexed by `sku` only. A migration in `api`
+declares the same, and the storefront lists a new category that has no
+products yet, five times a second:
+
+```bash
+mkdir -p api/migrations/versions
+cat > api/migrations/versions/0001_products.py <<'PY'
+"""The products table, listed by sku."""
+import sqlalchemy as sa
+from alembic import op
+
+revision = "0001_products"
+down_revision = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "products",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("sku", sa.Text, nullable=False),
+        sa.Column("category", sa.Text, nullable=False),
+    )
+    op.create_index("ix_products_sku", "products", ["sku"])
+
+
+def downgrade() -> None:
+    op.drop_table("products")
+PY
+cat > db.yaml <<YAML
+version: 1
+components:
+  - name: api
+    kind: service
+    connections:
+      - to: db
+        kind: sql
+        criticality: background
+  - name: db
+    kind: database
+extract:
+  extractors:
+    - name: python
+      command: ["uv", "run", "--project", "$CULPRIT_HOME/extractors/python", "culprit-extract-python"]
+  components:
+    api: { root: api, extractors: [python] }
+budgets:
+  - subject: "schema:db/public.products"
+    predicate: query_mean_ms_max
+    value: 20
+    why: the product list reads the first page of one category
+environments:
+  shop:
+    adapter: process
+    components:
+      api: { database: { dsn_env: SHOP_DB_DSN } }
+    grants: { config.read.names: true, db.stats.read: true, db.plan.read: true }
+YAML
+docker run -d --name culprit-tour-db -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=tour \
+  postgres:16-alpine -c shared_preload_libraries=pg_stat_statements
+until docker exec culprit-tour-db pg_isready -q -h 127.0.0.1 -U postgres; do sleep 1; done
+docker exec -i culprit-tour-db psql -q -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+CREATE EXTENSION pg_stat_statements;
+CREATE TABLE products (id serial PRIMARY KEY, sku text NOT NULL, category text NOT NULL);
+CREATE INDEX ix_products_sku ON products (sku);
+INSERT INTO products (sku, category)
+  SELECT format('sku-%s', lpad(i::text, 7, '0')), format('category-%s', i % 200)
+  FROM generate_series(1, 1000000) AS i;
+ANALYZE products;
+CREATE ROLE culprit_reader LOGIN PASSWORD 'reader' IN ROLE pg_read_all_stats;
+GRANT SELECT ON products TO culprit_reader;
+SQL
+docker exec -i culprit-tour-db sh -c 'cat > /tmp/list.sql' <<'SQL'
+SELECT sku FROM products WHERE category = 'category-new' ORDER BY sku LIMIT 50;
+SQL
+docker exec -d culprit-tour-db sh -c 'pgbench -n -U postgres -f /tmp/list.sql -R 5 -T 900 postgres'
+export SHOP_DB_DSN=postgresql://culprit_reader:reader@127.0.0.1:55432/postgres
+export DATABASE_URL=postgresql://app:example@db.example.internal:5432/app PAYMENTS_API_KEY=example-key
+culprit diagnose api --env shop -f db.yaml --from api --state-dir ./state
+```
+
+Culprit reads the database as `culprit_reader`, which can read statistics
+and plan a statement, and never sees a row. It never runs your statements
+and makes no traffic: it times the statements the traffic already runs over
+a 30-second window, then reads the generic plan of the one over its budget,
+without executing it:
+
+```
+Diagnosis (COMPLETE)
+  root   schema:db/public.products.category
+  api is slow because a statement on table products in database db is over the statement budget declared for it, and no index serves category: the plan filters category row by row on public.products, with no index condition serving it, and it walks ix_products_sku for its order. No live index leads category, and the migrations declare none. ...
+  fix    Add an index on public.products (category, sku): the columns the plan filters, then those of the index it walks for its order. Verification, not this recommendation, decides whether a change worked.
+...
+  r3   fail          probe.db.statement_budget  component:db
+       statement 4650866916234037515 is over its 20 ms budget: 18364131 µs over 150 call(s) in the window, more than 20 ms each
+```
+
+The root needs four planes to agree:
+
+- the statement is over its budget;
+- the plan filters `category` row by row;
+- no live index leads `category`;
+- the migrations declare none.
+
+A seeded category would be fast: the walk along `sku` finds 50 matches
+within about 10,000 entries and stops. Only a category with no products
+makes it walk the whole index (`docs/LIMITS.md`). To fix it, add the index
+as a migration, apply it, and verify, giving `culprit verify` the
+investigation id that `diagnose` printed:
+
+```bash
+cat > api/migrations/versions/0002_products_category_sku.py <<'PY'
+"""Index products by category, then sku."""
+from alembic import op
+
+revision = "0002_products_category_sku"
+down_revision = "0001_products"
+
+
+def upgrade() -> None:
+    op.create_index("ix_products_category_sku", "products", ["category", "sku"])
+
+
+def downgrade() -> None:
+    op.drop_index("ix_products_category_sku", table_name="products")
+PY
+docker exec culprit-tour-db psql -q -U postgres -c "CREATE INDEX ix_products_category_sku ON products (category, sku)"
+culprit verify <id> -f db.yaml --from api --state-dir ./state \
+  --change "action:added and applied migration 0002, an index on products (category, sku)"
+```
+
+The statement is measured again, twice, and passes both times: `Verdict
+(VERIFIED)`. An index on `category` alone would leave this read where it
+was, because the planner does not use it for a category it expects to be
+as common as any other; the fault library checks that verification says
+`not_resolved` for exactly that fix. `docker rm -f culprit-tour-db` when
+you are done.
+
 **On your own repository:** describe your components and connections in
 `culprit.yaml` (the demo's [`cli/testdata/demo/culprit.yaml`](cli/testdata/demo/culprit.yaml)
 is a fuller example, with route, schema and client-call extraction), then run
@@ -588,9 +727,17 @@ which columns lead an index — through a read-only session that can send
 only a fixed set of catalogue statements, and compare it with what your
 Alembic migrations declare: a missing migration, or an index the
 migrations declare and the database lacks (or the reverse), is a finding.
-`db.stats.read` and `db.plan.read` are accepted in grants and allowances
-and used by nothing yet; [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) says
-what each will read and what role they need.
+Under `db.stats.read`, `probe.db.statement_budget` times each statement
+over a 30-second window of the system's own traffic against a
+`query_mean_ms_max` budget; under `db.plan.read`, `probe.db.plan` reads the
+generic plan of one statement, never running it. When the errors and the
+latency explain nothing below the symptom, `culprit diagnose` asks the
+databases the entry connects to, and roots at a missing index only when the
+statement, the plan, the live indexes and your migrations all agree,
+recommending the index the plan needs
+([`docs/PROBES.md`](docs/PROBES.md), "In the walk").
+[`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) says what each grant reads and
+what role it needs.
 
 ### For a coding agent: `culprit mcp`
 
@@ -636,9 +783,9 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
 
 ## Accuracy, on faults we planted
 
-**6 of 6 planted faults verified fixed** (100%), of 8 faults planted: 6 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
+**7 of 7 planted faults verified fixed** (100%), of 9 faults planted: 7 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
 
-**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 6 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
+**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 7 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
 
 **Method.** Each fault in the library (`cli/testdata/faultlib/`) is planted in the demo stack, diagnosed by `culprit diagnose` from inside a service, its known fix is applied, and `culprit verify` measures every reading again, twice, and compares the environment with the record of it taken at diagnosis. An outcome is the verification of a **complete** diagnosis; its fault class is the subject kind of the diagnosis's root. Per class, `verified` is counted against the decided outcomes (every verdict but inconclusive), and inconclusive is reported beside it, never folded in. A `verified` outcome shows that the fix for the root the walk diagnosed was seen to fix what it saw failing; a fault diagnosed at the wrong root would be counted under that root's class, so this measures diagnosis-then-fix, not whether every diagnosis named the true cause. `GET /outcomes/accuracy` counts verifications recorded through the control plane the same way, with the same function, and says for each count whether its faults were planted or real.
 
@@ -649,10 +796,11 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
 | `config` | `config` | 1 | 1 | 1 | 0 |
 | `connection` | `network-partition` | 1 | 1 | 1 | 0 |
 | `http` | `contract` | 1 | 1 | 1 | 0 |
+| `schema` | `missing-index` | 1 | 1 | 1 | 0 |
 
 Not counted, because the walk's diagnosis was partial — an outcome is the verification of a complete one: `auth-audience-ungranted` (inconclusive); `latency-unbudgeted` (inconclusive).
 
-Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `latency-wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive).
+Not counted either: the library's deliberate wrong and partial fixes, which check that verification says so rather than measure diagnosis — `wrong-fix` (not_resolved); `latency-wrong-fix` (not_resolved); `regressed` (regressed); `changed-underneath` (changed_underneath); `no-change-named` (inconclusive); `missing-index-wrong-fix` (not_resolved).
 
 <!-- accuracy:end -->
 

@@ -3,7 +3,7 @@
     "Phase 32's fault library: every fault the demo services can be given, with the diagnosis `culprit diagnose` must reach. cli/cmd/culprit/faultlib_test.go injects each one into demo-services/faults/docker-compose.yml, runs the walk inside the named vantage container, and compares.",
     "This is the regression suite for the product's core claim — the walk finds the root, not the symptom — and it runs in CI on every push (DIAGNOSTIC_PLAN.md Phase 32 field 15).",
     "relations is the set of relations the fault tree must contain, exactly. rubric is §2.9; verified is false on every diagnosis: a diagnosis is never edited, and whether it is verified is a verification's to say (Phase 34).",
-    "fix is the known fix for each fault, applied by the test once the diagnosis is checked, and the verdict `culprit verify` must then give, run in the same vantage with the changes named. Three fixes are runtime actions — a firewall rule removed, an injected fault cleared — which are none of an image, a config key or a commit: they are named as actions, in words (Q20, ruled 2026-11-10). No record here names a commit, because no commit applied any of these fixes. An action, like a commit, explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed.",
+    "fix is the known fix for each fault, applied by the test once the diagnosis is checked, and the verdict `culprit verify` must then give, run in the same vantage with the changes named. Three fixes are runtime actions — a firewall rule removed, an injected fault cleared — which are none of an image, a config key or a commit: they are named as actions, in words (Q20, ruled 2026-11-10). One record names a commit: the database fault's known fix is the commit that added 0003 (1327410), with the database upgraded to it (Phase 37 part 3, Q33). The others name none, because no commit applied them. An action, like a commit, explains nothing a capture records, so the verdict still rests on the readings and on the environment not having changed.",
     "scenarios are the verdicts a fix should not get: a wrong fix, a fix that breaks what passed, and a change underneath that nothing named explains."
   ],
   "symptom": "POST http://order-service:8001/orders",
@@ -248,6 +248,43 @@
         "verdict": "inconclusive",
         "reason_contains": "no latency budget was judged"
       }
+    },
+    {
+      "name": "missing-index",
+      "symptom": "GET http://inventory-service:8002/products",
+      "inject": "inventory-service's database at 0002, with no index led by category, and the tree the walk reads holding migrations 0001-0002 only; GET /products for the featured category, which has no products, walks the whole sku index",
+      "vantage": "inventory-service",
+      "environment": "faults-inventory",
+      "root_subject": "schema:inventory-db/public.products.category",
+      "root_kind": "missing_index",
+      "complete": true,
+      "relations": [
+        "caused_by",
+        "propagates_to",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": false,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:inventory-service/GET /products -[symptom_of]-> component:inventory-service",
+        "schema:inventory-db/public.products -[propagates_to]-> component:inventory-service",
+        "schema:inventory-db/public.products -[caused_by]-> schema:inventory-db/public.products.category"
+      ],
+      "statement_contains": "no index serves category",
+      "remediation_contains": "public.products (category, sku)",
+      "note": "Phase 37 part 3. The root is the missing index on category, supported by four planes: the statement over its 20 ms budget, the plan filtering category on ix_products_sku, no live index leading category, and the migrations (extracted from the planted tree) declaring none. inventory-service calls nothing on the request path, so its own route over its 30 ms p95 budget is the statement's propagation, the diagnosis is complete, and it recommends public.products (category, sku). Not discriminated: every hypothesis on that path is supported and none competes for a reading to rule out, as in network-partition; before Q36 the order-service branch made it partial instead. A GET symptom is replayed by a probe, so its attestation is reproduced.",
+      "attestation": "reproduced",
+      "fix": {
+        "how": "the commit that adds 0003, (category, sku), with the database upgraded to it",
+        "change": [
+          "commit:1327410"
+        ],
+        "verdict": "verified"
+      }
     }
   ],
   "scenarios": [
@@ -301,6 +338,17 @@
       "how": "inventory-service serves /stock again, and nothing is named",
       "change": [],
       "verdict": "inconclusive"
+    },
+    {
+      "name": "missing-index-wrong-fix",
+      "fault": "missing-index",
+      "apply": "index-category-only",
+      "how": "a migration indexing products on category alone, added to the tree and applied (demo-services/faults/0003_products_category.py); the planner does not use it for a category with no products",
+      "change": [
+        "action:added and applied a migration indexing products on category alone"
+      ],
+      "verdict": "not_resolved",
+      "reason_contains": "probe.db.statement_budget"
     }
   ]
 }
