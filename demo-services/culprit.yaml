@@ -322,8 +322,8 @@ budgets:
       CI's runners and 46 to 133 ms on a developer's machine, and 0.1 to
       0.96 ms with it (PostgreSQL 16, Q35, Q37). 10 ms guards the index the
       list route depends on: the fault's smallest mean is 2.8 times it,
-      and health stays under 2 ms. It was 20 ms until Q37, which a fast
-      runner's fault mean, 28.2 ms, fell under 1.5 times it.
+      and health stays under 2 ms. It was 20 ms until Q37: on one fast
+      runner the fault's mean, 28.2 ms, fell under 1.5 times that.
   - subject: "http:inventory-service/GET /products"
     predicate: latency_p95_ms
     value: 25
@@ -337,3 +337,15 @@ budgets:
       slowest healthy p95 37% under half the budget and the fault's
       smallest p95 37% over twice it. It was 30 ms until Q37, when one
       runner's fault p95 came within 14% of twice the budget.
+  - subject: "http:inventory-service/GET /products"
+    predicate: response_items_max
+    value: 50
+    at: /products
+    why: >-
+      Phase 38 part 2. GET /products answers one page of a category, in an
+      envelope ({"category", "products"}), 50 products unless the caller
+      asks for more with ?limit=, which the route caps at 200. A probe
+      sends no query (docs/PROBES.md), so what is counted is the default
+      page, of the featured category, which is empty by design (Q35): the
+      probe passes with 0. The bound guards the default page size the
+      storefront relies on.

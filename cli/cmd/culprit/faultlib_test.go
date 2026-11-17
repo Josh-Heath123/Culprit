@@ -205,6 +205,8 @@ func TestTheFaultLibrary(t *testing.T) {
 			}
 			if fault.Name == "missing-index" {
 				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictPass), "<=", 0.5)
+				// Phase 38 part 2: the list route within its bound.
+				stack.countProducts(fault)
 			}
 			verification := stack.verify(fault, inv, state, fault.Fix.Change)
 			stack.checkVerification(verification, inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
@@ -708,23 +710,70 @@ var (
 // reordering the file's budgets moves nothing here (Phase 38 part 1).
 func latencyBudgetLocator(t *testing.T, subject string) string {
 	t.Helper()
+	return budgetLocator(t, subject, "latency_p95_ms")
+}
+
+// budgetLocator is where the demo's culprit.yaml declares subject's one
+// budget under predicate.
+func budgetLocator(t *testing.T, subject, predicate string) string {
+	t.Helper()
 	manifest, err := extract.LoadManifest(demoManifest)
 	if err != nil {
 		t.Fatalf("the demo's culprit.yaml: %v", err)
 	}
 	locator := ""
 	for index, budget := range manifest.Budgets {
-		if budget.Subject == subject && budget.Predicate == "latency_p95_ms" {
+		if budget.Subject == subject && budget.Predicate == predicate {
 			if locator != "" {
-				t.Fatalf("the demo's culprit.yaml declares two p95 budgets on %s", subject)
+				t.Fatalf("the demo's culprit.yaml declares two %s budgets on %s", predicate, subject)
 			}
 			locator = fmt.Sprintf("budgets[%d]", index)
 		}
 	}
 	if locator == "" {
-		t.Fatalf("the demo's culprit.yaml declares no p95 budget on %s", subject)
+		t.Fatalf("the demo's culprit.yaml declares no %s budget on %s", predicate, subject)
 	}
 	return locator
+}
+
+// countProducts runs probe.http.response_items on GET /products from the
+// fault's vantage, against the demo's response_items_max budget (Phase 38
+// part 2), and checks it passes: the criterion "culprit probe on the
+// faults stack passes GET /products at 50 items". It logs the count.
+func (s *faultStack) countProducts(fault faultExpectation) {
+	s.t.Helper()
+	container := s.container(fault.Vantage)
+	output, err := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "probe",
+		productsRoute.subject, "-p", model.ResponseItemsProbeID,
+		"--input", "base_url=http://inventory-service:8002",
+		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment,
+		"--no-plugins", "--format", "json", "--agent-id", "fault-library").Output()
+	if err != nil {
+		s.t.Errorf("culprit probe probe.http.response_items in %s: %v\n%s", container, err, output)
+		return
+	}
+	var result struct {
+		Readings []model.Reading `json:"readings"`
+	}
+	if err := json.Unmarshal(output, &result); err != nil || len(result.Readings) != 1 {
+		s.t.Fatalf("culprit probe printed no single reading (%v):\n%s", err, output)
+	}
+	reading := result.Readings[0]
+	s.t.Logf("GET /products: %s, measured %v against %v", reading.Verdict, reading.Measured, reading.Expected)
+	if reading.Verdict != model.VerdictPass {
+		s.t.Errorf("probe.http.response_items on GET /products: %s, want pass: %s", reading.Verdict, reading.Reason)
+	}
+	if err := reading.Validate(); err != nil {
+		s.t.Errorf("the list reading does not validate: %v", err)
+	}
+	if reading.ExpectedSource == nil ||
+		reading.ExpectedSource.Locator != budgetLocator(s.t, productsRoute.subject, "response_items_max") {
+		s.t.Errorf("the reading was not measured against the demo's list budget: %+v", reading.ExpectedSource)
+	}
+	// Expected is the judged form, read back from JSON.
+	if reading.Expected["response_items_max"] != float64(50) || reading.Expected["at"] != "/products" {
+		s.t.Errorf("judged against %v, want 50 items at /products", reading.Expected)
+	}
 }
 
 // measureLatency runs probe.http.latency on one of inventory-service's
