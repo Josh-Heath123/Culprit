@@ -42,8 +42,8 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
     manifest = load_manifest(DEMO.read_text(encoding="utf-8"))
     assert [(b.subject, b.predicate, b.value) for b in manifest.budgets] == [
         (READY, "latency_p95_ms", 300),
-        (PRODUCTS, "query_mean_ms_max", 20),
-        (LIST_ROUTE, "latency_p95_ms", 30),
+        (PRODUCTS, "query_mean_ms_max", 10),
+        (LIST_ROUTE, "latency_p95_ms", 25),
     ]
     exported = dump_manifest(manifest)
     again = load_manifest(exported)
