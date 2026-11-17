@@ -394,8 +394,7 @@ class Reading(BaseModel):
             ) from None
         if verdict != self.verdict.value:
             raise ValueError(
-                f"a per-item reading says {self.verdict.value}, "
-                f"but its own integers give {verdict}"
+                f"a per-item reading says {self.verdict.value}, but its own integers give {verdict}"
             )
         claimed = self.measured.get("per_item")
         if not isinstance(claimed, list) or not all(isinstance(item, str) for item in claimed):

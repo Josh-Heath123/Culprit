@@ -103,7 +103,9 @@ def judge_per_item(measured: dict[str, Any]) -> tuple[str, str, list[str]]:
             f"for {items} items",
             [],
         )
-    named = ", ".join(f"{query_id} ({calls} calls)" for query_id, calls in ordered if calls >= items)
+    named = ", ".join(
+        f"{query_id} ({calls} calls)" for query_id, calls in ordered if calls >= items
+    )
     return (
         "pass",
         f"{len(per_item)} statement(s) ran at least once per item of {items}: {named}",

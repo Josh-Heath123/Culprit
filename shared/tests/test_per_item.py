@@ -105,7 +105,11 @@ def generate() -> list[dict[str, Any]]:
         for name, statements in _statements(items).items():
             measured = {"items": items, "statements": statements}
             cases.append(
-                {"name": f"{items} items, {name}", "measured": measured, "expect": _record(measured)}
+                {
+                    "name": f"{items} items, {name}",
+                    "measured": measured,
+                    "expect": _record(measured),
+                }
             )
     for name, measured in SHAPE_CASES:
         cases.append({"name": name, "measured": measured, "expect": _record(measured)})
