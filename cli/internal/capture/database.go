@@ -30,6 +30,8 @@ type (
 	// StatementPlan is one statement's generic plan.
 	StatementPlan = dbsession.StatementPlan
 	IndexShape    = dbsession.IndexShape
+	// StatementBracket is three snapshots around one request (Phase 39).
+	StatementBracket = dbsession.StatementBracket
 )
 
 // The closed set of database failures.
@@ -49,4 +51,5 @@ const (
 const (
 	StatementWindowLength = dbsession.StatementWindowLength
 	MinimumPlanVersion    = dbsession.MinimumPlanVersion
+	QuietWindowLength     = dbsession.QuietWindowLength
 )

@@ -112,3 +112,19 @@ func TestAWindowThatCannotFitTheDeadlineIsNotStarted(t *testing.T) {
 		t.Fatalf("%v %q", err, window.Unavailable)
 	}
 }
+
+// TestABracketThatCannotFitTheDeadlineSendsNothing: with less than the
+// quiet window and its margin left, no session is opened and the caller's
+// request is never made (Phase 39 part 1).
+func TestABracketThatCannotFitTheDeadlineSendsNothing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	called := false
+	bracket, err := StatsReader{}.Bracket(ctx, "postgresql://reader@127.0.0.1:1/shop", func(context.Context) error {
+		called = true
+		return nil
+	})
+	if err != nil || !strings.Contains(bracket.Unavailable, "nothing was sent") || called || bracket.Sent {
+		t.Fatalf("%v %q called=%v", err, bracket.Unavailable, called)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -408,5 +409,59 @@ func TestAWindowCutShortIsUnavailable(t *testing.T) {
 	}
 	if err != nil || !strings.Contains(window.Unavailable, "cut short") || len(window.Statements) != 0 {
 		t.Fatalf("%v %q %d statements", err, window.Unavailable, len(window.Statements))
+	}
+}
+
+// TestTheBracketAgainstARealPostgres (Phase 39 part 1): another role's
+// statements in the quiet window are counted and the request is not made;
+// with the window quiet, the request's statements are the third snapshot's
+// change, by queryid, and the reader's own snapshots are not among them.
+func TestTheBracketAgainstARealPostgres(t *testing.T) {
+	if os.Getenv("CULPRIT_DOCKER_TESTS") != "1" {
+		t.Skip("NOT RUN: set CULPRIT_DOCKER_TESTS=1 to run the bracket test (needs Docker)")
+	}
+	container, address := postgresWithStatements(t)
+	psql(t, container, "postgres", "postgres", "CREATE DATABASE shop")
+	psql(t, container, "postgres", "shop", `
+		CREATE EXTENSION pg_stat_statements;
+		CREATE TABLE tags (item_id int NOT NULL, name text NOT NULL);
+		INSERT INTO tags SELECT i, 'tag ' || i FROM generate_series(1, 10) i;
+		CREATE ROLE app LOGIN PASSWORD 'app-pass';
+		GRANT SELECT ON tags TO app;
+		CREATE ROLE reader LOGIN PASSWORD 'reader-pass' IN ROLE pg_read_all_stats;`)
+	dsn := "postgresql://reader:reader-pass@" + address + "/shop?sslmode=disable"
+	perItem := func(n int) {
+		for id := 1; id <= n; id++ {
+			psql(t, container, "app", "shop", "SELECT name FROM tags WHERE item_id = "+strconv.Itoa(id)+" AND name <> '"+secretConstant+"'")
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Not quiet: the app's statements fall in the quiet window.
+	noisy := StatsReader{Wait: func(context.Context, time.Duration) error { perItem(3); return nil }}
+	called := false
+	bracket, err := noisy.Bracket(ctx, dsn, func(context.Context) error { called = true; return nil })
+	for attempt := 0; err != nil && attempt < 20; attempt++ {
+		time.Sleep(time.Second)
+		bracket, err = noisy.Bracket(ctx, dsn, func(context.Context) error { called = true; return nil })
+	}
+	if err != nil || bracket.QuietCalls < 3 || called || bracket.Sent || len(bracket.Statements) != 0 {
+		t.Fatalf("a noisy quiet window: %v, %d quiet calls, called=%v, %d statements",
+			err, bracket.QuietCalls, called, len(bracket.Statements))
+	}
+
+	// Quiet: the request runs four statements of one shape.
+	quiet := StatsReader{Wait: func(context.Context, time.Duration) error { return nil }}
+	bracket, err = quiet.Bracket(ctx, dsn, func(context.Context) error { perItem(4); return nil })
+	if err != nil || bracket.QuietCalls != 0 || !bracket.Sent || bracket.Reset || bracket.Unavailable != "" {
+		t.Fatalf("a quiet bracket: %v %+v", err, bracket)
+	}
+	if len(bracket.Statements) != 1 || bracket.Statements[0].Calls != 4 ||
+		!strings.Contains(bracket.Statements[0].Text, "FROM tags WHERE item_id = $1") {
+		t.Fatalf("the bracket's statements: %+v", bracket.Statements)
+	}
+	if strings.Contains(bracket.Statements[0].Text, secretConstant) {
+		t.Error("the statement's text holds its constant")
 	}
 }

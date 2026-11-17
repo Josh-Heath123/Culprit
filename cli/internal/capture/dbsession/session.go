@@ -601,8 +601,9 @@ type IndexShape struct {
 // never EXPLAIN ANALYZE.
 type StatsReader struct {
 	Timeout time.Duration
-	// Span is the time between the two snapshots: 30 seconds, fixed by
-	// the plan; settable for tests.
+	// Span is the time between the two snapshots: 30 seconds for a
+	// window, 2 for a bracket's quiet window, fixed by the plan; settable
+	// for tests.
 	Span time.Duration
 	// Wait waits out the window; nil waits on a timer, cut by ctx.
 	Wait func(ctx context.Context, d time.Duration) error
@@ -829,6 +830,164 @@ func (r StatsReader) Window(parent context.Context, dsn string, plan bool) (Stat
 		}
 	}
 	return result, nil
+}
+
+// --- The bracket (Phase 39 part 1) -------------------------------------
+
+// QuietWindowLength is the quiet window: two snapshots this far apart,
+// before anything is sent, in which no role but Culprit's may call a
+// statement (PERFORMANCE_PLAN.md, "How Phase 39 is run", decision 3).
+const QuietWindowLength = 2 * time.Second
+
+// StatementBracket is what three snapshots of one session give: before the
+// quiet window, after it, and after the caller's request.
+type StatementBracket struct {
+	// QuietCalls are the calls, by every role but Culprit's, in the quiet
+	// window. More than none means the environment was not quiet, and the
+	// request was not sent.
+	QuietCalls int64
+	// Sent says the caller's request was started between the second and
+	// third snapshots.
+	Sent bool
+	// Statements are each statement's change between the second and third
+	// snapshots, most calls first, with no plan.
+	Statements []StatementStats
+	// Reset is a reset of the statistics, or an eviction from them, at any
+	// point in the bracket: no delta of it can be trusted.
+	Reset bool
+	// Unavailable says why nothing was measured. Empty when measured.
+	Unavailable   string
+	ServerVersion int
+}
+
+// snapshotDelta is after minus before, per statement: the statements called
+// in between, most calls first, and whether any count went backwards (a
+// reset or an eviction).
+func snapshotDelta(before, after map[int64]snapshotRow) ([]StatementStats, bool) {
+	var out []StatementStats
+	reset := false
+	for queryID, now := range after {
+		then := before[queryID]
+		calls, micros := now.calls-then.calls, now.micros-then.micros
+		if calls < 0 || micros < 0 {
+			reset = true
+			continue
+		}
+		if calls == 0 {
+			continue
+		}
+		stats := StatementStats{QueryID: queryID, Calls: calls, TotalMicros: micros}
+		if now.text != nil {
+			stats.Text, stats.TextKept = *now.text, true
+		}
+		out = append(out, stats)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Calls != b.Calls {
+			return a.Calls > b.Calls
+		}
+		return a.QueryID < b.QueryID
+	})
+	return out, reset
+}
+
+// Bracket takes three snapshots of this database's statements in one
+// session, with the existing templates only: before a quiet window, after
+// it, and after between has run. Any call in the quiet window by a role
+// other than the session's own means the environment was not quiet:
+// between is not called, and QuietCalls says how many. A reset or eviction
+// anywhere in the bracket sets Reset. Deltas only: nothing is reset.
+//
+// between is the caller's one request, run under this session's deadline.
+// This package sends it nothing and reads nothing back from it; it is only
+// called, and its error stops the bracket with nothing measured.
+func (r StatsReader) Bracket(parent context.Context, dsn string, between func(ctx context.Context) error) (StatementBracket, error) {
+	quiet := r.Span
+	if quiet == 0 {
+		quiet = QuietWindowLength
+	}
+	if deadline, bounded := parent.Deadline(); bounded {
+		if left := time.Until(deadline); left < quiet+WindowMargin {
+			return StatementBracket{Unavailable: fmt.Sprintf(
+				"the caller's deadline leaves %s, less than the %s quiet window and its snapshots, "+
+					"so nothing was sent", left.Round(time.Second), quiet)}, nil
+		}
+	}
+	ctx, cancel, conn, err := r.session(parent, dsn, quiet)
+	if err != nil {
+		return StatementBracket{}, err
+	}
+	defer cancel()
+	defer conn.Close(context.Background())
+
+	version, missing, err := probeStats(ctx, conn, minimumStatsVersion)
+	if err != nil {
+		return StatementBracket{}, classify(ctx, err)
+	}
+	result := StatementBracket{ServerVersion: version, Unavailable: missing}
+	if missing != "" {
+		return result, nil
+	}
+	if err := r.bracket(ctx, conn, quiet, between, &result); err != nil {
+		if unloaded(err) {
+			return StatementBracket{ServerVersion: version,
+				Unavailable: "pg_stat_statements is installed but not loaded (shared_preload_libraries)"}, nil
+		}
+		return StatementBracket{}, classify(ctx, err)
+	}
+	return result, nil
+}
+
+// bracket is Bracket's three snapshots. An error is the session's;
+// between's stops the bracket with Unavailable set.
+func (r StatsReader) bracket(ctx context.Context, conn querier, quiet time.Duration,
+	between func(ctx context.Context) error, result *StatementBracket,
+) error {
+	deallocBefore, resetBefore, err := readInfo(ctx, conn)
+	if err != nil {
+		return err
+	}
+	first, err := readSnapshot(ctx, conn)
+	if err != nil {
+		return err
+	}
+	if err := r.wait(ctx, quiet); err != nil && ctx.Err() != nil {
+		result.Unavailable = "the quiet window was cut short by the caller's deadline, so nothing was sent"
+		return nil
+	}
+	second, err := readSnapshot(ctx, conn)
+	if err != nil {
+		return err
+	}
+	inQuiet, reset := snapshotDelta(first, second)
+	for _, statement := range inQuiet {
+		result.QuietCalls += statement.Calls
+	}
+	if reset {
+		result.Reset = true
+		return nil
+	}
+	if result.QuietCalls > 0 {
+		return nil
+	}
+	result.Sent = true
+	if err := between(ctx); err != nil {
+		result.Unavailable = "the request between the snapshots did not complete, so nothing was measured"
+		return nil
+	}
+	third, err := readSnapshot(ctx, conn)
+	if err != nil {
+		return err
+	}
+	deallocAfter, resetAfter, err := readInfo(ctx, conn)
+	if err != nil {
+		return err
+	}
+	statements, reset := snapshotDelta(second, third)
+	result.Reset = reset || deallocAfter != deallocBefore || !resetAfter.Equal(resetBefore)
+	result.Statements = statements
+	return nil
 }
 
 // planOne reads one statement by queryid, in this session, and plans it.
