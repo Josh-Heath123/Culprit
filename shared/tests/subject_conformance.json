@@ -249,6 +249,33 @@
         "dependency": "github.com/spf13/cobra"
       },
       "subject": "dep:cli/github.com/spf13/cobra"
+    },
+    {
+      "why": "Phase 38 part 1: a build's entry, as the Vite manifest keys it",
+      "kind": "bundle",
+      "parts": {
+        "component": "culprit-web",
+        "entry": "index.html"
+      },
+      "subject": "bundle:culprit-web/index.html"
+    },
+    {
+      "why": "an entry that is a source path: the `/` after the component is the split, later ones are the entry's",
+      "kind": "bundle",
+      "parts": {
+        "component": "web",
+        "entry": "src/main.tsx"
+      },
+      "subject": "bundle:web/src/main.tsx"
+    },
+    {
+      "why": "the component is canonicalised; the entry is trimmed and keeps its case, as a served path does",
+      "kind": "bundle",
+      "parts": {
+        "component": "  Web  ",
+        "entry": " src/Admin.tsx "
+      },
+      "subject": "bundle:web/src/Admin.tsx"
     }
   ],
   "build_errors": [
@@ -340,6 +367,37 @@
         "component": "ns/web",
         "dependency": "react"
       }
+    },
+    {
+      "why": "a bundle with no entry",
+      "kind": "bundle",
+      "parts": {
+        "component": "web"
+      }
+    },
+    {
+      "why": "an entry containing the aspect separator",
+      "kind": "bundle",
+      "parts": {
+        "component": "web",
+        "entry": "index.html#x"
+      }
+    },
+    {
+      "why": "an entry containing a space",
+      "kind": "bundle",
+      "parts": {
+        "component": "web",
+        "entry": "my page.html"
+      }
+    },
+    {
+      "why": "a `/` in a bundle's component would move the split point",
+      "kind": "bundle",
+      "parts": {
+        "component": "ns/web",
+        "entry": "index.html"
+      }
     }
   ],
   "parse_errors": [
@@ -362,6 +420,14 @@
     {
       "why": "schema with too many dotted parts",
       "subject": "schema:orders-db/a.b.c.d"
+    },
+    {
+      "why": "bundle with no entry",
+      "subject": "bundle:web"
+    },
+    {
+      "why": "bundle with an empty entry",
+      "subject": "bundle:web/"
     }
   ]
 }

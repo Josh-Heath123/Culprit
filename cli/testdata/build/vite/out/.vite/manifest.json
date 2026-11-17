@@ -1,0 +1,39 @@
+{
+  "index.html": {
+    "file": "assets/index-a1b2.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "imports": [
+      "_shared-c3d4.js"
+    ],
+    "dynamicImports": [
+      "src/lazy.tsx"
+    ],
+    "css": [
+      "assets/index-9f8e.css"
+    ]
+  },
+  "_shared-c3d4.js": {
+    "file": "assets/shared-c3d4.js",
+    "name": "shared"
+  },
+  "src/lazy.tsx": {
+    "file": "assets/lazy-e5f6.js",
+    "name": "lazy",
+    "src": "src/lazy.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "_shared-c3d4.js"
+    ]
+  },
+  "admin.html": {
+    "file": "assets/admin-0a1b.js",
+    "name": "admin",
+    "src": "admin.html",
+    "isEntry": true,
+    "imports": [
+      "_shared-c3d4.js"
+    ]
+  }
+}

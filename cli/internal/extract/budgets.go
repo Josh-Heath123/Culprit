@@ -93,30 +93,30 @@ const BudgetSkipWant = "budgets"
 // budgetValue is a budget's whole number of milliseconds, 1 to
 // model.MaxBudgetMS — the same bounds culprit_model.latency.Budget holds,
 // so a manifest `culprit check` accepts is one `apply-model` accepts.
-func budgetValue(value any) (int, bool) {
+func budgetValue(value any, maximum int) (int, bool) {
 	var whole int
 	switch typed := value.(type) {
 	case int:
 		whole = typed
 	case int64:
-		if typed > model.MaxBudgetMS || typed < 1 {
+		if typed > int64(maximum) || typed < 1 {
 			return 0, false
 		}
 		whole = int(typed)
 	case uint64:
-		if typed > model.MaxBudgetMS {
+		if typed > uint64(maximum) {
 			return 0, false
 		}
 		whole = int(typed)
 	case float64:
-		if typed < 1 || typed > model.MaxBudgetMS || typed != float64(int(typed)) {
+		if typed < 1 || typed > float64(maximum) || typed != float64(int(typed)) {
 			return 0, false
 		}
 		whole = int(typed)
 	default:
 		return 0, false
 	}
-	return whole, whole >= 1 && whole <= model.MaxBudgetMS
+	return whole, whole >= 1 && whole <= maximum
 }
 
 // validateBudgets refuses a `budgets:` entry that cannot be measured
@@ -142,7 +142,9 @@ func (m *Manifest) validateBudgets() error {
 				": `why` is required. A budget nobody explained is one nobody can safely change."}
 		}
 		_, latency := model.BudgetPredicates[budget.Predicate]
-		if !latency && !model.StatementBudgetPredicates[budget.Predicate] {
+		statement := model.StatementBudgetPredicates[budget.Predicate]
+		bundle := model.BundleBudgetPredicates[budget.Predicate]
+		if !latency && !statement && !bundle {
 			return &PolicyError{Message: fmt.Sprintf(
 				"%s: predicate %q is not one of %s", where, budget.Predicate,
 				strings.Join(budgetPredicateNames(), ", "))}
@@ -150,9 +152,9 @@ func (m *Manifest) validateBudgets() error {
 		if budget.literalProblem != "" {
 			return &PolicyError{Message: where + ": `value`: " + budget.literalProblem}
 		}
-		if _, ok := budgetValue(budget.Value); !ok {
-			return &PolicyError{Message: where +
-				fmt.Sprintf(": `value` must be a whole number of milliseconds, 1 to %d", model.MaxBudgetMS)}
+		if _, ok := budgetValue(budget.Value, model.BudgetMax(budget.Predicate)); !ok {
+			return &PolicyError{Message: where + fmt.Sprintf(": `value` must be a whole number of %s, 1 to %d",
+				model.BudgetUnit(budget.Predicate), model.BudgetMax(budget.Predicate))}
 		}
 		if strings.HasSuffix(budget.Subject, "*") {
 			return &PolicyError{Message: where +
@@ -161,8 +163,13 @@ func (m *Manifest) validateBudgets() error {
 		if err := checkSubject(where, budget.Subject); err != nil {
 			return err
 		}
-		if !latency {
+		if statement {
 			if err := m.checkStatementBudgetSubject(where, budget.Subject); err != nil {
+				return err
+			}
+		}
+		if bundle {
+			if err := m.checkBundleBudgetSubject(where, budget.Subject); err != nil {
 				return err
 			}
 		}
@@ -201,12 +208,39 @@ func (m *Manifest) checkStatementBudgetSubject(where, subject string) error {
 	return nil
 }
 
+// checkBundleBudgetSubject holds a `bundle_gzip_bytes_max` budget to what
+// it can be about (Phase 38 part 1): a `bundle:` subject, on a component
+// this file declares a build for. A budget on a build nobody declared
+// could never be judged; refused, not left unchecked.
+// api/app/model/manifest.py holds the same rule.
+func (m *Manifest) checkBundleBudgetSubject(where, subject string) error {
+	kind, parts, err := model.ParseSubject(subject)
+	if err != nil {
+		return &PolicyError{Message: where + ": `subject` is not a subject URI"}
+	}
+	if kind != model.KindBundle {
+		return &PolicyError{Message: where + ": a bundle budget is on an entry of a build " +
+			"(bundle:<component>/<entry>)"}
+	}
+	component, ok := m.componentNamed(parts["component"])
+	if !ok || component.Build == nil {
+		return &PolicyError{Message: fmt.Sprintf(
+			"%s: %s declares no build (components[].build.vite_manifest), so nothing could judge this budget",
+			where, parts["component"])}
+	}
+	return nil
+}
+
 func budgetPredicateNames() []string {
-	names := make([]string, 0, len(model.BudgetPredicates)+len(model.StatementBudgetPredicates))
+	names := make([]string, 0,
+		len(model.BudgetPredicates)+len(model.StatementBudgetPredicates)+len(model.BundleBudgetPredicates))
 	for name := range model.BudgetPredicates {
 		names = append(names, name)
 	}
 	for name := range model.StatementBudgetPredicates {
+		names = append(names, name)
+	}
+	for name := range model.BundleBudgetPredicates {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -223,7 +257,7 @@ func BudgetFacts(
 	}
 	facts := make([]model.Fact, 0, len(manifest.Budgets))
 	for index, budget := range manifest.Budgets {
-		value, _ := budgetValue(budget.Value)
+		value, _ := budgetValue(budget.Value, model.BudgetMax(budget.Predicate))
 		fact := model.Fact{
 			Plane:     model.PlaneIntent,
 			Subject:   budget.Subject,

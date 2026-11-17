@@ -105,10 +105,38 @@ func Run(ctx context.Context, options Options) (Report, error) {
 	report.Bundle = bundle
 
 	report.Result = diverge.Compare(bundle, diverge.Options{Now: now})
-	report.Result.Budgets = diverge.Budgets(bundle.Facts, len(manifest.Budgets) > 0)
+	// The unbudgeted surface is listed when the manifest declares budgets
+	// (Phase 36). A bundle budget (Phase 38 part 1) is on a build, not on
+	// anything served, so a manifest whose only budgets are bundle budgets
+	// does not switch it on.
+	declared := false
+	for _, budget := range manifest.Budgets {
+		declared = declared || !model.BundleBudgetPredicates[budget.Predicate]
+	}
+	report.Result.Budgets = diverge.Budgets(bundle.Facts, declared)
+	// Phase 38 part 1: a declared build is read and its entries judged
+	// against their bundle budgets. Nothing is read for a manifest that
+	// declares no build.
+	read := extract.ReadBuilds(manifest, baseDir, options.Only, now, bundle.CaptureID)
+	findings, missing := diverge.BundleBudgets(budgets, read.Facts)
+	report.Result.Bundles = findings
+	report.Result.BuildNotChecked = append(read.NotChecked, missing...)
 	severity.NewClassifier(manifest, bundle).Apply(report.Result.Divergences)
 	report.Suppressed = manifest.ApplySuppressions(report.Result.Divergences, now)
 	return report, nil
+}
+
+// CountFailing counts every finding of a check at or above threshold: its
+// divergences, as CountAtOrAbove does, and its bundles over budget (Phase
+// 38 part 1).
+func CountFailing(result diverge.Result, threshold model.Severity) int {
+	count := CountAtOrAbove(result.Divergences, threshold)
+	for _, finding := range result.Bundles {
+		if finding.Severity.AtLeast(threshold) {
+			count++
+		}
+	}
+	return count
 }
 
 // CountAtOrAbove counts the findings that should fail a build.

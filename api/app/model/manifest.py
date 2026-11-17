@@ -66,6 +66,7 @@ from culprit_model.graph import (
 )
 from culprit_model.latency import (
     BUDGET_MERGE_PROBLEM,
+    BUNDLE_BUDGET_PREDICATES,
     STATEMENT_BUDGET_PREDICATES,
     Budget,
     budget_literal_problem,
@@ -238,6 +239,37 @@ class ConnectionSpec(BaseModel):
     criticality: Criticality = Criticality.UNKNOWN
 
 
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:")
+
+#: The environment of the build reader's OBSERVED facts (Phase 38 part 1).
+#: Reserved: cli/internal/model/protocol.go's BuildEnvironment.
+BUILD_ENVIRONMENT = "build"
+
+
+class BuildSpec(BaseModel):
+    """Where a component's frontend build is (Phase 38 part 1). Declared,
+    never searched for. cli/internal/extract/manifest.go's ComponentBuild;
+    validated as it is, never acted on here."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: Vite's build manifest, relative to culprit.yaml.
+    vite_manifest: str
+
+    @field_validator("vite_manifest")
+    @classmethod
+    def _relative(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("required: the path of the build's manifest, relative to culprit.yaml")
+        if value.startswith(("/", "\\")) or _WINDOWS_DRIVE.match(value):
+            raise ValueError("must be relative to culprit.yaml, not absolute")
+        if ".." in re.split(r"[/\\]", value):
+            raise ValueError(
+                "may not climb out of the directory culprit.yaml is in (a `..` segment)"
+            )
+        return value
+
+
 class ComponentSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -248,6 +280,7 @@ class ComponentSpec(BaseModel):
     labels: dict[str, Any] = Field(default_factory=dict)
     monitored_metrics: tuple[str, ...] = ()
     connections: tuple[ConnectionSpec, ...] = ()
+    build: BuildSpec | None = None
 
 
 class ExtractorSpec(BaseModel):
@@ -586,6 +619,11 @@ class Manifest(BaseModel):
                 raise ValueError(
                     f"{where}: an environment name may not be blank or contain spaces or slashes"
                 )
+            if name == BUILD_ENVIRONMENT:
+                raise ValueError(
+                    f"{where}: the name {BUILD_ENVIRONMENT!r} is reserved for the build's own "
+                    "facts (Phase 38 part 1); name this environment something else"
+                )
             allowlist = spec.grants.get(Capability("process.exec.allowlist"), ())
             for command, argv in spec.exec.items():
                 if not argv or not argv[0].strip():
@@ -710,6 +748,29 @@ class Manifest(BaseModel):
             if database not in databases:
                 raise ValueError(
                     f"{where}: {database} is not a component of kind database in this file"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _check_bundle_budgets(self) -> "Manifest":
+        """A `bundle_gzip_bytes_max` budget (Phase 38 part 1) is on a
+        `bundle:` subject, on a component this file declares a build for.
+        cli/internal/extract/budgets.go holds the same rule."""
+        built = {c.name for c in self.components if c.build is not None}
+        for index, budget in enumerate(self.budgets):
+            if budget.predicate not in BUNDLE_BUDGET_PREDICATES:
+                continue
+            where = f"budgets[{index}]"
+            kind, parts = subjects.parse(budget.subject)
+            if kind != subjects.SubjectKind.BUNDLE:
+                raise ValueError(
+                    f"{where}: a bundle budget is on an entry of a build "
+                    "(bundle:<component>/<entry>)"
+                )
+            if parts["component"] not in built:
+                raise ValueError(
+                    f"{where}: {parts['component']} declares no build "
+                    "(components[].build.vite_manifest), so nothing could judge this budget"
                 )
         return self
 
@@ -1350,6 +1411,10 @@ def dump_manifest(manifest: Manifest) -> str:
                 _dump_connection(connection)
                 for connection in sorted(spec.connections, key=lambda c: (c.to, str(c.kind)))
             ]
+        # Phase 38 part 1: carried whole, as `extract` is, so a round trip
+        # never deletes where a component's build is.
+        if spec.build is not None:
+            entry["build"] = {"vite_manifest": spec.build.vite_manifest}
         components.append(entry)
 
     document: dict[str, Any] = {"version": manifest.version, "components": components}

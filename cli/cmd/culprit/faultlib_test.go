@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -693,14 +694,38 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	return inv
 }
 
-// budgetedRoute is a route probe.http.latency times, and the locator of
-// the budget the demo's culprit.yaml declares for it.
-type budgetedRoute struct{ subject, locator string }
+// budgetedRoute is a route probe.http.latency times against the budget the
+// demo's culprit.yaml declares for it.
+type budgetedRoute struct{ subject string }
 
 var (
-	readyRoute    = budgetedRoute{"http:inventory-service/GET /ready", "budgets[0]"}
-	productsRoute = budgetedRoute{"http:inventory-service/GET /products", "budgets[2]"}
+	readyRoute    = budgetedRoute{"http:inventory-service/GET /ready"}
+	productsRoute = budgetedRoute{"http:inventory-service/GET /products"}
 )
+
+// latencyBudgetLocator is where the demo's culprit.yaml declares the p95
+// budget on subject, found by its subject rather than by its position, so
+// reordering the file's budgets moves nothing here (Phase 38 part 1).
+func latencyBudgetLocator(t *testing.T, subject string) string {
+	t.Helper()
+	manifest, err := extract.LoadManifest(demoManifest)
+	if err != nil {
+		t.Fatalf("the demo's culprit.yaml: %v", err)
+	}
+	locator := ""
+	for index, budget := range manifest.Budgets {
+		if budget.Subject == subject && budget.Predicate == "latency_p95_ms" {
+			if locator != "" {
+				t.Fatalf("the demo's culprit.yaml declares two p95 budgets on %s", subject)
+			}
+			locator = fmt.Sprintf("budgets[%d]", index)
+		}
+	}
+	if locator == "" {
+		t.Fatalf("the demo's culprit.yaml declares no p95 budget on %s", subject)
+	}
+	return locator
+}
 
 // measureLatency runs probe.http.latency on one of inventory-service's
 // routes from the fault's vantage, against the budget the demo's
@@ -732,7 +757,7 @@ func (s *faultStack) measureLatency(fault faultExpectation, route budgetedRoute,
 	if err := reading.Validate(); err != nil {
 		s.t.Errorf("the latency reading does not validate: %v", err)
 	}
-	if reading.ExpectedSource == nil || reading.ExpectedSource.Locator != route.locator {
+	if reading.ExpectedSource == nil || reading.ExpectedSource.Locator != latencyBudgetLocator(s.t, route.subject) {
 		s.t.Errorf("the reading was not measured against the demo's budget: %+v", reading.ExpectedSource)
 	}
 	return reading

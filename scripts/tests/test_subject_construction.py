@@ -26,7 +26,18 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
-SCHEMES = ("component", "connection", "http", "config", "schema", "dep", "image", "auth")
+SCHEMES = (
+    "component",
+    "connection",
+    "http",
+    "config",
+    "schema",
+    "dep",
+    "image",
+    "auth",
+    # Phase 38 part 1.
+    "bundle",
+)
 
 #: A string literal opening with `<scheme>:` — `"http:` or `f"component:`.
 #: `(?!//)` excludes `"http://..."`, which is a URL and not a subject.

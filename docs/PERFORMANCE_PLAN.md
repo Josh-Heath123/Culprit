@@ -1856,6 +1856,65 @@ stands as amended by Q35. Its criteria not yet met carry forward unchanged.
 - **Determinism:** the outcomes are the same across two runs of the library's
   database case. The report shows both.
 
+**Architecture review of part 3, the rest, 2026-11-17 — merged as `4619099`
+(PR #44). Phase 37 is signed off.**
+
+Read by id from GitHub's API:
+- PR #44's last run, 44072232611 on `5867ae3`: success on every job. The two
+  fault-library shards took 673 s and 641 s.
+- Run 44067449151 on `9a305f9`, attempt 2: the database shard was rerun, and
+  `results.json` was reproduced both times.
+- `main`'s push run 44076102588 on `4619099` was still in progress at sign-off.
+  Phase 38's step 0 confirms it.
+
+**Verified on disk:**
+- **The existing test faults are unchanged.** All eight faults and all five
+  scenarios in `expected.json` are as they were, compared one by one with
+  `883e9b2`. The new entries are `missing-index` and
+  `missing-index-wrong-fix`.
+- **The migrations changed only in their docstrings.** `0002`'s and `0003`'s
+  diffs are 30 lines, all docstring.
+- **Q36 is applied.** The demo's graph is now `order-service → inventory-service`,
+  `order-service → payments-service`, and `inventory-service → inventory-db`
+  (background).
+
+**Accepted:**
+- **Q36, ruled mid-run, as applied.** No existing case's result changed, because
+  the walk never followed the two edges.
+- **The wrong fix is recorded as an action, not a commit.** The category-only
+  migration is in no commit of the repository's history, so naming one would
+  break Q20's rule that a record names only real commits. The run was right
+  to deviate. The brief's "a commit adding a `category`-only migration" was
+  imprecise.
+- **`discriminated` is false for the database case.** On inventory-service's
+  path no other branch competes, as in `network-partition`. The run's own
+  record had carried `true` over from the partial case, and CI caught it.
+- **The live-plan fix (`641c92c`).** The walk had only ever read plan nodes in
+  the shape a JSON round-trip gives. This is pattern 1 again, and the library
+  is what found it.
+- **The shards.** A Docker-free test proves every case runs in exactly one
+  shard, and that the matrix is `[1, 2]`.
+- **Q35's criteria, measured in CI** over two runs of the database shard:
+  - at `0002`, means of 41–43 ms and a p95 of 97–98 ms;
+  - at `0003`, means of about 0.1 ms and a p95 of 3–4 ms;
+  - with `category` alone, means of 41–42 ms and `not_resolved`.
+- **The quickstart criterion is accepted on the faults stack's evidence.** The
+  run did not check the quickstart itself at `0003`, but the faults stack runs
+  the same images, migrations and traffic, and CI holds it to both budgets.
+  No CI job judges the quickstart against its own budgets. That is recorded
+  here as a gap, and not built.
+
+**Carried into Phase 38 part 1, as small items:**
+- The invariant auditor's two risks: `TestAShardKeepsTheOtherShardsResults`
+  covers shard 1 only, and the route budget's locator `budgets[2]` depends on
+  order. Find the budget by its subject.
+
+**Phase 37 is complete.** Its parts were PR #39, #40, #41, #42, #43 and #44.
+Six questions were ruled in its third part. Three of them corrected the
+architecture session's own briefs or sign-offs: Q34, Q35 and Q36. That is the
+argument for reproducing a claim before ruling on it, and it is now step 4 of
+the routine.
+
 ---
 
 ### Phase 38 — Bounds: what the browser downloads, and what a list returns
@@ -1921,6 +1980,138 @@ the database per request.
 
 **17. Do NOT implement yet.** No browser, no fetch-waterfall analysis, no
 response values kept.
+
+**How Phase 38 is run (2026-11-17).**
+
+Phase 38 is two parts, each its own `/next` run with a review after it:
+
+- **Part 1 — bundles.** P6, as amended below. This covers the build reader,
+  `bundle_gzip_bytes_max`, judged in `culprit check`, and Culprit's own
+  frontend under a budget in CI.
+- **Part 2 — lists.** This covers `probe.http.response_items`,
+  `response_items_max`, and the unbounded surface. Its brief is written at
+  part 1's review.
+
+**P6 is amended: a built-in Go reader, not the Node extractor.** P6 said the
+Node extractor reads Vite's build manifest and reports OBSERVED facts in the
+environment `build`. That cannot work as written. Extractor protocol 1 is
+INTENT only: the request's `environment` is always `null`, and the
+orchestrator rolls every response into one INTENT capture
+(`orchestrator.go`, `EXTRACTOR_PROTOCOL.md`). Making it carry OBSERVED facts
+would mean a second capture per run and a protocol version.
+
+A build needs neither. Its manifest is JSON, its sizes are file sizes, and
+reading them runs no project code and needs no Node. So the reader is built
+into the CLI, beside `openapi.go` and `artefacts.go`. It is the only reader
+of a build, so pattern 9 does not arise. Bundlers other than Vite stay out of
+this plan.
+
+**Decided now for part 2, so it is not re-argued:**
+- **A list route is bounded only where a bound is declared.** That means
+  either the spec's response array declares `maxItems`, or `culprit.yaml`
+  declares `response_items_max` for the route. The unbounded surface lists
+  every other route whose declared response is an array.
+- **No paging-parameter names.** A list of names like `limit` or `page` is a
+  denylist, and it loses (pattern 4). A well-paged route that declares no
+  bound is listed. That is informational, and the remedy is to declare the
+  bound.
+- **The criterion is amended to match.** Phase 38's "names exactly the unpaged
+  ones" becomes "names exactly the array routes with no declared bound".
+
+**Part 1 — bundles. Brief and criteria, 2026-11-17.**
+
+**Work order.**
+0. **Commit the review first.** Confirm `main`'s push run 44076102588 on
+   `4619099` green, by id. Then `git apply ../phase-37-signoff.patch` and
+   `git commit -F ../phase-37-signoff.txt`.
+1. **The carried items.**
+   - `TestAShardKeepsTheOtherShardsResults` covers shard 2 as well as shard 1.
+   - The route budget is located by its subject, not by `budgets[2]`.
+2. **Where a build is.** A component may declare
+   `build: {vite_manifest: <path>}`, relative to `culprit.yaml`.
+   - Both manifest readers know the field, strictly typed, and the generated
+     corpus covers it (Q28).
+   - The environment name `build` becomes reserved, and a manifest that
+     declares an environment of that name is refused.
+   - Nothing searches for a `dist` folder. An undeclared build is not
+     checked.
+3. **The subject.** A new subject kind, `bundle`, holds a component and an
+   entry. The entry is the Vite manifest's key for a chunk with
+   `isEntry: true`, for example `index.html`.
+   - It is added to both subject models and their constructors.
+   - The subject-construction gate covers it (Q34).
+4. **The build reader**, built into the CLI.
+   - **What it emits:** OBSERVED facts in the environment `build`. For each
+     entry, `bundle_raw_bytes` and `bundle_gzip_bytes` of its initial
+     download: the entry chunk, plus the closure of its static `imports`,
+     plus the `css` files each of those lists. `dynamicImports` are excluded,
+     because they load later.
+   - **How gzip is measured:** each file through Go's `compress/gzip` at
+     `BestCompression`, then summed.
+   - **What it never keeps:** a file's contents. Facts hold names and sizes
+     only.
+   - **The largest chunks:** the reader keeps enough to name the three
+     largest chunks by gzip size for each entry.
+5. **The budget.** P1's set gains `bundle_gzip_bytes_max`, on `bundle:`
+   subjects, in both readers. `culprit check` judges it against the build's
+   facts:
+   - **An entry over its budget** is a finding of severity `degrades`, in
+     every format `check` writes, naming the three largest chunks with their
+     gzip sizes.
+   - **An entry at or under its budget** produces nothing.
+   - **A declared build whose manifest file is missing** gets a "Not
+     checked" line naming the path.
+   - **A budget naming an entry that is not in the build** gets a "Not
+     checked" line naming the entry.
+   - **A budget on a component that declares no build** makes the manifest
+     refused.
+6. **Culprit's own frontend.**
+   - `frontend/vite.config.ts` sets `build.manifest: true` (§6 of this plan).
+   - `culprit.yaml` declares `culprit-web`'s build and a gzip budget for its
+     entry. The budget is chosen from a measured build with stated headroom,
+     and its `why` says how it was chosen.
+   - The self-check job builds the frontend before it runs `check`, and its
+     gate becomes `--fail-on=degrades`. The self-check has no divergences
+     today, so this changes nothing now. Say so in the report, with the
+     count.
+7. **The documents.**
+   - README: a bundle budget in CI. This is Phase 38's definition of done.
+   - LIMITS:
+     - Vite only;
+     - the gzip measure, and why its figure differs from Vite's printout and
+       from what a CDN serves with brotli;
+     - dynamic imports excluded;
+     - an undeclared build is not checked.
+   - The report formats.
+
+**Acceptance criteria.**
+- **On recorded build fixtures** (a manifest and the files it names, kept
+  under testdata):
+  - an entry over budget is reported with its three largest chunks;
+  - under budget, nothing is reported;
+  - a missing manifest, and a missing entry, each give a "Not checked" line;
+  - a static import is counted and a dynamic import is not, each shown by a
+    fixture.
+- **Determinism:** the same fixture gives identical facts twice.
+- **Contents are never kept:** a fixture chunk holding secret-looking strings
+  yields facts with sizes and names only. This is shown by a test.
+- **Readers and corpus:** both readers accept the new field, kind and
+  predicate. The corpus covers them, and the environment name `build` is
+  refused.
+- **Culprit's own frontend in CI:** the self-check builds `culprit-web` and
+  judges its budget. A deliberate mutation, with the budget set below the
+  build, turns the self-check red; show it, then restore it.
+- **Unchanged elsewhere:** `culprit check` on every existing fixture and
+  golden is unchanged, except where a fixture now declares a build.
+- **CI** is green on the merge result, and `LLM_PROVIDER=none` changes
+  nothing.
+
+**Do NOT implement in part 1:**
+- no Node extractor change for builds, and no extractor protocol change;
+- no bundler other than Vite, and no brotli;
+- no `response_items` probe, no `response_items_max`, and no unbounded surface
+  (part 2);
+- no browser, and nothing about fetch waterfalls (§0.5).
 
 ---
 

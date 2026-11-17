@@ -123,6 +123,16 @@ def test_the_root_model_loads() -> None:
     load_manifest((QUICKSTART_MODEL.parents[1] / "culprit.yaml").read_text(encoding="utf-8"))
 
 
+def test_the_root_model_round_trips() -> None:
+    """Phase 38 part 1: the root culprit.yaml declares culprit-web's build
+    and a bundle budget on it. An export that dropped `build:` gave a file
+    that no longer loads (a bundle budget on a component with no build)."""
+    root = (QUICKSTART_MODEL.parents[1] / "culprit.yaml").read_text(encoding="utf-8")
+    manifest = load_manifest(root)
+    assert any(component.build is not None for component in manifest.components)
+    assert load_manifest(dump_manifest(manifest)) == manifest
+
+
 def test_the_quickstart_model_loads() -> None:
     """`just quickstart` applies demo-services/culprit.yaml with this
     loader. Phase 32 part 1 gave it `tokens:` maps, which the credential

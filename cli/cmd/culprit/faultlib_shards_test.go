@@ -201,36 +201,63 @@ func TestAShardKeepsTheOtherShardsResults(t *testing.T) {
 	if err := json.Unmarshal(committed, &kept); err != nil {
 		t.Fatal(err)
 	}
-	ran := faultResults{Why: kept.Why}
-	for _, result := range kept.Faults {
-		if shardOf(library, result.Name) == 1 {
-			result.Verdict = "changed-by-shard-1"
-			ran.Faults = append(ran.Faults, result)
+	// Every shard, faults and scenarios alike (Phase 38 part 1: it covered
+	// shard 1's faults only). Each shard's fresh results are marked, and
+	// only that shard's cases may carry the mark after the merge.
+	for shard := 1; shard <= faultLibraryShards; shard++ {
+		mark := fmt.Sprintf("changed-by-shard-%d", shard)
+		ran := faultResults{Why: kept.Why}
+		for _, result := range kept.Faults {
+			if shardOf(library, result.Name) == shard {
+				result.Verdict = mark
+				ran.Faults = append(ran.Faults, result)
+			}
+		}
+		for _, result := range kept.Scenarios {
+			if shardOf(library, "verify/"+result.Name) == shard {
+				result.Verdict = mark
+				ran.Scenarios = append(ran.Scenarios, result)
+			}
+		}
+		if len(ran.Faults)+len(ran.Scenarios) == 0 {
+			t.Fatalf("shard %d has no committed result to merge", shard)
+		}
+		merged, err := mergeShardResults(library, shard, ran, committed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(merged.Faults) != len(kept.Faults) || len(merged.Scenarios) != len(kept.Scenarios) {
+			t.Fatalf("shard %d merged %d faults and %d scenarios, committed %d and %d", shard,
+				len(merged.Faults), len(merged.Scenarios), len(kept.Faults), len(kept.Scenarios))
+		}
+		for index, result := range merged.Faults {
+			if result.Name != kept.Faults[index].Name {
+				t.Errorf("shard %d: fault %d is %s, want %s: the library's order", shard, index, result.Name, kept.Faults[index].Name)
+			}
+			if changed := result.Verdict == mark; changed != (shardOf(library, result.Name) == shard) {
+				t.Errorf("shard %d: fault %s: this shard's result kept = %v", shard, result.Name, changed)
+			}
+		}
+		for index, result := range merged.Scenarios {
+			if result.Name != kept.Scenarios[index].Name {
+				t.Errorf("shard %d: scenario %d is %s, want %s: the library's order", shard, index, result.Name, kept.Scenarios[index].Name)
+			}
+			if changed := result.Verdict == mark; changed != (shardOf(library, "verify/"+result.Name) == shard) {
+				t.Errorf("shard %d: scenario %s: this shard's result kept = %v", shard, result.Name, changed)
+			}
 		}
 	}
-	for _, result := range kept.Scenarios {
-		if shardOf(library, "verify/"+result.Name) == 1 {
-			ran.Scenarios = append(ran.Scenarios, result)
-		}
-	}
-	merged, err := mergeShardResults(library, 1, ran, committed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(merged.Faults) != len(kept.Faults) || len(merged.Scenarios) != len(kept.Scenarios) {
-		t.Fatalf("merged %d faults and %d scenarios, committed %d and %d",
-			len(merged.Faults), len(merged.Scenarios), len(kept.Faults), len(kept.Scenarios))
-	}
-	for index, result := range merged.Faults {
-		if result.Name != kept.Faults[index].Name {
-			t.Errorf("fault %d is %s, want %s: the library's order", index, result.Name, kept.Faults[index].Name)
-		}
-		changed := result.Verdict == "changed-by-shard-1"
-		if changed != (shardOf(library, result.Name) == 1) {
-			t.Errorf("%s: shard 1's result kept = %v", result.Name, changed)
-		}
-	}
-	if _, err := shardFromEnvironment("3"); err == nil {
+	if _, err := shardFromEnvironment(strconv.Itoa(faultLibraryShards + 1)); err == nil {
 		t.Error("a shard past faultLibraryShards is accepted")
+	}
+}
+
+// TestTheLibrarysRoutesHaveTheirBudgets: the routes the library times are
+// found in the demo's culprit.yaml by subject, without Docker.
+func TestTheLibrarysRoutesHaveTheirBudgets(t *testing.T) {
+	for _, route := range []budgetedRoute{readyRoute, productsRoute} {
+		if locator := latencyBudgetLocator(t, route.subject); !strings.HasPrefix(locator, "budgets[") {
+			t.Errorf("%s: locator %q", route.subject, locator)
+		}
 	}
 }

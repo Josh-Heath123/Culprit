@@ -59,8 +59,15 @@ const (
 	// or an undeclared index is a plain disagreement.
 	PredicateLeadsIndex    = "leads_index"
 	PredicateMigrationHead = "migration_head"
-	PredicateVersion       = "version"
-	PredicateReadBy        = "read_by"
+	// The build reader's OBSERVED facts on a `bundle:` subject, in the
+	// environment `build` (Phase 38 part 1): an entry's initial download,
+	// raw and gzipped, in bytes, and its three largest chunks by gzipped
+	// size. Names and sizes only, never a file's contents.
+	PredicateBundleRawBytes      = "bundle_raw_bytes"
+	PredicateBundleGzipBytes     = "bundle_gzip_bytes"
+	PredicateBundleLargestChunks = "bundle_largest_chunks"
+	PredicateVersion             = "version"
+	PredicateReadBy              = "read_by"
 	// PredicateValueShape is kept as a name a third-party extractor
 	// may use, but nothing in this repository emits it any more.
 	//
@@ -216,3 +223,9 @@ func SkipsFromFailure(extractor string, wants []string, reason string) []Skip {
 	}
 	return skips
 }
+
+// BuildEnvironment is the environment of the build reader's OBSERVED facts
+// (Phase 38 part 1): what a build measured, not what any running
+// environment does. Reserved: a manifest declaring an environment of this
+// name is refused, by both readers.
+const BuildEnvironment = "build"

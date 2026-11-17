@@ -200,7 +200,7 @@ func operationBudgets(
 	var facts []model.Fact
 	var skips []model.Skip
 	for _, predicate := range predicates {
-		value, valid := budgetValue(declared[predicate])
+		value, valid := budgetValue(declared[predicate], model.MaxBudgetMS)
 		_, known := model.BudgetPredicates[predicate]
 		if !known || !valid {
 			skips = append(skips, model.Skip{

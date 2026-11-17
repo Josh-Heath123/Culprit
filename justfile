@@ -158,10 +158,11 @@ cli-test:
 # hundred facts across five components. If the comparator starts
 # inventing findings, it invents them here first.
 #
-# `--fail-on=breaks_request_path` rather than the default `degrades`: the
-# gate is about faults that break requests, and a stricter threshold in
-# our own CI than we recommend to users would be us not believing our own
-# default.
+# `--fail-on=degrades`, the default we recommend to users (Phase 38 part
+# 1; it was breaks_request_path before). It also fails on culprit-web's
+# bundle over its gzip budget, a finding of severity degrades. Build the
+# dashboard first (`just frontend-build`): without a build the budget is
+# "Not checked", not judged.
 #
 # **The placeholder env is not optional here.** `just intent` sets it
 # because api/app/*/config.py reads those variables at import time and
@@ -177,11 +178,11 @@ cli-test:
 # goes through `_self-check-env`, and none of them invokes the binary
 # directly.
 self-check *ARGS:
-    @just _self-check-env --fail-on=breaks_request_path {{ARGS}}
+    @just _self-check-env --fail-on=degrades {{ARGS}}
 
 # The same, as the SARIF file CI uploads for pull-request annotations.
 self-check-sarif:
-    @just _self-check-env --fail-on=breaks_request_path --format sarif --output ../culprit.sarif
+    @just _self-check-env --fail-on=degrades --format sarif --output ../culprit.sarif
 
 # The §0.1 coverage report: subjects only one source describes, where
 # nothing could ever catch a mistake. Not defects — a map of where this
