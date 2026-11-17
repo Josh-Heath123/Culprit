@@ -173,6 +173,15 @@ def test_the_anchors(name: str, verdict: str, per_item: list[str]) -> None:
     assert expect["per_item"] == per_item
 
 
+def test_the_boundary_is_held_by_hand() -> None:
+    """Calls equal to the item count are per item, one fewer is not:
+    asserted against the rule itself, not only against the record."""
+    at = {"items": 5, "statements": [{"queryid": "202", "calls": 5}]}
+    short = {"items": 5, "statements": [{"queryid": "202", "calls": 4}]}
+    assert judge_per_item(at)[2] == ["202"]
+    assert judge_per_item(short)[2] == []
+
+
 def test_the_reasons_say_what_they_found() -> None:
     assert _expect("5 items, the list's statement and one per item (N+1)")["reason"] == (
         "1 statement(s) ran at least once per item of 5: 202 (5 calls)"

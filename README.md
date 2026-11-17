@@ -784,8 +784,9 @@ PASSING (1)
       measured: at=/products items=0 method=GET status=200 url=http://inventory-service:8002/products
 
 0 failing, 0 inconclusive, 0 refused, 1 passing
-``` The limits are in
-[`docs/LIMITS.md`](docs/LIMITS.md), "List budgets".
+```
+
+The limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "List budgets".
 
 **Databases.** A component's database is reached through a variable you
 name, never a connection string in the file:
