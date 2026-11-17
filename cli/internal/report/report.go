@@ -76,9 +76,17 @@ func renderText(writer io.Writer, input Input) error {
 	open := openFindings(input.Result.Divergences)
 	suppressed := len(input.Result.Divergences) - len(open)
 
+	// Phase 38 part 2: the headline counts every kind of finding it
+	// reports, so a bundle over budget is never headed "No divergences."
+	bundles := len(input.Result.Bundles)
 	if len(open) == 0 {
-		fmt.Fprintf(writer, "No divergences. %d fact(s) compared across %d subject(s).\n",
-			totalFacts(input), countSubjects(input.Bundle, input.Captures...))
+		if bundles == 0 {
+			fmt.Fprintf(writer, "No divergences. %d fact(s) compared across %d subject(s).\n",
+				totalFacts(input), countSubjects(input.Bundle, input.Captures...))
+		} else {
+			fmt.Fprintf(writer, "%d finding(s): %d bundle(s) over budget, no divergences. %d fact(s) compared across %d subject(s).\n",
+				bundles, bundles, totalFacts(input), countSubjects(input.Bundle, input.Captures...))
+		}
 		if suppressed > 0 {
 			fmt.Fprintf(writer, "%d finding(s) suppressed by culprit.yaml.\n", suppressed)
 		}
@@ -92,7 +100,12 @@ func renderText(writer io.Writer, input Input) error {
 		return nil
 	}
 
-	fmt.Fprintf(writer, "%d divergence(s)\n\n", len(open))
+	if bundles == 0 {
+		fmt.Fprintf(writer, "%d divergence(s)\n\n", len(open))
+	} else {
+		fmt.Fprintf(writer, "%d finding(s): %d divergence(s), %d bundle(s) over budget\n\n",
+			len(open)+bundles, len(open), bundles)
+	}
 	for _, finding := range open {
 		fmt.Fprintf(writer, "  [%s] %s\n", finding.Severity, finding.Subject)
 		fmt.Fprintf(writer, "      %s\n", finding.Explanation)
@@ -435,6 +448,11 @@ type jsonSummary struct {
 	UnverifiableSubjects int `json:"unverifiable_subjects"`
 	// Phase 38 part 1, omitted when zero.
 	BundlesOverBudget int `json:"bundles_over_budget,omitempty"`
+	// Phase 38 part 2: every open finding of every kind, divergences and
+	// bundles over budget: what --fail-on=any fails on. The severity
+	// counts above are divergences' only; a bundle over budget is always
+	// degrades.
+	Failing int `json:"failing"`
 }
 
 // jsonBundle is one entry over its gzip budget.
@@ -570,6 +588,7 @@ func buildJSON(input Input) jsonReport {
 			Right:          side(finding.Right),
 		})
 	}
+	report.Summary.Failing = report.Summary.Open + report.Summary.BundlesOverBudget
 	return report
 }
 
