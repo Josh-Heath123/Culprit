@@ -89,6 +89,41 @@ type ManifestComponent struct {
 	// "does this subject lie on a request path" is the whole difference
 	// between `breaks_request_path` and `cosmetic`.
 	Connections []ManifestConnection `yaml:"connections"`
+	// Build is where this component's frontend build is (Phase 38 part
+	// 1). Declared, never searched for: an undeclared build is not
+	// checked, and `culprit check` says so of no one, because nothing was
+	// asked of it.
+	Build *ComponentBuild `yaml:"build"`
+}
+
+// ComponentBuild names a component's build output.
+//
+//	components:
+//	  - name: web
+//	    kind: frontend
+//	    build:
+//	      vite_manifest: frontend/dist/.vite/manifest.json
+type ComponentBuild struct {
+	// ViteManifest is the path of Vite's build manifest, relative to
+	// culprit.yaml. The files it names are read for their sizes, never
+	// kept (build.go).
+	ViteManifest string `yaml:"vite_manifest"`
+}
+
+// windowsDrive is a path that starts with a drive letter, which is not
+// relative on any platform.
+var windowsDrive = regexp.MustCompile(`^[A-Za-z]:`)
+
+// relativePathProblem says why path is not a path relative to culprit.yaml,
+// or "". api/app/model/manifest.py holds the same rule.
+func relativePathProblem(path string) string {
+	switch {
+	case strings.TrimSpace(path) == "":
+		return "required: the path of the build's manifest, relative to culprit.yaml"
+	case strings.HasPrefix(path, "/"), strings.HasPrefix(path, `\`), windowsDrive.MatchString(path):
+		return "must be relative to culprit.yaml, not absolute"
+	}
+	return ""
 }
 
 // ExtractConfig is the `extract:` section (field 10): extractor commands
@@ -334,6 +369,11 @@ func (m *Manifest) validate() error {
 			return fmt.Errorf("duplicate component name: %s", component.Name)
 		}
 		seen[component.Name] = true
+		if component.Build != nil {
+			if problem := relativePathProblem(component.Build.ViteManifest); problem != "" {
+				return fmt.Errorf("components.%s.build.vite_manifest: %s", component.Name, problem)
+			}
+		}
 	}
 
 	names := map[string]bool{}

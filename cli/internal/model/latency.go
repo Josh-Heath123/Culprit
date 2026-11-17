@@ -58,6 +58,33 @@ var BudgetPredicates = map[string]int{
 // the latency walk reads as percentiles of a route.
 var StatementBudgetPredicates = map[string]bool{"query_mean_ms_max": true}
 
+// BundleBudgetPredicates are the predicates a budget on a frontend build's
+// entry may name (Phase 38 part 1): the most its initial download may
+// weigh, gzipped, in whole bytes. On `bundle:` subjects only. Kept apart
+// from both sets above: it is neither a percentile nor milliseconds.
+var BundleBudgetPredicates = map[string]bool{"bundle_gzip_bytes_max": true}
+
+// MaxBundleBytes is the largest bundle budget, in bytes: a bound on what
+// can be declared, as MaxBudgetMS is for time. Python holds the same.
+const MaxBundleBytes = 1_000_000_000
+
+// BudgetMax is the largest value a budget naming predicate may declare,
+// and BudgetUnit the unit it is declared in.
+func BudgetMax(predicate string) int {
+	if BundleBudgetPredicates[predicate] {
+		return MaxBundleBytes
+	}
+	return MaxBudgetMS
+}
+
+// BudgetUnit is the unit a budget naming predicate is declared in.
+func BudgetUnit(predicate string) string {
+	if BundleBudgetPredicates[predicate] {
+		return "bytes"
+	}
+	return "milliseconds"
+}
+
 // plainDecimal is a budget as written in culprit.yaml: plain decimal
 // digits, no sign, no leading zero.
 var plainDecimal = regexp.MustCompile(`^[1-9][0-9]*$`)

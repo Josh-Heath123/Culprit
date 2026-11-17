@@ -223,6 +223,10 @@ func (m *Manifest) validateEnvironments() error {
 		if strings.TrimSpace(name) == "" || strings.ContainsAny(name, " /\\") {
 			return fmt.Errorf("%s: an environment name may not be blank or contain spaces or slashes", where)
 		}
+		if name == model.BuildEnvironment {
+			return fmt.Errorf("%s: the name %q is reserved for the build's own facts (Phase 38 part 1); "+
+				"name this environment something else", where, model.BuildEnvironment)
+		}
 
 		switch spec.Adapter {
 		case AdapterCompose, AdapterKubernetes, AdapterProcess, AdapterExec:

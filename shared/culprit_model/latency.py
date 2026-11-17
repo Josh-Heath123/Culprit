@@ -36,7 +36,7 @@ import re
 from math import comb
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from culprit_model.subjects import SubjectError, SubjectKind
 from culprit_model.subjects import build as build_subject
@@ -56,6 +56,13 @@ BUDGET_PREDICATES: dict[str, int] = {"latency_p50_ms": 50, "latency_p95_ms": 95}
 #: latency rule reads as percentiles. cli/internal/model/latency.go's
 #: StatementBudgetPredicates.
 STATEMENT_BUDGET_PREDICATES: frozenset[str] = frozenset({"query_mean_ms_max"})
+#: Phase 38 part 1: the most a frontend build's entry may download, gzipped,
+#: in whole bytes, on `bundle:` subjects. Neither a percentile nor
+#: milliseconds. cli/internal/model/latency.go's BundleBudgetPredicates.
+BUNDLE_BUDGET_PREDICATES: frozenset[str] = frozenset({"bundle_gzip_bytes_max"})
+#: The largest bundle budget, in bytes: a bound on what can be declared, as
+#: MAX_BUDGET_MS is for time. Go holds the same number.
+MAX_BUNDLE_BYTES = 1_000_000_000
 #: The most requests one latency reading may record — the probe's hard cap.
 MAX_REQUESTS = 50
 #: The largest budget, in milliseconds. Not a threshold Culprit judges by:
@@ -128,16 +135,22 @@ class Budget(BaseModel):
 
     @field_validator("value", mode="before")
     @classmethod
-    def _value_is_whole_milliseconds(cls, value: Any) -> int:
+    def _value_is_whole_milliseconds(cls, value: Any, info: ValidationInfo) -> int:
+        # Bytes for a bundle budget (Phase 38 part 1), milliseconds for
+        # every other; `predicate` is declared, and so validated, first.
+        bundle = info.data.get("predicate") in BUNDLE_BUDGET_PREDICATES
+        maximum, unit = (MAX_BUNDLE_BYTES, "bytes") if bundle else (MAX_BUDGET_MS, "milliseconds")
         try:
-            return _int(value, "a budget", minimum=1, maximum=MAX_BUDGET_MS)
+            return _int(value, "a budget", minimum=1, maximum=maximum)
         except LatencyShapeError as exc:
-            raise ValueError(f"{exc} (milliseconds)") from None
+            raise ValueError(f"{exc} ({unit})") from None
 
     @field_validator("predicate")
     @classmethod
     def _predicate_is_known(cls, value: str) -> str:
-        known = sorted({*BUDGET_PREDICATES, *STATEMENT_BUDGET_PREDICATES})
+        known = sorted(
+            {*BUDGET_PREDICATES, *STATEMENT_BUDGET_PREDICATES, *BUNDLE_BUDGET_PREDICATES}
+        )
         if value not in known:
             raise ValueError(f"budget predicate {value!r} is not one of {known}")
         return value
