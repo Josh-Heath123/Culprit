@@ -381,9 +381,7 @@ jobs:
               if text.startswith("Not checked: culprit-web build") or "bundle_gzip_bytes_max" in text
           ]
           if unjudged:
-              sys.exit("culprit-web's bundle budget was not judged:
-  " + "
-  ".join(unjudged))
+              sys.exit("culprit-web's bundle budget was not judged: " + "; ".join(unjudged))
           print("culprit-web's bundle budget was judged")
           PY
 
