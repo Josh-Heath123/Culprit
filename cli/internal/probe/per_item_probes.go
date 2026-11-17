@@ -176,7 +176,8 @@ func judgeBracket(url, at, database string, bracket capture.StatementBracket,
 	switch {
 	case bracket.Unavailable != "" && getErr != nil:
 		return Outcome{Verdict: model.VerdictInconclusive, Measured: measured, Reason: fmt.Sprintf(
-			"the GET did not complete (%v), so nothing was measured", getErr)}
+			"the GET did not complete (%s), so nothing was measured",
+			model.RedactCredentials(getErr.Error()))}
 	case bracket.Unavailable != "":
 		return Outcome{Verdict: model.VerdictInconclusive, Measured: measured,
 			Reason: fmt.Sprintf("%s: %s", database, bracket.Unavailable)}

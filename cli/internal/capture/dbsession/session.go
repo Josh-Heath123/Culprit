@@ -952,8 +952,10 @@ func (r StatsReader) bracket(ctx context.Context, conn querier, quiet time.Durat
 	if err != nil {
 		return err
 	}
-	if err := r.wait(ctx, quiet); err != nil && ctx.Err() != nil {
-		result.Unavailable = "the quiet window was cut short by the caller's deadline, so nothing was sent"
+	// Any wait that did not run its length ends the bracket: a quiet window
+	// cut short is not the quiet window (invariant audit).
+	if err := r.wait(ctx, quiet); err != nil {
+		result.Unavailable = "the quiet window was cut short, so nothing was sent"
 		return nil
 	}
 	second, err := readSnapshot(ctx, conn)
