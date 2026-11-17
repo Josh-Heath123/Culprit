@@ -32,6 +32,9 @@ type openAPIDocument struct {
 	OpenAPI string                            `yaml:"openapi" json:"openapi"`
 	Swagger string                            `yaml:"swagger" json:"swagger"`
 	Paths   map[string]map[string]interface{} `yaml:"paths" json:"paths"`
+	// raw is the whole document, JSON-shaped (jsonShaped): what a local
+	// `$ref` resolves within (Phase 38 part 2, the spec's lists).
+	raw map[string]any
 }
 
 func openAPIReader() reader {
@@ -94,16 +97,26 @@ func readOpenAPI(ctx captureContext) ([]model.Fact, []model.Skip) {
 func parseOpenAPI(text string) (openAPIDocument, bool) {
 	var document openAPIDocument
 	trimmed := strings.TrimSpace(text)
+	var raw any
 	if strings.HasPrefix(trimmed, "{") {
 		if err := json.Unmarshal([]byte(text), &document); err != nil {
 			return document, false
 		}
-	} else if err := yaml.Unmarshal([]byte(text), &document); err != nil {
-		return document, false
+		if err := json.Unmarshal([]byte(text), &raw); err != nil {
+			return document, false
+		}
+	} else {
+		if err := yaml.Unmarshal([]byte(text), &document); err != nil {
+			return document, false
+		}
+		if err := yaml.Unmarshal([]byte(text), &raw); err != nil {
+			return document, false
+		}
 	}
 	if document.OpenAPI == "" && document.Swagger == "" {
 		return document, false
 	}
+	document.raw, _ = jsonShaped(raw).(map[string]any)
 	return document, true
 }
 
@@ -155,12 +168,63 @@ func openAPIFacts(
 
 			details, _ := operation.(map[string]interface{})
 			facts = append(facts, operationFacts(ctx, subject, locator, artefact, details)...)
+			if fact, ok := responseListFact(ctx, document.raw, route, method, subject, locator, artefact); ok {
+				facts = append(facts, fact)
+			}
 			budgets, refused := operationBudgets(ctx, subject, locator, artefact, details)
 			facts = append(facts, budgets...)
 			skips = append(skips, refused...)
 		}
 	}
 	return facts, skips
+}
+
+// responseListFact is the route's `response_list` fact (Phase 38 part 2),
+// by model.ResponseList, the rule the Python extractor applies to
+// app.openapi() too: the spec's list, and its maxItems or null. Read from
+// the JSON-shaped document, so a YAML spec's `200:` key (an integer to a
+// YAML reader) is the "200" a JSON one has.
+func responseListFact(
+	ctx captureContext, raw map[string]any, route, method, subject, locator, artefact string,
+) (model.Fact, bool) {
+	paths, _ := raw["paths"].(map[string]any)
+	item, _ := paths[route].(map[string]any)
+	operation, _ := item[method].(map[string]any)
+	if operation == nil {
+		return model.Fact{}, false
+	}
+	bound, found := model.ResponseList(raw, operation)
+	if !found {
+		return model.Fact{}, false
+	}
+	provenance := ctx.provenance(model.SourceSpec, artefact, locator+".responses", model.RankCommittedSpec)
+	return ctx.fact(subject, model.PredicateResponseList, model.ResponseListValue(bound), provenance)
+}
+
+// jsonShaped turns a decoded YAML document into the shape a JSON one has:
+// every mapping a map[string]any, its keys as written.
+func jsonShaped(node any) any {
+	switch typed := node.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, value := range typed {
+			out[key] = jsonShaped(value)
+		}
+		return out
+	case map[any]any:
+		out := make(map[string]any, len(typed))
+		for key, value := range typed {
+			out[fmt.Sprint(key)] = jsonShaped(value)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for index, value := range typed {
+			out[index] = jsonShaped(value)
+		}
+		return out
+	}
+	return node
 }
 
 // operationBudgets reads an operation's `x-culprit-budget` (Phase 36, P1):

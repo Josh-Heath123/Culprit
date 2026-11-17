@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from culprit_model import build
+from culprit_model.lists import response_list
 from culprit_model.planes import ConfidenceRank, SourceKind
 from culprit_model.protocol import Predicate
 
@@ -92,6 +93,23 @@ def _fastapi_routes(app: Any, builder: FactBuilder) -> list[Any]:
                         source_kind=SourceKind.INTROSPECTION,
                         artefact=builder.app_target,
                         locator=locator,
+                        rank=ConfidenceRank.RUNTIME_INTROSPECTION,
+                    )
+                )
+
+            # Phase 38 part 2: the spec's list, by the rule the Go reader
+            # applies to a committed spec (culprit_model.lists, held to
+            # shared/tests/list_conformance.json).
+            listed, bound = response_list(document, operation)
+            if listed:
+                facts.append(
+                    builder.fact(
+                        subject,
+                        Predicate.RESPONSE_LIST,
+                        {"max_items": bound},
+                        source_kind=SourceKind.INTROSPECTION,
+                        artefact=builder.app_target,
+                        locator=f"{locator}.responses",
                         rank=ConfidenceRank.RUNTIME_INTROSPECTION,
                     )
                 )

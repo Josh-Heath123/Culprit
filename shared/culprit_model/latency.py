@@ -47,7 +47,6 @@ from pydantic import (
 )
 
 from culprit_model.lists import LIST_BUDGET_PREDICATES, MAX_LIST_ITEMS, json_pointer_problem
-
 from culprit_model.subjects import SubjectError, SubjectKind
 from culprit_model.subjects import build as build_subject
 from culprit_model.subjects import parse as parse_subject

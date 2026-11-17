@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 )
 
@@ -163,4 +164,174 @@ func JudgeResponseItems(measured, expected map[string]any) (Verdict, string, err
 			"the list at %s holds %d items, over its bound of %d", where, items, bound), nil
 	}
 	return VerdictPass, "", nil
+}
+
+// --- the spec's lists ---------------------------------------------------
+//
+// ResponseList is the rule both OpenAPI readers apply to one operation
+// (Phase 38 part 2, decision 2), held to shared/tests/list_conformance.json
+// with shared/culprit_model/lists.py's response_list:
+//
+//   - the response is the operation's first 2xx in sorted order ("200",
+//     "201", ..., "2XX"); a `$ref` to it is resolved;
+//   - its schema is, in OpenAPI 3, that of its first JSON media type in
+//     sorted order (application/json, or a type ending +json, parameters
+//     ignored), and in Swagger 2 its own `schema`;
+//   - `$ref`s are resolved within the document only ("#/..."), at most
+//     maxRefHops deep; any other `$ref` is not followed, and nothing is
+//     emitted;
+//   - a schema of `type: array` is the list; an object (`type: object`, or
+//     no type, with `properties`) with exactly one property of `type:
+//     array` is an envelope, and that property is the list;
+//   - the list's maxItems, when it is a whole number from 0 to 2^31-1, is
+//     its bound; otherwise the bound is null (unbounded).
+//
+// Anything else — two array properties, no 2xx, no JSON, a type list, an
+// allOf — emits nothing: such a route is not listed (docs/LIMITS.md).
+// The bool is whether a list was found; the *int is its bound or nil.
+
+const maxRefHops = 16
+
+// ResponseList finds an operation's list, per the rule above.
+func ResponseList(document, operation map[string]any) (*int, bool) {
+	responses, _ := operation["responses"].(map[string]any)
+	codes := make([]string, 0, len(responses))
+	for code := range responses {
+		if is2xx(code) {
+			codes = append(codes, code)
+		}
+	}
+	if len(codes) == 0 {
+		return nil, false
+	}
+	sort.Strings(codes)
+	response, ok := resolveRef(document, responses[codes[0]])
+	if !ok {
+		return nil, false
+	}
+	var schema any
+	if content, isOpenAPI3 := response["content"].(map[string]any); isOpenAPI3 {
+		types := make([]string, 0, len(content))
+		for mediaType := range content {
+			if isJSONMediaType(mediaType) {
+				types = append(types, mediaType)
+			}
+		}
+		if len(types) == 0 {
+			return nil, false
+		}
+		sort.Strings(types)
+		media, _ := content[types[0]].(map[string]any)
+		schema = media["schema"]
+	} else {
+		schema = response["schema"]
+	}
+	resolved, ok := resolveRef(document, schema)
+	if !ok {
+		return nil, false
+	}
+	if resolved["type"] == "array" {
+		return maxItemsOf(resolved), true
+	}
+	properties, hasProperties := resolved["properties"].(map[string]any)
+	if kind, typed := resolved["type"]; !hasProperties || (typed && kind != "object") {
+		return nil, false
+	}
+	var list map[string]any
+	for _, property := range properties {
+		candidate, ok := resolveRef(document, property)
+		if !ok || candidate["type"] != "array" {
+			continue
+		}
+		if list != nil {
+			return nil, false
+		}
+		list = candidate
+	}
+	if list == nil {
+		return nil, false
+	}
+	return maxItemsOf(list), true
+}
+
+func is2xx(code string) bool {
+	if code == "2XX" || code == "2xx" {
+		return true
+	}
+	return len(code) == 3 && code[0] == '2' && code[1] >= '0' && code[1] <= '9' &&
+		code[2] >= '0' && code[2] <= '9'
+}
+
+func isJSONMediaType(mediaType string) bool {
+	base, _, _ := strings.Cut(strings.ToLower(mediaType), ";")
+	base = strings.TrimSpace(base)
+	return base == "application/json" || strings.HasSuffix(base, "+json")
+}
+
+// resolveRef follows local `$ref`s to a mapping, at most maxRefHops.
+func resolveRef(document map[string]any, node any) (map[string]any, bool) {
+	for hop := 0; hop <= maxRefHops; hop++ {
+		mapping, ok := node.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		ref, isRef := mapping["$ref"]
+		if !isRef {
+			return mapping, true
+		}
+		pointer, ok := ref.(string)
+		if !ok || !strings.HasPrefix(pointer, "#/") {
+			return nil, false
+		}
+		node = any(document)
+		for _, token := range PointerTokens(pointer[1:]) {
+			container, ok := node.(map[string]any)
+			if !ok {
+				return nil, false
+			}
+			if node, ok = container[token]; !ok {
+				return nil, false
+			}
+		}
+	}
+	return nil, false
+}
+
+// maxItemsOf is a list schema's bound: maxItems when it is a whole number
+// from 0 to 2^31-1, else nil.
+func maxItemsOf(schema map[string]any) *int {
+	var bound int
+	switch value := schema["maxItems"].(type) {
+	case int:
+		bound = value
+	case int64:
+		if value > math.MaxInt32 {
+			return nil
+		}
+		bound = int(value)
+	case uint64:
+		if value > math.MaxInt32 {
+			return nil
+		}
+		bound = int(value)
+	case float64:
+		if value != math.Trunc(value) || value > math.MaxInt32 || value < 0 {
+			return nil
+		}
+		bound = int(value)
+	default:
+		return nil
+	}
+	if bound < 0 || bound > math.MaxInt32 {
+		return nil
+	}
+	return &bound
+}
+
+// ResponseListValue is a response_list fact's value.
+func ResponseListValue(bound *int) map[string]any {
+	if bound == nil {
+		return map[string]any{"max_items": nil}
+	}
+	return map[string]any{"max_items": *bound}
 }
