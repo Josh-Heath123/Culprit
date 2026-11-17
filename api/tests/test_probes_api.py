@@ -143,7 +143,7 @@ def test_the_catalogue_is_served(client: TestClient) -> None:
     response = client.get("/probes")
     assert response.status_code == 200, response.text
     probes = response.json()["probes"]
-    assert len(probes) == 17
+    assert len(probes) == 18
     assert {probe["id"] for probe in probes} == set(_go_manifests())
 
 
