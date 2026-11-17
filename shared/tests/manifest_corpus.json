@@ -222,7 +222,10 @@
   "a build with no manifest": "version: 1\ncomponents:\n  - name: web\n    build: {}\n",
   "a build manifest at an absolute path": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: /srv/web/manifest.json\n",
   "a build manifest at a drive path": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: \"C:/web/manifest.json\"\n",
-  "a build with an unknown key": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: dist/.vite/manifest.json\n      webpack_stats: stats.json\n"
+  "a build with an unknown key": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: dist/.vite/manifest.json\n      webpack_stats: stats.json\n",
+  "a build manifest above culprit.yaml": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: ../web/dist/.vite/manifest.json\n",
+  "a build manifest climbing out with a backslash": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: \"web\\..\\..\\m.json\"\n",
+  "a build manifest with dots in a name": "version: 1\ncomponents:\n  - name: web\n    kind: frontend\n    build:\n      vite_manifest: web/..dist/.vite/manifest.json\n"
  },
  "seeds": {
   "budgets_null": "version: 1\ncomponents:\n  - name: shop\nbudgets: ~\n",
@@ -6043,6 +6046,9 @@
   "structural a build manifest at an absolute path": "refused",
   "structural a build manifest at a drive path": "refused",
   "structural a build with an unknown key": "refused",
+  "structural a build manifest above culprit.yaml": "refused",
+  "structural a build manifest climbing out with a backslash": "refused",
+  "structural a build manifest with dots in a name": "018c19dbc232c78e",
   "seed budgets_null": "refused",
   "seed comment_only": "refused",
   "seed comp_name_int": "refused",

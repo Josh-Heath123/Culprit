@@ -37,9 +37,6 @@ type Report struct {
 	Manifest *extract.Manifest
 	Bundle   model.CaptureBundle
 	Result   diverge.Result
-	// Build is what the build reader measured (Phase 38 part 1): OBSERVED
-	// facts in the environment `build`, apart from the INTENT capture.
-	Build []model.Fact
 	// Suppressed is how many findings a suppression silenced.
 	Suppressed int
 	BaseDir    string
@@ -108,20 +105,19 @@ func Run(ctx context.Context, options Options) (Report, error) {
 	report.Bundle = bundle
 
 	report.Result = diverge.Compare(bundle, diverge.Options{Now: now})
-	// The unbudgeted surface is routes no budget holds to a time, so it is
-	// listed when a latency budget is declared. A bundle budget alone
-	// (Phase 38 part 1) says nothing about routes.
-	latencyDeclared := false
-	for _, declared := range manifest.Budgets {
-		_, latency := model.BudgetPredicates[declared.Predicate]
-		latencyDeclared = latencyDeclared || latency
+	// The unbudgeted surface is listed when the manifest declares budgets
+	// (Phase 36). A bundle budget (Phase 38 part 1) is on a build, not on
+	// anything served, so a manifest whose only budgets are bundle budgets
+	// does not switch it on.
+	declared := false
+	for _, budget := range manifest.Budgets {
+		declared = declared || !model.BundleBudgetPredicates[budget.Predicate]
 	}
-	report.Result.Budgets = diverge.Budgets(bundle.Facts, latencyDeclared)
+	report.Result.Budgets = diverge.Budgets(bundle.Facts, declared)
 	// Phase 38 part 1: a declared build is read and its entries judged
 	// against their bundle budgets. Nothing is read for a manifest that
 	// declares no build.
 	read := extract.ReadBuilds(manifest, baseDir, options.Only, now, bundle.CaptureID)
-	report.Build = read.Facts
 	findings, missing := diverge.BundleBudgets(budgets, read.Facts)
 	report.Result.Bundles = findings
 	report.Result.BuildNotChecked = append(read.NotChecked, missing...)

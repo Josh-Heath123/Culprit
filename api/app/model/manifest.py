@@ -263,6 +263,10 @@ class BuildSpec(BaseModel):
             raise ValueError("required: the path of the build's manifest, relative to culprit.yaml")
         if value.startswith(("/", "\\")) or _WINDOWS_DRIVE.match(value):
             raise ValueError("must be relative to culprit.yaml, not absolute")
+        if ".." in re.split(r"[/\\]", value):
+            raise ValueError(
+                "may not climb out of the directory culprit.yaml is in (a `..` segment)"
+            )
         return value
 
 

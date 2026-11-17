@@ -2813,8 +2813,9 @@ larger budget, so a timeout is slower than both.
 A budget whose subject no other INTENT source declares is listed under
 "Budgets that name nothing declared" — a renamed or mistyped route would
 otherwise never be measured. The unbudgeted surface (routes declared with
-`exists` and no budget) is listed only when the manifest declares a
-latency budget; a bundle budget alone says nothing about routes, and does
+`exists` and no budget) is listed only when the manifest declares
+`budgets:` other than bundle budgets: a bundle budget is on a build, not on
+anything served, and a manifest whose only budgets are bundle budgets does
 not switch it on (Phase 38 part 1). An `x-culprit-budget` entry that is not a budget (an
 unknown predicate, a value that is not a whole, positive number of
 milliseconds) is reported as a gap under `budgets`, not dropped. A budget
@@ -3007,7 +3008,20 @@ limits.
   (`npm run build`, or `just frontend-build` for this repository). So is a
   budget on an entry the build does not have, a manifest that is not
   Vite's, and a manifest naming a file that is missing or outside the
-  output directory, which is never read.
+  output directory, which is never read. A "Not checked" line does not
+  fail `--fail-on`: a CI job that must judge the budget has to fail on it
+  as well (this repository's self-check does).
+- **"Outside the output directory" is judged on the path as written.** A
+  name with `..` past the top, or an absolute or drive path, is refused;
+  a symbolic link inside the output directory is followed, and only the
+  size of what it points at is kept. A file over 256 MiB is not read: its
+  entry is "Not checked".
+- **The build's manifest is inside the repository.** `vite_manifest` is
+  relative to `culprit.yaml` and may not climb out of its directory: an
+  absolute path, a drive path or a `..` segment is refused, so a
+  `culprit.yaml` in a pull request cannot point `check` at files outside
+  the checkout. A frontend beside the directory `culprit.yaml` is in
+  cannot be declared from it; put `culprit.yaml` at the root above both.
 - **What is counted is the initial download.** An entry is its own chunk,
   the chunks its static `imports` reach, and the CSS each of those lists,
   each file once. `dynamicImports` are left out, because the browser loads

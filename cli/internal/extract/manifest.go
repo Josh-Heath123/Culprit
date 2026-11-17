@@ -123,6 +123,11 @@ func relativePathProblem(path string) string {
 	case strings.HasPrefix(path, "/"), strings.HasPrefix(path, `\`), windowsDrive.MatchString(path):
 		return "must be relative to culprit.yaml, not absolute"
 	}
+	for _, segment := range strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if segment == ".." {
+			return "may not climb out of the directory culprit.yaml is in (a `..` segment)"
+		}
+	}
 	return ""
 }
 

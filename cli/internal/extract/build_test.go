@@ -257,3 +257,24 @@ func TestOnlyAnUndeclaredBuildIsUnread(t *testing.T) {
 		t.Fatalf("--only api read web's build")
 	}
 }
+
+// TestAFileTooLargeIsNotRead: a file past maxBuildFileBytes is a Not
+// checked line, never read whole. Sparse, so nothing that size is written.
+func TestAFileTooLargeIsNotRead(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "m.json"), []byte(`{"index.html": {"file": "big.js", "isEntry": true}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	big, err := os.Create(filepath.Join(dir, "big.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := big.Truncate(maxBuildFileBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	_ = big.Close()
+	read := ReadBuilds(builtManifest("m.json"), dir, nil, buildClock, "capture-1")
+	if len(read.Facts) != 0 || len(read.NotChecked) != 1 || !strings.Contains(read.NotChecked[0].Reason, "is not read") {
+		t.Fatalf("facts %d, not checked %+v", len(read.Facts), read.NotChecked)
+	}
+}

@@ -704,7 +704,7 @@ budgets:
 or `x-culprit-budget: { latency_p95_ms: 300 }` on an OpenAPI operation.
 `culprit check` reports two sources that disagree as an `intent_conflict`,
 lists a budget whose route nothing else declares, and, once you declare
-a latency budget, lists the routes that have none. `probe.http.latency` measures a
+any, lists the routes that have none. `probe.http.latency` measures a
 route against its budget ([`docs/PROBES.md`](docs/PROBES.md)), and
 `culprit diagnose` uses it once the errors explain nothing (step 4 above);
 its limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "Latency budgets".
@@ -736,10 +736,12 @@ Build before you check, in the same CI job:
 An entry over its budget is a `degrades` finding naming its three largest
 files. What counts is the entry's first load: its own chunk, what it
 statically imports and their CSS, not what `import()` loads later. With no
-build present the budget is "Not checked", never quietly passed. Culprit's
-own CI holds its dashboard to 200,000 bytes this way (the root
-`culprit.yaml`); the limits are in [`docs/LIMITS.md`](docs/LIMITS.md),
-"Bundle budgets".
+build present the budget is listed as "Not checked", which does not by
+itself fail `--fail-on`: if your CI must judge it, fail on that line too.
+Culprit's own CI holds its dashboard to 200,000 bytes this way, and fails
+if the budget goes unjudged (the root `culprit.yaml`, and the self-check
+job); the limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "Bundle
+budgets".
 
 **Databases.** A component's database is reached through a variable you
 name, never a connection string in the file:

@@ -48,6 +48,10 @@ const BuildExtractor = "culprit-build"
 // largestChunks is how many of an entry's files the reader names.
 const largestChunks = 3
 
+// maxBuildFileBytes is the largest file the reader reads: a file is read
+// whole to be compressed, and no file a page loads first is this large.
+const maxBuildFileBytes = 256 << 20
+
 // viteChunk is the part of one Vite manifest entry the reader uses.
 type viteChunk struct {
 	File           string   `json:"file"`
@@ -261,10 +265,18 @@ func measure(outDir, file string) ([2]int64, error) {
 	if path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") || windowsDrive.MatchString(clean) {
 		return [2]int64{}, fmt.Errorf("a path outside the build's output directory, which is not read")
 	}
-	contents, err := os.ReadFile(filepath.Join(outDir, filepath.FromSlash(clean)))
+	full := filepath.Join(outDir, filepath.FromSlash(clean))
+	info, err := os.Stat(full)
 	if errors.Is(err, fs.ErrNotExist) {
 		return [2]int64{}, fmt.Errorf("the file is missing from the build")
 	}
+	if err != nil {
+		return [2]int64{}, err
+	}
+	if info.Size() > maxBuildFileBytes {
+		return [2]int64{}, fmt.Errorf("the file is over %d bytes, and is not read", maxBuildFileBytes)
+	}
+	contents, err := os.ReadFile(full)
 	if err != nil {
 		return [2]int64{}, err
 	}

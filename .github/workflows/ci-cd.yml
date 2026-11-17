@@ -361,6 +361,32 @@ jobs:
           cd cli
           go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=degrades             --format sarif --output ../culprit.sarif
 
+      # Phase 38 part 1: a budget that could not be judged is a "Not
+      # checked" line, which no --fail-on counts. Here that would mean the
+      # dashboard's bundle budget silently stopped being judged (the build
+      # step dropped, Vite's outDir moved), with the job still green. So
+      # the job fails on any such line in the SARIF the check just wrote.
+      - name: The bundle budget was judged
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          run = json.load(open("culprit.sarif", encoding="utf-8"))["runs"][0]
+          notes = [
+              n["message"]["text"]
+              for invocation in run.get("invocations", [])
+              for n in invocation.get("toolExecutionNotifications", [])
+          ]
+          unjudged = [
+              text for text in notes
+              if text.startswith("Not checked: culprit-web build") or "bundle_gzip_bytes_max" in text
+          ]
+          if unjudged:
+              sys.exit("culprit-web's bundle budget was not judged:
+  " + "
+  ".join(unjudged))
+          print("culprit-web's bundle budget was judged")
+          PY
+
       # Run again for the log. The SARIF file went to disk, so without
       # this the job's output says nothing a person reading it can use.
       - name: culprit check (human-readable, including coverage)

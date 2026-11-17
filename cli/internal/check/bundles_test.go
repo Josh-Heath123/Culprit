@@ -163,3 +163,20 @@ func TestAMissingManifestOrEntryIsNotChecked(t *testing.T) {
 		})
 	}
 }
+
+// TestOnlyBundleBudgetsLeaveTheUnbudgetedSurfaceOff: a statement budget
+// still switches the unbudgeted surface on, as any budget did before Phase
+// 38 part 1; a bundle budget alone does not.
+func TestOnlyBundleBudgetsLeaveTheUnbudgetedSurfaceOff(t *testing.T) {
+	dir := t.TempDir()
+	manifest := "version: 1\ncomponents:\n  - name: shop\n    connections:\n      - to: db\n        kind: sql\n" +
+		"  - name: db\n    kind: database\nbudgets:\n  - subject: \"component:db\"\n    predicate: query_mean_ms_max\n" +
+		"    value: 20\n    why: the list route reads it\n"
+	path := filepath.Join(dir, "culprit.yaml")
+	if err := os.WriteFile(path, []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !runBudgetCheck(t, path).Result.Budgets.Declared {
+		t.Error("a statement budget no longer switches on the unbudgeted surface")
+	}
+}
