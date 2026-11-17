@@ -411,9 +411,19 @@ jobs:
   # product's core claim — the walk finds the root, not the symptom — and
   # field 15 of the phase says it runs on every push. Same as `just
   # fault-library` locally.
+  #
+  # Phase 37 part 3: two shards, because the database fault (a statement
+  # window per reading) took the job past fifteen minutes. Every case runs
+  # in exactly one shard (cli/cmd/culprit/faultlib_shards_test.go proves it,
+  # and that this matrix is 1..faultLibraryShards); each shard writes its
+  # own cases' results and keeps the committed ones for the rest.
   fault-library:
     needs: cli
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     # Phase 35 part 2 (D8): with narration off. The binary reads no provider
     # setting and links no model client (check_no_llm_imports covers cli/),
     # so this is complete output with LLM_PROVIDER=none by construction.
@@ -425,8 +435,8 @@ jobs:
         with:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
-      - name: Walk every fault in the library
-        run: cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+      - name: Walk this shard's faults
+        run: cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_SHARD=${{ matrix.shard }} CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
       # Phase 34 part 2: the README's number is rendered from the committed
       # results (just accuracy-readme). This run must reproduce them exactly,
       # or the number describes a library that no longer behaves that way.
