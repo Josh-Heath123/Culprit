@@ -73,6 +73,18 @@ func (f *fakeHTTP) Options(
 
 // fakeTimer is an HTTP client that can also time a request (Phase 36),
 // answering each TimeGet with the next timing in turn and counting calls.
+// fakeCounter counts a list (Phase 38 part 2) with a fixed answer.
+type fakeCounter struct {
+	fakeHTTP
+	count  ItemCount
+	tokens []string
+}
+
+func (f *fakeCounter) CountItems(_ context.Context, _ string, tokens []string) (ItemCount, error) {
+	f.tokens = tokens
+	return f.count, nil
+}
+
 type fakeTimer struct {
 	fakeHTTP
 	timings []Timing

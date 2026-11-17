@@ -377,3 +377,110 @@ func (c *RealHTTPClient) TimeGet(ctx context.Context, url string, timeout time.D
 	}
 	return stamp(Timing{Status: response.StatusCode, Total: total}), nil
 }
+
+// Counting a list — Phase 38 part 2, for probe.http.response_items.
+//
+// One GET, under the same rules as TimeGet: no header, no body, no
+// redirect followed (a redirect is an answer other than 2xx), and the body
+// read to the same MaxBodyBytes cap. The body is decoded — there is no way
+// to count a JSON array without doing so — and what is at the pointer is
+// counted if it is an array. Nothing else leaves this function: the count,
+// the status, and why nothing was counted. Never an item, a key or a value
+// (the same rule describeJSON keeps).
+
+// ItemCount is one counted response.
+type ItemCount struct {
+	Status int
+	// Items is the array's length, when Counted.
+	Items   int
+	Counted bool
+	// NotCounted says why nothing was counted, when not Counted: "status"
+	// (not 2xx), "not_json", "no_array" (nothing at the pointer, or not an
+	// array) or "too_large" (over MaxBodyBytes).
+	NotCounted string
+}
+
+// CountItems sends one GET and counts the array at pointer, an RFC 6901
+// JSON pointer ("" is the whole document) given as its unescaped tokens.
+func (c *RealHTTPClient) CountItems(ctx context.Context, url string, tokens []string) (ItemCount, error) {
+	next := http.DefaultTransport
+	if guard, ok := c.client.Transport.(methodGuard); ok {
+		next = guard.next
+	}
+	client := newGuardedClient(next, c.client.Timeout, func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	})
+	request, err := newProbeRequest(ctx, http.MethodGet, url)
+	if err != nil {
+		return ItemCount{}, err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return ItemCount{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	result := ItemCount{Status: response.StatusCode}
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, c.MaxBodyBytes))
+		result.NotCounted = "status"
+		return result, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, c.MaxBodyBytes+1))
+	if err != nil {
+		return ItemCount{}, err
+	}
+	if int64(len(body)) > c.MaxBodyBytes {
+		result.NotCounted = "too_large"
+		return result, nil
+	}
+	var document any
+	if err := json.Unmarshal(body, &document); err != nil {
+		result.NotCounted = "not_json"
+		return result, nil
+	}
+	node := document
+	for _, token := range tokens {
+		switch container := node.(type) {
+		case map[string]any:
+			value, found := container[token]
+			if !found {
+				result.NotCounted = "no_array"
+				return result, nil
+			}
+			node = value
+		case []any:
+			index, ok := arrayIndex(token, len(container))
+			if !ok {
+				result.NotCounted = "no_array"
+				return result, nil
+			}
+			node = container[index]
+		default:
+			result.NotCounted = "no_array"
+			return result, nil
+		}
+	}
+	list, isArray := node.([]any)
+	if !isArray {
+		result.NotCounted = "no_array"
+		return result, nil
+	}
+	result.Items, result.Counted = len(list), true
+	return result, nil
+}
+
+// arrayIndex reads an RFC 6901 array index: decimal digits, no leading
+// zero, within length.
+func arrayIndex(token string, length int) (int, bool) {
+	if token == "" || len(token) > 9 || (len(token) > 1 && token[0] == '0') {
+		return 0, false
+	}
+	index := 0
+	for _, digit := range token {
+		if digit < '0' || digit > '9' {
+			return 0, false
+		}
+		index = index*10 + int(digit-'0')
+	}
+	return index, index < length
+}

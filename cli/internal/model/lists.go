@@ -335,3 +335,27 @@ func ResponseListValue(bound *int) map[string]any {
 	}
 	return map[string]any{"max_items": *bound}
 }
+
+// validateList holds a probe.http.response_items reading to its own count
+// and bound (Phase 38 part 2), as shared/culprit_model/readings.py does.
+func (r Reading) validateList() error {
+	if r.ProbeID != ResponseItemsProbeID || r.Verdict == VerdictRefused {
+		return nil
+	}
+	_, counted := r.Measured["items"]
+	_, notCounted := r.Measured["not_counted"]
+	if !counted && !notCounted {
+		if r.Verdict != VerdictInconclusive {
+			return fmt.Errorf("a %s list reading must carry the count it was judged on", r.Verdict)
+		}
+		return nil
+	}
+	verdict, _, err := JudgeResponseItems(r.Measured, r.Expected)
+	if err != nil {
+		return fmt.Errorf("a list reading's measurement is not the rule's input: %w", err)
+	}
+	if verdict != r.Verdict {
+		return fmt.Errorf("a list reading says %s, but its own count and bound give %s", r.Verdict, verdict)
+	}
+	return nil
+}

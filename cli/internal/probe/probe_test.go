@@ -384,6 +384,22 @@ func cases() []probeCase {
 			map[string]any{"url": "http://inventory.internal/ready"},
 			Deps{HTTP: &fakeTimer{timings: []Timing{{Status: 200}}}, Now: clock},
 			model.VerdictInconclusive, nil},
+		// --- probe.http.response_items (Phase 38 part 2) ---
+		{"a list within its bound", "probe.http.response_items", componentTarget,
+			map[string]any{"url": "http://inventory.internal/products"},
+			Deps{HTTP: &fakeCounter{count: ItemCount{Status: 200, Items: 50, Counted: true}}, Now: clock},
+			model.VerdictPass,
+			declaredAs("http:inventory-service/GET /products", "response_items_max", model.ListBudgetValue(50, "/products"))},
+		{"a list over its bound", "probe.http.response_items", componentTarget,
+			map[string]any{"url": "http://inventory.internal/products"},
+			Deps{HTTP: &fakeCounter{count: ItemCount{Status: 200, Items: 51, Counted: true}}, Now: clock},
+			model.VerdictFail,
+			declaredAs("http:inventory-service/GET /products", "response_items_max", model.ListBudgetValue(50, "/products"))},
+		{"no array where the budget says", "probe.http.response_items", componentTarget,
+			map[string]any{"url": "http://inventory.internal/products"},
+			Deps{HTTP: &fakeCounter{count: ItemCount{Status: 200, NotCounted: "no_array"}}, Now: clock},
+			model.VerdictInconclusive,
+			declaredAs("http:inventory-service/GET /products", "response_items_max", model.ListBudgetValue(50, "/products"))},
 		{"too little history to say", "probe.edge.impedance", connectionTarget,
 			map[string]any{},
 			Deps{Metrics: fakeMetrics{found: true, sample: ImpedanceSample{
@@ -527,7 +543,7 @@ func TestBuiltInCatalogueRegistersEveryCoreProbe(t *testing.T) {
 		"probe.db.connect", "probe.db.plan", "probe.db.schema_conformance",
 		"probe.db.statement_budget", "probe.dep.version",
 		"probe.edge.impedance", "probe.http.latency", "probe.http.reachable",
-		"probe.http.route_conformance", "probe.http.schema_conformance",
+		"probe.http.response_items", "probe.http.route_conformance", "probe.http.schema_conformance",
 		"probe.net.dns_resolve", "probe.net.tcp_connect", "probe.net.tls_validity",
 	}
 	got := catalogue.IDs()
