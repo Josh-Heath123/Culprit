@@ -18,6 +18,7 @@ Direct string formatting of a subject anywhere else is a lint failure —
     dep:orders-svc/stripe
     image:orders-svc
     auth:orders-svc->payments-svc/audience
+    bundle:web/index.html
 
 A Go implementation lives at `cli/internal/model/subjects.go` from Phase
 28 and shares a conformance fixture with this one (§2.3). The fixture is
@@ -46,6 +47,10 @@ class SubjectKind(StrEnum):
     DEP = "dep"
     IMAGE = "image"
     AUTH = "auth"
+    #: One entry of a component's frontend build (Phase 38 part 1): the
+    #: entry is the build manifest's key for a chunk with isEntry, such as
+    #: index.html or src/main.tsx.
+    BUNDLE = "bundle"
 
 
 #: The `from->to` separator inside a connection/auth subject. A component
@@ -103,6 +108,10 @@ _FORBIDDEN_IN_PART: dict[str, tuple[str, ...]] = {
     "table": _DOT_SEPARATED,
     "column": _DOT_SEPARATED,
     "aspect": ("/", _ASPECT, " "),
+    # An entry is a path in the build, so `/` and `.` are what it is made
+    # of: `_parse_bundle` partitions on the first `/`, after the component,
+    # as `_parse_dep` does.
+    "entry": (_ASPECT, " "),
 }
 
 
@@ -215,6 +224,12 @@ def _build_auth(parts: dict[str, Any]) -> str:
     return f"auth:{source}{_ARROW}{target}/{aspect}"
 
 
+def _build_bundle(parts: dict[str, Any]) -> str:
+    # The entry is trimmed but not case-folded: it is a path in the build,
+    # and paths are case-sensitive where the build is served.
+    return f"bundle:{canonical_component(parts['component'])}/{str(parts['entry']).strip()}"
+
+
 # --- parsers ----------------------------------------------------------
 
 
@@ -295,6 +310,13 @@ def _parse_auth(rest: str, subject: str) -> dict[str, str]:
     return {"from_component": source, "to_component": target, "aspect": aspect}
 
 
+def _parse_bundle(rest: str, subject: str) -> dict[str, str]:
+    component, separator, entry = rest.partition("/")
+    if not separator or not component or not entry:
+        raise SubjectError(f"expected 'component/entry' in {subject!r}")
+    return {"component": component, "entry": entry}
+
+
 _BUILDERS = {
     SubjectKind.COMPONENT: _build_component,
     SubjectKind.CONNECTION: _build_connection,
@@ -304,6 +326,7 @@ _BUILDERS = {
     SubjectKind.DEP: _build_dep,
     SubjectKind.IMAGE: _build_image,
     SubjectKind.AUTH: _build_auth,
+    SubjectKind.BUNDLE: _build_bundle,
 }
 
 _PARSERS = {
@@ -315,6 +338,7 @@ _PARSERS = {
     SubjectKind.DEP: _parse_dep,
     SubjectKind.IMAGE: _parse_image,
     SubjectKind.AUTH: _parse_auth,
+    SubjectKind.BUNDLE: _parse_bundle,
 }
 
 _REQUIRED: dict[SubjectKind, set[str]] = {
@@ -326,6 +350,7 @@ _REQUIRED: dict[SubjectKind, set[str]] = {
     SubjectKind.DEP: {"component", "dependency"},
     SubjectKind.IMAGE: {"component"},
     SubjectKind.AUTH: {"from_component", "to_component", "aspect"},
+    SubjectKind.BUNDLE: {"component", "entry"},
 }
 
 _OPTIONAL: dict[SubjectKind, set[str]] = {
@@ -337,4 +362,5 @@ _OPTIONAL: dict[SubjectKind, set[str]] = {
     SubjectKind.DEP: set(),
     SubjectKind.IMAGE: set(),
     SubjectKind.AUTH: set(),
+    SubjectKind.BUNDLE: set(),
 }

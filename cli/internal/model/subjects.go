@@ -25,6 +25,7 @@ import (
 //	dep:orders-svc/stripe
 //	image:orders-svc
 //	auth:orders-svc->payments-svc/audience
+//	bundle:web/index.html
 
 // SubjectKind is the scheme of a subject URI. A closed set: an unknown
 // scheme is an error, never a passthrough.
@@ -39,6 +40,10 @@ const (
 	KindDep        SubjectKind = "dep"
 	KindImage      SubjectKind = "image"
 	KindAuth       SubjectKind = "auth"
+	// KindBundle is one entry of a component's frontend build (Phase 38
+	// part 1): the entry is the build manifest's key for a chunk with
+	// isEntry, such as index.html or src/main.tsx.
+	KindBundle SubjectKind = "bundle"
 )
 
 // arrow is the from->to separator inside a connection/auth subject. A
@@ -88,6 +93,10 @@ var (
 		"table":      dotSeparated,
 		"column":     dotSeparated,
 		"aspect":     {"/", aspectSeparator, " "},
+		// An entry is a path in the build, so `/` and `.` are what it is
+		// made of: ParseSubject cuts on the first `/`, after the component,
+		// as it does for a dependency.
+		"entry": {aspectSeparator, " "},
 	}
 
 	requiredParts = map[SubjectKind][]string{
@@ -99,6 +108,7 @@ var (
 		KindDep:        {"component", "dependency"},
 		KindImage:      {"component"},
 		KindAuth:       {"from_component", "to_component", "aspect"},
+		KindBundle:     {"component", "entry"},
 	}
 
 	optionalParts = map[SubjectKind][]string{
@@ -210,6 +220,10 @@ func BuildSubject(kind SubjectKind, parts Parts) (string, error) {
 	case KindAuth:
 		return "auth:" + CanonicalComponent(parts["from_component"]) + arrow +
 			CanonicalComponent(parts["to_component"]) + "/" + strings.TrimSpace(parts["aspect"]), nil
+	case KindBundle:
+		// The entry is trimmed but not case-folded: it is a path in the
+		// build, and paths are case-sensitive where the build is served.
+		return "bundle:" + CanonicalComponent(parts["component"]) + "/" + strings.TrimSpace(parts["entry"]), nil
 	}
 	return "", subjectErrorf("unknown subject kind %q", string(kind))
 }
@@ -315,6 +329,13 @@ func ParseSubject(subject string) (SubjectKind, Parts, error) {
 			return "", nil, err
 		}
 		return kind, Parts{"from_component": from, "to_component": to, "aspect": aspect}, nil
+
+	case KindBundle:
+		component, entry, found := strings.Cut(rest, "/")
+		if !found || component == "" || entry == "" {
+			return "", nil, subjectErrorf("expected 'component/entry' in %q", subject)
+		}
+		return kind, Parts{"component": component, "entry": entry}, nil
 	}
 	return "", nil, subjectErrorf("unknown subject kind %q in %q", scheme, subject)
 }
