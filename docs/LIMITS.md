@@ -2768,14 +2768,20 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
 - **`pg_stat_statements` where the session can see it.** The view is read
   by its bare name, so the extension must be in the role's `search_path`
   (it is, by default, in `public`).
-- **The demo's index is `(category, sku)`.** The list route orders by
-  `sku` with a `LIMIT`; with an index on `category` alone Postgres still
-  walks the `sku` index and filters every row: 153–159 ms a call with no
-  index on `category` and 153–171 ms with one on `category` alone, against
-  the 20 ms budget (two local runs, 2026-11-13; in CI on Linux, 96 ms and
-  96 ms; CI logs each run's `MEASURED` lines).
-  An index led by `category` and carrying `sku` serves it in 0.014–0.025 ms a
-  call, measured the same way. Phase 37 part 3's fault and its fix are this index.
+- **The demo's index is `(category, sku)`, and its fault shows only for an
+  empty category.** The list route orders by `sku` with a `LIMIT`. With no
+  index led by `category`, Postgres walks the `sku` index and filters
+  `category` row by row. The demo's 200 seeded categories are interleaved,
+  one every 200 skus, so for any of them the walk finds 50 matches and stops:
+  about 0.7 ms. For a category with no products it walks the whole index:
+  about 75 ms. An index on `category` alone is not used for it, because the
+  planner estimates 5,000 rows for any category, and it stays at about
+  75 ms. `(category, sku)` serves it in about 0.006 ms (Q35, PostgreSQL 16,
+  2026-11-14). The demo's featured category, `category-200`, is a new one
+  with no products, and its products traffic alternates it with the seeded
+  categories, so a window's mean is about half the empty category's time.
+  (Part 2's "about 100 ms a call" was measured on `category-7`, which the
+  seed never writes: an empty category, by accident.)
 
 ### What a sample is
 
@@ -2921,3 +2927,58 @@ limits.
   run's deadline: a run cut short is `inconclusive` with the samples it
   has, its hypothesis unexplored, never judged on fewer requests than it
   planned. `culprit verify` runs it twice more.
+
+### The database in the walk
+
+Phase 37 part 3. `culprit diagnose` asks about a database's statements, and
+these are its limits.
+
+- **Third, and from the entry only.** The database pass runs only when the
+  error pass and the latency pass found no root strictly below the entry.
+  It asks about the databases the entry connects to, by an edge of any kind.
+  A database only a deeper component reaches is not asked, even when the
+  fault is there: walk from that component instead.
+- **Everything else the walk could not check stays partial.** A database
+  root is complete only when nothing else is left open. When the model says
+  the entry calls a component the walk cannot probe from the vantage (no
+  `health_path`), or one with no latency budget, the diagnosis names the
+  database root and says what it could not check, and gives no
+  recommendation. The demo's database fault is partial for exactly this
+  reason today: its model says inventory-service calls order-service (§3,
+  Q36).
+- **The system's own traffic is the measurement.** The walk sends no
+  statement and no request to make traffic. A statement nobody calls in the
+  30-second window is not judged, so a fault in a statement that runs
+  rarely is not seen.
+- **A missing index under `ORDER BY … LIMIT` shows only for rare or absent
+  values.** Walking another index for the order and filtering row by row
+  stops early for a common value and walks everything for a rare or absent
+  one. The window's mean judges all calls together, so it sees the fault
+  only when such calls are a large enough share of the traffic. The demo's
+  traffic is half its empty featured category; real traffic may be 1% of
+  it, and a mean over budget then means many slow calls or very slow ones.
+- **`missing_index` needs four planes.** The statement over its budget
+  (OBSERVED), the plan filtering column C with no index condition serving it
+  (the plan), no live index leading C (CONFIGURED, read in the plan's
+  session), and the migrations declaring none (INTENT). Without the
+  migrations' facts — no `extract:` section that reaches them, or
+  `--no-plugins` — the index is not claimed missing and the diagnosis is
+  partial. Without `db.plan.read` there is no plan, so no `missing_index`
+  and no table budget; a database's own budget can still be judged.
+- **An index the plan does not use is not missing.** When a live index
+  leads C but the plan walks another index for the order and filters C, the
+  root is the statement's budget, citing the plan and the index, and the
+  statement says what the plan does. The demo's wrong fix (an index on
+  `category` alone) is this case.
+- **An unapplied migration is not diagnosed.** When the migrations declare
+  an index led by C and the database has none, INTENT and CONFIGURED
+  disagree. The walk leaves `missing_index` unexplored and says the planes
+  disagree; it has no hypothesis for a migration not applied.
+- **The recommendation is derived, not checked.** It is an index on the
+  filtered columns, then the columns of the index the plan walks for its
+  order. Verification, not the recommendation, decides whether a change
+  worked.
+- **An agent has no migration INTENT.** The agent skips extractor plugins on
+  a production host, so a missing index found under the agent is partial,
+  for want of the migrations' facts. Carrying INTENT extracted in CI to an
+  agent is not built.

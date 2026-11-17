@@ -215,13 +215,25 @@ it would run one statement, and nothing else:
   force_generic_plan` — a plan built without the parameters' values — and
   deallocated;
 - the columns of the database's tables are read from the catalogue, to name
-  the columns a plan's filter uses without keeping the filter.
+  the columns a plan's filter uses without keeping the filter;
+- the live indexes on the tables the plan reads, each with its key columns,
+  are read from the catalogue in the same session (Phase 37 part 3): the
+  CONFIGURED plane of a missing index. Names and columns only.
 
 `EXPLAIN ANALYZE`, which runs the statement, cannot be sent: it is not a
 template, and the planned text must begin with `SELECT` or `WITH`. The
 session is read-only. It does not imply `db.rows.read`, and no capability
 implies it (a test grants each capability alone and finds every other
 withheld). Before PostgreSQL 16 it is not used, and the reading says so.
+
+**In the walk** (Phase 37 part 3), `culprit diagnose` uses both, and only
+these, on the databases the entry connects to: `db.stats.read` for the
+statement window, `db.plan.read` for the plan of a statement over a table's
+budget. Without `db.plan.read` a table's budget is unjudged and no missing
+index is claimed; the diagnosis is partial and names the capability. The
+fault library's database fault grants exactly these two, to a role made for
+it: `pg_read_all_stats` and `SELECT` on the one table
+(`demo-services/faults/docker-compose.yml`, `culprit-reader-setup`).
 
 ### The recommended database role, and what it reveals
 

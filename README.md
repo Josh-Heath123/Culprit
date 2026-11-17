@@ -588,9 +588,17 @@ which columns lead an index — through a read-only session that can send
 only a fixed set of catalogue statements, and compare it with what your
 Alembic migrations declare: a missing migration, or an index the
 migrations declare and the database lacks (or the reverse), is a finding.
-`db.stats.read` and `db.plan.read` are accepted in grants and allowances
-and used by nothing yet; [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) says
-what each will read and what role they need.
+Under `db.stats.read`, `probe.db.statement_budget` times each statement
+over a 30-second window of the system's own traffic against a
+`query_mean_ms_max` budget; under `db.plan.read`, `probe.db.plan` reads the
+generic plan of one statement, never running it. When the errors and the
+latency explain nothing below the symptom, `culprit diagnose` asks the
+databases the entry connects to, and roots at a missing index only when the
+statement, the plan, the live indexes and your migrations all agree,
+recommending the index the plan needs
+([`docs/PROBES.md`](docs/PROBES.md), "In the walk").
+[`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) says what each grant reads and
+what role it needs.
 
 ### For a coding agent: `culprit mcp`
 

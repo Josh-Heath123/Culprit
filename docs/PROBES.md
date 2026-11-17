@@ -260,6 +260,33 @@ Under `culprit mcp`, `culprit_probe` refuses `probe.db.plan` and any
 `queryid`, and any input at all to `probe.db.statement_budget`, before
 anything is sent: an agent names no statement, table or address.
 
+### In the walk
+
+Phase 37 part 3. `culprit diagnose` runs these third, after the error and
+latency passes, only when neither found a root strictly below the entry,
+and only on the databases the entry connects to. It runs the statement
+probe on each one with a statement budget. When a statement is over a
+table's budget, it runs the plan probe on that statement's `queryid`, taken
+from the statement reading, which is the only way a `queryid` reaches it.
+
+- **`statement_budget_exceeded`** is supported on the budget's own subject,
+  the table or the database, when the statement reading fails.
+- **`missing_index`** is supported on the filtered column's `schema:`
+  subject only when four planes agree. OBSERVED: the statement is over its
+  budget. The plan: it filters column C with no index condition serving C.
+  CONFIGURED: the plan reading's live indexes, read in the plan's session
+  from the catalogue, show none led by C. INTENT: the migrations, read by
+  the extractor, declare none (`leads_index` false). The root cites the
+  statement and the plan readings.
+- **A live index led by C that the plan does not use** roots at the
+  statement's budget instead, and the statement names the index.
+- **The recommendation** is an index on the filtered columns, then the
+  columns of the index the plan walks for its order: for the demo,
+  `public.products (category, sku)`.
+
+The walk sends no statement and makes no traffic: the window measures the
+system's own (LIMITS, "The database in the walk").
+
 ## What each probe rules out — `discriminates`
 
 `culprit diagnose` (Phase 32) chooses probes by the `discriminates` field of
@@ -277,6 +304,9 @@ discriminate the same kind, the cheapest runs first, then by id.
 | `contract_mismatch` | `probe.http.route_conformance`, `probe.http.schema_conformance` |
 | `config_missing` | `probe.config.present` |
 | `database_unreachable` | `probe.db.connect` |
+| `latency_budget_exceeded` | `probe.http.latency` |
+| `statement_budget_exceeded` | `probe.db.statement_budget` |
+| `missing_index` | `probe.db.plan` — evidence, not a verdict: supported only when four planes agree (below) |
 
 `probe.net.dns_resolve` deliberately discriminates nothing: a name that
 resolves says nothing about whether a connection opens, and
