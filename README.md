@@ -385,8 +385,8 @@ a compromised agent or control plane can and cannot do.
 
 ## Usage: one project, end to end
 
-This is the project the `diff` and `probe` captures above were made from. It takes five minutes
-and needs the CLI built as above. `CULPRIT_HOME` is your clone of this
+This is the project the `diff` and `probe` captures above were made from. It takes five minutes,
+and step 5 three more with Docker, and needs the CLI built as above. `CULPRIT_HOME` is your clone of this
 repository, so `culprit.yaml` can find the Python extractor.
 
 ```bash
@@ -538,6 +538,145 @@ the `time.sleep(0.4)` out, restart it, and `culprit verify <id> --from web
 `budgets:` section and the same walk stays partial, saying no budget is
 declared: Culprit never decides on your behalf how fast is fast. `kill %1`
 when you are done.
+
+**5. Let the walk find a missing index.** This step needs Docker and takes
+about three minutes. A Postgres with `pg_stat_statements` holds a million
+products in 200 categories, indexed by `sku` only. A migration in `api`
+declares the same, and the storefront lists a new category that has no
+products yet, five times a second:
+
+```bash
+mkdir -p api/migrations/versions
+cat > api/migrations/versions/0001_products.py <<'PY'
+"""The products table, listed by sku."""
+import sqlalchemy as sa
+from alembic import op
+
+revision = "0001_products"
+down_revision = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "products",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("sku", sa.Text, nullable=False),
+        sa.Column("category", sa.Text, nullable=False),
+    )
+    op.create_index("ix_products_sku", "products", ["sku"])
+
+
+def downgrade() -> None:
+    op.drop_table("products")
+PY
+cat > db.yaml <<YAML
+version: 1
+components:
+  - name: api
+    kind: service
+    connections:
+      - to: db
+        kind: sql
+        criticality: background
+  - name: db
+    kind: database
+extract:
+  extractors:
+    - name: python
+      command: ["uv", "run", "--project", "$CULPRIT_HOME/extractors/python", "culprit-extract-python"]
+  components:
+    api: { root: api, extractors: [python] }
+budgets:
+  - subject: "schema:db/public.products"
+    predicate: query_mean_ms_max
+    value: 20
+    why: the product list reads the first page of one category
+environments:
+  shop:
+    adapter: process
+    components:
+      api: { database: { dsn_env: SHOP_DB_DSN } }
+    grants: { config.read.names: true, db.stats.read: true, db.plan.read: true }
+YAML
+docker run -d --name culprit-tour-db -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=tour \
+  postgres:16-alpine -c shared_preload_libraries=pg_stat_statements
+until docker exec culprit-tour-db pg_isready -q -h 127.0.0.1 -U postgres; do sleep 1; done
+docker exec -i culprit-tour-db psql -q -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+CREATE EXTENSION pg_stat_statements;
+CREATE TABLE products (id serial PRIMARY KEY, sku text NOT NULL, category text NOT NULL);
+CREATE INDEX ix_products_sku ON products (sku);
+INSERT INTO products (sku, category)
+  SELECT format('sku-%s', lpad(i::text, 7, '0')), format('category-%s', i % 200)
+  FROM generate_series(1, 1000000) AS i;
+ANALYZE products;
+CREATE ROLE culprit_reader LOGIN PASSWORD 'reader' IN ROLE pg_read_all_stats;
+GRANT SELECT ON products TO culprit_reader;
+SQL
+docker exec -i culprit-tour-db sh -c 'cat > /tmp/list.sql' <<'SQL'
+SELECT sku FROM products WHERE category = 'category-new' ORDER BY sku LIMIT 50;
+SQL
+docker exec -d culprit-tour-db sh -c 'pgbench -n -U postgres -f /tmp/list.sql -R 5 -T 900 postgres'
+export SHOP_DB_DSN=postgresql://culprit_reader:reader@127.0.0.1:55432/postgres
+export DATABASE_URL=postgresql://app:example@db.example.internal:5432/app PAYMENTS_API_KEY=example-key
+culprit diagnose api --env shop -f db.yaml --from api --state-dir ./state
+```
+
+Culprit reads the database as `culprit_reader`, which can read statistics
+and plan a statement, and never sees a row. It never runs your statements
+and makes no traffic: it times the statements the traffic already runs over
+a 30-second window, then reads the generic plan of the one over its budget,
+without executing it:
+
+```
+Diagnosis (COMPLETE)
+  root   schema:db/public.products.category
+  api is slow because a statement on table products in database db is over the statement budget declared for it, and no index serves category: the plan filters category row by row on public.products, with no index condition serving it, and it walks ix_products_sku for its order. No live index leads category, and the migrations declare none. ...
+  fix    Add an index on public.products (category, sku): the columns the plan filters, then those of the index it walks for its order. Verification, not this recommendation, decides whether a change worked.
+...
+  r3   fail          probe.db.statement_budget  component:db
+       statement 4650866916234037515 is over its 20 ms budget: 18364131 µs over 150 call(s) in the window, more than 20 ms each
+```
+
+The root needs four planes to agree:
+
+- the statement is over its budget;
+- the plan filters `category` row by row;
+- no live index leads `category`;
+- the migrations declare none.
+
+A seeded category would be fast: the walk along `sku` finds 50 matches
+within about 10,000 entries and stops. Only a category with no products
+makes it walk the whole index (`docs/LIMITS.md`). To fix it, add the index
+as a migration, apply it, and verify, giving `culprit verify` the
+investigation id that `diagnose` printed:
+
+```bash
+cat > api/migrations/versions/0002_products_category_sku.py <<'PY'
+"""Index products by category, then sku."""
+from alembic import op
+
+revision = "0002_products_category_sku"
+down_revision = "0001_products"
+
+
+def upgrade() -> None:
+    op.create_index("ix_products_category_sku", "products", ["category", "sku"])
+
+
+def downgrade() -> None:
+    op.drop_index("ix_products_category_sku", table_name="products")
+PY
+docker exec culprit-tour-db psql -q -U postgres -c "CREATE INDEX ix_products_category_sku ON products (category, sku)"
+culprit verify <id> -f db.yaml --from api --state-dir ./state \
+  --change "action:added and applied migration 0002, an index on products (category, sku)"
+```
+
+The statement is measured again, twice, and passes both times: `Verdict
+(VERIFIED)`. An index on `category` alone would leave this read where it
+was, because the planner does not use it for a category it expects to be
+as common as any other; the fault library checks that verification says
+`not_resolved` for exactly that fix. `docker rm -f culprit-tour-db` when
+you are done.
 
 **On your own repository:** describe your components and connections in
 `culprit.yaml` (the demo's [`cli/testdata/demo/culprit.yaml`](cli/testdata/demo/culprit.yaml)
