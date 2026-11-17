@@ -289,9 +289,37 @@ jobs:
           # frontend/node_modules.
           cd ../extractors/node && npm ci
 
-      # Culprit checks itself and fails the build on any
-      # breaks_request_path divergence (no continue-on-error since
-      # 60e53fd). The false-positive corpus in `cli/testdata/faults/`,
+      # Phase 38 part 1: build the dashboard, so `culprit check` can read
+      # its build manifest (frontend/dist/.vite/manifest.json) and judge the
+      # bundle budget the root culprit.yaml declares for culprit-web. Its
+      # API types are generated from the api's OpenAPI schema first, as
+      # `just frontend-build` does; the schema dump needs the same
+      # placeholder environment the check below does.
+      - name: Build culprit-web
+        env:
+          JWT_SECRET_KEY: culprit-intent-extraction-placeholder
+          AGENT_AUTOMATION_TOKEN: culprit-intent-extraction-placeholder
+          INGEST_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          API_READER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          REGISTRY_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          POSTMORTEM_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          FACT_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          CAPTURE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          PROBE_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          INVESTIGATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_ADMIN_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_REGISTRAR_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          AGENT_GATEWAY_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+          VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
+        run: |
+          cd api && uv run python -m scripts.dump_openapi_schema > ../frontend/openapi.schema.json
+          cd ../frontend && npm run generate-types && npm run build
+
+      # Culprit checks itself and fails the build on any divergence or
+      # bundle over budget of severity degrades or worse (no
+      # continue-on-error since 60e53fd; degrades since Phase 38 part 1,
+      # breaks_request_path before it). The false-positive corpus in `cli/testdata/faults/`,
       # run in the `cli` job above, is the exact assertion; this is the
       # same tool pointed at a real repository.
       #
@@ -331,7 +359,7 @@ jobs:
           VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
-          go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=breaks_request_path             --format sarif --output ../culprit.sarif
+          go run ./cmd/culprit check             -f ../culprit.yaml             --fail-on=degrades             --format sarif --output ../culprit.sarif
 
       # Run again for the log. The SARIF file went to disk, so without
       # this the job's output says nothing a person reading it can use.

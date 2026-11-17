@@ -52,6 +52,11 @@ components:
       - to: culprit-api
         kind: http
         criticality: on_request_path
+    # Phase 38 part 1: the dashboard's build, read by `culprit check` for
+    # the bundle budget below. `npm run build` writes it (vite.config.ts
+    # sets build.manifest); the self-check job builds before it checks.
+    build:
+      vite_manifest: frontend/dist/.vite/manifest.json
 
   - name: culprit-db
     kind: database
@@ -165,3 +170,16 @@ environments:
         database:
           dsn_env: CULPRIT_QUICKSTART_DSN
           name: culprit-db
+
+# --- Phase 38 part 1: how much the dashboard may download -----------------
+budgets:
+  - subject: "bundle:culprit-web/index.html"
+    predicate: bundle_gzip_bytes_max
+    value: 200000
+    why: >-
+      Chosen from a measured build (2026-11-17, `npm run build` with the
+      committed lockfile): index.html's first load is 167,686 bytes
+      gzipped as `culprit check` measures it, the JS 144,625 and the CSS
+      23,061 (fonts are assets, fetched later, and not counted). 200,000
+      leaves about 19% for ordinary growth, and fails the self-check on a
+      change the size of a new charting or date library.
