@@ -20,6 +20,7 @@ DEMO = Path(__file__).parents[2] / "demo-services" / "culprit.yaml"
 ITEMS = build("http", component="shop", method="GET", path="/items")
 READY = build("http", component="inventory-service", method="GET", path="/ready")
 PRODUCTS = build("schema", database="inventory-db", namespace="public", table="products")
+LIST_ROUTE = build("http", component="inventory-service", method="GET", path="/products")
 
 BASE = """
 version: 1
@@ -42,6 +43,7 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
     assert [(b.subject, b.predicate, b.value) for b in manifest.budgets] == [
         (READY, "latency_p95_ms", 300),
         (PRODUCTS, "query_mean_ms_max", 20),
+        (LIST_ROUTE, "latency_p95_ms", 30),
     ]
     exported = dump_manifest(manifest)
     again = load_manifest(exported)

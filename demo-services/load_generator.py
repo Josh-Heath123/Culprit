@@ -9,16 +9,23 @@ generator's own send rate.
 Two kinds of traffic, each at its own rate (0 turns it off):
 
 * POST /orders on order-service (LOAD_GEN_RATE_RPS);
-* GET /products?category=… on inventory-service, across the seeded
-  categories (LOAD_GEN_PRODUCTS_RPS). Phase 37 part 3: Culprit's statement
-  window measures the system's own traffic and sends none of its own, so
-  this is what makes the list route's statement visible to it. The fault
-  library runs this kind alone.
+* GET /products on inventory-service (LOAD_GEN_PRODUCTS_RPS). Phase 37
+  part 3: Culprit's statement window measures the system's own traffic and
+  sends none of its own, so this is what makes the list route's statement
+  visible to it. The fault library runs this kind alone.
+
+The products traffic is deterministic, not random (Q35): it alternates a
+bare GET /products — the storefront's featured category, a new one with no
+products yet — with GET /products?category=… for each seeded category in
+turn. Half the calls are then the empty category, the one a missing index
+makes slow, so a statement window's mean judges the same way on every run.
 """
 
 import asyncio
+import itertools
 import os
 import random
+from collections.abc import Iterator
 
 import httpx
 
@@ -30,6 +37,17 @@ REQUEST_TIMEOUT_S = float(os.environ.get("LOAD_GEN_TIMEOUT_S", "10"))
 SKUS = ["widget-a", "widget-b", "widget-c"]
 # The 200 categories inventory-service's 0002 migration seeds.
 CATEGORIES = [f"category-{n:03d}" for n in range(200)]
+
+
+def products_requests() -> Iterator[str | None]:
+    """The products traffic's categories, in order, forever: None (a bare
+    request, the featured category) and each seeded category, alternately."""
+    for category in itertools.cycle(CATEGORIES):
+        yield None
+        yield category
+
+
+_PRODUCTS = products_requests()
 
 
 async def place_order(client: httpx.AsyncClient) -> None:
@@ -47,13 +65,15 @@ async def place_order(client: httpx.AsyncClient) -> None:
 
 
 async def list_products(client: httpx.AsyncClient) -> None:
-    category = random.choice(CATEGORIES)
+    category = next(_PRODUCTS)
     url = f"{INVENTORY_SERVICE_URL}/products"
+    params = {} if category is None else {"category": category}
+    shown = category or "(featured)"
     try:
-        resp = await client.get(url, params={"category": category}, timeout=REQUEST_TIMEOUT_S)
-        print(f"[load-gen] GET /products {category} -> {resp.status_code}")
+        resp = await client.get(url, params=params, timeout=REQUEST_TIMEOUT_S)
+        print(f"[load-gen] GET /products {shown} -> {resp.status_code}")
     except httpx.HTTPError as exc:
-        print(f"[load-gen] GET /products {category} -> error: {exc}")
+        print(f"[load-gen] GET /products {shown} -> error: {exc}")
 
 
 async def steady(rate: float, send, client: httpx.AsyncClient) -> None:

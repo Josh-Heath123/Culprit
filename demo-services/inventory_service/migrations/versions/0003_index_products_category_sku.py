@@ -5,10 +5,13 @@ Revises: 0002_seed_products
 
 GET /products reads the first 50 of one category's products in sku order.
 Without an index led by `category`, Postgres walks `ix_products_sku` for
-the order and filters `category` row by row, across a million rows. This
-index serves both the filter and the order, so the read stops after 50
-entries (Phase 37 part 2 measured it within the 20 ms statement budget,
-where an index on `category` alone is not).
+the order and filters `category` row by row. That stops early for a
+seeded category, which has a product every 200 skus, but walks the whole
+million-entry index for a category with no products: about 75 ms
+(Q35). This index serves both the filter and the order, so the read
+stops after at most 50 entries, or at once for an empty category (about
+0.006 ms), within the 20 ms statement budget. An index on `category`
+alone is not used for an empty category, and leaves it at about 75 ms.
 
 The fault library's database fault is this revision missing: the tree
 holds 0001-0002 and the database is at 0002. Its known fix is the commit

@@ -311,9 +311,26 @@ budgets:
     predicate: query_mean_ms_max
     value: 20
     why: >-
-      Phase 37 part 2. GET /products reads the first 50 of one category's
-      products in sku order, from a million seeded rows. Without an index
-      led by category, Postgres walks the sku index filtering category
-      row by row: about 100 ms a call, measured. With one on (category,
-      sku) it reads 50 entries and stops. 20 ms guards the index the list
-      route depends on, and is clear of both.
+      GET /products reads the first 50 of one category's products in sku
+      order, from a million seeded rows in 200 interleaved categories.
+      Without an index led by category, Postgres walks the sku index and
+      filters category row by row: under a millisecond for a seeded
+      category, which matches every ~200 skus, but about 75 ms for a
+      category with no products, such as the storefront's featured new
+      one, because the walk never stops. An index on category alone is not
+      used for it. With one on (category, sku) it takes about 0.006 ms.
+      The demo's traffic is half the empty category, so a window's mean is
+      about 38 ms without the index and about 0.02 ms with it; 20 ms
+      guards the index the list route depends on, and is clear of both
+      (measured on PostgreSQL 16, Q35).
+  - subject: "http:inventory-service/GET /products"
+    predicate: latency_p95_ms
+    value: 30
+    why: >-
+      Phase 37 part 3. Chosen from measurement on the fault library's
+      stack, a bare GET /products (the featured category, which has no
+      products) timed 100 times from inside inventory-service, with the
+      products traffic running: p95 3.1 ms at the healthy head (0003) and
+      108.5 ms with the database at 0002, without the index. 30 ms puts
+      the healthy p95 under half the budget and the fault's p95 over twice
+      it, with room on a slower machine either way.
