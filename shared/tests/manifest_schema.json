@@ -3,6 +3,7 @@
     "Every culprit.yaml field and the one type it holds (Q28, ruled 2026-11-12): str, int, bool, any (a core scalar, a list or a mapping, a date kept as its text) or grant (true, false or a list of text). [] is a list item, {} a map value. Derived from the API model (api/app/model/manifest.py manifest_schema) and from the Go loader (cli/internal/extract/typed.go ManifestSchema); each language tests its derivation equals this file, and manifest_corpus.json crosses every field here with every scalar form."
   ],
   "fields": {
+    "budgets[].at": "str",
     "budgets[].predicate": "str",
     "budgets[].subject": "str",
     "budgets[].value": "int",
