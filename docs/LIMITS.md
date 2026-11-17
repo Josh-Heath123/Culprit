@@ -2937,7 +2937,10 @@ these are its limits.
   error pass and the latency pass found no root strictly below the entry.
   It asks about the databases the entry connects to, by an edge of any kind.
   A database only a deeper component reaches is not asked, even when the
-  fault is there: walk from that component instead.
+  fault is there: walk from that component instead. That holds for a
+  `background` edge as for any other: the demo's
+  `inventory-service -> inventory-db` is `background`, so a walk from an
+  order never asks inventory-db, and a walk from the list route does.
 - **Everything else the walk could not check stays partial.** A database
   root is complete only when nothing else is left open. When the model says
   the entry calls a component the walk cannot probe from the vantage (no
