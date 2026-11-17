@@ -33,6 +33,11 @@ type BudgetCoverage struct {
 	Unmatched []Unverifiable `json:"unmatched"`
 	// Unbudgeted are declared routes with no budget, when Declared.
 	Unbudgeted []string `json:"unbudgeted,omitempty"`
+	// Unbounded are list routes with no declared bound, when Declared
+	// (Phase 38 part 2): a response_list fact, from either OpenAPI
+	// reader, and no source giving its max_items, and no
+	// response_items_max budget. A coverage statement, never a finding.
+	Unbounded []string `json:"unbounded,omitempty"`
 }
 
 // IsBudgetPredicate reports whether a predicate declares a budget.
@@ -48,9 +53,24 @@ func Budgets(facts []model.Fact, declared bool) BudgetCoverage {
 	budgeted := map[string]bool{}
 	var budgets []model.Fact
 	routes := map[string]bool{}
+	lists := map[string]bool{}
+	bounded := map[string]bool{}
 	for _, fact := range facts {
 		if fact.Plane != model.PlaneIntent {
 			continue
+		}
+		if model.ListBudgetPredicates[fact.Predicate] {
+			// A list budget bounds its route; it does not declare the
+			// route, so a latency budget beside it on a mistyped route is
+			// still reported as pointing at nothing.
+			bounded[fact.Subject] = true
+			continue
+		}
+		if fact.Predicate == model.PredicateResponseList {
+			lists[fact.Subject] = true
+			if value, ok := fact.Value.(map[string]any); ok && value["max_items"] != nil {
+				bounded[fact.Subject] = true
+			}
 		}
 		if IsBudgetPredicate(fact.Predicate) {
 			budgets = append(budgets, fact)
@@ -96,6 +116,15 @@ func Budgets(facts []model.Fact, declared bool) BudgetCoverage {
 		sort.Strings(coverage.Unbudgeted)
 		if coverage.Unbudgeted == nil {
 			coverage.Unbudgeted = []string{}
+		}
+		for route := range lists {
+			if !bounded[route] {
+				coverage.Unbounded = append(coverage.Unbounded, route)
+			}
+		}
+		sort.Strings(coverage.Unbounded)
+		if coverage.Unbounded == nil {
+			coverage.Unbounded = []string{}
 		}
 	}
 	return coverage

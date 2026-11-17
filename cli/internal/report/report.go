@@ -226,6 +226,15 @@ func reportBudgets(writer io.Writer, input Input) {
 			fmt.Fprintf(writer, "  %s\n", subject)
 		}
 	}
+	// Phase 38 part 2: beside it, the list routes nothing bounds. Listed
+	// when there are any; a coverage statement, never a finding.
+	if budgets.Declared && len(budgets.Unbounded) > 0 {
+		fmt.Fprintf(writer, "\nUnbounded surface (%d) — list routes with no declared bound "+
+			"(maxItems in the spec, or a response_items_max budget)\n", len(budgets.Unbounded))
+		for _, subject := range budgets.Unbounded {
+			fmt.Fprintf(writer, "  %s\n", subject)
+		}
+	}
 }
 
 // labelledRefusal is a refusal with the environment it happened in.
@@ -421,6 +430,8 @@ type jsonReport struct {
 	// when there are none, so a check with none keeps its JSON contract.
 	BundlesOverBudget []jsonBundle `json:"bundles_over_budget,omitempty"`
 	Unbudgeted        []string     `json:"unbudgeted,omitempty"`
+	// Phase 38 part 2, omitted when empty.
+	Unbounded []string `json:"unbounded,omitempty"`
 	// Phase 30: one entry per environment a diff compared. Omitted for
 	// `culprit check`, so its JSON contract is unchanged.
 	Environments []jsonEnvironment `json:"environments,omitempty"`
@@ -552,6 +563,7 @@ func buildJSON(input Input) jsonReport {
 	report.UnmatchedBudgets = input.Result.Budgets.Unmatched
 	if input.Result.Budgets.Declared {
 		report.Unbudgeted = input.Result.Budgets.Unbudgeted
+		report.Unbounded = input.Result.Budgets.Unbounded
 	}
 
 	report.Summary.Facts = totalFacts(input)
