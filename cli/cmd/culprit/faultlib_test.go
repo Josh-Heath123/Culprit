@@ -233,7 +233,7 @@ func TestTheFaultLibrary(t *testing.T) {
 			verification := stack.verify(fault, inv, state, scenario.Change)
 			stack.checkVerification(verification, inv, scenario.Verdict, scenario.ReasonContains)
 			if scenario.Apply == "index-category-only" {
-				// Q35: with category alone the mean is still over the 20 ms
+				// Q35: with category alone the mean is still over the 10 ms
 				// budget, and the plan still filters category on the sku index.
 				reran := rerunReadings(verification)
 				stack.checkStatementMean(reran, ">", productsStatementBudgetMs)

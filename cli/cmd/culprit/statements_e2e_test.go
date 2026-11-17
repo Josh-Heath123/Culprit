@@ -23,7 +23,7 @@ import (
 // query as inventory-service's own role.
 //
 //   - Without an index on category, the window finds that statement over
-//     the demo's 20 ms budget on products, and its plan is a sequential scan
+//     the demo's 10 ms budget on products, and its plan is a sequential scan
 //     of products filtering category.
 //   - With one (created here, in this test database), the plan is an index
 //     scan and the window is within budget.
@@ -54,7 +54,7 @@ environments:
 budgets:
   - subject: "schema:inventory-db/public.products"
     predicate: query_mean_ms_max
-    value: 20
+    value: 10
     why: the demo's own budget on the list route's table
 `
 
@@ -264,11 +264,11 @@ func TestTheStatementProbesOnTheDemoDatabase(t *testing.T) {
 		if calls > 0 {
 			mean = total / calls / 1000
 		}
-		t.Logf("MEASURED %s: %.0f calls, %.0f µs in the window, mean %.3f ms against the 20 ms budget", label, calls, total, mean)
+		t.Logf("MEASURED %s: %.0f calls, %.0f µs in the window, mean %.3f ms against the 10 ms budget", label, calls, total, mean)
 	}
 	measured("without an index on category", statement)
 	if before.Verdict != model.VerdictFail || statement["budget_on"] != "public.products" {
-		t.Fatalf("without an index: %s (%s), budget on %v; want the products statement over the table's 20 ms",
+		t.Fatalf("without an index: %s (%s), budget on %v; want the products statement over the table's 10 ms",
 			before.Verdict, before.Reason, statement["budget_on"])
 	}
 	// Without an index on category, products is read row by row with
@@ -306,7 +306,7 @@ func TestTheStatementProbesOnTheDemoDatabase(t *testing.T) {
 	statement = products(after)
 	measured("with the index on (category, sku)", statement)
 	if after.Verdict != model.VerdictPass {
-		t.Fatalf("with an index on category: %s (%s); want within the 20 ms budget", after.Verdict, after.Reason)
+		t.Fatalf("with an index on category: %s (%s); want within the 10 ms budget", after.Verdict, after.Reason)
 	}
 	indexed := plan(statement["queryid"].(string))
 	if !strings.Contains(nodes(indexed), "ix_products_category") {

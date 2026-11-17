@@ -306,28 +306,34 @@ budgets:
       library's injected 800 ms.
   - subject: "schema:inventory-db/public.products"
     predicate: query_mean_ms_max
-    value: 20
+    value: 10
     why: >-
       GET /products reads the first 50 of one category's products in sku
       order, from a million seeded rows in 200 interleaved categories.
       Without an index led by category, Postgres walks the sku index and
       filters category row by row: under a millisecond for a seeded
-      category, which matches every ~200 skus, but about 75 ms for a
+      category, which matches every ~200 skus, but the whole index for a
       category with no products, such as the storefront's featured new
       one, because the walk never stops. An index on category alone is not
       used for it. With one on (category, sku) it takes about 0.006 ms.
       The demo's traffic is half the empty category, so a window's mean is
-      about 38 ms without the index and about 0.02 ms with it; 20 ms
-      guards the index the list route depends on, and is clear of both
-      (measured on PostgreSQL 16, Q35).
+      about half the walk. The walk's cost is the machine's speed: the
+      window's mean without the index has measured 28.2 to 63.8 ms across
+      CI's runners and 46 to 133 ms on a developer's machine, and 0.1 to
+      0.96 ms with it (PostgreSQL 16, Q35, Q37). 10 ms guards the index the
+      list route depends on: the fault's smallest mean is 2.8 times it,
+      and health stays under 2 ms. It was 20 ms until Q37, which a fast
+      runner's fault mean, 28.2 ms, fell under 1.5 times it.
   - subject: "http:inventory-service/GET /products"
     predicate: latency_p95_ms
-    value: 30
+    value: 25
     why: >-
-      Phase 37 part 3. Chosen from measurement on the fault library's
-      stack, a bare GET /products (the featured category, which has no
-      products) timed 100 times from inside inventory-service, with the
-      products traffic running: p95 3.1 ms at the healthy head (0003) and
-      108.5 ms with the database at 0002, without the index. 30 ms puts
-      the healthy p95 under half the budget and the fault's p95 over twice
-      it, with room on a slower machine either way.
+      Phase 37 part 3, moved by Q37. Measured on the fault library's
+      stack, GET /products for the featured category (which has no
+      products) with the products traffic running: the p95 at the healthy
+      head (0003) has been 3 to 8 ms (7.9 ms the slowest, on a developer's
+      machine), and with the database at 0002, without the index, 68.4 ms
+      the smallest in CI and 108.5 ms timed by hand. 25 ms keeps the
+      slowest healthy p95 37% under half the budget and the fault's
+      smallest p95 37% over twice it. It was 30 ms until Q37, when one
+      runner's fault p95 came within 14% of twice the budget.

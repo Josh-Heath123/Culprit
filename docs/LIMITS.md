@@ -2780,6 +2780,14 @@ Phase 37 part 2 (`probe.db.statement_budget`, `probe.db.plan`; PROBES.md).
   2026-11-14). The demo's featured category, `category-200`, is a new one
   with no products, and its products traffic alternates it with the seeded
   categories, so a window's mean is about half the empty category's time.
+  That time is the machine's speed, not the fault's: the window's mean
+  without the index has measured 28.2 to 63.8 ms across CI's runners and 46
+  to 133 ms on a developer's machine, and the route's p95 68.4 ms at the
+  least. So the demo's budgets sit near health, not near the fault: 10 ms
+  for the statement and 25 ms for the route's p95 (Q37, 2026-11-17; they
+  were 20 and 30 ms, and one runner's fault came within the library's
+  margin of them). A runner faster still would need a larger table, not a
+  looser test.
   (Part 2's "about 100 ms a call" was measured on `category-7`, which the
   seed never writes: an empty category, by accident.)
 
