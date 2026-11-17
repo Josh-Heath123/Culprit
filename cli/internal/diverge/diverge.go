@@ -80,6 +80,12 @@ type Result struct {
 	// nothing, and the unbudgeted surface. Filled by `culprit check`, which
 	// knows whether the manifest declares `budgets:`. See budgets.go.
 	Budgets BudgetCoverage
+	// Bundles are the entries of a build over their gzip budget (Phase 38
+	// part 1), findings of their own beside the divergences (bundles.go).
+	// BuildNotChecked says of each declared build, and each budgeted
+	// entry, what could not be judged and why. Filled by `culprit check`.
+	Bundles         []BundleFinding
+	BuildNotChecked []model.Skip
 }
 
 // Unverifiable is one subject with a single source of truth.

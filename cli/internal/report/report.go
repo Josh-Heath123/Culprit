@@ -82,6 +82,7 @@ func renderText(writer io.Writer, input Input) error {
 		if suppressed > 0 {
 			fmt.Fprintf(writer, "%d finding(s) suppressed by culprit.yaml.\n", suppressed)
 		}
+		reportBundles(writer, input)
 		reportRefused(writer, input)
 		reportGaps(writer, input)
 		reportBudgets(writer, input)
@@ -118,6 +119,7 @@ func renderText(writer io.Writer, input Input) error {
 	if suppressed > 0 {
 		fmt.Fprintf(writer, "%d further finding(s) suppressed by culprit.yaml.\n", suppressed)
 	}
+	reportBundles(writer, input)
 	reportRefused(writer, input)
 	reportGaps(writer, input)
 	reportBudgets(writer, input)
@@ -125,6 +127,27 @@ func renderText(writer io.Writer, input Input) error {
 		renderUnverifiableText(writer, input)
 	}
 	return nil
+}
+
+// reportBundles prints the entries of a build over their gzip budget
+// (Phase 38 part 1): findings of their own, not divergences, each with its
+// budget, what the build measured, and its three largest files.
+func reportBundles(writer io.Writer, input Input) {
+	bundles := input.Result.Bundles
+	if len(bundles) == 0 {
+		return
+	}
+	fmt.Fprintf(writer, "\n%d bundle(s) over budget\n\n", len(bundles))
+	for _, finding := range bundles {
+		fmt.Fprintf(writer, "  [%s] %s\n", finding.Severity, finding.Subject)
+		fmt.Fprintf(writer, "      %s\n", finding.Explanation)
+		fmt.Fprintf(writer, "      %s\n", describeSide(finding.Budget))
+		fmt.Fprintf(writer, "      %s\n", describeSide(finding.Measured))
+		for _, chunk := range finding.Largest {
+			fmt.Fprintf(writer, "      %10d  %s\n", chunk.GzipBytes, chunk.File)
+		}
+		fmt.Fprintln(writer)
+	}
 }
 
 // reportRefused prints what an environment capture was not allowed to
@@ -232,6 +255,12 @@ func allSkips(input Input) []model.Skip {
 			skip.Reason = model.RedactCredentials(skip.Reason)
 			skips = append(skips, skip)
 		}
+	}
+	// Phase 38 part 1: a declared build that could not be read, and a
+	// budgeted entry the build does not have.
+	for _, skip := range input.Result.BuildNotChecked {
+		skip.Reason = model.RedactCredentials(skip.Reason)
+		skips = append(skips, skip)
 	}
 	return skips
 }
@@ -375,7 +404,10 @@ type jsonReport struct {
 	// Phase 36: budget coverage. Omitted when there is none to report, so
 	// a manifest with no budgets keeps the same JSON contract.
 	UnmatchedBudgets []diverge.Unverifiable `json:"unmatched_budgets,omitempty"`
-	Unbudgeted       []string               `json:"unbudgeted,omitempty"`
+	// Phase 38 part 1: entries of a build over their gzip budget. Omitted
+	// when there are none, so a check with none keeps its JSON contract.
+	BundlesOverBudget []jsonBundle `json:"bundles_over_budget,omitempty"`
+	Unbudgeted        []string     `json:"unbudgeted,omitempty"`
 	// Phase 30: one entry per environment a diff compared. Omitted for
 	// `culprit check`, so its JSON contract is unchanged.
 	Environments []jsonEnvironment `json:"environments,omitempty"`
@@ -401,6 +433,18 @@ type jsonSummary struct {
 	Cosmetic             int `json:"cosmetic"`
 	Unknown              int `json:"unknown"`
 	UnverifiableSubjects int `json:"unverifiable_subjects"`
+	// Phase 38 part 1, omitted when zero.
+	BundlesOverBudget int `json:"bundles_over_budget,omitempty"`
+}
+
+// jsonBundle is one entry over its gzip budget.
+type jsonBundle struct {
+	Subject     string                `json:"subject"`
+	Severity    string                `json:"severity"`
+	Explanation string                `json:"explanation"`
+	Budget      jsonSide              `json:"budget"`
+	Measured    jsonSide              `json:"measured"`
+	Largest     []diverge.BundleChunk `json:"largest"`
 }
 
 type jsonDivergence struct {
@@ -474,6 +518,18 @@ func buildJSON(input Input) jsonReport {
 			report.Unverifiable = []diverge.Unverifiable{}
 		}
 	}
+
+	for _, finding := range input.Result.Bundles {
+		report.BundlesOverBudget = append(report.BundlesOverBudget, jsonBundle{
+			Subject:     finding.Subject,
+			Severity:    string(finding.Severity),
+			Explanation: finding.Explanation,
+			Budget:      side(finding.Budget),
+			Measured:    side(finding.Measured),
+			Largest:     finding.Largest,
+		})
+	}
+	report.Summary.BundlesOverBudget = len(input.Result.Bundles)
 
 	report.UnmatchedBudgets = input.Result.Budgets.Unmatched
 	if input.Result.Budgets.Declared {
@@ -698,6 +754,35 @@ func renderSARIF(writer io.Writer, input Input) error {
 		})
 	}
 
+	// Phase 38 part 1: an entry over its gzip budget, annotated where the
+	// budget is declared (culprit.yaml), the one file the finding names.
+	for _, finding := range input.Result.Bundles {
+		ruleID := "culprit/bundle_over_budget/" + finding.Budget.Predicate
+		if _, exists := rules[ruleID]; !exists {
+			rules[ruleID] = sarifRule{
+				ID:               ruleID,
+				Name:             "bundle_over_budget." + finding.Budget.Predicate,
+				ShortDescription: sarifText{Text: "An entry of a frontend build is over its gzip budget"},
+				FullDescription: sarifText{
+					Text: "Culprit reads the build's manifest and measures each entry's initial " +
+						"download, gzipped, against the bundle_gzip_bytes_max declared in culprit.yaml. " +
+						"This rule fires when an entry weighs more than its budget.",
+				},
+				DefaultConfig: sarifRuleConfig{Level: sarifLevel(finding.Severity)},
+				Properties:    map[string]string{"predicate": finding.Budget.Predicate},
+			}
+		}
+		results = append(results, sarifResult{
+			RuleID:    ruleID,
+			Level:     sarifLevel(finding.Severity),
+			Message:   sarifText{Text: finding.Subject + " — " + finding.Explanation},
+			Locations: []sarifLocation{sarifLocationFor(input.Root, finding.Budget)},
+			PartialFingerprints: map[string]string{
+				"culpritBundle/v1": finding.Subject + "|" + finding.Budget.Predicate,
+			},
+		})
+	}
+
 	ruleList := make([]sarifRule, 0, len(rules))
 	for _, rule := range rules {
 		ruleList = append(ruleList, rule)
@@ -836,6 +921,19 @@ func renderJUnit(writer io.Writer, input Input) error {
 				Text: fmt.Sprintf("expected: %s\nfound:    %s\nwhy %s: %s",
 					describeSide(finding.Left), describeSide(finding.Right),
 					finding.Severity, finding.SeverityReason),
+			},
+		})
+		suite.Failures++
+	}
+	for _, finding := range input.Result.Bundles {
+		suite.Cases = append(suite.Cases, junitCase{
+			Name:      finding.Subject + " " + finding.Budget.Predicate,
+			ClassName: "culprit.bundle_over_budget",
+			Failure: &junitFailure{
+				Message: finding.Explanation,
+				Type:    string(finding.Severity),
+				Text: fmt.Sprintf("budget:   %s\nmeasured: %s",
+					describeSide(finding.Budget), describeSide(finding.Measured)),
 			},
 		})
 		suite.Failures++

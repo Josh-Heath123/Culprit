@@ -37,6 +37,9 @@ type Report struct {
 	Manifest *extract.Manifest
 	Bundle   model.CaptureBundle
 	Result   diverge.Result
+	// Build is what the build reader measured (Phase 38 part 1): OBSERVED
+	// facts in the environment `build`, apart from the INTENT capture.
+	Build []model.Fact
 	// Suppressed is how many findings a suppression silenced.
 	Suppressed int
 	BaseDir    string
@@ -105,10 +108,39 @@ func Run(ctx context.Context, options Options) (Report, error) {
 	report.Bundle = bundle
 
 	report.Result = diverge.Compare(bundle, diverge.Options{Now: now})
-	report.Result.Budgets = diverge.Budgets(bundle.Facts, len(manifest.Budgets) > 0)
+	// The unbudgeted surface is routes no budget holds to a time, so it is
+	// listed when a latency budget is declared. A bundle budget alone
+	// (Phase 38 part 1) says nothing about routes.
+	latencyDeclared := false
+	for _, declared := range manifest.Budgets {
+		_, latency := model.BudgetPredicates[declared.Predicate]
+		latencyDeclared = latencyDeclared || latency
+	}
+	report.Result.Budgets = diverge.Budgets(bundle.Facts, latencyDeclared)
+	// Phase 38 part 1: a declared build is read and its entries judged
+	// against their bundle budgets. Nothing is read for a manifest that
+	// declares no build.
+	read := extract.ReadBuilds(manifest, baseDir, options.Only, now, bundle.CaptureID)
+	report.Build = read.Facts
+	findings, missing := diverge.BundleBudgets(budgets, read.Facts)
+	report.Result.Bundles = findings
+	report.Result.BuildNotChecked = append(read.NotChecked, missing...)
 	severity.NewClassifier(manifest, bundle).Apply(report.Result.Divergences)
 	report.Suppressed = manifest.ApplySuppressions(report.Result.Divergences, now)
 	return report, nil
+}
+
+// CountFailing counts every finding of a check at or above threshold: its
+// divergences, as CountAtOrAbove does, and its bundles over budget (Phase
+// 38 part 1).
+func CountFailing(result diverge.Result, threshold model.Severity) int {
+	count := CountAtOrAbove(result.Divergences, threshold)
+	for _, finding := range result.Bundles {
+		if finding.Severity.AtLeast(threshold) {
+			count++
+		}
+	}
+	return count
 }
 
 // CountAtOrAbove counts the findings that should fail a build.

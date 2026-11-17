@@ -51,6 +51,12 @@ No environment is read, no service is contacted and no model provider is
 called. Everything it knows comes from files in the repository, which is
 why it works in a pull-request check on a fork with no secrets.
 
+A component that declares a build (build: {vite_manifest: <path>}) has its
+Vite build manifest read, and each entry's first load, gzipped, judged
+against its bundle_gzip_bytes_max budget: an entry over it is a finding of
+severity degrades. Build before you check; a declared build that is not
+there is listed as not checked.
+
 Exit codes: 0 clean, 1 findings at or above --fail-on, 2 the command
 could not run.`,
 		Args: cobra.NoArgs,
@@ -101,7 +107,7 @@ could not run.`,
 
 			warnExpiredSuppressions(command.ErrOrStderr(), result.Manifest, captureTime())
 
-			count := check.CountAtOrAbove(result.Result.Divergences, threshold)
+			count := check.CountFailing(result.Result, threshold)
 			if count > 0 {
 				return &findingsError{count: count, threshold: threshold}
 			}
