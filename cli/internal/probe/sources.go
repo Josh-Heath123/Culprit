@@ -314,6 +314,32 @@ func (st *statementSource) Plan(ctx context.Context, name string, queryID int64)
 	return plan, nil
 }
 
+func (st *statementSource) Bracket(ctx context.Context, component string,
+	between func(ctx context.Context) error,
+) (capture.StatementBracket, string, error) {
+	databases := st.db.s.Manifest.SQLDatabases(component)
+	switch len(databases) {
+	case 0:
+		return capture.StatementBracket{}, "", &UnavailableError{Reason: fmt.Sprintf(
+			"%s has no sql connection in culprit.yaml, so there is no database to measure", component)}
+	case 1:
+	default:
+		return capture.StatementBracket{}, "", &UnavailableError{Reason: fmt.Sprintf(
+			"%s has %d sql connections in culprit.yaml (%s), so which database it reads per item "+
+				"is not known", component, len(databases), strings.Join(databases, ", "))}
+	}
+	database := databases[0]
+	dsn, err := st.db.dsnFor(database)
+	if err != nil {
+		return capture.StatementBracket{}, database, err
+	}
+	bracket, err := st.db.s.Stats.Bracket(ctx, dsn, between)
+	if err != nil {
+		return capture.StatementBracket{}, database, sourceError(err)
+	}
+	return bracket, database, nil
+}
+
 // --- database ---------------------------------------------------------
 
 // Database reads schema metadata through capture.PostgresReader.

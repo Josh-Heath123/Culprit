@@ -251,6 +251,42 @@
     ]
   },
   {
+    "id": "probe.db.statements_per_request",
+    "version": 1,
+    "effect": "interrogate",
+    "capabilities": [
+      "db.stats.read",
+      "net.http.outbound"
+    ],
+    "inputs": {
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "base_url": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "timeout_ms": 30000,
+    "produces": [
+      {
+        "subject_template": "http:{component}/{method} {path}",
+        "predicate": "statements_per_item"
+      }
+    ],
+    "cost": "cheap",
+    "verdicts": [
+      "pass",
+      "inconclusive",
+      "refused"
+    ]
+  },
+  {
     "id": "probe.dep.version",
     "version": 2,
     "effect": "inspect",

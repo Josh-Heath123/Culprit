@@ -400,6 +400,21 @@ func cases() []probeCase {
 			Deps{HTTP: &fakeCounter{count: ItemCount{Status: 200, NotCounted: "no_array"}}, Now: clock},
 			model.VerdictInconclusive,
 			declaredAs("http:inventory-service/GET /products", "response_items_max", model.ListBudgetValue(50, "/products"))},
+		// --- probe.db.statements_per_request (Phase 39 part 1); the
+		// fixtures' runner declares staging isolated ---
+		{"one statement per item named", "probe.db.statements_per_request", "http:inventory-service/GET /products",
+			map[string]any{"base_url": "http://inventory.internal", "at": "/products"},
+			Deps{HTTP: &fakeCounter{count: ItemCount{Status: 200, Items: 5, Counted: true}},
+				Statements: fakeStatements{database: "inventory-db", bracket: capture.StatementBracket{
+					Sent: true, Statements: []capture.StatementStats{{QueryID: 202, Calls: 5}, {QueryID: 101, Calls: 1}}}},
+				Now: clock},
+			model.VerdictPass, nil},
+		{"a quiet window that was not quiet", "probe.db.statements_per_request", "http:inventory-service/GET /products",
+			map[string]any{"base_url": "http://inventory.internal"},
+			Deps{HTTP: &fakeCounter{count: ItemCount{Status: 200, Items: 5, Counted: true}},
+				Statements: fakeStatements{database: "inventory-db", bracket: capture.StatementBracket{QuietCalls: 3}},
+				Now:        clock},
+			model.VerdictInconclusive, nil},
 		{"too little history to say", "probe.edge.impedance", connectionTarget,
 			map[string]any{},
 			Deps{Metrics: fakeMetrics{found: true, sample: ImpedanceSample{
@@ -412,8 +427,9 @@ func TestProbeVerdicts(t *testing.T) {
 	for _, testCase := range cases() {
 		t.Run(testCase.name, func(t *testing.T) {
 			runner := NewRunner(Options{
-				Ledger: grantEverything(t),
-				Deps:   testCase.deps,
+				Ledger:              grantEverything(t),
+				Deps:                testCase.deps,
+				IsolatedEnvironment: "staging",
 			})
 			readings := runner.Run(context.Background(), []Request{{
 				ProbeID:     testCase.probeID,
@@ -541,7 +557,7 @@ func TestBuiltInCatalogueRegistersEveryCoreProbe(t *testing.T) {
 	want := []string{
 		"probe.auth.propagation", "probe.auth.token_shape", "probe.config.present",
 		"probe.db.connect", "probe.db.plan", "probe.db.schema_conformance",
-		"probe.db.statement_budget", "probe.dep.version",
+		"probe.db.statement_budget", "probe.db.statements_per_request", "probe.dep.version",
 		"probe.edge.impedance", "probe.http.latency", "probe.http.reachable",
 		"probe.http.response_items", "probe.http.route_conformance", "probe.http.schema_conformance",
 		"probe.net.dns_resolve", "probe.net.tcp_connect", "probe.net.tls_validity",

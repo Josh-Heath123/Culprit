@@ -174,7 +174,7 @@ func runDiagnose(ctx context.Context, in diagnoseInput) (model.Investigation, er
 			return walkRunner{}, err
 		}
 		return walkRunnerUnder(manifest, resolved, environment, in.AgentID, in.Timeout, catalogue(), facts,
-			grants, through), nil
+			grants, through, isolatedIn(manifest, environment)), nil
 	}
 	runner, err := runnerFor(in.Environment)
 	if err != nil {
@@ -403,9 +403,13 @@ func realWire(timeout time.Duration) wire {
 // probeRunnerUnder builds a probe runner whose every reading is decided
 // by grants — the environment's from culprit.yaml for `culprit diagnose`
 // and `culprit probe`, the agent's own for `culprit agent`.
+//
+// isolated is the environment culprit.yaml declares `isolated: true`, when
+// it is this one (isolatedIn), and "" for the production agent, which
+// never measures as if nothing else were talking (Phase 39 part 1).
 func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, agentID string,
 	timeout time.Duration, catalogue *probe.Catalogue, facts []model.Fact,
-	grants capability.Grants, through wire,
+	grants capability.Grants, through wire, isolated string,
 ) *probe.Runner {
 	ledger := capability.NewLedger(grants)
 	sources := &probe.Sources{
@@ -428,18 +432,28 @@ func probeRunnerUnder(manifest *extract.Manifest, manifestPath, environment, age
 	return probe.NewRunner(probe.Options{
 		Catalogue: catalogue, Ledger: ledger, AgentID: agentID,
 		Overrides: overridesFrom(manifest), Deps: deps,
-		Expectations: probe.NewExpectations(facts),
+		Expectations:        probe.NewExpectations(facts),
+		IsolatedEnvironment: isolated,
 	})
+}
+
+// isolatedIn is environment when culprit.yaml declares it `isolated: true`,
+// and "" otherwise: what a runner stamps every request's Isolated from.
+func isolatedIn(manifest *extract.Manifest, environment string) string {
+	if spec, declared := manifest.Environments[environment]; declared && spec.Isolated {
+		return environment
+	}
+	return ""
 }
 
 func walkRunnerUnder(manifest *extract.Manifest, manifestPath, environment, agentID string,
 	timeout time.Duration, catalogue *probe.Catalogue, facts []model.Fact,
-	grants capability.Grants, through wire,
+	grants capability.Grants, through wire, isolated string,
 ) walkRunner {
 	return walkRunner{
 		environment: environment,
 		runner: probeRunnerUnder(manifest, manifestPath, environment, agentID, timeout, catalogue, facts,
-			grants, through),
+			grants, through, isolated),
 	}
 }
 

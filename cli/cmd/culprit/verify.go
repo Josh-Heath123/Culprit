@@ -478,7 +478,7 @@ func (r *verifyRunner) RunSet(ctx context.Context, request verify.Request) []mod
 			through = *r.through
 		}
 		runner = probeRunnerUnder(r.manifest, r.manifestPath, request.Environment, r.agentID, r.timeout,
-			r.catalogue, r.facts, grants, through)
+			r.catalogue, r.facts, grants, through, isolatedIn(r.manifest, request.Environment))
 		r.runners[request.Environment] = runner
 	}
 	return runner.RunOne(ctx, probe.Request{

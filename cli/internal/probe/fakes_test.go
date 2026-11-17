@@ -119,6 +119,34 @@ type fakeStatements struct {
 	plan    capture.StatementPlan
 	err     error
 	calls   *int
+	// bracket is Bracket's answer; between is run only when it says Sent,
+	// as the real bracket runs it only after a quiet window.
+	bracket  capture.StatementBracket
+	database string
+	// components records which component each Bracket was asked about.
+	components *[]string
+}
+
+func (f fakeStatements) Bracket(ctx context.Context, component string,
+	between func(context.Context) error,
+) (capture.StatementBracket, string, error) {
+	if f.calls != nil {
+		*f.calls++
+	}
+	if f.components != nil {
+		*f.components = append(*f.components, component)
+	}
+	if f.err != nil {
+		return capture.StatementBracket{}, "", f.err
+	}
+	bracket := f.bracket
+	if bracket.Sent {
+		if err := between(ctx); err != nil {
+			bracket.Unavailable = "the request between the snapshots did not complete, so nothing was measured"
+			bracket.Statements = nil
+		}
+	}
+	return bracket, f.database, nil
 }
 
 func (f fakeStatements) Window(context.Context, string) (capture.StatementWindow, bool, error) {

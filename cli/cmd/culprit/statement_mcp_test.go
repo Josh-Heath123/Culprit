@@ -59,6 +59,11 @@ func (c *countingStatements) Plan(context.Context, string, int64) (capture.State
 	return capture.StatementPlan{}, nil
 }
 
+func (c *countingStatements) Bracket(context.Context, string, func(context.Context) error) (capture.StatementBracket, string, error) {
+	c.calls.Add(1)
+	return capture.StatementBracket{}, "", nil
+}
+
 func TestCulpritProbeRefusesWhatOnlyTheWalkMayName(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "culprit.yaml")
 	if err := os.WriteFile(path, []byte(statementManifest), 0o600); err != nil {

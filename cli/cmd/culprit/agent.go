@@ -218,8 +218,10 @@ func (e *agentExecutor) Execute(ctx context.Context, task agent.Task, config age
 
 	switch task.Kind {
 	case agent.TaskProbe:
+		// The production agent never stamps an environment isolated
+		// (Phase 39 part 1): "" whatever culprit.yaml says.
 		runner := probeRunnerUnder(manifest, config.Manifest, task.Environment, config.AgentID, e.timeout,
-			catalogue, facts, grants, through)
+			catalogue, facts, grants, through, "")
 		readings := runner.Run(ctx, []probe.Request{{
 			ProbeID: task.Probe.ProbeID, Target: task.Probe.Target,
 			Environment: task.Environment, Inputs: task.Probe.Inputs,
@@ -250,7 +252,7 @@ func (e *agentExecutor) Execute(ctx context.Context, task agent.Task, config age
 		defer cancel()
 		recorded := &recordingRunner{
 			inner: walkRunnerUnder(manifest, config.Manifest, task.Environment, config.AgentID, e.timeout,
-				catalogue, facts, grants, through),
+				catalogue, facts, grants, through, ""),
 			record: record, cancel: cancel,
 		}
 		options := isolate.Options{Environment: task.Environment}
@@ -349,7 +351,7 @@ func (e *agentExecutor) verify(ctx context.Context, task agent.Task, config agen
 		environment: task.Environment, grants: grants, record: record, runners: map[string]*probe.Runner{},
 		build: func(environment string, under capability.Grants) *probe.Runner {
 			return probeRunnerUnder(manifest, config.Manifest, environment, config.AgentID, e.timeout,
-				catalogue, facts, under, through)
+				catalogue, facts, under, through, "")
 		},
 	}
 	verification, err := verify.Run(ctx, verify.Options{

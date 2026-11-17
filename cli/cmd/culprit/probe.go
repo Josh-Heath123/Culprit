@@ -285,6 +285,8 @@ func runProbe(ctx context.Context, in probeInput) ([]model.Reading, *capability.
 		Overrides:    overridesFrom(manifest),
 		Deps:         deps,
 		Expectations: probe.NewExpectations(factSets...),
+		// From culprit.yaml only: an input cannot set it (Phase 39 part 1).
+		IsolatedEnvironment: isolatedIn(manifest, in.Environment),
 	})
 	return runner.Run(ctx, requests), ledger, nil
 }

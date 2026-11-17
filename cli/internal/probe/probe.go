@@ -75,6 +75,12 @@ type Request struct {
 	// NoExpectation says why no expectation was found, so a probe's
 	// inconclusive reason can name what it looked for. Set by the runner.
 	NoExpectation string
+	// Isolated says culprit.yaml declares this request's environment
+	// isolated (Phase 39 part 1, decision 3). The runner stamps it on every
+	// request from its own options, overwriting whatever a caller set, so
+	// no caller and no input can assert it; the production agent's runner
+	// is never told an environment is isolated.
+	Isolated bool
 }
 
 // withoutExpectation is a probe's inconclusive outcome when nothing it
