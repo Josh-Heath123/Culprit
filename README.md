@@ -704,10 +704,42 @@ budgets:
 or `x-culprit-budget: { latency_p95_ms: 300 }` on an OpenAPI operation.
 `culprit check` reports two sources that disagree as an `intent_conflict`,
 lists a budget whose route nothing else declares, and, once you declare
-any, lists the routes that have none. `probe.http.latency` measures a
+a latency budget, lists the routes that have none. `probe.http.latency` measures a
 route against its budget ([`docs/PROBES.md`](docs/PROBES.md)), and
 `culprit diagnose` uses it once the errors explain nothing (step 4 above);
 its limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "Latency budgets".
+
+**Bundle budgets.** How much a page may download is declared the same
+way. Point `culprit check` at your Vite build's manifest and budget an
+entry in gzipped bytes:
+
+```yaml
+components:
+  - name: web
+    kind: frontend
+    build:
+      vite_manifest: web/dist/.vite/manifest.json   # build.manifest: true in vite.config
+budgets:
+  - subject: "bundle:web/index.html"
+    predicate: bundle_gzip_bytes_max
+    value: 200000                    # whole bytes, gzipped
+    why: the first page waits on it
+```
+
+Build before you check, in the same CI job:
+
+```yaml
+- run: cd web && npm ci && npm run build
+- run: culprit check --fail-on=degrades --format sarif --output culprit.sarif
+```
+
+An entry over its budget is a `degrades` finding naming its three largest
+files. What counts is the entry's first load: its own chunk, what it
+statically imports and their CSS, not what `import()` loads later. With no
+build present the budget is "Not checked", never quietly passed. Culprit's
+own CI holds its dashboard to 200,000 bytes this way (the root
+`culprit.yaml`); the limits are in [`docs/LIMITS.md`](docs/LIMITS.md),
+"Bundle budgets".
 
 **Databases.** A component's database is reached through a variable you
 name, never a connection string in the file:
@@ -811,7 +843,7 @@ Not counted either: the library's deliberate wrong and partial fixes, which chec
 | `just test` | everything below that needs no cluster: the api, worker and MCP server suites (with the repository's own scripts and the shared model's conformance tests), `go test` across the CLI, and both extractors. Needs Docker for Postgres |
 | `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all sixteen probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
 | `just extractors-test` | the Python and Node extractors |
-| `just self-check` | `culprit check` on this repository: **no divergences, 1,023 facts across 451 subjects**, and 9 gaps listed |
+| `just self-check` | `culprit check` on this repository, failing on `degrades`: **no divergences, 1,713 facts across 631 subjects**, 9 gaps listed, and the dashboard's first load within its 200,000-byte gzip budget (run `just frontend-build` first, or the budget is "Not checked") |
 | `just self-check-coverage` | the 368 subjects only one source describes — places where a mistake would go uncaught |
 | `just cli-test-docker`, `just cli-test-kind` | environment capture against real Compose projects and a kind cluster |
 | `just check-migration-round-trip` | every migration upgrades, downgrades and upgrades again against a real database with rows in it |

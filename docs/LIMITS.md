@@ -2813,8 +2813,9 @@ larger budget, so a timeout is slower than both.
 A budget whose subject no other INTENT source declares is listed under
 "Budgets that name nothing declared" — a renamed or mistyped route would
 otherwise never be measured. The unbudgeted surface (routes declared with
-`exists` and no budget) is listed only when the manifest declares
-`budgets:` at all. An `x-culprit-budget` entry that is not a budget (an
+`exists` and no budget) is listed only when the manifest declares a
+latency budget; a bundle budget alone says nothing about routes, and does
+not switch it on (Phase 38 part 1). An `x-culprit-budget` entry that is not a budget (an
 unknown predicate, a value that is not a whole, positive number of
 milliseconds) is reported as a gap under `budgets`, not dropped. A budget
 does not count as a second source for the unverifiable surface.
@@ -2986,3 +2987,49 @@ these are its limits.
   a production host, so a missing index found under the agent is partial,
   for want of the migrations' facts. Carrying INTENT extracted in CI to an
   agent is not built.
+
+## Bundle budgets
+
+Phase 38 part 1. `culprit check` reads a component's frontend build and
+judges each entry against a `bundle_gzip_bytes_max` budget. These are its
+limits.
+
+- **Vite only.** The build is read from Vite's build manifest
+  (`build.manifest: true`). webpack, esbuild, Rollup on its own, Parcel and
+  every other bundler are not read; their builds are not checked.
+- **An undeclared build is not checked.** Nothing searches for a `dist`
+  folder. A component is read only when it declares
+  `build: {vite_manifest: <path>}`, relative to `culprit.yaml`, and
+  nothing is said of one that declares none. A budget on a component with
+  no build makes the manifest refused.
+- **A build must exist before the check.** A declared manifest that is not
+  there is a "Not checked" line naming the path, not a failure: build first
+  (`npm run build`, or `just frontend-build` for this repository). So is a
+  budget on an entry the build does not have, a manifest that is not
+  Vite's, and a manifest naming a file that is missing or outside the
+  output directory, which is never read.
+- **What is counted is the initial download.** An entry is its own chunk,
+  the chunks its static `imports` reach, and the CSS each of those lists,
+  each file once. `dynamicImports` are left out, because the browser loads
+  them later, if at all, so a route split behind `import()` does not count
+  against the entry. Neither do `assets`: fonts and images, fetched as the
+  CSS and the page ask for them. An entry can be over its budget in what
+  people actually download and pass here.
+- **The gzip figure is Culprit's own, and it is not what is served.** Each
+  file is compressed by Go's `compress/gzip` at `BestCompression` and the
+  sizes summed. Vite's build printout compresses differently and gives a
+  slightly different number (for this repository's dashboard, 146.76 kB
+  for its JS where Culprit measures 144,625 bytes). A CDN serving brotli
+  sends less again, and one serving the files uncompressed sends the raw
+  size, which the facts also record (`bundle_raw_bytes`) but nothing
+  judges. Choose a budget against the figure `culprit check` prints.
+- **Over is strictly greater.** An entry at its budget, to the byte, passes.
+- **It is a finding of its own, not a divergence.** It has severity
+  `degrades`, is counted by `--fail-on`, and appears in every format: text,
+  JSON (`bundles_over_budget`), SARIF (annotated on `culprit.yaml`) and
+  JUnit. A suppression or a severity override does not apply to it; to
+  accept a larger bundle, raise the budget, with its `why`.
+- **A budget is 1 byte to 1,000,000,000.** A bound on what can be declared,
+  like the 60 s bound on a time.
+- **The environment name `build` is reserved** for what a build measured,
+  and a manifest declaring an environment of that name is refused.
