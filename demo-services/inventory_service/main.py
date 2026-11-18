@@ -138,11 +138,14 @@ DETAILS_PER_PRODUCT = os.environ.get("N_PLUS_ONE_FAULT") == "details-per-product
 # sends none, sees. Its size decides what loading each item's details
 # separately costs, and so the route's latency budget in culprit.yaml,
 # which is measured against this page (Q37). At most the route's declared
-# list bound, response_items_max. 200, not 50: at 50, loading each item's
-# details separately measured a p95 of 15.5 to 15.9 ms in CI, too close to
-# the join's few milliseconds for any budget to sit at twice the one and
-# half the other (decision 4). 200 is the cap GET /products already has.
-DETAILS_PAGE = 200
+# list bound, response_items_max. 500 (Phase 40 part 1, C1): an N+1's cost
+# is the runner's round trip, and at 200 the fault's sample 45 came within
+# 2.6 ms of its budget on CI's fastest runner. The join's cost hardly moves
+# with the page; the N+1's grows with it (measured at 200, 400 and 600:
+# the join's slowest 5.9 to 9.0 ms throughout, the N+1's sample 45 from
+# 35.8 to 128.7 ms). At 50 the N+1 measured 15.5 to 15.9 ms, too close to
+# the join to tell apart.
+DETAILS_PAGE = 500
 
 
 @app.get("/products/details")
