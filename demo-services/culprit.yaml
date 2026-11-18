@@ -227,6 +227,29 @@ environments:
       config.read.names: true
       db.stats.read: true
       db.plan.read: true
+  # Phase 39 part 2: the N+1 fault's vantage, the same as faults-inventory
+  # and declared isolated: nothing but Culprit talks to inventory-service's
+  # database here. The fault library holds that true by stopping the load
+  # generator (the only other client: it reaches the database through GET
+  # /products, as the inventory role) before the walk and through verify;
+  # /ready reads no database. probe.db.statements_per_request checks the
+  # declaration with a quiet window before every request it brackets, and is
+  # inconclusive when another client called in it. Never declare a shared
+  # environment isolated (docs/LIMITS.md, "Statements per item").
+  faults-inventory-isolated:
+    adapter: process
+    isolated: true
+    components:
+      inventory-service:
+        database: {dsn_env: CULPRIT_INVENTORY_STATS_DSN}
+    endpoints: *fault-endpoints
+    grants:
+      net.dns.resolve: true
+      net.tcp.connect: true
+      net.http.outbound: true
+      config.read.names: true
+      db.stats.read: true
+      db.plan.read: true
   # inventory-service's database read from wherever culprit runs, with
   # CULPRIT_INVENTORY_DSN naming a reader's connection string: its live
   # schema (`culprit env capture local-inventory`), its statements and its
@@ -282,6 +305,13 @@ invariants:
     why: >-
       inventory-service lists one category's products here, from its own
       database; with no category asked for, the featured one.
+  # Phase 39 part 2: the N+1 fault's route, so its budgets below point at a
+  # route the model declares.
+  - subject: "http:inventory-service/GET /products/details"
+    predicate: exists
+    why: >-
+      inventory-service lists the first page of products here, each with its
+      details from its own database (product_details, one row per product).
   - subject: "http:inventory-service/GET /ready"
     predicate: exists
     why: >-
@@ -349,3 +379,19 @@ budgets:
       page, of the featured category, which is empty by design (Q35): the
       probe passes with 0. The bound guards the default page size the
       storefront relies on.
+  - subject: "http:inventory-service/GET /products/details"
+    predicate: latency_p95_ms
+    value: 20
+    why: >-
+      Phase 39 part 2. PROVISIONAL: to be set from the spread measured
+      across CI's runners (Q37).
+  - subject: "http:inventory-service/GET /products/details"
+    predicate: response_items_max
+    value: 50
+    at: /products
+    why: >-
+      Phase 39 part 2. GET /products/details answers the first 50 products
+      with their details, in an envelope ({"products"}), and caps ?limit= at
+      50. A probe sends no query, so what is counted is that default page,
+      which holds 50 items. The bound guards the page the route's latency
+      budget is measured against: a larger page costs more.

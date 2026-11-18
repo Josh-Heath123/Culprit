@@ -49,6 +49,7 @@ services:
       EXPECTED_AUDIENCE: inventory-service
       DEMO_TOKEN_SECRET: ${DEMO_TOKEN_SECRET:?the fault library mints this}
       CONTRACT_FAULT: ${CONTRACT_FAULT:-}
+      N_PLUS_ONE_FAULT: ${N_PLUS_ONE_FAULT:-}
       INVENTORY_DATABASE_URL: postgresql://inventory:faults-inventory-password@postgres:5432/inventory
       # Phase 37 part 3: Culprit's own read-only role, which the walk run
       # inside this container reads statements and plans as (the demo's
@@ -67,7 +68,7 @@ services:
   #
   # Set up once per stack, as `just quickstart` sets it up: the demo's own
   # setup job creates the inventory role and database and applies the
-  # migrations to head (0003). The database fault downgrades it to 0002 and
+  # migrations to head (0004). The database fault downgrades it to 0002 and
   # each fix upgrades it again; the harness does that, never Culprit. Not
   # recreated by the healthy layer, so the million seeded rows are seeded
   # once.

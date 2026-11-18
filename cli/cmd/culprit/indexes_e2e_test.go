@@ -187,9 +187,51 @@ func TestTheDemoDatabase(t *testing.T) {
 	if strings.Join(leading, ",") != "category,id,sku" {
 		t.Fatalf("the columns leading an index on products are %v; the migrations declare id, sku and (0003) category", leading)
 	}
-	if strings.Join(schema.MigrationHeads, ",") != "0003_products_category_sku" {
-		t.Fatalf("the demo's database is at %v, want its head 0003_products_category_sku", schema.MigrationHeads)
+	if strings.Join(schema.MigrationHeads, ",") != "0004_product_details" {
+		t.Fatalf("the demo's database is at %v, want its head 0004_product_details", schema.MigrationHeads)
 	}
+	if !hasTable(schema, "product_details") {
+		t.Fatalf("no product_details table at the head: %+v", schema.Tables)
+	}
+
+	// 0004 round-trips (Phase 39 part 2): down to 0003 drops product_details
+	// and leaves products as it was; up again restores it.
+	for _, step := range []struct{ direction, revision string }{
+		{"downgrade", "0003_products_category_sku"}, {"upgrade", "0004_product_details"},
+	} {
+		alembic := exec.Command("uv", "run", "--project", ".", "python", "-c",
+			"import sys\nfrom alembic import command\nfrom alembic.config import Config\n"+
+				"getattr(command, sys.argv[1])(Config('inventory_service/alembic.ini'), sys.argv[2])",
+			step.direction, step.revision)
+		alembic.Dir = filepath.Join(repoRoot, "demo-services")
+		alembic.Env = append(os.Environ(), "INVENTORY_DATABASE_URL="+inventory)
+		if out, err := alembic.CombinedOutput(); err != nil {
+			t.Fatalf("alembic %s %s: %v\n%s", step.direction, step.revision, err, out)
+		}
+		schema, err := capture.PostgresReader{}.Read(ctx, inventory)
+		if err != nil {
+			t.Fatalf("capture's read after %s: %v", step.direction, err)
+		}
+		if got := strings.Join(schema.MigrationHeads, ","); got != step.revision {
+			t.Fatalf("after %s the database is at %s, want %s", step.direction, got, step.revision)
+		}
+		if hasTable(schema, "product_details") != (step.direction == "upgrade") {
+			t.Fatalf("after %s to %s, product_details present = %v", step.direction, step.revision, !(step.direction == "upgrade"))
+		}
+		if !hasTable(schema, "products") {
+			t.Fatalf("after %s to %s, products is gone", step.direction, step.revision)
+		}
+	}
+}
+
+// hasTable says a captured schema holds public.<table>.
+func hasTable(schema capture.Schema, table string) bool {
+	for _, each := range schema.Tables {
+		if each.Namespace == "public" && each.Table == table {
+			return true
+		}
+	}
+	return false
 }
 
 // setUpDemoDatabase runs the demo's own setup, as the quickstart does, on a
