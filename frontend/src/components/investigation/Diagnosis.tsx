@@ -15,7 +15,9 @@ import type { ConfidenceRubric, Diagnosis, Hypothesis, Symptom } from "@/lib/typ
  * above it as a mono label: the question, outranked by the answer. */
 export function DiagnosisHeading({ diagnosis, symptom }: { diagnosis: Diagnosis | null; symptom: Symptom }) {
   return (
-    <header className="flex flex-col gap-4" data-testid="diagnosis-heading">
+    // A div, not <header>: the page has one header, the app's (and the
+    // tour checks the investigation's id is not in it).
+    <div className="flex flex-col gap-4" data-testid="diagnosis-heading">
       <div className="flex min-w-0 flex-col gap-1">
         <Label>Symptom</Label>
         <p className="font-mono text-sm wrap-anywhere text-fg-muted" data-testid="symptom-subject">
@@ -58,7 +60,7 @@ export function DiagnosisHeading({ diagnosis, symptom }: { diagnosis: Diagnosis 
           </p>
         </div>
       )}
-    </header>
+    </div>
   );
 }
 
