@@ -130,6 +130,16 @@ probe-catalogue:
 readme-captures:
     uv run --no-project python scripts/render_captures.py
 
+# Render the README's hero (docs/brand/hero-dark.png, hero-light.png) and
+# the social preview from docs/brand/hero.html, with the Playwright and
+# fontsource fonts frontend/ installs (`npm ci` in frontend/ and
+# `npx playwright install chromium` once). Its colours are index.css's
+# tokens, its figure scripts/accuracy_readme.py's; it records the figure
+# in docs/brand/hero.json, which test_accuracy_readme.py holds to the
+# fault library's committed results.
+readme-hero:
+    node scripts/render_hero.mjs
+
 # Cross-compile every released platform into cli/dist/ (what CI publishes)
 cli-release:
     #!/usr/bin/env bash

@@ -1,0 +1,14 @@
+{
+  "why": "The figure the hero images were rendered with, from scripts/accuracy_readme.py's figure() of cli/testdata/faultlib/results.json. Written by `just readme-hero`; scripts/tests/test_accuracy_readme.py fails when it is not what the committed results give.",
+  "figure": {
+    "verified": 9,
+    "decided": 9,
+    "share": "100%",
+    "planted": 11
+  },
+  "images": [
+    "hero-dark.png",
+    "hero-light.png",
+    "social-preview.png"
+  ]
+}

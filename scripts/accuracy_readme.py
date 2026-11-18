@@ -15,6 +15,13 @@ Culprit's own demo services — not accuracy on anyone's real system.
 
     uv run --project api python scripts/accuracy_readme.py          # rewrite README.md
     uv run --project api python scripts/accuracy_readme.py --check  # exit 1 if stale
+    uv run --project api python scripts/accuracy_readme.py --figure # the hero's figure, JSON
+
+The README's hero (docs/brand/hero-*.png, `just readme-hero`) carries one
+figure, the accuracy. It comes from `figure()` below, the same function this
+section's headline is built from, and the hero's renderer records what it
+drew in docs/brand/hero.json, which scripts/tests/test_accuracy_readme.py
+holds to `figure()` of the committed results: a stale hero is red.
 
 Exit codes: 0 written or current · 1 stale (--check) · 2 could not run.
 """
@@ -28,6 +35,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "cli" / "testdata" / "faultlib" / "results.json"
 README = ROOT / "README.md"
+HERO = ROOT / "docs" / "brand" / "hero.json"
 BEGIN = "<!-- accuracy:begin -->"
 END = "<!-- accuracy:end -->"
 
@@ -39,10 +47,8 @@ def _share(verified: int, decided: int) -> str:
     return f"{100 * verified / decided:.0f}%" if decided else "none decided"
 
 
-def render(results: dict[str, Any]) -> str:
-    """The README section, from the results alone."""
-    faults = results["faults"]
-    report = tally(
+def _report(results: dict[str, Any]) -> dict[str, Any]:
+    return tally(
         [
             {
                 "complete": fault["complete"],
@@ -50,12 +56,32 @@ def render(results: dict[str, Any]) -> str:
                 "verdict": fault["verdict"],
                 "source": "planted",
             }
-            for fault in faults
+            for fault in results["faults"]
         ]
     )
-    classes = report["classes"]
+
+
+def figure(results: dict[str, Any]) -> dict[str, Any]:
+    """The one figure that matters: verified of decided, its share, and of
+    how many planted. The section's headline and the hero both use it."""
+    classes = _report(results)["classes"]
     verified = sum(row["verdicts"]["verified"] for row in classes)
     decided = sum(row["decided"] for row in classes)
+    return {
+        "verified": verified,
+        "decided": decided,
+        "share": _share(verified, decided),
+        "planted": len(results["faults"]),
+    }
+
+
+def render(results: dict[str, Any]) -> str:
+    """The README section, from the results alone."""
+    faults = results["faults"]
+    report = _report(results)
+    classes = report["classes"]
+    headline = figure(results)
+    verified, decided = headline["verified"], headline["decided"]
     inconclusive = sum(row["inconclusive"] for row in classes)
     counted = [fault for fault in faults if fault["complete"]]
     partial = [fault for fault in faults if not fault["complete"]]
@@ -68,7 +94,7 @@ def render(results: dict[str, Any]) -> str:
         "## Accuracy, on faults we planted",
         "",
         f"**{verified} of {decided} planted faults verified fixed** "
-        f"({_share(verified, decided)}), of {len(faults)} faults planted: "
+        f"({headline['share']}), of {headline['planted']} faults planted: "
         f"{report['outcomes']} outcomes, {inconclusive} inconclusive beside that, and "
         f"{report['partial_diagnoses_not_counted']} partial diagnoses not counted.",
         "",
@@ -138,9 +164,13 @@ def replaced(readme: str, section: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="exit 1 if README.md is stale")
+    parser.add_argument("--figure", action="store_true", help="print the hero's figure as JSON")
     args = parser.parse_args()
     try:
         results = json.loads(RESULTS.read_text(encoding="utf-8"))
+        if args.figure:
+            print(json.dumps(figure(results)))
+            return 0
         readme = README.read_text(encoding="utf-8")
         updated = replaced(readme, render(results))
     except (OSError, ValueError, KeyError) as exc:
