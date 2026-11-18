@@ -180,7 +180,9 @@ func runDiagnose(ctx context.Context, in diagnoseInput) (model.Investigation, er
 	if err != nil {
 		return model.Investigation{}, err
 	}
-	options := isolate.Options{Environment: in.Environment}
+	// Isolated from the same declaration the runner stamps requests from:
+	// the walk asks N+1 only where it holds (Phase 39 part 2).
+	options := isolate.Options{Environment: in.Environment, Isolated: isolatedIn(manifest, in.Environment) != ""}
 	options.MaxProbes, options.MaxWallClock = manifest.IsolationBudget(in.Environment)
 	if in.Reference != "" {
 		referenceSpec, declared := manifest.Environments[in.Reference]
@@ -587,6 +589,20 @@ func (p placement) Inputs(manifest model.ProbeManifest, h model.Hypothesis) (map
 		// agent runs — the one vantage — to the component's endpoint.
 		if manifest.ID != model.LatencyProbeID {
 			return nil, "the walk measures latency with probe.http.latency only"
+		}
+		endpoint := p.endpoint(parts["component"])
+		if endpoint == nil {
+			return nil, fmt.Sprintf("no endpoint is declared for %s in this environment", parts["component"])
+		}
+		return map[string]any{"base_url": endpointURL(*endpoint, "")}, ""
+
+	case model.HypothesisNPlusOne:
+		// Asked of the slow route (Phase 39 part 2), placed as the latency
+		// probe is: the component's endpoint, from wherever this agent runs.
+		// The walk adds `at` from the route's list budget. Which database is
+		// measured is the probe's to decide, by the component's one sql edge.
+		if manifest.ID != model.StatementsPerRequestProbeID {
+			return nil, "the walk measures statements per item with " + model.StatementsPerRequestProbeID + " only"
 		}
 		endpoint := p.endpoint(parts["component"])
 		if endpoint == nil {

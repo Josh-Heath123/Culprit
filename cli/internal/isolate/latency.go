@@ -220,6 +220,9 @@ func (w *Walk) latencyPass(ctx context.Context, entry string, found *located) {
 		found.partial = append(found.partial, hop)
 	}
 
+	if state[entry] == latencySlow {
+		found.entrySlow = slowReading[entry]
+	}
 	found.path, found.fail = nil, map[string]string{}
 	for _, name := range path {
 		found.path = append(found.path, name)

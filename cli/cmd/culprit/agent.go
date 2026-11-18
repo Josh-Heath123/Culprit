@@ -255,6 +255,8 @@ func (e *agentExecutor) Execute(ctx context.Context, task agent.Task, config age
 				catalogue, facts, grants, through, ""),
 			record: record, cancel: cancel,
 		}
+		// Never Isolated: the production agent stamps every request as not
+		// isolated (Phase 39 part 1), so the walk does not ask N+1 here.
 		options := isolate.Options{Environment: task.Environment}
 		options.MaxProbes, options.MaxWallClock = manifest.IsolationBudget(task.Environment)
 		components, connections := walkModel(manifest)
