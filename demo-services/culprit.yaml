@@ -381,20 +381,23 @@ budgets:
       storefront relies on.
   - subject: "http:inventory-service/GET /products/details"
     predicate: latency_p95_ms
-    value: 15
+    value: 20
     why: >-
-      Phase 39 part 2, pending Q40. Measured on the fault library's stack
-      against the default page of 200, across two CI runs (44269336518,
-      44273031843): with N_PLUS_ONE_FAULT, one statement per product, p95
-      46.0 to 62.9 ms; with the join, 4.5 to 5.1 ms. 15 ms keeps the N+1's
-      smallest p95 1.5 times over twice the budget and the join's largest
-      1.5 times under half of it (decision 4 as first written). But the
-      healthy route's slowest answer in a run of 50 has reached 28.1 to
-      39.5 ms, over the budget, so its fix verified inconclusive until
-      Q39 warmed the demo and froze its startup heap; since then at most
-      13.1 ms. Q38 amended decision 4 to the judge's terms; its rule 3 is
-      not met on the fault's side on one runner (sample 45 27.7 and 30.2
-      ms): Q40.
+      Phase 39 part 2, ruled by Q40. Measured on the fault library's stack
+      against the default page of 200, in the latency judge's terms (50
+      samples, 90%: it fails when sample 45 is over the budget and passes
+      when the slowest is within it), over the runs since Q39 warmed the
+      demo and froze its startup heap (44307212906, both attempts, and
+      44313908008): with N_PLUS_ONE_FAULT, one statement per product,
+      sample 45 from 27.7 to 58.0 ms; with the join, the slowest sample
+      from 3.9 to 13.1 ms. The N+1's cost is the runner's round trip: at
+      this page its sample 45 has ranged 27.7 to 62.9 ms. No budget meets
+      both of amended decision 4's margins (sample 45 at least 1.5 times
+      it, slowest at most two-thirds) on the fastest runner seen, a ratio
+      of 2.11 where they need 2.25, so Q40 set 20 ms: the fault 7.7 ms
+      over it on that runner, the fix 6.9 ms under it. A runner with round
+      trips about a quarter shorter could bring the fault under it: a
+      flake to attribute, not a wrong answer.
   - subject: "http:inventory-service/GET /products/details"
     predicate: response_items_max
     value: 200

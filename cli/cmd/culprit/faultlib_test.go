@@ -204,12 +204,12 @@ func TestTheFaultLibrary(t *testing.T) {
 				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictFail), productsRouteBudgetMs, ">=", 2)
 				stack.checkStatementMean(investigationReadings(inv), ">=", 1.5*productsStatementBudgetMs)
 			}
-			// Phase 39 part 2 (decision 4): the N+1 route's p95 with the
-			// toggle, at least twice its budget; its MEASURED lines are the
-			// spread the budget is set from.
+			// Phase 39 part 2 (Q40): the N+1 route fails its budget with the
+			// toggle: the judge's verdict at the budget, logged in its terms
+			// (LATENCY). No p95 factor: that tested the demo's headroom on
+			// whichever runner the job got, not Culprit's answer.
 			if fault.injection() == "n-plus-one" {
-				stack.checkRouteP95(stack.measureLatency(fault, detailsRoute, model.VerdictFail),
-					routeBudgetMs(t, detailsRoute.subject), ">=", 2)
+				stack.measureLatency(fault, detailsRoute, model.VerdictFail)
 			}
 			// Phase 34: the loop closed. Apply the known fix, then verify
 			// from the same vantage with the change named.
@@ -224,13 +224,12 @@ func TestTheFaultLibrary(t *testing.T) {
 				stack.countList(fault, productsRoute)
 			}
 			if fault.injection() == "n-plus-one" {
-				// Fixed: at most half the budget. And the list probe counts the
-				// route's real page, not zero (Phase 38's count of 0, closed).
-				// The fix recreated inventory-service, the vantage, and the
-				// bundle with it.
+				// Fixed: the route passes its budget (the judge's verdict, as
+				// above; Q40). And the list probe counts the route's real page,
+				// not zero (Phase 38's count of 0, closed). The fix recreated
+				// inventory-service, the vantage, and the bundle with it.
 				stack.rebundle(fault)
-				stack.checkRouteP95(stack.measureLatency(fault, detailsRoute, model.VerdictPass),
-					routeBudgetMs(t, detailsRoute.subject), "<=", 0.5)
+				stack.measureLatency(fault, detailsRoute, model.VerdictPass)
 				stack.countList(fault, detailsRoute)
 			}
 			verification := stack.verify(fault, inv, state, fault.Fix.Change)
@@ -1243,28 +1242,6 @@ func declaredIsolated(t *testing.T, environment string) bool {
 		t.Fatalf("the demo's culprit.yaml: %v", err)
 	}
 	return manifest.Environments[environment].Isolated
-}
-
-// routeBudgetMs is the latency_p95_ms the demo's culprit.yaml declares on
-// subject, read from the file so the harness cannot drift from it.
-func routeBudgetMs(t *testing.T, subject string) float64 {
-	t.Helper()
-	manifest, err := extract.LoadManifest(demoManifest)
-	if err != nil {
-		t.Fatalf("the demo's culprit.yaml: %v", err)
-	}
-	for _, budget := range manifest.Budgets {
-		if budget.Subject == subject && budget.Predicate == "latency_p95_ms" {
-			if value, ok := budget.Value.(int); ok {
-				return float64(value)
-			}
-			if value, ok := budget.Value.(float64); ok {
-				return value
-			}
-		}
-	}
-	t.Fatalf("the demo's culprit.yaml declares no latency_p95_ms on %s", subject)
-	return 0
 }
 
 // pauseLoad stops the load generator: in an environment declared isolated,
