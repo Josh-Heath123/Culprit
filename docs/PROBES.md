@@ -375,8 +375,8 @@ environments:
 - **Verdicts:** `pass` with a count, whether or not a statement is named:
   the reason names each statement run per item, with its calls. It has no
   `fail`. A statement run once per item on a fast route is not a fault
-  until something declares the route fast; Phase 39 part 2 puts it in the
-  walk only beneath a route over its declared latency budget.
+  until something declares the route fast, so the walk asks it only
+  beneath a route over its declared latency budget (below).
   `inconclusive` as above, and `refused` without `db.stats.read` and
   `net.http.outbound`. A reading whose verdict or `per_item` is not its
   own integers' is refused in Go and at the API.
@@ -385,7 +385,39 @@ environments:
 culprit probe "http:inventory-service/GET /products" -p probe.db.statements_per_request     --input base_url=http://inventory-service:8002 --input at=/products --env lab
 ```
 
-It is not in the walk, and the fault library plants no N+1 yet (part 2).
+### In the walk
+
+Phase 39 part 2. `culprit diagnose` asks it for `n_plus_one`, and only
+where an N+1 would explain the symptom: the entry's own `GET` route is over
+its declared latency budget, and nothing the entry calls on the request
+path is slow. That is where the database pass would run.
+
+- **Declared isolated:** the walk asks it first, before the database pass,
+  whose statement window times the system's own traffic. It is placed on
+  the slow route as the latency probe is, with `at` from that route's
+  `response_items_max` budget when one is declared.
+  - **Supported:** the reading names a statement run per item. The root is
+    the route, citing the first statement named (its `queryid`, its text
+    where kept, its calls) and the item count. The database pass is not
+    run. The recommendation is to load the relation for every item in one
+    statement, a join or one query over the items' keys.
+  - **Ruled out:** the reading passes, saw at least one statement, and
+    names none. The database pass then runs as before.
+  - **Unexplored:** a pass that saw no statement at all is not evidence
+    (the route was served without that database, or under Culprit's own
+    role); an `inconclusive` or `refused` reading is unexplored with its
+    reason. The diagnosis is then partial and says so.
+- **Not declared isolated:** it is not asked. There is no `n_plus_one`
+  hypothesis, and one sentence of the diagnosis says why. It is not a
+  partial: the diagnosis is as complete as the other passes make it.
+- **`culprit verify`** judges by the same rules as ever; the per-item
+  reading passes before a fix and after it. Its description adds whether
+  the statement the root cited still runs once per item on the two
+  reruns.
+
+The fault library plants one on the demo's `GET /products/details`, walked
+in `faults-inventory-isolated` with the load generator stopped, and again in
+`faults-inventory`, which is not declared isolated, with it running.
 
 ## What each probe rules out — `discriminates`
 
@@ -407,6 +439,7 @@ discriminate the same kind, the cheapest runs first, then by id.
 | `latency_budget_exceeded` | `probe.http.latency` |
 | `statement_budget_exceeded` | `probe.db.statement_budget` |
 | `missing_index` | `probe.db.plan` — evidence, not a verdict: supported only when four planes agree (below) |
+| `n_plus_one` | `probe.db.statements_per_request` — evidence, not a verdict: asked only beneath a route over its latency budget, in an environment declared isolated (below) |
 
 `probe.net.dns_resolve` deliberately discriminates nothing: a name that
 resolves says nothing about whether a connection opens, and

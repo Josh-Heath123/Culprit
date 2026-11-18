@@ -279,6 +279,9 @@
         "predicate": "statements_per_item"
       }
     ],
+    "discriminates": [
+      "n_plus_one"
+    ],
     "cost": "cheap",
     "verdicts": [
       "pass",

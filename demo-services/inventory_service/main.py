@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from shared.faults import FaultState, build_fault_router
 from shared.middleware import TelemetryFaultMiddleware
 from shared.otel import configure_otel
+from shared.startup import startup
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from inventory_service.db import engine
 from shared import demo_auth
@@ -16,7 +18,7 @@ configure_otel(SERVICE_NAME)
 logger = logging.getLogger(SERVICE_NAME)
 
 fault_state = FaultState()
-app = FastAPI(title=SERVICE_NAME)
+app = FastAPI(title=SERVICE_NAME, lifespan=startup(lambda: _warm()))
 app.add_middleware(
     TelemetryFaultMiddleware,  # pyright: ignore[reportArgumentType]
     service_name=SERVICE_NAME,
@@ -122,6 +124,80 @@ def list_products(category: str = FEATURED_CATEGORY, limit: int = 50) -> dict:
             for sku, name, price_cents in rows
         ],
     }
+
+
+# Phase 39 part 2's fault library: the N+1 fault, off unless set, so the
+# quickstart is unchanged. N_PLUS_ONE_FAULT=details-per-product makes GET
+# /products/details load each product's details with a statement of its
+# own, one per item; unset, one statement loads them all. A toggle, as
+# CONTRACT_FAULT is, so the known fix is a configuration change a capture
+# records (config:inventory-service/N_PLUS_ONE_FAULT).
+DETAILS_PER_PRODUCT = os.environ.get("N_PLUS_ONE_FAULT") == "details-per-product"
+
+# The page GET /products/details answers with no query: what a probe, which
+# sends none, sees. Its size decides what loading each item's details
+# separately costs, and so the route's latency budget in culprit.yaml,
+# which is measured against this page (Q37). At most the route's declared
+# list bound, response_items_max. 200, not 50: at 50, loading each item's
+# details separately measured a p95 of 15.5 to 15.9 ms in CI, too close to
+# the join's few milliseconds for any budget to sit at twice the one and
+# half the other (decision 4). 200 is the cap GET /products already has.
+DETAILS_PAGE = 200
+
+
+@app.get("/products/details")
+def list_product_details(limit: int = DETAILS_PAGE) -> dict:
+    """The first products by id, each with its details from
+    product_details (0004), one row per product. Not on the order path."""
+    database = engine()
+    if database is None:
+        raise HTTPException(status_code=503, detail="this inventory-service has no database")
+    limit = max(1, min(limit, DETAILS_PAGE))
+    with database.connect() as connection:
+        if DETAILS_PER_PRODUCT:
+            products = connection.execute(
+                text("SELECT id, sku, name FROM products ORDER BY id LIMIT :limit"),
+                {"limit": limit},
+            ).all()
+            rows = []
+            for product_id, sku, name in products:
+                details = connection.execute(
+                    text(
+                        "SELECT description, weight_grams FROM product_details "
+                        "WHERE product_id = :product_id"
+                    ),
+                    {"product_id": product_id},
+                ).one()
+                rows.append((sku, name, details[0], details[1]))
+        else:
+            rows = connection.execute(
+                text(
+                    "SELECT p.sku, p.name, d.description, d.weight_grams FROM products p "
+                    "JOIN product_details d ON d.product_id = p.id ORDER BY p.id LIMIT :limit"
+                ),
+                {"limit": limit},
+            ).all()
+    return {
+        "products": [
+            {"sku": sku, "name": name, "description": description, "weight_grams": weight}
+            for sku, name, description, weight in rows
+        ],
+    }
+
+
+def _warm() -> None:
+    """Startup's warm-up (Q39): each database read path once, before /ready
+    answers, so no request a probe times is the process's first. A read
+    that fails is skipped and logged: the database may be at a revision
+    without product_details (the missing-index fault holds it at 0002), or
+    not configured at all."""
+    if engine() is None:
+        return
+    for read in (list_products, list_product_details):
+        try:
+            read()
+        except SQLAlchemyError as error:
+            logger.info("startup warm-up of %s skipped: %s", read.__name__, type(error).__name__)
 
 
 @app.post("/reserve", status_code=201)

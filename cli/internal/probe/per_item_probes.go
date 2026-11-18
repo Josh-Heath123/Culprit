@@ -39,7 +39,7 @@ import (
 //
 // Evidence, not a finding (decision 1): it declares pass, inconclusive and
 // refused, and no expectation, as probe.db.plan does. Its reason names each
-// statement run per item. Not in the walk (part 2 puts it there).
+// statement run per item. The walk asks it for n_plus_one (Phase 39 part 2).
 
 type dbStatementsPerRequest struct{}
 
@@ -61,7 +61,11 @@ func (dbStatementsPerRequest) Manifest() model.ProbeManifest {
 		Produces: []model.Produces{
 			{SubjectTemplate: "http:{component}/{method} {path}", Predicate: "statements_per_item"},
 		},
-		Cost: model.CostCheap,
+		// The walk asks it beneath a route over its latency budget, in an
+		// environment declared isolated (Phase 39 part 2), as it asks
+		// probe.db.plan for missing_index.
+		Discriminates: []string{model.HypothesisNPlusOne},
+		Cost:          model.CostCheap,
 		Inputs: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

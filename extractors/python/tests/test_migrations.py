@@ -334,7 +334,8 @@ def test_the_demo_migrations_declare_their_indexes() -> None:
     """inventory-service's own migrations (Phase 37 part 1, P8), read as
     the extractor reads them, on the database the orchestrator names for it
     (inventory-db, by its one sql edge: Q34): `products` is led by its
-    primary key, the unique index on sku and, since 0003, (category, sku).
+    primary key, the unique index on sku and, since 0003, (category, sku);
+    `product_details` (0004) by its primary key, product_id.
     The fault library's database fault is 0003 missing. cli/cmd/culprit's
     TestTheDemoDatabase holds the live side to the same three columns."""
     from datetime import UTC, datetime
@@ -357,14 +358,26 @@ def test_the_demo_migrations_declare_their_indexes() -> None:
     }
     from culprit_model import build
 
-    declared = {"id": True, "sku": True, "category": True, "name": False, "price_cents": False}
+    declared = {
+        "products": {
+            "id": True,
+            "sku": True,
+            "category": True,
+            "name": False,
+            "price_cents": False,
+        },
+        # 0004 (Phase 39 part 2): the relation the N+1 route loads, one row
+        # per product, keyed by its primary key.
+        "product_details": {"product_id": True, "description": False, "weight_grams": False},
+    }
     assert leads == {
         build(
             "schema",
             database="inventory-db",
             namespace="public",
-            table="products",
+            table=table,
             column=column,
         ): value
-        for column, value in declared.items()
+        for table, columns in declared.items()
+        for column, value in columns.items()
     }

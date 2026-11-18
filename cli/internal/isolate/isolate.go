@@ -48,6 +48,7 @@ const (
 	KindLatencyBudgetExceeded   = model.HypothesisLatencyBudgetExceeded
 	KindStatementBudgetExceeded = model.HypothesisStatementBudgetExceeded
 	KindMissingIndex            = model.HypothesisMissingIndex
+	KindNPlusOne                = model.HypothesisNPlusOne
 )
 
 // localOrder is the order boundary hypotheses are tested in, cheapest and
@@ -113,6 +114,9 @@ type Placement interface {
 // Options bound a walk (`isolation:` in culprit.yaml).
 type Options struct {
 	Environment string
+	// Isolated says culprit.yaml declares Environment `isolated: true`: the
+	// N+1 step is asked only there (Phase 39 part 2).
+	Isolated bool
 	// MaxProbes is the most probes one investigation may run, counting the
 	// reproduction and counterfactual runs. Zero means DefaultMaxProbes.
 	MaxProbes int
@@ -263,6 +267,13 @@ type located struct {
 	// request path has a budget: a partial on its own, a note under a
 	// database root, which explains the symptom without it.
 	latencyUnasked string
+	// entrySlow is the latency reading that found the entry's own route
+	// over its budget, or "".
+	entrySlow string
+	// perItem is what the N+1 step established (Phase 39 part 2), and
+	// perItemUnasked the sentence saying why it was not asked.
+	perItem        *perItemFinding
+	perItemUnasked string
 }
 
 // Diagnose runs the walk from a symptom on entry. The Investigation it
@@ -287,6 +298,11 @@ func (w *Walk) Diagnose(ctx context.Context, symptom model.Symptom, entry string
 		// reads, are what remain (Phase 37 part 3). A slow entry above a
 		// statement over its budget is propagation, not the root.
 		if found.root == "" && len(found.path) == 1 {
+			// N+1, in an environment declared isolated, before the database
+			// pass (Phase 39 part 2).
+			w.perItemStep(ctx, entry, found)
+		}
+		if found.root == "" && len(found.path) == 1 && found.perItem == nil {
 			w.databasePass(ctx, entry, found)
 			if found.database != nil {
 				w.rootAtDatabase(found)
@@ -851,6 +867,8 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 	}
 	if found.database != nil {
 		databaseTree(found.database, entry, add)
+	} else if found.perItem != nil {
+		perItemTree(found.perItem, entry, add)
 	} else if found.root != "" {
 		add(componentSubject(deepest), found.root, model.RelationCausedBy, found.rootReading)
 	}
@@ -864,6 +882,8 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 		Confidence:  w.rubric(ctx, found),
 	}
 	switch {
+	case found.perItem != nil:
+		perItemDiagnosis(diagnosis, found, entry)
 	case found.database != nil:
 		w.databaseDiagnosis(diagnosis, found, entry)
 	case found.latency != "" && len(found.partial) > 0:
@@ -939,6 +959,11 @@ func (w *Walk) assemble(ctx context.Context, symptom model.Symptom, found *locat
 	}
 	if diagnosis.Complete && !treeReaches(tree, root) {
 		diagnosis.Complete = false
+	}
+	if found.perItemUnasked != "" {
+		// Said, and not a partial: no hypothesis was asked, so none was left
+		// unexplored (Phase 39 part 2, decision 6).
+		diagnosis.Statement += " " + found.perItemUnasked
 	}
 	return tree, diagnosis
 }

@@ -818,6 +818,65 @@ recommending the index the plan needs
 [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) says what each grant reads and
 what role it needs.
 
+**N+1, where it can be seen cleanly.** A list route that runs one statement
+per item it returns is found only in an environment you declare
+`isolated: true`, where nothing but Culprit talks to the database while it
+measures, and only beneath a route over its declared latency budget. There
+`culprit diagnose` brackets one `GET` of the slow route with
+`pg_stat_statements` snapshots and counts the list's items from the same
+response: a statement called at least once per item is the N+1. In any
+other environment it is not asked, and the diagnosis says so in one
+sentence. The fault library plants one on the demo's `GET /products/details`
+(`N_PLUS_ONE_FAULT=details-per-product`, a page of 200). This is that walk,
+from CI's log (run 44321940704):
+
+```
+Symptom    http:inventory-service/GET /products/details
+           GET http://inventory-service:8002/products/details
+           reproduced read-only (r2)
+Environment faults-inventory-isolated   investigation inv-92a2ef322b20d5a9
+
+Diagnosis (COMPLETE)
+  root   http:inventory-service/GET /products/details
+  inventory-service is slow because GET /products/details on inventory-service runs one statement per item it returns: statement 8878744738955718652 (SELECT description, weight_grams FROM product_details WHERE product_id = $1) ran 200 times for the 200 items one request returned. The route is over the latency budget declared for it, and nothing it calls on the request path is slow.
+  fix    Load the relation for every item in one statement, a join or one query over the items' keys, in place of statement 8878744738955718652 (SELECT description, weight_grams FROM product_details WHERE product_id = $1) run once per item. Verification, not this recommendation, decides whether a change worked.
+
+Confidence — four checks, never a number
+  reproduced      yes  probe.http.latency failed again when run a second time (r2, then r4)
+  discriminated   no   no reading ruled out a competing explanation
+  counterfactual  no   no reference environment was named (--reference)
+  verified        no   not yet verified: after a fix is applied, `culprit verify inv-92a2ef322b20d5a9 --change ...` measures every reading again and compares the environment with the record of it taken at diagnosis
+
+Fault tree — every edge cites the readings that established it
+  http:inventory-service/GET /products/details
+    -[symptom_of]-> component:inventory-service   (r2)
+  component:inventory-service
+    -[caused_by]-> http:inventory-service/GET /products/details   (r3, r2)
+
+Supported (2)
+  latency_budget_exceeded  component:inventory-service  (r1, r2)
+  n_plus_one               http:inventory-service/GET /products/details  (r3, r2)
+
+Untested — the walk did not need them; neither ruled out nor in (1)
+  component_fails          component:inventory-service
+
+Readings
+  r1   pass          probe.http.latency  http:inventory-service/GET /products
+       p95 is within the 25 ms budget: at 90% confidence it is at most 3.224 ms (sample 50 of 50)
+  r2   fail          probe.http.latency  http:inventory-service/GET /products/details
+       p95 is over the 20 ms budget: at 90% confidence it is at least 23.366 ms (sample 45 of 50)
+  r3   pass          probe.db.statements_per_request  http:inventory-service/GET /products/details
+       1 statement(s) ran at least once per item of 200: 8878744738955718652 (200 calls)
+  r4   fail          probe.http.latency  http:inventory-service/GET /products/details
+       p95 is over the 20 ms budget: at 90% confidence it is at least 22.587 ms (sample 45 of 50)
+```
+
+With the join restored, `culprit verify` measures every reading again and
+says `verified`, adding that the statement no longer runs once per item.
+The route's cost is the machine's round trip to the database, so its budget
+is set from CI's spread ([`docs/LIMITS.md`](docs/LIMITS.md), "N+1 in the
+walk").
+
 ### For a coding agent: `culprit mcp`
 
 A coding agent that speaks MCP can start the binary as a tool server and run
@@ -862,19 +921,19 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](docs/LIMITS.md),
 
 ## Accuracy, on faults we planted
 
-**7 of 7 planted faults verified fixed** (100%), of 9 faults planted: 7 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
+**9 of 9 planted faults verified fixed** (100%), of 11 faults planted: 9 outcomes, 0 inconclusive beside that, and 2 partial diagnoses not counted.
 
-**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 7 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
+**These are faults we planted, in Culprit's own three demo services, and nothing else. They are not accuracy on anyone's real system.** No outcome from a real system is counted here, because none has been recorded. A sample of 9 planted faults says the loop works on the faults it was built against; it says nothing yet about the faults it was not.
 
 **Method.** Each fault in the library (`cli/testdata/faultlib/`) is planted in the demo stack, diagnosed by `culprit diagnose` from inside a service, its known fix is applied, and `culprit verify` measures every reading again, twice, and compares the environment with the record of it taken at diagnosis. An outcome is the verification of a **complete** diagnosis; its fault class is the subject kind of the diagnosis's root. Per class, `verified` is counted against the decided outcomes (every verdict but inconclusive), and inconclusive is reported beside it, never folded in. A `verified` outcome shows that the fix for the root the walk diagnosed was seen to fix what it saw failing; a fault diagnosed at the wrong root would be counted under that root's class, so this measures diagnosis-then-fix, not whether every diagnosis named the true cause. `GET /outcomes/accuracy` counts verifications recorded through the control plane the same way, with the same function, and says for each count whether its faults were planted or real.
 
 | Fault class | Planted fault | Outcomes | Verified | Decided | Inconclusive |
 |---|---|---|---|---|---|
 | `auth` | `auth-audience` | 1 | 1 | 1 | 0 |
-| `component` | `error-rate`, `latency` | 2 | 2 | 2 | 0 |
+| `component` | `error-rate`, `latency`, `n-plus-one-shared` | 3 | 3 | 3 | 0 |
 | `config` | `config` | 1 | 1 | 1 | 0 |
 | `connection` | `network-partition` | 1 | 1 | 1 | 0 |
-| `http` | `contract` | 1 | 1 | 1 | 0 |
+| `http` | `contract`, `n-plus-one` | 2 | 2 | 2 | 0 |
 | `schema` | `missing-index` | 1 | 1 | 1 | 0 |
 
 Not counted, because the walk's diagnosis was partial — an outcome is the verification of a complete one: `auth-audience-ungranted` (inconclusive); `latency-unbudgeted` (inconclusive).

@@ -43,9 +43,10 @@ func libraryCases(library faultLibrary) []string {
 }
 
 // shardOf is the shard a case runs in. The database's cases — walked from
-// inventory-service, each with a statement window per reading — take
-// shard 2; every other case, shard 1. Each shard then stays well under
-// fifteen minutes.
+// inventory-service, each with a statement window per reading, in
+// faults-inventory or, since Phase 39 part 2, faults-inventory-isolated —
+// take shard 2; every other case, shard 1. Each shard then stays well
+// under the job's 30-minute test timeout.
 func shardOf(library faultLibrary, name string) int {
 	fault := strings.TrimPrefix(name, "verify/")
 	for _, scenario := range library.Scenarios {
@@ -54,7 +55,7 @@ func shardOf(library faultLibrary, name string) int {
 		}
 	}
 	for _, each := range library.Faults {
-		if each.Name == fault && each.Environment == "faults-inventory" {
+		if each.Name == fault && strings.HasPrefix(each.Environment, "faults-inventory") {
 			return 2
 		}
 	}

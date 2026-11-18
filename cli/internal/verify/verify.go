@@ -220,7 +220,7 @@ func Run(ctx context.Context, options Options) (model.Verification, error) {
 	verification, err := model.NewVerification(options.ID, inv.ID, inv.Environment, options.Changes,
 		reran, before, after, differences, now().UTC(),
 		func(judged model.Judgement) string {
-			return describe(judged, reran, options.Changes, differences, record, inv)
+			return describe(judged, reran, options.Changes, differences, record, inv) + perItemNote(inv, reran)
 		})
 	if err != nil {
 		return model.Verification{}, fmt.Errorf("the verification does not validate: %w", err)
@@ -454,4 +454,109 @@ func changeList(changes []model.Change) string {
 		return "no change named"
 	}
 	return strings.Join(labels, ", ")
+}
+
+// perItemNote says, after the verdict's own description, whether the
+// statement an N+1 root cited still runs once per item in the rerun
+// per-item readings (Phase 39 part 2, decision 9). The verdict rules do not
+// change: the per-item reading is evidence and passes either way, and the
+// route's latency budget is what is judged. "" when no N+1 root was found.
+func perItemNote(inv model.Investigation, reran []model.Rerun) string {
+	readingID, queryID := "", ""
+	for _, h := range inv.Hypotheses {
+		if h.Kind != model.HypothesisNPlusOne || h.Status != model.HypothesisSupported {
+			continue
+		}
+		for _, id := range h.Readings {
+			for _, item := range inv.Readings {
+				if item.ID != id || item.Reading.ProbeID != model.StatementsPerRequestProbeID {
+					continue
+				}
+				if named := namedPerItem(item.Reading); len(named) > 0 && readingID == "" {
+					readingID, queryID = id, named[0]
+				}
+			}
+		}
+	}
+	if readingID == "" {
+		return ""
+	}
+	for _, rerun := range reran {
+		if rerun.ReadingID != readingID {
+			continue
+		}
+		still, settled := 0, 0
+		var unsettled []string
+		others := map[string]bool{}
+		for _, run := range rerun.Runs {
+			if run.Verdict != model.VerdictPass {
+				unsettled = append(unsettled, fmt.Sprintf("%s: %s", run.Verdict, run.Reason))
+				continue
+			}
+			if !sawStatements(run) {
+				// Not evidence either way (decision 7): the request made no
+				// statement Culprit could see on that database.
+				unsettled = append(unsettled, "the request made no statement Culprit could see")
+				continue
+			}
+			settled++
+			for _, named := range namedPerItem(run) {
+				if named == queryID {
+					still++
+				} else {
+					others[named] = true
+				}
+			}
+		}
+		lead := fmt.Sprintf("; statement %s, which ran once per item at diagnosis (%s), ", queryID, readingID)
+		note := ""
+		switch {
+		case len(unsettled) > 0:
+			return lead + "could not be measured again on both runs: " + strings.Join(unsettled, "; ")
+		case still == settled:
+			note = lead + "still runs once per item on both runs"
+		case still == 0:
+			note = lead + "no longer runs once per item on either run"
+		default:
+			note = lead + "runs once per item on one run and not on the other"
+		}
+		if len(others) > 0 {
+			var named []string
+			for queryID := range others {
+				named = append(named, queryID)
+			}
+			sort.Strings(named)
+			note += fmt.Sprintf("; statement(s) %s now run once per item", strings.Join(named, ", "))
+		}
+		return note
+	}
+	return ""
+}
+
+// sawStatements says a per-item reading's bracket held at least one
+// statement.
+func sawStatements(reading model.Reading) bool {
+	switch list := reading.Measured["statements"].(type) {
+	case []any:
+		return len(list) > 0
+	case []map[string]any:
+		return len(list) > 0
+	}
+	return false
+}
+
+// namedPerItem are the queryids a per-item reading names as run per item.
+func namedPerItem(reading model.Reading) []string {
+	var out []string
+	switch list := reading.Measured["per_item"].(type) {
+	case []string:
+		out = append(out, list...)
+	case []any:
+		for _, item := range list {
+			if text, ok := item.(string); ok {
+				out = append(out, text)
+			}
+		}
+	}
+	return out
 }

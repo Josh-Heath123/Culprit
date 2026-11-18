@@ -285,6 +285,75 @@
         ],
         "verdict": "verified"
       }
+    },
+    {
+      "name": "n-plus-one",
+      "symptom": "GET http://inventory-service:8002/products/details",
+      "inject": "inventory-service recreated with N_PLUS_ONE_FAULT=details-per-product: GET /products/details reads its page of 200 products, then each product's details with a statement of its own",
+      "vantage": "inventory-service",
+      "environment": "faults-inventory-isolated",
+      "root_subject": "http:inventory-service/GET /products/details",
+      "root_kind": "n_plus_one",
+      "complete": true,
+      "relations": [
+        "caused_by",
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": true,
+        "discriminated": false,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:inventory-service/GET /products/details -[symptom_of]-> component:inventory-service",
+        "component:inventory-service -[caused_by]-> http:inventory-service/GET /products/details"
+      ],
+      "statement_contains": "ran 200 times for the 200 items",
+      "remediation_contains": "in one statement",
+      "note": "Phase 39 part 2. Walked in an environment declared isolated, with the load generator stopped before the walk and through verify. The route is over its p95 budget and calls nothing on the request path, so, before the database pass, the walk brackets one GET of it with pg_stat_statements: the details statement ran once per item. The root is the route; the database pass is not run. Not discriminated: nothing on that path competes for a reading to rule out, as in missing-index. Reproduced by the route's latency reading run again: the per-item reading is evidence, and passes either way.",
+      "attestation": "reproduced",
+      "fix": {
+        "how": "inventory-service recreated without N_PLUS_ONE_FAULT, loading every product's details with one join",
+        "change": [
+          "config:inventory-service/N_PLUS_ONE_FAULT"
+        ],
+        "verdict": "verified",
+        "reason_contains": "no longer runs once per item on either run"
+      }
+    },
+    {
+      "name": "n-plus-one-shared",
+      "kind": "n-plus-one",
+      "symptom": "GET http://inventory-service:8002/products/details",
+      "inject": "the N+1 fault again, walked in faults-inventory, which is not declared isolated, with the load generator running",
+      "vantage": "inventory-service",
+      "environment": "faults-inventory",
+      "root_subject": "component:inventory-service",
+      "root_kind": "latency_budget_exceeded",
+      "complete": true,
+      "relations": [
+        "symptom_of"
+      ],
+      "rubric": {
+        "reproduced": false,
+        "discriminated": true,
+        "counterfactual": false,
+        "verified": false
+      },
+      "edges": [
+        "http:inventory-service/GET /products/details -[symptom_of]-> component:inventory-service"
+      ],
+      "statement_contains": "runs one statement per item was not asked: this walk does not run in an environment declared isolated",
+      "note": "Phase 39 part 2. Never a guess: N+1 is not asked where the environment is not declared isolated, and one sentence of the diagnosis says so; it is not a partial. The database pass runs as before, and its statement window over the load generator's GET /products traffic keeps the 10 ms budget, which rules the statement budget out. What remains is inventory-service's own time on the route. Not reproduced: the root is the entry itself, with no failing probe below it to run again, as for any slow entry.",
+      "attestation": "reproduced",
+      "fix": {
+        "how": "the same fix: inventory-service recreated without N_PLUS_ONE_FAULT",
+        "change": [
+          "config:inventory-service/N_PLUS_ONE_FAULT"
+        ],
+        "verdict": "verified"
+      }
     }
   ],
   "scenarios": [

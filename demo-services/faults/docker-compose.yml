@@ -38,6 +38,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      # Q39: nothing in this stack reads the services' metrics, and the
+      # console dump every 10 s is the stack's own background work, which
+      # has no place inside a measurement.
+      OTEL_METRIC_EXPORT_INTERVAL_MS: "3600000"
       INVENTORY_SERVICE_URL: http://inventory-service:8002
       PAYMENTS_SERVICE_URL: http://payments-service:8003
       INVENTORY_TOKEN: ${INVENTORY_TOKEN:?the fault library mints this}
@@ -46,9 +50,14 @@ services:
     <<: *demo
     command: uvicorn inventory_service.main:app --host 0.0.0.0 --port 8002
     environment:
+      # Q39: nothing in this stack reads the services' metrics, and the
+      # console dump every 10 s is the stack's own background work, which
+      # has no place inside a measurement.
+      OTEL_METRIC_EXPORT_INTERVAL_MS: "3600000"
       EXPECTED_AUDIENCE: inventory-service
       DEMO_TOKEN_SECRET: ${DEMO_TOKEN_SECRET:?the fault library mints this}
       CONTRACT_FAULT: ${CONTRACT_FAULT:-}
+      N_PLUS_ONE_FAULT: ${N_PLUS_ONE_FAULT:-}
       INVENTORY_DATABASE_URL: postgresql://inventory:faults-inventory-password@postgres:5432/inventory
       # Phase 37 part 3: Culprit's own read-only role, which the walk run
       # inside this container reads statements and plans as (the demo's
@@ -62,12 +71,17 @@ services:
   payments-service:
     <<: *demo
     command: uvicorn payments_service.main:app --host 0.0.0.0 --port 8003
+    environment:
+      # Q39: nothing in this stack reads the services' metrics, and the
+      # console dump every 10 s is the stack's own background work, which
+      # has no place inside a measurement.
+      OTEL_METRIC_EXPORT_INTERVAL_MS: "3600000"
 
   # ---- inventory-service's database (Phase 37 part 3) ------------------------
   #
   # Set up once per stack, as `just quickstart` sets it up: the demo's own
   # setup job creates the inventory role and database and applies the
-  # migrations to head (0003). The database fault downgrades it to 0002 and
+  # migrations to head (0004). The database fault downgrades it to 0002 and
   # each fix upgrades it again; the harness does that, never Culprit. Not
   # recreated by the healthy layer, so the million seeded rows are seeded
   # once.
@@ -80,9 +94,14 @@ services:
       # Over TCP, not the socket: the image's first-boot server listens on
       # the socket only and is then restarted.
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
-      interval: 2s
+      # Often only while it starts (Q38 (2c)): every 2 s through first boot,
+      # then every 30 s. A docker exec every 2 s is the stack's own
+      # background work, and has no place inside a measurement.
+      start_period: 120s
+      start_interval: 2s
+      interval: 30s
       timeout: 5s
-      retries: 60
+      retries: 3
 
   inventory-db-setup:
     <<: *demo
