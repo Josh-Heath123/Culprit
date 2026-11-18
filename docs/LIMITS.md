@@ -3228,3 +3228,23 @@ per item, and these are its limits.
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a
   probe sends no query).
+
+## The dashboard's contrast is measured on its surfaces, not on everything behind glass
+
+Phase 40 part 1 gave the dashboard its new identity (deep plum, electric
+violet, acid lime; `docs/DELIVERY_PLAN.md` §2). `scripts/tests/test_design_tokens.py`
+measures every text token at 4.5:1 on every surface and tint, every
+control's boundary at 3:1, and the violet focus ring at 3:1. Two things it
+does not cover:
+
+- **The focus ring is 3:1 only where controls sit.** Violet itself
+  (`#7540F5`) is 3.0 to 3.4:1 on the well, the page, a panel and glass, but
+  2.3 to 2.8:1 on the lighter inner surfaces and on every status tint. So
+  no control is placed on those; the test's `RING_SURFACES` says so, and
+  the rule is kept by review, not by a gate that reads the components. A
+  button or link put inside a tinted box would show a ring under 3:1.
+- **Glass is measured over the page, not over what scrolls under it.** The
+  header is translucent; text in it is measured composited over plum. Bright
+  content scrolling beneath it (there is little: the dashboard is dark
+  throughout) would lower the contrast of the header's muted text, softened
+  by the blur.

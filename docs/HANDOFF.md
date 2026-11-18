@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **40, part 1 — the new identity: the dashboard** — `in progress` (PR #49, draft; C1 pushed and measured in CI). Brief: `docs/DELIVERY_PLAN.md` §2 (I1–I7) and Phase 40, "Part 1 — the dashboard", with C1 (carried from Phase 39) first. Step 0: `main`'s push run 44327031951 on `33df658`. |
+| Current phase | **40, part 1 — the new identity: the dashboard** — `complete`, awaiting review. PR #49; CI green on `1f3080a` (run 44340916627, every job and every PR check; no open alert). C1 met over runs 44333504867 and 44336394900. Report in §5; the screenshots in `docs/screenshots/phase-40-review/` are its first item for the review. |
 | Previous phase | **39, part 2 — the walk and the fault — merged as `33df658` (PR #48) and signed off 2026-11-18.** Run 44321940704 on `a832381`, the report's run 44326796071 and `main`'s push run 44327031951 on `33df658` green on every job, read from GitHub. Q38–Q40 ruled and carried out; two mutations of the join shown red by the architecture session; the run's seven decisions accepted, the first amended by C1. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`, which is complete. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-40-identity`, to be cut from `origin/main` = `33df658`. Its first commit is the review: `git apply ../phase-39-2-review.patch`, then `git commit -F ../phase-39-2-review.txt` (`docs/DELIVERY_PLAN.md`, `docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Then C1, as its own commit, pushed at once. Open a draft pull request and mark it ready when the run report is committed. Run the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. Do not commit the owner's reference image. |
+| Branch | `phase-40-identity`, from `origin/main` = `33df658`; its first commit the review (`1ad98c7`). PR #49, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally; the reference image not committed. |
 | Blocking questions | None. |
 
 ---
@@ -123,7 +123,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | 39, part 2 | The walk and the fault | **complete** (PR #48, `33df658`) | **Signed off 2026-11-18** (architecture session): runs 44321940704, 44326796071 (the report) and 44327031951 (`main`'s push) green on every job, read from GitHub; Q38–Q40 ruled and carried out; the walk's and `verify`'s tests rerun and two mutations of the join shown red; the run's seven decisions accepted, the first amended by C1. Phase 39 is complete, and with it `PERFORMANCE_PLAN.md`. Recorded at the end of Phase 39 there. |
-| 40, part 1 | The new identity: the dashboard | in progress (PR #49, draft) | **Brief (2026-11-18):** `docs/DELIVERY_PLAN.md` §2 (the identity, I1–I7) and Phase 40, "Part 1 — the dashboard": C1, the N+1 route's page carried from Phase 39, first, as its own commit pushed at once; then the work order from item 0, the assessment, written into the report before any screen changes; its criteria and what not to do. Step 0: `main`'s push run 44327031951 on `33df658`. Branch `phase-40-identity` from `origin/main` = `33df658`; its first commit is the review (`../phase-39-2-review.patch`, message `../phase-39-2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. The report shows every screen at 1280 px and one at 375 px. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 40, part 1 | The new identity: the dashboard | **complete, awaiting review** (PR #49; CI green on `1f3080a`, run 44340916627) | **Run 2026-11-18:** C1 met over two runs (page 500, budget 25 ms); items 0-8 built; the phase audit's ring finding fixed; every screen at 1280 px and one at 375 px in `docs/screenshots/phase-40-review/`. Report in §5. **Brief (2026-11-18):** `docs/DELIVERY_PLAN.md` §2 (the identity, I1–I7) and Phase 40, "Part 1 — the dashboard": C1, the N+1 route's page carried from Phase 39, first, as its own commit pushed at once; then the work order from item 0, the assessment, written into the report before any screen changes; its criteria and what not to do. Step 0: `main`'s push run 44327031951 on `33df658`. Branch `phase-40-identity` from `origin/main` = `33df658`; its first commit is the review (`../phase-39-2-review.patch`, message `../phase-39-2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. The report shows every screen at 1280 px and one at 375 px. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -155,15 +155,49 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        40, part 1 — the new identity: the dashboard
+Phase:        40, part 1 — the new identity: the dashboard (with C1, carried
+              from Phase 39)
 Branch:       phase-40-identity, from origin/main = 33df658. 1ad98c7 the
-              review; 61a0546 C1; then the assessment (this), then the
-              dashboard. PR #49 (draft).
-Run:          2026-11-18, /next. IN PROGRESS: the assessment is written
-              before any screen changes (work order item 0).
+              review; 61a0546 C1; 329171d the assessment (item 0, before
+              any screen changed); 8cba501 items 1-8; ded4f19 the audit's
+              findings; 1f3080a the e2e fix; then this report with the
+              README's N+1 case and the screenshots. PR #49.
+Run:          2026-11-18, /next. Local gates one at a time, in the
+              foreground. The fault library never run locally.
+Status:       COMPLETE pending review. CI green on 1f3080a (run
+              44340916627, every job; all 25 PR checks pass or skipping; no
+              open code-scanning alert). main has not moved (33df658), so
+              that is the merge result. Nothing blocking; no Q41.
 
-ITEM 0 — THE ASSESSMENT (written before any screen was changed)
+FIRST FOR THE REVIEW — THE LOOK
+  docs/screenshots/phase-40-review/ holds every screen at 1280 px and the
+  investigation at 375 px, from run 44340916627's e2e artifact
+  (e2e-screenshots-none), none touched by hand. Start with
+  investigation-complete-1280.png, investigation-complete-375.png,
+  investigations-1280.png and sign-in-1280.png. The folder is for this
+  review; remove it when the look is approved (32.1 part 2 did the same).
+  The README's four screenshots in docs/screenshots/ are from the same run.
 
+C1 — THE DETAILS ROUTE'S PAGE 500, BUDGET 25 MS (61a0546)
+  DETAILS_PAGE 500 (the default page and the ?limit= cap);
+  response_items_max 500 at /products; latency_p95_ms 25. The whys and
+  LIMITS give page 500 and the measured range; test_manifest_budgets.py
+  pins 25 and 500; the library expects "ran 500 times for the 500 items".
+  No harness check added back (Q40). Every existing case kept its root and
+  verdict (both shards green in all three runs).
+  The check, from the LATENCY lines (fault: sample 45 >= 37.5 ms; fix:
+  slowest <= 16.7 ms, measured and in verify's runs):
+                               fault: sample 45      fix: slowest
+    44333504867 (61a0546)      144.3, 142.6          <= 12.3 (6.5, 7.0 measured)
+    44336394900 (8cba501)      102.1, 98.5           <= 6.2  (6.2, 5.8 measured)
+  MET in every reading of two runs. These runners were slower than the
+  architecture session's projection (about 50 ms at 500): the fault's
+  margin is wide; the fix's slowest stayed at the join's few ms.
+  The README's N+1 case retaken from run 44333504867's log (the README
+  OUTPUT block, copied by script; nothing typed): page 500, 25 ms,
+  "ran 500 times for the 500 items", sample 45 at least 143.653 ms.
+
+ITEM 0 — THE ASSESSMENT (committed in 329171d, before any screen changed)
   Routes and their jobs
     /login                    sign in to this control plane
     /investigations           every stored walk, newest first; an admin
@@ -177,58 +211,150 @@ ITEM 0 — THE ASSESSMENT (written before any screen was changed)
     /settings/users           accounts and roles (admin)
     /settings/agents          pairing and grants (admin)
     *                         not found; admins-only for a member
-
   The most important information on each screen
     investigation view   the root (or where the walk stopped) and its
                          statement; then the four checks; then the edges
-                         and their readings
     investigations       per row: the symptom and its root or stop
     login                the two fields and the one action
     settings             the list being managed, then the form
     incidents            that it is history; the timeline
     postmortems          titles and their embedding status
     not found            the path that was asked for, and the way back
+  Inconsistencies found
+    1 the answer was not the editorial moment (the h1 was the symptom);
+    2 glass on data (the Symptom card) and on a form (sign-in);
+    3 cantaloupe on the brand dot and an unused badge as well as the root;
+    4 "complete" and "admin" in the brand tone of links and the button;
+    5 three title sizes; 6 three field styles; 7 error text two ways
+    (boxed, bare, and mono in services); 8 labels uppercase sans in some
+    places, sentence case in others; 9 motion only colour, 150 ms, default
+    easing; 10 Vite's favicon, a CSS dot for a mark.
+  Data-heavy (dense, solid, quiet): the investigation view, the lists,
+  settings, incidents, postmortems. Expressive (graticule; glow on
+  sign-in only): sign-in, empty states, not found.
 
-  Inconsistencies found today
-    1. The answer is not the editorial moment. The investigation page's
-       h1 is the symptom (mono, up to 2xl) and the root is a base/lg
-       line beneath a small label: the question outranks the answer.
-    2. Glass is on data: the Symptom card (a definition list) and the
-       sign-in form. PRODUCTISATION §2 already said never on dense data;
-       I5 keeps forms solid too.
-    3. Cantaloupe (to become lime) also marks the brand dot and an
-       unused "highlight" badge variant: two meanings for one colour.
-    4. "complete" in the diagnosis badge and "admin" share the brand
-       tone with links and the primary button.
-    5. Three heading sizes for a page title: Page's h1 (xl/2xl),
-       sign-in and not-found (lg), the investigation (mono lg/2xl).
-    6. Field styles differ: Input has a strong border and subtle
-       placeholder; Textarea a hairline and muted placeholder; the
-       command input muted.
-    7. Error text two ways: boxed on fail-tint (sign-in, postmortem
-       editor) and bare text-xs (users, agents, services, verify), and
-       mono in services.
-    8. Section labels are uppercase sans at widest tracking in some
-       places and sentence case in others (Hypotheses' group titles);
-       identifiers are mono throughout, which I3 keeps.
-    9. The only motion is colour; dialogs fade and zoom; the fault tree's
-       chevron turns. Durations are 150 ms everywhere, easing default.
-    10. The favicon is Vite's; the mark is a dot drawn in CSS.
+ITEMS 1-8 (8cba501, ded4f19, 1f3080a)
+  1 Tokens. Surfaces are plum at other lightnesses (hue 270, saturation
+    44%): a well #180e23, the page #221331, panels #261537 .. #392053;
+    cream #fdfdfd, muted #cbc1d8, subtle #ab9dbd; violet fill and ring
+    #7540f5, violet text #b69cff; --culprit #d6fa4a (was --highlight),
+    plum on it; verdicts and severities re-derived (pass #3ddbae, fail and
+    breaks #ff8070, inconclusive #6cc6ff, degrades #ffaa52, plum-greys);
+    tints at 13% over plum, lines at 38%; a title and two display steps,
+    a mono label tracking, the spacing step, radius and shadow steps, a
+    culprit glow, 180 ms ease-out by default. test_design_tokens.py: the
+    new sets; every boundary 3:1 on every surface; the ring 3:1 where
+    controls sit; the anchors exactly; the surfaces plum by lightness
+    alone; the hue-separation test (30 degrees from lime and violet, or a
+    grey under 25% saturation).
+  2 Restraint. check_frontend_tokens.py allows culprit utilities only in
+    Diagnosis, FaultTree, InvestigationList (a row's root) and Brand (the
+    mark), glass only in AppHeader, dialog and tooltip; a declared file
+    that no longer uses its token fails.
+  3 Components: violet primary, quiet secondary/outline/ghost, a press;
+    one field style (a well inside a 3:1 boundary); no lime badge; Card
+    solid only; a mono Label; ErrorNote and SuccessNote (21 failure
+    paragraphs became ErrorNote); the graticule on empty states; glass
+    dialogs, palette and tooltips; violet ring 2 px, offset.
+  4 Screens. The investigation's h1 is its answer: the root in mono
+    display under the lime "Root" marker, a lime rule beside the
+    statement (the diagnosis line), the symptom a label above; a partial
+    is "Walk stopped at" in the inconclusive tone, never lime. The fault
+    tree's root node in the lime outline glow. Symptom card and sign-in
+    solid. One title scale; labels in mono capitals; code and readings
+    in wells.
+  5 Motion: 150-220 ms ease-out on hover, press, the tree's edges and
+    dialogs; nothing animates data.
+  6 The mark: a measuring ring with four ticks and a lime centre, in
+    Brand.tsx, frontend/public/favicon.svg (replacing Vite's),
+    docs/brand/mark.svg and wordmark.svg.
+  7 The screenshots retaken by e2e (above).
+  8 PRODUCTISATION §2's status line.
 
-  Data-heavy: dense, solid and quiet
-    the investigation view (tree, evidence, rubric, hypotheses,
-    verification), the investigations list, the three settings pages,
-    incidents and postmortems.
-  Expressive: the graticule, and the violet glow on sign-in only
-    sign-in, the empty states, not found.
+DECISIONS OF THIS RUN (for the review)
+  1 The answer's heading is the root subject (mono, display), with the
+    statement beneath it as the diagnosis line, rather than the whole
+    statement at display size: statements run to 300+ characters.
+  2 Lime marks four places: the investigation's root and diagnosis line,
+    the tree's root node, a list row's root, and the mark (the plan names
+    the mark's dot).
+  3 The ring is violet itself, as I2 says, so controls stay on the well,
+    the page, a panel or glass, where it measures 3.0-3.4:1. Violet is
+    2.3-2.8:1 on surface-2, surface-3 and the tints: no control sits there
+    (LIMITS, new entry). The alternative was a lighter ring.
+  4 The graticule is an SVG (two paths), because a pattern fill would
+    need a colour prop the token gate refuses.
+  5 A complete diagnosis with no remediation now says "The walk suggests
+    no fix for this root." (before: nothing).
 
-  What changes because of it (the plan's items 1-8 in this order)
-    the root statement becomes the investigation's editorial heading
-    with the lime marker, the symptom drops to a mono label above it;
-    glass leaves the Symptom card and the sign-in form; lime is the
-    root, the diagnosis line, the tree's root node and the mark only;
-    one title scale; one field style; one error note; labels in mono
-    capitals; I6's motion under the reduced-motion rule.
+CRITERIA
+  Every colour from a token; check-frontend-tokens and
+    test_design_tokens pass, with the restrictions and the hue
+    test; each mutation red                                   PASS
+  Contrast: text 4.5:1 on every surface; boundaries and the
+    ring 3:1                                                  PASS, the
+    ring as decision 3 (after the audit's finding, ded4f19)
+  Lime only where the answer is marked; glass only on
+    layered components                                        PASS (gate)
+  reducedMotion 'reduce': no transition (e2e)                 PASS (CI,
+    "motion: 150 to 220 ms, and none under reduced motion")
+  Nothing lost: every e2e assertion holds at four widths,
+    every route, keyboard-only                                PASS (CI
+    44340916627, e2e (none) and (stub)); the e2e diff only adds
+  The report shows every screen at 1280 and one at 375        PASS (above)
+  Do NOT: no functionality removed, no dependency (Inter 700
+    is in the installed package), no light theme, no data
+    animated, the reference image not committed               PASS
+  C1 as above                                                 PASS
+
+MUTATIONS SHOWN RED (each restored; the tree checked after)
+  bg-culprit on the primary button     check: "culprit token outside the
+                                       answer", button.tsx:17, exit 1
+  bg-glass on Evidence                 check: "glass token outside a
+                                       layered component", exit 1
+  --degrades back to #f2d75b           hue test: degrades-culprit
+  --inconclusive back to #b9a6ff       hue test: inconclusive-brand-fill,
+                                       inconclusive-brand
+  --line-strong #5a4c6a                3:1 test: 6 pairs
+  --surface-1 one step lighter         ring test: ring-on-surface-1
+  and five parametrised restriction mutations in the check's own tests.
+
+AUDITS
+  invariant-auditor (1ad98c7..8cba501): CLEAN. No gate weakened; C1
+    touched only the route's page, budgets, pins, the library's expected
+    text and LIMITS. Risks noted: the four decorative tokens are exempt
+    from contrast; the 25 ms budget was a projection (now measured, C1).
+  phase-auditor (1ad98c7..8cba501): NOT COMPLETE on one criterion — the
+    ring under 3:1 on controls this phase placed on surface-2 (sign-in
+    card, services connections box) and degrades-tint (the agent
+    notice's link). Fixed in ded4f19: all three on a panel or a well;
+    Card lost its surface-2 variant; RING_SURFACES says why. Its scope
+    note (the graticule on admins-only, not named by I4) also taken. Not
+    re-run after the fixes.
+
+LOCAL GATES (Windows, one at a time, in the foreground)
+  just lint, typecheck, lint-imports, check-schema-drift,
+  check-no-llm-imports, check-invariants, check-scan-coverage,
+  check-frontend-tokens, check_coupled_files: clean. just test: api 1,840
+  (6 skipped), worker 93, mcp_server 21, 39. Frontend: tsc -b, vite
+  build, oxlint (three only-export-components warnings, as on main), node
+  tests. Not run locally: the fault library (instructed), e2e.
+
+CI (PR #49)
+  44333504867 on 61a0546 (C1): success on every job.
+  44336394900 on 8cba501: e2e (none) and (stub) red on one tour test —
+    DiagnosisHeading was a <header>, so locator('header') found two;
+    every other job green, fault library included (C1's second run).
+  44338092108 on ded4f19: the same e2e failure, for the same reason.
+  44340916627 on 1f3080a: success on every job (deploy, publish
+    skipped); 25 PR checks pass or skipping; no open code-scanning alert
+    on refs/pull/49/merge. main not moved: the merge result.
+  This report's own commit runs on the pull request after it.
+
+NOT BUILT (as the brief says)
+  No light theme; no dependency; nothing removed; no data animated; the
+  reference image not committed; the README rewrite, hero, captures and
+  diagrams are part 2.
 ```
 
 ## §6. Escalate to the architecture session when

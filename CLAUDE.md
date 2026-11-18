@@ -12,8 +12,9 @@ the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
 - **Current phase:** 40, part 1 (the new identity: the dashboard) — on
-  branch `phase-40-identity`, from `33df658`; not started. Phase 39 is
-  signed off, and `docs/PERFORMANCE_PLAN.md` is complete.
+  branch `phase-40-identity`, PR #49; complete and awaiting review (CI
+  green on `1f3080a`). Phase 39 is signed off, and
+  `docs/PERFORMANCE_PLAN.md` is complete.
 - **Plan of record:** `docs/DELIVERY_PLAN.md` (Phases 40–43), after
   `docs/DIAGNOSTIC_PLAN.md` (26–35) and `docs/PERFORMANCE_PLAN.md`
   (36–39). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8) and §2 (the core model),
