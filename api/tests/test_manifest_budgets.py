@@ -47,8 +47,8 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
         (PRODUCTS, "query_mean_ms_max", 10, None),
         (LIST_ROUTE, "latency_p95_ms", 25, None),
         (LIST_ROUTE, "response_items_max", 50, "/products"),
-        (DETAILS_ROUTE, "latency_p95_ms", 20, None),
-        (DETAILS_ROUTE, "response_items_max", 50, "/products"),
+        (DETAILS_ROUTE, "latency_p95_ms", 25, None),
+        (DETAILS_ROUTE, "response_items_max", 200, "/products"),
     ]
     exported = dump_manifest(manifest)
     again = load_manifest(exported)

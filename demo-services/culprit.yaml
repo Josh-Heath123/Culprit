@@ -381,17 +381,19 @@ budgets:
       storefront relies on.
   - subject: "http:inventory-service/GET /products/details"
     predicate: latency_p95_ms
-    value: 20
+    value: 25
     why: >-
       Phase 39 part 2. PROVISIONAL: to be set from the spread measured
-      across CI's runners (Q37).
+      across CI's runners (Q37), against the default page of 200.
   - subject: "http:inventory-service/GET /products/details"
     predicate: response_items_max
-    value: 50
+    value: 200
     at: /products
     why: >-
-      Phase 39 part 2. GET /products/details answers the first 50 products
+      Phase 39 part 2. GET /products/details answers the first 200 products
       with their details, in an envelope ({"products"}), and caps ?limit= at
-      50. A probe sends no query, so what is counted is that default page,
-      which holds 50 items. The bound guards the page the route's latency
-      budget is measured against: a larger page costs more.
+      200, as GET /products does. A probe sends no query, so what is counted
+      is that default page, which holds 200 items. The bound guards the page
+      the route's latency budget is measured against: a larger page costs
+      more. It is 200, not 50, because at 50 an N+1 cost too little to tell
+      from the join by a budget with Q37's margins.

@@ -3193,7 +3193,9 @@ per item, and these are its limits.
   set against one page size says nothing about another: a smaller default
   page can bring an N+1 route under its budget, and a larger one push a
   sound route over it. The demo's `GET /products/details` budget is
-  measured against its default page of 50, its declared list bound.
+  measured against its default page of 200, its declared list bound: at
+  50, the N+1 measured 15.5 to 15.9 ms, too close to the join to be told
+  apart by a budget with room on both sides.
 - **One request, measured once.** The walk brackets one `GET`; the
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a

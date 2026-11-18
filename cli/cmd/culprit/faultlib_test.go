@@ -225,6 +225,9 @@ func TestTheFaultLibrary(t *testing.T) {
 			if fault.injection() == "n-plus-one" {
 				// Fixed: at most half the budget. And the list probe counts the
 				// route's real page, not zero (Phase 38's count of 0, closed).
+				// The fix recreated inventory-service, the vantage, and the
+				// bundle with it.
+				stack.rebundle(fault)
 				stack.checkRouteP95(stack.measureLatency(fault, detailsRoute, model.VerdictPass),
 					routeBudgetMs(t, detailsRoute.subject), "<=", 0.5)
 				stack.countList(fault, detailsRoute)
@@ -830,8 +833,9 @@ func (s *faultStack) countList(fault faultExpectation, route budgetedRoute) {
 		s.t.Errorf("the reading was not measured against the demo's list budget: %+v", reading.ExpectedSource)
 	}
 	// Expected is the judged form, read back from JSON.
-	if reading.Expected["response_items_max"] != float64(50) || reading.Expected["at"] != "/products" {
-		s.t.Errorf("judged against %v, want 50 items at /products", reading.Expected)
+	if bound := listBound(s.t, route.subject); reading.Expected["response_items_max"] != float64(bound) ||
+		reading.Expected["at"] != "/products" {
+		s.t.Errorf("judged against %v, want %d items at /products", reading.Expected, bound)
 	}
 	if route != productsRoute {
 		return
@@ -1249,4 +1253,32 @@ func (s *faultStack) pauseLoad() {
 func (s *faultStack) resumeLoad() {
 	s.t.Helper()
 	s.compose(s.withToken(s.good), "start", "load-generator")
+}
+
+// listBound is the response_items_max the demo's culprit.yaml declares on
+// subject.
+func listBound(t *testing.T, subject string) int {
+	t.Helper()
+	manifest, err := extract.LoadManifest(demoManifest)
+	if err != nil {
+		t.Fatalf("the demo's culprit.yaml: %v", err)
+	}
+	for _, budget := range manifest.Budgets {
+		if budget.Subject == subject && budget.Predicate == "response_items_max" {
+			if value, ok := budget.Value.(int); ok {
+				return value
+			}
+		}
+	}
+	t.Fatalf("the demo's culprit.yaml declares no response_items_max on %s", subject)
+	return 0
+}
+
+// rebundle puts the walk bundle back in the vantage container after a fix
+// recreated it.
+func (s *faultStack) rebundle(fault faultExpectation) {
+	s.t.Helper()
+	container := s.container(fault.Vantage)
+	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk")
+	s.copyBundle(container)
 }
