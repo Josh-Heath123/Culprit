@@ -21,6 +21,8 @@ ITEMS = build("http", component="shop", method="GET", path="/items")
 READY = build("http", component="inventory-service", method="GET", path="/ready")
 PRODUCTS = build("schema", database="inventory-db", namespace="public", table="products")
 LIST_ROUTE = build("http", component="inventory-service", method="GET", path="/products")
+# Phase 39 part 2: the N+1 fault's route.
+DETAILS_ROUTE = build("http", component="inventory-service", method="GET", path="/products/details")
 
 BASE = """
 version: 1
@@ -45,6 +47,8 @@ def test_the_demo_manifest_with_its_budget_loads_and_round_trips() -> None:
         (PRODUCTS, "query_mean_ms_max", 10, None),
         (LIST_ROUTE, "latency_p95_ms", 25, None),
         (LIST_ROUTE, "response_items_max", 50, "/products"),
+        (DETAILS_ROUTE, "latency_p95_ms", 20, None),
+        (DETAILS_ROUTE, "response_items_max", 50, "/products"),
     ]
     exported = dump_manifest(manifest)
     again = load_manifest(exported)
