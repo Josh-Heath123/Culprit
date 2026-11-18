@@ -11,10 +11,9 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 39, part 1 (the measurement) — on branch
-  `phase-39-statements`, PR #47; complete and awaiting review (CI green
-  on `275f5fb`). Phase 38 is complete, and `docs/DIAGNOSTIC_PLAN.md` is
-  complete.
+- **Current phase:** 39, part 2 (the walk and the fault) — on branch
+  `phase-39-walk`, from `6b0de5d`; not started. Part 1 is signed off,
+  and `docs/DIAGNOSTIC_PLAN.md` is complete.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core
   model) and the phase you are working on — not the whole file.

@@ -2617,6 +2617,224 @@ Phase 39 is two parts, each its own `/next` run with a review after it:
 - no measurement in an environment not declared isolated;
 - no reading of ORM source (D6), and no trace ingestion.
 
+**Architecture review of part 1, 2026-11-18 — merged as `6b0de5d` (PR #47).
+Part 1 is signed off.**
+
+**CI.** Read by id from GitHub's API:
+- PR #47's runs: 44179969936 on `6ffceda` failed lint (two lines over 100
+  columns); 44180363288 on `61a6228` failed `test` alone (the API's
+  catalogue count, 18 against 17); 44182484917 on `ef17f24` and 44186455846
+  on `275f5fb` were green.
+- The report's own commit, `1cc77cf`, run 44189651276: success on every job
+  on attempt 1 (19 jobs; `publish` and `deploy` skipped, as on every pull
+  request). `main` had not moved from `02bae0d`, so that is the merge result.
+- `main`'s push run 44257273844 on `6b0de5d` was in progress at sign-off.
+  Part 2's step 0 confirms it.
+- **Step 0 recorded what Phase 38 part 2 could not.** Run 44170421496 was
+  green. Q37's margins, from two runs' logs: the fault's route p95 at 90.2 and
+  129.4 ms against its 50 ms floor (1.8 times at the tightest); the statement
+  mean at 41.2 and 59.1 ms against its 15 ms floor (2.7 times); the fixed
+  route at 3.8 and 4.4 ms against 12.5. Q37 is closed. The list probe counted
+  0 items on both runs, as Phase 38's review said.
+
+**This run is the protocol working.** The local gates ran one at a time, in
+the foreground, and only the CI-only jobs were left to CI. Both auditors ran,
+and their findings were acted on. The report was committed before the pull
+request was marked ready.
+
+**Verified on disk.** On `6b0de5d`, in the architecture session's workspace
+(Go 1.27, and PostgreSQL 16 behind a stand-in `docker`):
+- `go test` over `model`, `probe`, `capture`, `dbsession`, `extract` and
+  `check`, and `test_per_item.py` (18 tests): all green.
+- The real-Postgres tests pass: `TestTheBracketAgainstARealPostgres`,
+  `TestStatementsAndPlansAgainstARealPostgres`, and
+  `TestStatementsPerRequestAgainstARealPostgres` in `cmd/culprit`.
+- **Mutations, each shown red and then restored:**
+  - the runner honouring a caller's `Isolated`
+    (`TestAnInputCannotSetIsolation` fails);
+  - the bracket sending the request after a noisy quiet window
+    (`TestTheBracketAgainstARealPostgres` fails: "a noisy quiet window: 3
+    quiet calls, called=true").
+
+  The second is held only by the real-Postgres test. That test runs in CI's
+  database boundary step, which is enough: no unit test is asked for.
+- The run's own mutation of the rule (`>=` to `>`) was red in both languages.
+
+**The run's three decisions: accepted.**
+1. **`Bracket(ctx, dsn, between)`.** `dbsession` calls the caller's function
+   between its second and third snapshots and reads nothing back. It stays
+   one file, makes no HTTP call, and sends only the existing templates. That
+   is decision 4.
+2. **Isolation is a runner option that overwrites whatever a caller set.**
+   `probe`, `diagnose` and `verify` set it from `culprit.yaml`; the agent's
+   runners pass `""`. That the walk's and `verify`'s runners already carry it
+   is what part 2 needs.
+3. **`Manifest.SQLDatabases`, with no fallback.** `SchemaDatabase`'s
+   `<component>-db` fallback would have measured a guessed database. A
+   database is keyed on a declaration, never on a name (pattern 4).
+
+**Accepted as the auditors left them:**
+- The e2e test's not-isolated case asserts that no HTTP request was sent;
+  the unit test asserts that no database call was made. Between them, both
+  sides are held.
+- A service that uses Culprit's own role is invisible to the bracket, and
+  LIMITS says so. The reading is then a pass that names nothing. **Ruled for
+  part 2:** a bracket that saw no statement at all is not evidence against
+  `n_plus_one` (decision 7 below).
+
+**Noted:** `manifest_schema.json` has 64 fields (`5909362`'s message says
+63), and the corpus has 6,080 cases.
+
+**Part 2 — the walk and the fault. Brief and criteria, 2026-11-18.**
+
+**What the code holds today** (`git grep` on `6b0de5d`):
+- The walk runs errors, then latency, then the database pass (Phase 37 part
+  3). The database pass runs only when neither earlier pass found a root
+  strictly below the entry. `testLatency` stops at a component's first route
+  over its budget.
+- The database pass's statement window times the system's own traffic. With
+  no call to a budgeted statement in the window, the reading is
+  `inconclusive` (`JudgeStatements`).
+- The demo plants a code path with an environment toggle
+  (`CONTRACT_FAULT`). Its fix is `config:inventory-service/CONTRACT_FAULT`.
+- `verify` judges verdicts only (`judge`, one function in Go and Python). An
+  evidence reading passes before a fix and after it.
+- The missing-index case holds the demo's database at `0002`, and its fix
+  upgrades it to `0003`.
+- inventory-service connects as `inventory`, and Culprit's reader as
+  `culprit_reader`. `/ready` reads no database. The faults stack's
+  `load-generator` reaches the inventory database through `GET /products`.
+- `n_plus_one` is listed nowhere yet: not in Go, Python, the frontend's
+  labels, or `investigation_conformance.json`.
+
+**Decided now for part 2:**
+1. **The fault is planted by a toggle, and its fix is a `config` change.**
+   The plan said `commit`. Amended: the demo plants a code path with an
+   environment toggle, as `CONTRACT_FAULT` does. A `commit` change explains
+   nothing a capture records, so the toggle's difference in inventory-service's
+   configuration would go unexplained, and `verify` would land
+   `changed_underneath`, not `verified`. The fix is
+   `config:inventory-service/<the toggle>`, as contract's is.
+2. **The relation is a second table, added by a new migration, `0004`.** It
+   is additive, and no landed migration is rewritten (Q35 (b)). It is seeded
+   with one row per product, so the relation is distinct per item. `0004`
+   is round-trip tested as the demo's other migrations are.
+3. **The route.** A new `GET` list route on inventory-service reads products
+   and, for each product, its row in the new table.
+   - With the toggle, it runs one statement per item. Without it, it runs one
+     statement for them all (a join, or one query over the page's keys).
+   - Its default answer, with no query, holds a fixed page of items.
+   - It declares `response_items_max` with `at:`, so the list probe counts a
+     real list in CI. That closes Phase 38's count of 0.
+   - It also declares a `latency_p95_ms` budget.
+4. **The budget comes from the spread (Q37).** Before fixing the budget,
+   measure the route's p95 with and without the toggle across at least two
+   CI runs. Choose the page size and the budget so that the fault's smallest
+   p95 is at least twice the budget, and the fixed route's largest p95 is at
+   most half of it. Those are the multipliers the database case uses. The
+   `why` states the spread. If no page size, up to the route's own list
+   budget, gives those margins, stop and report.
+5. **`n_plus_one` joins the hypothesis kinds** wherever they are listed (Go,
+   Python, the frontend's labels), held by `investigation_conformance.json`.
+   `probe.db.statements_per_request` lists it in `discriminates`, as
+   `probe.db.plan` lists `missing_index`.
+6. **Where the walk asks.** At the database pass's condition: the entry's
+   own `GET` route over its latency budget, with nothing below the entry slow.
+   - **In an environment declared isolated, it asks before the database
+     pass.** That pass's statement window times the system's own traffic,
+     and an isolated environment declares there is none beyond Culprit's.
+     A statement found running per item roots there. Otherwise, the database
+     pass runs as it does now.
+   - **In any other environment, it is not asked.** There is no `n_plus_one`
+     hypothesis, and one line in the diagnosis says that N+1 was not asked
+     because the environment is not declared isolated. That line is not a
+     partial, so no existing case changes for it.
+   - **Placement:** the probe goes on the route whose latency reading
+     failed, placed as the latency probe is, with `at` from that route's
+     `response_items_max` budget when one is declared.
+7. **The join.**
+   - **Supported:** the reading names a statement run per item. The root is
+     on the route, citing the first named statement: its `queryid`, its
+     text where kept, its calls, and the item count.
+   - **Ruled out:** the reading passes, saw at least one statement, and names
+     none.
+   - **Unexplored:** a pass that saw no statement at all. Its reason says the
+     request made no statement Culprit could see on that database: the route
+     was served without it, or under Culprit's own role. Any `inconclusive`
+     or `refused` reading is also unexplored, with its reason.
+8. **The recommendation is deterministic:** load the relation for every item
+   in one statement (a join, or one query over the items' keys). It names
+   the statement where its text is kept. The narrator only narrates it.
+9. **`verify`'s verdict rules do not change.** There is one judge, in Go and
+   Python, and a declared budget is the reference (decision 1). Its
+   description says, from the rerun per-item reading, whether the statement
+   the root cited still runs per item.
+10. **The fault library gets two cases.**
+    - **`n-plus-one`:** a new environment declared isolated, from
+      inventory-service's vantage. The load generator is paused before the
+      walk and through `verify`, and resumed afterwards. Its fix lands
+      `verified`.
+    - **The same fault walked in `faults-inventory`:** not declared isolated,
+      with the load generator running.
+
+**Work order.**
+0. **Commit the review first.**
+   - Confirm `main`'s push run 44257273844 on `6b0de5d`, by id.
+   - Then `git apply ../phase-39-1-review.patch` and
+     `git commit -F ../phase-39-1-review.txt`.
+1. **The demo:** `0004` and its seed, and the route with its toggle. Its
+   budgets stay provisional until item 4.
+2. **`n_plus_one`** in the hypothesis kinds, and in the probe's
+   `discriminates`.
+3. **The walk:** the N+1 step, the join, the recommendation, and the line for
+   an environment not declared isolated.
+4. **The fault library:** the two cases. Measure in CI, then fix the budget
+   from the spread (decision 4).
+5. **`verify`'s description.**
+6. **The documents.**
+   - **README:** the N+1 case, with the output of a real run.
+   - **PROBES.**
+   - **LIMITS:**
+     - N+1 is asked only in an environment declared isolated, and there
+       before the database pass;
+     - a request with no visible statement is not evidence;
+     - the budget depends on the page size.
+
+**Acceptance criteria.**
+- **The isolated case.** The root is `n_plus_one` on the route, with its
+  statement and counts named and the recommendation given. With the fix, the
+  route keeps its budget, `verify` lands `verified`, and its description says
+  the statement no longer runs per item.
+- **Not declared isolated:** no `n_plus_one` root, and the line saying why.
+  Never a guess.
+- **The list probe** counts the new route's page in CI, not zero.
+- **The join:** each of its outcomes is shown by a walk test on recorded
+  readings, the no-statement case included. A mutation that turns the
+  no-statement case into `ruled_out` is shown red.
+- **`n_plus_one`:** Go, Python and the frontend agree over the fixture.
+- **`0004`** round-trips.
+- **The budget's margins** are recorded from at least two CI runs.
+- **Unchanged elsewhere:**
+  - every existing fault case's expected result, the missing-index case in
+    particular, whose database at `0002` lacks the new table;
+  - the demo repository's expected findings;
+  - every golden.
+
+  Each change is listed and explained; if one changes an existing case's
+  root or verdict, stop and report.
+- **CI** is green on the merge result, and `LLM_PROVIDER=none` changes
+  nothing. The run report is committed before the pull request is marked
+  ready.
+
+**Do NOT implement in part 2:**
+- no N+1 asked in an environment not declared isolated;
+- no change to the probe's measurement or its verdicts, and no statement
+  budget judged from the bracket;
+- no new statement template, capability or role;
+- no change to `verify`'s verdict rules, and no loosening of any existing
+  precondition;
+- no reading of ORM source (D6), and no trace ingestion.
+
 ---
 
 ## §4. Explicitly out of scope for this entire plan

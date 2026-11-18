@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **39, part 1 — the measurement: `isolated:`, `probe.db.statements_per_request`, the per-item rule** — `complete`, awaiting review. PR #47; CI green on `275f5fb` (run 44186455846, every job and every PR check; no open alert). Report in §5; three decisions for the review there. |
-| Previous phase | **38, part 2 — lists — merged as `02bae0d` (PR #46) and signed off 2026-11-17. Phase 38 is complete.** PR #46's run 44167165860 green on every job on attempt 1. The run stopped before its local gates finished (memory) and wrote no report: §5 still holds part 1's, and the review at the end of Phase 38 in `PERFORMANCE_PLAN.md` is part 2's record, with the criteria checked on disk. The brief's claim about the demo's default page was wrong (the probe counts 0); carried to Phase 39 part 2. |
+| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 39, "Part 2 — the walk and the fault". Step 0: `main`'s push run 44257273844 on `6b0de5d`. |
+| Previous phase | **39, part 1 — the measurement — merged as `6b0de5d` (PR #47) and signed off 2026-11-18.** The report's commit `1cc77cf` green on every job (run 44189651276) on the merge result. The three decisions of the run accepted; the real-Postgres tests rerun and two mutations shown red by the architecture session. Q37 closed on step 0's margins. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-39-statements`, from `origin/main` = `02bae0d`; its first commit the review (`13b5246`). PR #47, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally. |
+| Branch | `phase-39-walk`, to be cut from `origin/main` = `6b0de5d`. Its first commit is the review: `git apply ../phase-39-1-review.patch`, then `git commit -F ../phase-39-1-review.txt` (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Open a draft pull request and mark it ready when the run report is committed. Run the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
 | Blocking questions | None. |
 
 ---
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Phase 38's questions (Q37) are ruled and recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. | | |
+| — | None open. Phase 39 part 1's decisions are accepted at the end of Phase 39 in `PERFORMANCE_PLAN.md`. | | |
 
 ---
 
@@ -121,8 +121,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 37, part 3 | The database in the walk | **complete** (PR #42 `1d20322`, PR #43 `883e9b2`, PR #44 `4619099`) | **Signed off 2026-11-17** (architecture session): PR #44's last run 44072232611 green, read from GitHub; existing test faults unchanged; Q35's criteria met in CI over two runs; Q36 applied. Phase 37 is complete. Decisions are at the end of Phase 37 in `PERFORMANCE_PLAN.md`. |
 | 38, part 1 | Bundles | **complete** (PR #45, `3d9fb33`) | **Signed off 2026-11-17** (architecture session): run 44088509299 green on every job, read from GitHub; the report's commit green on attempt 2 of 44091691574. Decisions accepted; Q37 ruled. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
-| 39, part 1 | The measurement | **complete, awaiting review** (PR #47; CI green on `275f5fb`, run 44186455846) | **Brief (2026-11-17):** `docs/PERFORMANCE_PLAN.md` Phase 39, "How Phase 39 is run" and "Part 1 — the measurement". Built: `isolated:` in both readers and the corpus; the per-item rule in Go and Python with its generated fixture; `StatsReader.Bracket`; `probe.db.statements_per_request` in `culprit probe`, isolation stamped by the runner; the documents; the README's list output from CI. Both audits run (invariant: CLEAN). Report in §5. |
-| 39, part 2 | The walk and the fault | not started | Brief written at part 1's review. Decided already ("How Phase 39 is run"): N+1 is evidence beneath a route over its declared latency budget, never a finding of its own; isolation is declared, and checked by a quiet window. |
+| 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
+| 39, part 2 | The walk and the fault | not started | **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
