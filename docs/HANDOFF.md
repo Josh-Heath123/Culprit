@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `gates red`, **awaiting decision on Q38**. Built and diagnosing in CI; the N+1 case's fix verifies `inconclusive`, not `verified`, so fault-library (2) is red (runs 44269336518, 44273031843, 44277466463). PR #48, a draft. Report in §5. |
+| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `gates red`, **awaiting decision on Q39**. Q38 ruled and carried out; its rule 3 does not hold in either run (44288656924, attempts 1 and 2), so page and budget are unchanged. The N+1 case diagnoses in CI; its fix verifies `inconclusive`. PR #48, a draft. Report in §5. |
 | Previous phase | **39, part 1 — the measurement — merged as `6b0de5d` (PR #47) and signed off 2026-11-18.** The report's commit `1cc77cf` green on every job (run 44189651276) on the merge result. The three decisions of the run accepted; the real-Postgres tests rerun and two mutations shown red by the architecture session. Q37 closed on step 0's margins. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-39-walk`, from `origin/main` = `6b0de5d`; its first commit the review (`6349f84`). PR #48, left a draft: CI is red on the open question. `shared/uv.lock` not staged; the fault library not run locally. |
-| Blocking questions | **Q38** (§3): the N+1 route's latency budget cannot both keep decision 4's margins and verify its fix. |
+| Blocking questions | **Q39** (§3): the fixed N+1 route's slowest answer is over rule 3's 16.7 ms in both runs. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| 38 | **Decision 4 sets a route budget from p95s; the latency judge needs the slowest sample under it.** At a page of 200, `GET /products/details` measured p95 46.0–62.9 ms with the N+1 and 4.0–5.1 ms fixed over three CI runs, so 15 ms keeps both of decision 4's margins. But `probe.http.latency` places a p95 from 50 samples by the slowest of them, and the fixed route's slowest answer in a run reached 28.2–30.3 ms (once 113.4 ms), mid-run, so its fix verifies `inconclusive` in both N+1 cases. No budget is over ~30 ms and at most half of 46 ms. Options: change how the budget is chosen (phase-auditor proposes "the fixed route's slowest sample across ≥ 2 runs under the budget, the fault's p95 at least twice it"), a larger page (a third change of the list bound), a change to the demo's runtime to remove the pause (not diagnosed: a garbage-collection pause is a guess), or accept a library case that verifies `inconclusive`. The judge is not to be loosened. | 2026-11-18, Phase 39 part 2 | **Blocking** — part 2's criterion "verify lands verified", CI green, and the README's N+1 case |
+| 39 | **The fixed N+1 route's slowest answer, after Q38's ruling.** Q38's settle (VACUUM (ANALYZE) and CHECKPOINT after 0004) and the quieter health check changed nothing. Over two runs (44288656924, attempts 1 and 2) the fault's sample 45 is 45.1–59.2 ms (rule 3 wants ≥ 37.5) but the fixed route's slowest is 88.7–117.1 ms on the first request after the fix recreates inventory-service, and 28.1–39.5 ms mid-run in verify's first rerun of the route, in 10 of 10 verifications over five runs (rule 3 wants ≤ 16.7). Not the harness's database work; not attributed beyond that (a pause in the service's own process fits, unshown). §5 holds both tables. Per rule 3, page and budget unchanged. What next: attribute (ii) further, change the demo, or rule otherwise. | 2026-11-18, Phase 39 part 2 | **Blocking** — "verify lands verified", CI green, the README's N+1 case |
 
 ---
 
@@ -122,7 +122,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 38, part 1 | Bundles | **complete** (PR #45, `3d9fb33`) | **Signed off 2026-11-17** (architecture session): run 44088509299 green on every job, read from GitHub; the report's commit green on attempt 2 of 44091691574. Decisions accepted; Q37 ruled. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
-| 39, part 2 | The walk and the fault | **gates red — awaiting decision (Q38)** (PR #48, draft) | **Run 2026-11-18:** built; the diagnosis holds in CI; the fix verifies `inconclusive` on the healthy route's slowest answer (Q38). Report in §5. **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 39, part 2 | The walk and the fault | **gates red — awaiting decision (Q39)** (PR #48, draft) | **Run 2026-11-18:** built; the diagnosis holds in CI; the fix verifies `inconclusive` on the healthy route's slowest answer. Q38 ruled and carried out; rule 3 not met in two runs (Q39). Report in §5. **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -154,155 +154,139 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        39, part 2 — the walk and the fault: n_plus_one, the demo's
-              relation and route, the library's two N+1 cases
-Branch:       phase-39-walk, from origin/main = 6b0de5d. 6349f84 the review
-              (applied cleanly), then 72df2ef (item 1), 74e01a7 (item 2),
-              eb23f87 (items 3, 5), 000c4a5 (item 4), 8d11f70 and d3ee1d5
-              (gates), c460697 (item 6), 1686be8 and c58cc54 (page and
-              budget from CI), fc0a9c2 (invariant audit), 8e5b746 (the
-              warm-up out), then this report. PR #48, a draft.
-Run:          2026-11-18, /next then /ci. Local gates one at a time, in
+Phase:        39, part 2 — the walk and the fault (second report: Q38's
+              ruling carried out)
+Branch:       phase-39-walk, from origin/main = 6b0de5d. 6349f84 the
+              review; the first run's commits through ae091f9 (its report);
+              then 0ed3f4a (Q38 2b, 2c and the latency log), and this
+              report. PR #48, a draft.
+Run:          2026-11-18, after Q38's ruling. Local gates one at a time, in
               the foreground. The fault library not run locally.
-Status:       GATES RED, AWAITING DECISION (Q38, blocking). Every criterion
-              but one holds: the N+1 case's fix verifies inconclusive, not
-              verified, in CI, so fault-library (2) is red. The PR stays a
-              draft.
+Status:       GATES RED, AWAITING DECISION (Q39, blocking). Q38's rule 3
+              does not hold in either run, so, as ruled, nothing was
+              changed: the page stays 200, the budget 15 ms (pending).
 
-STEP 0
-  main's push run 44257273844 on 6b0de5d: success on every job (deploy
-  skipped), read by id once fault-library (1) had finished.
+Q38 — RULED (architecture session, 2026-11-18), recorded here for the plan
+  1. Decision 4 was wrong: it put the margins on p95s, but
+     probe.http.latency's judge at 50 samples and 90% passes only when
+     sample 50 (the slowest) is within the budget, and fails only when
+     sample 45 is over it. Amended: across at least two CI runs, the fixed
+     route's slowest sample is at most two-thirds of the budget, and the
+     fault's sample 45 of 50 at least 1.5 times it. The judge and the
+     50-request cap do not change.
+  2. Attribute the slow samples first (Q37's rule): tabulate; settle the
+     database after every upgrade reaching 0004 (VACUUM (ANALYZE)
+     product_details, CHECKPOINT); postgres's health check frequent only
+     while it starts; push, read two runs, tabulate again.
+  3. If in both runs the fixed slowest <= 16.7 ms and the fault's sample
+     45 >= 37.5 ms: budget 25 ms, page 200. Otherwise stop and report both
+     tables, changing neither.
+  Q38 is deleted from §3.
 
-Q38 — WHY IT STOPS (§3)
-  Decision 4 sets the budget from p95s: the fault's smallest at least
-  twice it, the fix's largest at most half. At a page of 200 that holds at
-  15 ms over three runs. But probe.http.latency places a p95 from 50
-  samples by the slowest of them, and the healthy route's slowest answer
-  in a run has been 28.2, 28.8, 30.3, 30.3 and once 113.4 ms (mid-run:
-  sample 21 and 27 of 50, not a cold start). So its fix reads
-  inconclusive, and verify says so. No budget is over ~30 ms and at most
-  half of the fault's 46 ms. Tuning past this (the page again, the judge,
-  the demo's runtime) is the architecture session's choice, not this run's.
+WHAT WAS DONE (0ed3f4a)
+  2b: settleDatabase (VACUUM (ANALYZE) product_details; CHECKPOINT, as the
+    stack's postgres superuser through docker exec psql) after atTop's
+    upgrade and once after the stack starts (the demo's setup also reaches
+    0004). In this harness only atTop takes the database up to 0004:
+    restoreDatabase stops at 0003 (the database fault's fix) and the wrong
+    fix at its own category-only revision; both reach 0004 through the
+    next case's atTop. The ruling's premise said otherwise; the effect is
+    the same.
+  2c: postgres's health check: start_period 120s, start_interval 2s,
+    interval 30s, retries 3. The harness checks `docker compose config`
+    renders it, and logs the version: the runner's Compose is v5.1.3 and
+    accepts it (both attempts).
+  Every latency reading, measured or rerun by verify, is logged as
+  "LATENCY <where> <route>: <verdict>, slowest X ms at #i of 50, sample 45
+  Y ms". The table before 0ed3f4a came from the verification JSON the
+  harness printed on failure; healthy readings in passing cases were not
+  printed then.
 
-THE SPREAD (GET /products/details, page 200, from the MEASURED lines)
-                         44269336518   44273031843   44277466463
-  toggle (N+1) p95       46.0, 46.4    61.3, 62.9    58.7, 59.0
-  join (fixed) p95       4.6, 5.1      4.5, 4.7      4.0, 5.1
-  budget then            25 ms         15 ms         15 ms
-  At page 50 (44263168879): toggle 15.5, 15.9 ms, under the 20 ms then
-  provisional; no budget fits at 50, so the page and the route's
-  response_items_max are 200, GET /products' own cap (decision for review).
+TABLE 1 — BEFORE (2a; runs 44269336518, 44273031843, 44277466463)
+  Healthy GET /products/details in verify, slowest sample (index):
+                     n-plus-one (after       n-plus-one-shared (after
+                     missing-index)          n-plus-one)
+    r2 run 1         38.3 (#49) 28.8 (#28)   41.8 (#41) 30.3 (#22)
+                     30.3 (#48)              28.2 (#37)
+    r2 run 2, r4     4.5 to 7.5              4.2 to 5.5
+  Healthy GET /products in the same verifications: at most 7.0 ms
+  (always #1, the run's first request, or mid-run under 6 ms). GET
+  /products after the missing-index fix: not printed (the case passed).
+  The separate measurement after the fix, 44277466463: 113.4 ms (its
+  reason, sample 50; index not printed).
 
-FOR THE REVIEW — DECISIONS OF THIS RUN
-  1. The page is 200 and the route's list bound 200, not 50 (above).
-  2. The root is the route, and reproduced is asked of the latency reading
-     that found it slow: the per-item reading is evidence and passes either
-     way. The tree is symptom(route) -[symptom_of]-> component
-     -[caused_by]-> route; the subject repeats, which FaultTree renders.
-  3. The not-isolated sentence says "this walk does not run in an
-     environment declared isolated", not "environment X is not declared",
-     because the agent never sets Isolated whatever culprit.yaml declares.
-  4. An unexplored N+1 (no statement seen, inconclusive, refused) is a
-     partial, as every unexplored database hypothesis is.
-  5. The database fault's fix leaves the tree at 0001-0003 (the commit
-     that added 0003) and the database at 0003; every case starts at 0004
-     (atTop). Its expected result is unchanged.
+TABLE 2 — AFTER (2d; run 44288656924, attempts 1 and 2, on 0ed3f4a)
+                                         attempt 1         attempt 2
+  missing-index (first case):
+    GET /products fixed, measured        4.5 (#29)         3.8 (#1)
+    GET /products, verify r1 x2          4.5 (#2) 4.2      4.1 (#1) 4.1
+  n-plus-one (after missing-index):
+    fault, sample 45                     59.2              47.1
+    fixed, measured (just recreated)     117.1 (#1)        88.7 (#1)
+    GET /products, verify r1 x2          6.9 (#1) 3.9      5.9 (#1) 3.6
+    details, verify r2 run 1             39.5 (#48)        29.5 (#49)
+    details, verify r2 run 2             4.9               4.3
+    details, verify r4 x2                5.0, 4.9          4.4, 3.7
+  n-plus-one-shared (after n-plus-one):
+    fault, sample 45                     58.7              45.1
+    fixed, measured (just recreated)     6.7 (#1)          6.0 (#1)
+    GET /products, verify r1 x2          4.7 (#1) 5.2      3.6 (#1) 12.3 (#44)
+    details, verify r2 run 1             28.5 (#41)        28.1 (#40)
+    details, verify r2 run 2             5.3               4.7
 
-ITEMS
-  1 (72df2ef, 1686be8): 0004 product_details, one row per product,
-    additive. GET /products/details: one join, or with
-    N_PLUS_ONE_FAULT=details-per-product one statement per product.
-    culprit.yaml: the route (exists), latency_p95_ms 15 (pending Q38),
-    response_items_max 200 at /products, faults-inventory-isolated.
-  2 (74e01a7): n_plus_one, "One statement per item", in Go, Python, the
-    frontend and investigation_conformance.json; the probe discriminates
-    it; catalogue.json regenerated.
-  3 (eb23f87, fc0a9c2): isolate/per_item.go. Asked at the database pass's
-    condition when the entry's own GET route is slow; isolated: before the
-    database pass, at from the list budget; supported roots at the route;
-    ruled out when statements were seen and none named; unexplored for no
-    statement seen, inconclusive, refused. Not isolated: one sentence, no
-    hypothesis. The agent never sets Isolated.
-  4 (000c4a5 ... 8e5b746): n-plus-one (isolated, load generator stopped
-    before the walk and through verify) and n-plus-one-shared, both in
-    shard 2. p95 checked against the budget read from culprit.yaml; the
-    list probe counts the page; the README's N+1 output is logged.
-  5 (eb23f87, fc0a9c2): verify's description says whether the cited
-    statement still runs per item; a rerun that saw no statement is not
-    measured (decision 7); another statement now run per item is named.
-    Verdict rules untouched.
-  6 (c460697, 8e5b746): PROBES (discriminates; In the walk), LIMITS (N+1
-    in the walk: only isolated, before the database pass; only beneath a
-    slow route; no visible statement is not evidence; the budget depends
-    on the page; a budget must clear the slowest answer, Q38).
-    README: NOT DONE. Its N+1 case waits for Q38, since the case does not
-    verify; the accuracy number is left at main's 7 of 7 (results.json as
-    on main), because CI has never verified the two N+1 cases.
+RULE 3: NOT MET IN EITHER RUN
+  The fault's sample 45 holds (45.1 to 59.2 >= 37.5). The fixed route's
+  slowest does not (<= 16.7 wanted): 117.1, 39.5, 28.5; 88.7, 29.5, 28.1.
+  So the budget stays 15 ms, the page 200; nothing was changed a third time.
 
-CRITERIA
-  Isolated case: root n_plus_one on the route, statement and counts
-    named, recommendation given                    PASS (CI, 3 runs:
-    "statement 8878744738955718652 (SELECT description, weight_grams FROM
-    product_details WHERE product_id = $1) ran 200 times for the 200 items")
-  With the fix: the route keeps its budget,
-    verify lands verified                          FAIL (inconclusive; Q38)
-  Its description: the statement no longer runs
-    per item                                       PASS (CI log)
-  Not declared isolated: no n_plus_one root, the
-    line saying why                                PASS (walk test; CI
-    diagnosis checks held, verify inconclusive as above)
-  The list probe counts the new route's page       PASS (items:200, CI)
-  The join: each outcome by a walk test            PASS
-  Mutation, no-statement -> ruled_out, red         PASS (shown red by me
-    and again by phase-auditor; restored)
-  n_plus_one: Go, Python, frontend agree           PASS
-  0004 round-trips                                 PASS (TestTheDemoDatabase,
-    local Docker; CI's migration-round-trip green)
-  Budget margins from >= 2 CI runs                 PASS for decision 4's
-    p95 margins (3 runs, above); the budget is pending Q38
-  Unchanged elsewhere: existing cases (missing-index and its wrong fix
-    green in every run; expected.json only appends), goldens, the demo's
-    expected findings                              PASS. Listed: the
-    missing-index statement now ends with the not-isolated sentence (its
-    statement_contains still holds); the database fault's trees drop 0004
-  CI green on the merge result                     FAIL (fault-library (2))
-  LLM_PROVIDER=none changes nothing                PASS (e2e (none) green)
-  Report committed before ready                    the PR stays a draft
+ATTRIBUTION — WHAT THE TABLES SHOW, AND WHAT THEY DO NOT
+  - Settling the database and quieting the health check changed nothing:
+    the slow answers are the same size, in the same place.
+  - Two kinds of slow answer, both on the fixed route only:
+    (i) the first request after inventory-service is recreated by the fix
+        (#1 of the separate measurement: 117.1, 88.7 ms in n-plus-one;
+        6.7, 6.0 in n-plus-one-shared);
+    (ii) one answer of 28 to 42 ms, mid-run, in the first rerun of the
+        route in verify (r2 run 1) — in 10 of 10 verifications across
+        five runs — and never in r2's second run, in r4 a few seconds
+        later, or in the separate measurement 50 requests before it.
+  - Neither is the harness's database work: (ii) follows the settle by
+    minutes and a case with no upgrade (n-plus-one-shared) shows it too.
+  - Not attributed: what (ii) is. Its regularity (always the route's
+    first verify rerun, after about 100 requests to the freshly recreated
+    service; never once that rerun is over) fits a one-off pause in the
+    service's own process, such as Python's first full garbage collection
+    after the 200-row responses, but nothing here shows it; it is a guess,
+    and the run does not act on it.
 
-NOT BUILT (as the brief says)
-  No N+1 asked outside an isolated environment; no change to the probe's
-  measurement or verdicts; no statement budget from the bracket; no new
-  template, capability or role; no change to verify's verdict rules; no
-  ORM source, no traces.
+FOR THE REVIEW (unchanged from the first report, still open)
+  The page and list bound are 200; the root is the route, reproduced by
+  the latency reading; the not-isolated sentence's wording; an unexplored
+  N+1 is a partial; the database fault's fix tree is 0001-0003.
+
+CRITERIA (changed since the first report: none)
+  Every criterion as in the first report: the isolated diagnosis, its
+  description, not-isolated, the list count (items:200), the join and
+  its mutation, kinds, 0004, unchanged elsewhere, LLM_PROVIDER=none PASS.
+  With the fix, verify lands verified: FAIL. CI green: FAIL
+  (fault-library (2) only). README N+1 case and accuracy number: left for
+  green (the number stays main's 7 of 7).
 
 AUDITS
-  invariant-auditor (6349f84..fc0a9c2 on disk): NOT CLEAN on V1 (two test
-    subjects formatted, not built), plus R1 (verify's note read a rerun
-    with no statement as fixed) and R2 (another per-item statement
-    unnamed). All three fixed in fc0a9c2. Not re-audited.
-  phase-auditor (6349f84..8e5b746): PHASE NOT COMPLETE. NOT MET: verify
-    verified; CI green; the budget's why (fixed since); the report
-    (this); the README's N+1 case (left for Q38). Its proposal for Q38:
-    word decision 4 as "the fixed route's slowest sample across >= 2 runs
-    is under the budget, and the fault's p95 is at least 2x it".
+  Both ran in the first run (§5 of ae091f9: invariant-auditor NOT CLEAN on
+  V1, fixed in fc0a9c2 with R1 and R2; phase-auditor PHASE NOT COMPLETE on
+  verify and CI). 0ed3f4a is harness and compose only; not re-audited.
 
-LOCAL GATES (Windows, one at a time, in the foreground)
-  just lint, typecheck, lint-imports, check-schema-drift,
-  check-no-llm-imports, check-invariants, check-scan-coverage,
-  check_coupled_files: clean. go test -p 2 ./...: every package ok.
-  api 1,778 passed (after d3ee1d5), shared 686, worker 93, mcp_server 21,
-  extractors/python 19 (migrations), node 22, frontend 19. Docker:
-  TestTheDemoDatabase passes. Not run locally: the fault library
-  (instructed), the migration round trip job, e2e, the frontend build.
+LOCAL GATES (this run's changes: harness and compose)
+  go vet, gofmt, the shard test, just cli-lint clean; docker compose
+  config renders the health check locally (Compose v5.3.1).
 
 CI (PR #48)
-  44263168879 on 8d11f70: test (the demo-budget test) and fault-library
-    (2) (page 50: the route under its budget) red.
-  44269336518 on 1686be8: fault-library (2) red, verify inconclusive.
-  44273031843 on c58cc54: fault-library (2) red, verify inconclusive.
-  44277466463 on 8e5b746: fault-library (2) red, verify inconclusive;
-    every other job green, fault-library (1) included. main had not moved
-    (6b0de5d), so each was the merge result.
+  44281288687 on ae091f9: fault-library (2) red (verify inconclusive);
+    every other job and PR check green; no open code-scanning alert.
+  44288656924 on 0ed3f4a, attempt 1: fault-library (2) red, every other
+    job green; attempt 2 (shard 2 rerun, for the second table): red, the
+    same way. main had not moved (6b0de5d): the merge result.
   This report's own commit runs on the pull request after it.
 ```
 

@@ -3201,7 +3201,9 @@ per item, and these are its limits.
   the slowest of the 50 is under it. A route that answers in 5 ms but
   pauses for 30 ms once in a run reads `inconclusive` against a 15 ms
   budget, and its fix verifies `inconclusive`. The demo's N+1 route does
-  this in CI (Phase 39 part 2; open as Q38).
+  this in CI (Phase 39 part 2; Q38 ruled that a budget is set in the
+  judge's terms, the fixed route's slowest answer at most two-thirds of
+  it; open as Q39).
 - **One request, measured once.** The walk brackets one `GET`; the
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a
