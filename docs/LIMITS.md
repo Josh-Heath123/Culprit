@@ -3196,12 +3196,12 @@ per item, and these are its limits.
   measured against its default page of 200, its declared list bound: at
   50, the N+1 measured 15.5 to 15.9 ms, too close to the join to be told
   apart by a budget with room on both sides.
-- **A service just restarted may verify `inconclusive`.** Its first
-  requests open database connections. One slow answer in fifty is enough
-  to leave a p95 judged from 50 samples unplaced against a tight budget,
-  so a verification run straight after a restart can be `inconclusive`
-  where the fix worked. Send the route some traffic first, or verify
-  again. The fault library warms the demo's route after its fix.
+- **A budget must clear the healthy route's slowest answer, not only its
+  p95.** A p95 judged from 50 samples is placed under a budget only when
+  the slowest of the 50 is under it. A route that answers in 5 ms but
+  pauses for 30 ms once in a run reads `inconclusive` against a 15 ms
+  budget, and its fix verifies `inconclusive`. The demo's N+1 route does
+  this in CI (Phase 39 part 2; open as Q38).
 - **One request, measured once.** The walk brackets one `GET`; the
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a

@@ -226,12 +226,8 @@ func TestTheFaultLibrary(t *testing.T) {
 				// Fixed: at most half the budget. And the list probe counts the
 				// route's real page, not zero (Phase 38's count of 0, closed).
 				// The fix recreated inventory-service, the vantage, and the
-				// bundle with it. Its first requests open the pool's
-				// connections: one in fifty took about 90 ms in CI, which a
-				// p95 judged from 50 samples cannot place (LIMITS). Warmed, as
-				// the harness waits for a recreated service to answer.
+				// bundle with it.
 				stack.rebundle(fault)
-				stack.warm(detailsPath, 20)
 				stack.checkRouteP95(stack.measureLatency(fault, detailsRoute, model.VerdictPass),
 					routeBudgetMs(t, detailsRoute.subject), "<=", 0.5)
 				stack.countList(fault, detailsRoute)
@@ -1286,14 +1282,4 @@ func (s *faultStack) rebundle(fault faultExpectation) {
 	container := s.container(fault.Vantage)
 	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk")
 	s.copyBundle(container)
-}
-
-// warm sends n bare GETs to one of inventory-service's routes from inside
-// it, after it was recreated, before anything is measured there. Harness,
-// not a probe.
-func (s *faultStack) warm(path string, n int) {
-	s.t.Helper()
-	script := "import urllib.request,sys\nfor _ in range(int(sys.argv[2])): " +
-		"urllib.request.urlopen('http://localhost:8002'+sys.argv[1],timeout=15).read()"
-	s.docker(nil, "exec", s.container("inventory-service"), "python", "-c", script, path, fmt.Sprint(n))
 }
