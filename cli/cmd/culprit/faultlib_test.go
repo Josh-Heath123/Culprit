@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/josh-heath123/culprit/cli/internal/extract"
+	"github.com/josh-heath123/culprit/cli/internal/isolate"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -551,9 +552,26 @@ func startFaultStack(t *testing.T) *faultStack {
 	}
 	stack.secrets = []string{secret, stack.good}
 	stack.walkIn = buildWalkBundle(t)
+	stack.checkHealthcheck()
 	stack.compose(stack.withToken(stack.good), "up", "-d", "--build")
 	t.Cleanup(func() { stack.compose(stack.withToken(stack.good), "down", "--volumes", "--timeout", "2") })
+	// The demo's setup took the database to 0004, a million rows inserted
+	// into product_details: settled before any case measures (Q38 (2b)).
+	stack.settleDatabase()
 	return stack
+}
+
+// checkHealthcheck confirms this Docker Compose keeps postgres's health
+// check frequent only while it starts (Q38 (2c)): `docker compose config`
+// renders start_interval, and the version is logged.
+func (s *faultStack) checkHealthcheck() {
+	s.t.Helper()
+	rendered := s.compose(s.withToken(s.good), "config")
+	if !strings.Contains(rendered, "start_interval: 2s") || !strings.Contains(rendered, "interval: 30s") {
+		s.t.Fatalf("docker compose config does not render postgres's start_interval 2s and interval 30s:\n%s", rendered)
+	}
+	s.t.Logf("COMPOSE %s; postgres's health check: start_interval 2s, then interval 30s",
+		strings.TrimSpace(s.docker(nil, "compose", "version")))
 }
 
 func (s *faultStack) withToken(token string, extra ...string) []string {
@@ -880,6 +898,7 @@ func (s *faultStack) measureLatency(fault faultExpectation, route budgetedRoute,
 		s.t.Fatalf("culprit probe printed no single reading (%v):\n%s", err, output)
 	}
 	reading := result.Readings[0]
+	logLatency(s.t, "measured", reading)
 	if reading.Verdict != want {
 		s.t.Errorf("probe.http.latency on %s: %s, want %s: %s", route.subject, reading.Verdict, want, reading.Reason)
 	}
@@ -1175,6 +1194,11 @@ func (s *faultStack) checkVerification(verification model.Verification, inv mode
 	t := s.t
 	t.Helper()
 	t.Logf("verify: %s, %d readings re-run twice: %s", verification.Verdict, len(verification.Reran), verification.Reason)
+	for _, rerun := range verification.Reran {
+		for round, run := range rerun.Runs {
+			logLatency(t, fmt.Sprintf("verify %s run %d", rerun.ReadingID, round+1), run)
+		}
+	}
 	if says != "" && !strings.Contains(verification.Reason, says) {
 		t.Errorf("the reason does not say %q: %s", says, verification.Reason)
 	}
@@ -1282,4 +1306,46 @@ func (s *faultStack) rebundle(fault faultExpectation) {
 	container := s.container(fault.Vantage)
 	s.docker(nil, "exec", "-u", "0", container, "rm", "-rf", "/tmp/walk")
 	s.copyBundle(container)
+}
+
+// logLatency logs a latency reading in the judge's terms (Q38): its
+// slowest sample and where in the run it came, and sample 45 of 50 in
+// order, which the judge places the p95 by. Every one, pass or not, so a
+// slow answer can be attributed from CI's log.
+func logLatency(t *testing.T, where string, reading model.Reading) {
+	t.Helper()
+	if reading.ProbeID != model.LatencyProbeID {
+		return
+	}
+	var samples []float64
+	switch raw := reading.Measured["samples_us"].(type) {
+	case []any:
+		for _, each := range raw {
+			if value, ok := each.(float64); ok {
+				samples = append(samples, value/1000)
+			}
+		}
+	case []int:
+		for _, each := range raw {
+			samples = append(samples, float64(each)/1000)
+		}
+	}
+	if len(samples) == 0 {
+		t.Logf("LATENCY %s %s: %s, no samples", where, isolate.Describe(reading.Target), reading.Verdict)
+		return
+	}
+	slowest, at := samples[0], 1
+	for index, value := range samples {
+		if value > slowest {
+			slowest, at = value, index+1
+		}
+	}
+	ordered := append([]float64(nil), samples...)
+	sort.Float64s(ordered)
+	sample45 := 0.0
+	if len(ordered) >= 45 {
+		sample45 = ordered[44]
+	}
+	t.Logf("LATENCY %s %s: %s, slowest %.1f ms at #%d of %d, sample 45 %.1f ms",
+		where, isolate.Describe(reading.Target), reading.Verdict, slowest, at, len(samples), sample45)
 }

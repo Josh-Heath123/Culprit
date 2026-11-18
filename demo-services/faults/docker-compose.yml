@@ -81,9 +81,14 @@ services:
       # Over TCP, not the socket: the image's first-boot server listens on
       # the socket only and is then restarted.
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
-      interval: 2s
+      # Often only while it starts (Q38 (2c)): every 2 s through first boot,
+      # then every 30 s. A docker exec every 2 s is the stack's own
+      # background work, and has no place inside a measurement.
+      start_period: 120s
+      start_interval: 2s
+      interval: 30s
       timeout: 5s
-      retries: 60
+      retries: 3
 
   inventory-db-setup:
     <<: *demo

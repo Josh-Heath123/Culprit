@@ -183,6 +183,20 @@ func (s *faultStack) atTop() {
 	if got := s.databaseRevision(); got != demoTopRevision {
 		s.t.Fatalf("inventory-service's database is at %s, want the head %s", got, demoTopRevision)
 	}
+	s.settleDatabase()
+}
+
+// settleDatabase finishes, before anything is measured, the work a million
+// rows inserted into product_details leaves the server (Q38 (2b)): 0004's
+// insert would otherwise be vacuumed and checkpointed during the next
+// case's latency runs. As the stack's superuser, as databaseRevision reads;
+// harness, never Culprit.
+func (s *faultStack) settleDatabase() {
+	s.t.Helper()
+	for _, statement := range []string{"VACUUM (ANALYZE) product_details", "CHECKPOINT"} {
+		s.docker(nil, "exec", s.container("postgres"),
+			"psql", "-U", "postgres", "-d", "inventory", "-v", "ON_ERROR_STOP=1", "-qc", statement)
+	}
 }
 
 // listProducts sends a bare GET /products from inside inventory-service and
