@@ -158,7 +158,9 @@ def _non_text_pairs(tokens: dict[str, str]) -> list[tuple[str, str, float]]:
     assert tints, "index.css declares no tint"
     for name in tints:
         backgrounds[name] = _over(colour[name], page)
-    pairs += [("ring", name, contrast(colour["ring"], value)) for name, value in backgrounds.items()]
+    pairs += [
+        ("ring", name, contrast(colour["ring"], value)) for name, value in backgrounds.items()
+    ]
     return pairs
 
 

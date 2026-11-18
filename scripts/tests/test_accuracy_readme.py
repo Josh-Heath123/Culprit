@@ -136,4 +136,6 @@ def test_the_headline_is_built_from_the_figure() -> None:
     figure = accuracy.figure(_results())
     assert figure == {"verified": 1, "decided": 2, "share": "50%", "planted": 3}
     section = accuracy.render(_results())
-    assert f"**{figure['verified']} of {figure['decided']} planted faults verified fixed**" in section
+    assert (
+        f"**{figure['verified']} of {figure['decided']} planted faults verified fixed**" in section
+    )

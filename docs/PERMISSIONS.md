@@ -566,7 +566,7 @@ the investigation page and `GET /outcomes/accuracy`.
 ## The narrator — what it reads, and what it sends
 
 Narration is off unless `LLM_PROVIDER` in `infra/.env.prod` says otherwise
-(Phase 35 part 2; the README's "Narration, if you want it").
+(Phase 35 part 2; `docs/GUIDE.md`'s "Narration, if you want it").
 
 ### The narrator role
 

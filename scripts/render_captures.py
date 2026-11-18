@@ -55,6 +55,7 @@ MAX_LINE = 132
 NOT_CHECKED_SHOWN = 4
 
 FONT_SIZE = 13
+FONT_FAMILY = "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 LINE_HEIGHT = 18
 CHAR_WIDTH = 7.85  # ~0.6em, the advance width of common monospace faces
 PAD = 16
@@ -153,7 +154,7 @@ def render_svg(lines: list[str]) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" role="img">\n'
         f'<rect width="100%" height="100%" rx="8" fill="{BG}"/>\n'
-        f'<g font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" '
+        f'<g font-family="{FONT_FAMILY}" '
         f'font-size="{FONT_SIZE}">\n' + "\n".join(body) + "\n</g>\n</svg>\n"
     )
 

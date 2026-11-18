@@ -2409,7 +2409,7 @@ the CLI's and the agent's job.
 
 Phase 35 part 2. An optional narrator writes prose for a stored
 investigation, shown beside it on its page, labelled as derived. Off by
-default (`LLM_PROVIDER=none`); the README's "Narration, if you want it" says
+default (`LLM_PROVIDER=none`); `docs/GUIDE.md`'s "Narration, if you want it" says
 how to turn it on, and `docs/PERMISSIONS.md` exactly what is sent.
 
 ### The check holds identifiers, not meaning

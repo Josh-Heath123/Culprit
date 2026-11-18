@@ -47,6 +47,10 @@ lint:
     # its root list, and a `just cli-lint` line there would be one more
     # thing for it to misread.
     just cli-lint
+    # Phase 40 part 2 (S4): links, the probe count, the README's length and
+    # its diagrams' colours. The self-check's figures are checked in CI's
+    # self-check job, where they are produced.
+    uv run --no-project python scripts/check_readme.py
 
 # Enforce module-isolation contracts (e.g. anomaly detection vs RAG/LLM)
 lint-imports:
