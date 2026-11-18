@@ -12,6 +12,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { createTask, fetchTask } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 import type { Change, InvestigationTree, StoredVerification, TaskView } from "@/lib/types";
+import { ErrorNote } from "@/components/ui/states";
 
 /** Whether a fix fixed it (Phase 34 part 2): every verification of this
  * investigation, newest first. Each is its own append-only record; the
@@ -70,13 +71,13 @@ function VerificationItem({ stored, newest }: { stored: StoredVerification; newe
   const { verification } = stored;
   return (
     <li
-      className="flex flex-col gap-2.5 rounded-md border border-line bg-surface-2 p-3"
+      className="flex flex-col gap-2.5 rounded-md border border-line bg-surface-sunken p-3"
       data-testid="verification"
       data-verdict={verification.verdict}
     >
       <div className="flex flex-wrap items-center gap-2">
         <VerificationBadge verdict={verification.verdict} />
-        {newest ? <span className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">Newest</span> : null}
+        {newest ? <span className="font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">Newest</span> : null}
         <time dateTime={verification.verified_at} className="text-xs text-fg-muted">
           {formatDateTime(verification.verified_at)}
         </time>
@@ -219,9 +220,9 @@ function AskToVerify({ investigation }: { investigation: InvestigationTree }) {
         </label>
       </fieldset>
       {start.isError ? (
-        <p role="alert" className="text-xs text-fail">
+        <ErrorNote>
           {start.error instanceof Error ? start.error.message : "The verification was not started."}
-        </p>
+        </ErrorNote>
       ) : null}
       <Button type="submit" className="self-start" disabled={!chosen || !source || start.isPending}>
         {start.isPending ? "Starting…" : "Verify"}
@@ -257,9 +258,9 @@ function VerifyProgress({
     <div className="flex flex-col gap-2 border-t border-line pt-4" data-testid="verify-progress">
       <p className="text-sm text-fg">{progressWords(data)}</p>
       {isError ? (
-        <p role="alert" className="text-xs text-fail">
+        <ErrorNote>
           {error instanceof Error ? error.message : "The task could not be read."}
-        </p>
+        </ErrorNote>
       ) : null}
       {data?.completed_at ? (
         <>

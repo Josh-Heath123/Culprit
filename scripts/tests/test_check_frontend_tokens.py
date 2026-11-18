@@ -93,6 +93,95 @@ def test_a_raw_colour_in_a_real_screen_turns_it_red(tmp_path: Path) -> None:
     assert violations[0].path == view
 
 
+def _copy_scope(tmp_path: Path) -> Path:
+    root = tmp_path / "repo"
+    for entry in gate.SCOPE:
+        source = gate.ROOT / entry
+        target = root / entry
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
+    return root
+
+
+@pytest.mark.parametrize(
+    ("file", "find", "replace", "rule"),
+    [
+        # I7: lime on a button is the mistake the restriction exists for.
+        (
+            "frontend/src/components/ui/button.tsx",
+            'default: "bg-brand-fill',
+            'default: "bg-culprit',
+            "culprit token outside the answer",
+        ),
+        (
+            "frontend/src/routes/SettingsUsers.tsx",
+            'className="',
+            'className="text-culprit ',
+            "culprit token outside the answer",
+        ),
+        (
+            "frontend/src/components/investigation/Evidence.tsx",
+            'className="',
+            'className="shadow-culprit ',
+            "culprit token outside the answer",
+        ),
+        # Glass on dense data: the fault tree, a settings form.
+        (
+            "frontend/src/components/investigation/FaultTree.tsx",
+            'className="',
+            'className="bg-glass ',
+            "glass token outside a layered component",
+        ),
+        (
+            "frontend/src/routes/SettingsServices.tsx",
+            'className="',
+            'className="backdrop-blur-glass ',
+            "glass token outside a layered component",
+        ),
+    ],
+)
+def test_a_restricted_token_outside_its_components_turns_it_red(
+    tmp_path: Path, file: str, find: str, replace: str, rule: str
+) -> None:
+    """The I7 mutations: a culprit or glass utility added to a component
+    not declared for it fails, on that file, with that rule."""
+    root = _copy_scope(tmp_path)
+    target = root / file
+    source = target.read_text(encoding="utf-8")
+    assert find in source, f"{file} no longer holds {find!r}: the mutation would change nothing"
+    target.write_text(source.replace(find, replace, 1), encoding="utf-8")
+    violations = gate.check(root)
+    assert [(v.path, v.rule) for v in violations] == [(target, rule)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '<span className="text-culprit" />',
+        '<li className="border-culprit-line bg-culprit-tint shadow-culprit" />',
+        '<span className="bg-culprit text-on-culprit" />',
+    ],
+)
+def test_culprit_utilities_are_recognised(tmp_path: Path, body: str) -> None:
+    violations = gate.check_file(_page(tmp_path, body))
+    assert {v.rule for v in violations} == {"culprit token outside the answer"}
+
+
+def test_the_declared_components_exist_and_use_their_tokens() -> None:
+    """A declaration for a file that moved, or that no longer uses the
+    token, is an allowance nobody needs."""
+    for allowed, pattern in (
+        (gate.CULPRIT_COMPONENTS, gate.CULPRIT_UTILITY),
+        (gate.GLASS_COMPONENTS, gate.GLASS_UTILITY),
+    ):
+        for file, reason in allowed.items():
+            path = gate.ROOT / file
+            assert path.is_file(), f"{file} is declared and does not exist"
+            source = path.read_text(encoding="utf-8")
+            assert pattern.search(source), f"{file} is declared and does not use it"
+            assert len(reason) > 5
+
+
 def test_a_scope_entry_that_does_not_exist_is_an_error(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         gate.check(tmp_path, ("frontend/src/routes/Gone.tsx",))

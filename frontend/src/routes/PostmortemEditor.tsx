@@ -6,7 +6,7 @@ import { Page } from "@/components/layout/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ErrorPanel, LoadingRows } from "@/components/ui/states";
+import { ErrorNote, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useIncident } from "@/hooks/useIncident";
@@ -217,14 +217,14 @@ export function PostmortemEditor() {
         </div>
 
         {saveError ? (
-          <p role="alert" className="rounded-md border border-fail-line bg-fail-tint px-3 py-2 text-xs text-fail">
+          <ErrorNote>
             {saveError instanceof Error ? saveError.message : "Couldn't save this postmortem."}
-          </p>
+          </ErrorNote>
         ) : null}
         {deleteError ? (
-          <p role="alert" className="rounded-md border border-fail-line bg-fail-tint px-3 py-2 text-xs text-fail">
+          <ErrorNote>
             {deleteError instanceof Error ? deleteError.message : "Couldn't delete this postmortem."}
-          </p>
+          </ErrorNote>
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">

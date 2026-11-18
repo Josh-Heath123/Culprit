@@ -65,7 +65,7 @@ function NarrationBody({ narration }: { narration: NarrationView }) {
           <ul className="flex flex-wrap gap-1.5" aria-label="What the prose named">
             {(narration.named ?? []).map((name) => (
               <li key={name}>
-                <code className="rounded-sm bg-surface-2 px-1 font-mono text-code wrap-anywhere text-fg">{name}</code>
+                <code className="rounded-sm bg-surface-sunken px-1 font-mono text-code wrap-anywhere text-fg">{name}</code>
               </li>
             ))}
           </ul>

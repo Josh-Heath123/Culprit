@@ -17,6 +17,17 @@ reach it. So this refuses, in the files in scope:
 - Tailwind v4's CSS-variable shorthand (`bg-(--x)`);
 - any inline `style=` and any colour prop (`color=`, `fill=`, `stroke=`).
 
+**Restraint (DELIVERY_PLAN I7, Phase 40 part 1).** Two token families are
+allowed only in the components declared for them, so their meaning cannot
+drift by being borrowed:
+
+- the culprit's lime (`text-culprit`, `bg-culprit-tint`, `shadow-culprit`,
+  `text-on-culprit`, ...) marks the answer: the walk's root, the diagnosis
+  line, the mark. CULPRIT_COMPONENTS names where.
+- glass (`bg-glass`, `border-glass-line`, `shadow-glass`,
+  `backdrop-blur-glass`) is for layered elements: navigation, the command
+  palette, dialogs, popovers, tooltips. GLASS_COMPONENTS names where.
+
 **Scope.** All of frontend/src since Phase 32.1 part 2 (part 1 covered
 the investigation screens only), every .tsx and .ts file, components/ui
 included. A path in SCOPE that does not exist is an
@@ -49,6 +60,34 @@ EXCLUDED: dict[str, str] = {
     "frontend/src/lib/api-types.generated.ts": "generated from the API's OpenAPI schema, never "
     "hand-edited, and holds no styling",
 }
+
+#: Where the culprit's lime may appear (I2, I7): only where the answer is
+#: marked. Each entry says what it marks.
+CULPRIT_COMPONENTS: dict[str, str] = {
+    "frontend/src/components/investigation/Diagnosis.tsx": "the root and the diagnosis line",
+    "frontend/src/components/investigation/FaultTree.tsx": "the fault tree's root node",
+    "frontend/src/routes/InvestigationList.tsx": "each row's root",
+    "frontend/src/components/layout/Brand.tsx": "the mark",
+}
+
+#: Where glass may appear (I5, I7): layered elements, never data or forms.
+GLASS_COMPONENTS: dict[str, str] = {
+    "frontend/src/components/layout/AppHeader.tsx": "the navigation, over the page as it scrolls",
+    "frontend/src/components/ui/dialog.tsx": "dialogs, and the command palette inside one",
+    "frontend/src/components/ui/tooltip.tsx": "tooltips",
+}
+
+#: A utility that uses a culprit token: text-culprit, bg-culprit-tint,
+#: border-culprit-line, shadow-culprit, text-on-culprit, with any variant.
+CULPRIT_UTILITY = re.compile(r"(?<![\w-])[a-z][a-z0-9-]*-(?:on-)?culprit(?:-tint|-line)?(?![\w-])")
+#: A utility that uses a glass token: bg-glass, border-glass-line,
+#: shadow-glass, backdrop-blur-glass.
+GLASS_UTILITY = re.compile(r"(?<![\w-])[a-z][a-z0-9-]*-glass(?:-line)?(?![\w-])")
+
+RESTRICTED: tuple[tuple[str, re.Pattern[str], dict[str, str]], ...] = (
+    ("culprit token outside the answer", CULPRIT_UTILITY, CULPRIT_COMPONENTS),
+    ("glass token outside a layered component", GLASS_UTILITY, GLASS_COMPONENTS),
+)
 
 _PALETTE = (
     "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|"
@@ -146,6 +185,13 @@ def check_file(path: Path) -> list[Violation]:
             rule = "locale formatting outside lib/datetime.ts"
             found.append(Violation(path, line, rule, match.group(0)))
     for rule, pattern in RULES:
+        for match in pattern.finditer(source):
+            line = source.count("\n", 0, match.start()) + 1
+            found.append(Violation(path, line, rule, match.group(0)))
+    posix = path.as_posix()
+    for rule, pattern, allowed in RESTRICTED:
+        if any(posix.endswith(declared) for declared in allowed):
+            continue
         for match in pattern.finditer(source):
             line = source.count("\n", 0, match.start()) + 1
             found.append(Violation(path, line, rule, match.group(0)))

@@ -17,9 +17,9 @@ export function RequireAdmin() {
   if (me?.role === "admin") return <Outlet />;
 
   return (
-    <Standalone>
+    <Standalone graticule={false}>
       <Card className="flex w-full max-w-md flex-col items-center gap-3 px-6 py-10 text-center" data-testid="admins-only">
-        <h1 className="text-lg font-semibold text-fg">This page is for admins.</h1>
+        <h1 className="text-title font-bold text-fg">This page is for admins.</h1>
         <p className="text-sm text-fg-muted">An admin can change your role under Settings → Users.</p>
         <Button asChild variant="outline" size="sm" className="mt-2">
           <Link to="/investigations">Go to investigations</Link>

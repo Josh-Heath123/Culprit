@@ -8,7 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { ErrorPanel, LoadingRows } from "@/components/ui/states";
+import { ErrorNote, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUsers } from "@/hooks/useUsers";
 import { createUser, patchUser, resetUserPassword } from "@/lib/api";
@@ -68,9 +68,9 @@ function ResetPasswordDialog({
             />
           </div>
           {error ? (
-            <p role="alert" className="text-xs text-fail">
+            <ErrorNote>
               {error}
-            </p>
+            </ErrorNote>
           ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
@@ -163,9 +163,9 @@ function AddUserForm() {
             </p>
           ) : null}
           {mutation.isError ? (
-            <p role="alert" className="text-xs text-fail">
+            <ErrorNote>
               {mutation.error instanceof Error ? mutation.error.message : "Couldn't create user."}
-            </p>
+            </ErrorNote>
           ) : null}
 
           <Button type="submit" className="self-start" disabled={!username || !passwordValid || mutation.isPending}>
@@ -238,9 +238,9 @@ function UserRow({ user, isSelf }: { user: UserOut; isSelf: boolean }) {
       </div>
 
       {failure ? (
-        <p role="alert" className="text-xs text-fail">
+        <ErrorNote>
           {failure.message || "That change was not saved."}
-        </p>
+        </ErrorNote>
       ) : null}
 
       {resettingPassword ? (

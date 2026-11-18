@@ -49,6 +49,12 @@ Preserve existing functionality and project-specific design decisions where they
 
 # 2. Premium UI/UX Redesign
 
+> **Status (2026-11-18, the owner's decision):** this section's palette —
+> midnight, electric blue, cantaloupe — is superseded by
+> `docs/DELIVERY_PLAN.md` §2, I1–I7 (deep plum, electric violet, acid lime),
+> built in Phase 40 part 1. Its other principles stand. The text below is
+> kept as it was written.
+
 The application needs a distinctive, high-end visual identity.
 
 I want the design language to feel like a combination of **Apple's attention to detail, premium financial technology products and modern enterprise software**.

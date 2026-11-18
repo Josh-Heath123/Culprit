@@ -1,5 +1,7 @@
 """Every text-and-background pair in frontend/src/index.css meets WCAG 2.2
-AA (Phase 32.1, field 13).
+AA (Phase 32.1, field 13); every boundary and the focus ring reach 3:1; and
+neither the culprit's lime nor the brand's violet can be taken for a
+status colour (DELIVERY_PLAN I2, I7; Phase 40 part 1).
 
 The tokens are read out of the stylesheet itself, never re-typed here, so
 changing a colour in index.css is what this test checks. The pairs are
@@ -10,9 +12,11 @@ too.
 
 AA for body text is 4.5:1. Nothing in the interface is large enough to
 claim the 3:1 large-text allowance consistently, so 4.5 is held
-everywhere.
+everywhere. Non-text contrast (WCAG 1.4.11) is 3:1: a control's boundary
+and the focus ring.
 """
 
+import colorsys
 import re
 from pathlib import Path
 
@@ -22,9 +26,11 @@ RGBA = tuple[float, float, float, float]
 
 INDEX_CSS = Path(__file__).resolve().parents[2] / "frontend" / "src" / "index.css"
 AA = 4.5
+NON_TEXT = 3.0
 
-#: Text tokens drawn on surfaces.
-TEXT = ("fg", "fg-muted", "fg-subtle", "brand", "highlight")
+#: Text tokens drawn on surfaces. `culprit` is lime as text: the root's
+#: label and the diagnosis line.
+TEXT = ("fg", "fg-muted", "fg-subtle", "brand", "culprit")
 #: Status colours: each is text on every surface and on its own tint.
 STATUS = (
     "pass",
@@ -36,10 +42,28 @@ STATUS = (
     "cosmetic",
     "unknown",
 )
-#: Opaque surfaces, page upward.
-SURFACES = ("surface-0", "surface-1", "surface-2", "surface-3")
+#: Opaque surfaces, from the well up.
+SURFACES = ("surface-sunken", "surface-0", "surface-1", "surface-2", "surface-3")
 #: Translucent surfaces, composited over the page before measuring.
 GLASS = ("glass",)
+#: Boundaries that identify a control: 3:1 on every surface and on glass.
+BOUNDARIES = ("line-strong",)
+#: Where a focusable element sits, and so where its offset ring is drawn:
+#: the well, the page, a panel (every Card), glass. Violet itself is under
+#: 3:1 on surface-2, surface-3 and every tint (2.3 to 2.8), so no control is
+#: placed on them: they are inner items, nodes, badges and hover states.
+#: Phase 40's audit found three controls on them (the sign-in card, the
+#: services connections box, the agent notice's link); all three moved to
+#: a panel or a well, and Card lost its surface-2 variant.
+RING_SURFACES = ("surface-sunken", "surface-0", "surface-1", "glass")
+#: The identity colours no status may be mistaken for (I2): the culprit's
+#: lime, and the brand's violet as fill and as text.
+IDENTITY = ("culprit", "brand-fill", "brand")
+#: A status colour must sit this far round the hue wheel from each, unless
+#: it is a grey (saturation under GREY), which no one reads as lime or
+#: violet. Lime's hue is 72 degrees, violet's 258.
+MIN_HUE_DISTANCE = 30.0
+GREY = 0.25
 
 
 def _root_tokens(css: str) -> dict[str, str]:
@@ -110,14 +134,51 @@ def _pairs(tokens: dict[str, str]) -> list[tuple[str, str, float]]:
         tint = _over(colour[f"{status}-tint"], page)
         pairs.append((status, f"{status}-tint", contrast(colour[status], tint)))
         pairs.append(("fg", f"{status}-tint", contrast(colour["fg"], tint)))
-    for tint in ("brand-tint", "highlight-tint"):
+    for tint in ("brand-tint", "culprit-tint"):
         under = colour[tint]
         pairs.append(("fg", tint, contrast(colour["fg"], under)))
         accent = tint.removesuffix("-tint")
         pairs.append((accent, tint, contrast(colour[accent], under)))
-    for fill in ("brand-fill", "brand-fill-hover"):
+    for fill in ("brand-fill", "brand-fill-hover", "selection"):
         pairs.append(("on-brand-fill", fill, contrast(colour["on-brand-fill"], colour[fill])))
+    # Lime as a filled block, with plum on it (I2).
+    pairs.append(("on-culprit", "culprit", contrast(colour["on-culprit"], colour["culprit"])))
     return pairs
+
+
+def _non_text_pairs(tokens: dict[str, str]) -> list[tuple[str, str, float]]:
+    colour = {name: _rgba(_resolve(tokens, name)) for name in tokens if _is_colour(tokens, name)}
+    page = colour["surface-0"]
+    backgrounds = {name: colour[name] for name in SURFACES}
+    for name in GLASS:
+        backgrounds[name] = _over(colour[name], page)
+    pairs = [
+        (boundary, background, contrast(colour[boundary], value))
+        for boundary in BOUNDARIES
+        for background, value in backgrounds.items()
+    ]
+    pairs += [("ring", name, contrast(colour["ring"], backgrounds[name])) for name in RING_SURFACES]
+    return pairs
+
+
+def hue_and_saturation(colour: RGBA) -> tuple[float, float]:
+    hue, _lightness, saturation = colorsys.rgb_to_hls(*(c / 255 for c in colour[:3]))
+    return hue * 360, saturation
+
+
+def hue_distance(a: float, b: float) -> float:
+    gap = abs(a - b) % 360
+    return min(gap, 360 - gap)
+
+
+def mistakable(status: RGBA, identity: RGBA) -> bool:
+    """A status colour a reader could take for an identity colour: a
+    chromatic one within MIN_HUE_DISTANCE of its hue."""
+    status_hue, status_saturation = hue_and_saturation(status)
+    identity_hue, _ = hue_and_saturation(identity)
+    if status_saturation < GREY:
+        return False
+    return hue_distance(status_hue, identity_hue) < MIN_HUE_DISTANCE
 
 
 def _is_colour(tokens: dict[str, str], name: str) -> bool:
@@ -130,6 +191,7 @@ def _is_colour(tokens: dict[str, str], name: str) -> bool:
 
 TOKENS = _root_tokens(INDEX_CSS.read_text(encoding="utf-8"))
 PAIRS = _pairs(TOKENS)
+NON_TEXT_PAIRS = _non_text_pairs(TOKENS)
 
 
 @pytest.mark.parametrize(
@@ -137,6 +199,55 @@ PAIRS = _pairs(TOKENS)
 )
 def test_every_text_and_background_pair_meets_aa(text: str, background: str, ratio: float) -> None:
     assert ratio >= AA, f"--{text} on --{background} is {ratio:.2f}:1, below WCAG AA {AA}:1"
+
+
+@pytest.mark.parametrize(
+    ("token", "background", "ratio"),
+    NON_TEXT_PAIRS,
+    ids=[f"{t}-on-{b}" for t, b, _ in NON_TEXT_PAIRS],
+)
+def test_every_boundary_and_the_focus_ring_reach_three_to_one(
+    token: str, background: str, ratio: float
+) -> None:
+    assert ratio >= NON_TEXT, f"--{token} on --{background} is {ratio:.2f}:1, below {NON_TEXT}:1"
+
+
+@pytest.mark.parametrize(("status", "identity"), [(s, i) for s in STATUS for i in IDENTITY])
+def test_no_status_colour_can_be_taken_for_lime_or_violet(status: str, identity: str) -> None:
+    """I7: lime means the answer and violet means interaction, so no verdict
+    or severity may sit near either on the hue wheel."""
+    status_colour = _rgba(_resolve(TOKENS, status))
+    identity_colour = _rgba(_resolve(TOKENS, identity))
+    status_hue, saturation = hue_and_saturation(status_colour)
+    identity_hue, _ = hue_and_saturation(identity_colour)
+    assert not mistakable(status_colour, identity_colour), (
+        f"--{status} (hue {status_hue:.0f}, saturation {saturation:.2f}) is within "
+        f"{MIN_HUE_DISTANCE:.0f} degrees of --{identity} (hue {identity_hue:.0f})"
+    )
+
+
+def test_the_anchors_are_the_identity() -> None:
+    """I2's four anchors, exactly: the page, the text, violet for fills and
+    the ring, lime for the culprit."""
+    assert _resolve(TOKENS, "surface-0").lower() == "#221331"
+    assert _resolve(TOKENS, "fg").lower() == "#fdfdfd"
+    assert _resolve(TOKENS, "brand-fill").lower() == "#7540f5"
+    assert _resolve(TOKENS, "ring").lower() == "#7540f5"
+    assert _resolve(TOKENS, "culprit").lower() == "#d6fa4a"
+
+
+def test_the_surfaces_are_plum_at_other_lightnesses() -> None:
+    """I2: surfaces are derived from plum by lightness alone, one darker
+    for wells and steps lighter for panels."""
+    plum_hue, plum_saturation = hue_and_saturation(_rgba(_resolve(TOKENS, "surface-0")))
+    lightness = []
+    for name in SURFACES:
+        colour = _rgba(_resolve(TOKENS, name))
+        hue, saturation = hue_and_saturation(colour)
+        assert hue_distance(hue, plum_hue) < 3, f"--{name} is not plum's hue"
+        assert abs(saturation - plum_saturation) < 0.03, f"--{name} is not plum's saturation"
+        lightness.append(colorsys.rgb_to_hls(*(c / 255 for c in colour[:3]))[1])
+    assert lightness == sorted(lightness), "the surfaces are not in order from the well up"
 
 
 def test_every_status_has_a_tint_and_a_line() -> None:
@@ -150,14 +261,24 @@ def test_no_text_token_escapes_the_check() -> None:
     token that is not a surface, a line, a tint or a fill must be one of
     TEXT or STATUS. (Since Phase 32.1 part 2 there are no shadcn aliases
     left to exempt.)"""
-    checked = set(TEXT) | set(STATUS) | {"on-brand-fill"}
+    checked = set(TEXT) | set(STATUS) | set(BOUNDARIES) | {"on-brand-fill", "on-culprit", "ring"}
     structural = re.compile(
-        r"^(surface-\d|glass(-line)?|scrim|line(-strong)?|.*-tint|.*-line|brand-fill(-hover)?|radius-\d|shadow-\d)$"
+        r"^(surface-(\d|sunken)|glass(-line)?|scrim|line|.*-tint|.*-line|brand-fill(-hover)?|selection"
+        r"|graticule(-mark)?|glow-violet|radius-\d|shadow-\d|shadow-culprit-glow)$"
     )
     unchecked = sorted(
         name for name in TOKENS if name not in checked and not structural.match(name)
     )
     assert unchecked == [], f"tokens with no contrast check: {unchecked}"
+
+
+def test_the_hue_check_fails_a_status_near_lime_or_violet() -> None:
+    """Mutation: the old degrades yellow (#f2d75b, hue 50) is 22 degrees from
+    lime, and the old inconclusive lavender (#b9a6ff, hue 253) 5 from violet."""
+    lime, violet = _rgba("#d6fa4a"), _rgba("#7540f5")
+    assert mistakable(_rgba("#f2d75b"), lime)
+    assert mistakable(_rgba("#b9a6ff"), violet)
+    assert not mistakable(_rgba("#b6a9c6"), violet), "a plum-grey is not violet"
 
 
 def test_the_check_fails_a_pair_below_aa() -> None:

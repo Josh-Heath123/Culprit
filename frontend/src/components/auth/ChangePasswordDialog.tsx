@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError, changePassword } from "@/lib/api";
+import { ErrorNote } from "@/components/ui/states";
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -74,9 +75,9 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           {error ? (
-            <p role="alert" className="text-xs text-fail">
+            <ErrorNote>
               {error}
-            </p>
+            </ErrorNote>
           ) : null}
 
           <div className="flex justify-end gap-2">

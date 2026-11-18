@@ -381,34 +381,35 @@ budgets:
       storefront relies on.
   - subject: "http:inventory-service/GET /products/details"
     predicate: latency_p95_ms
-    value: 20
+    value: 25
     why: >-
-      Phase 39 part 2, ruled by Q40. Measured on the fault library's stack
-      against the default page of 200, in the latency judge's terms (50
-      samples, 90%: it fails when sample 45 is over the budget and passes
-      when the slowest is within it), over the runs since Q39 warmed the
-      demo and froze its startup heap (44307212906, both attempts, and
-      44313908008): with N_PLUS_ONE_FAULT, one statement per product,
-      sample 45 from 27.7 to 58.0 ms; with the join, the slowest sample
-      from 3.9 to 13.1 ms. The N+1's cost is the runner's round trip: at
-      this page its sample 45 has ranged 22.6 to 62.9 ms. No budget meets
-      both of amended decision 4's margins (sample 45 at least 1.5 times
-      it, slowest at most two-thirds) on the fastest runner then seen, a
-      ratio of 2.11 where they need 2.25, so Q40 set 20 ms: the fault 7.7
-      ms over it on that runner, the fix 6.9 ms under it. The first run at
-      20 ms (44321940704) was faster still: the fault's sample 45 22.6 and
-      23.5 ms, 2.6 ms over; the fix's slowest 6.5 ms. A runner with round
-      trips about a tenth shorter could bring the fault under it: a flake
-      to attribute, not a wrong answer.
+      Phase 40 part 1 (C1, carried from Phase 39), the products list's own
+      budget. Measured against the default page of 500, in the latency
+      judge's terms (50 samples, 90%: it fails when sample 45 is over the
+      budget and passes when the slowest is within it). The N+1's cost is
+      the runner's round trip: at a page of 200 its sample 45 ranged 22.6
+      to 62.9 ms across CI's runners, and the first run at Q40's 20 ms
+      budget (44321940704) left it 2.6 ms over. The page is the remedy, not
+      the margins: the join's slowest hardly moves with the page (5.9 to
+      9.0 ms at 200, 400 and 600), while the N+1's sample 45 grows with it
+      (35.8 to 53.3 ms at 200, 71.5 to 81.8 at 400, 93.9 to 128.7 at 600,
+      on PostgreSQL 16 with the million-row seed). Projected from the
+      fastest runner seen, at 500 the fault's sample 45 is about 50 ms and
+      the fix's slowest about 14 ms at worst: amended decision 4's margins
+      (sample 45 at least 1.5 times the budget, 37.5 ms; the slowest at
+      most two-thirds, 16.7 ms) with room. Checked in CI from the fault
+      library's LATENCY lines over two runs.
   - subject: "http:inventory-service/GET /products/details"
     predicate: response_items_max
-    value: 200
+    value: 500
     at: /products
     why: >-
-      Phase 39 part 2. GET /products/details answers the first 200 products
-      with their details, in an envelope ({"products"}), and caps ?limit= at
-      200, as GET /products does. A probe sends no query, so what is counted
-      is that default page, which holds 200 items. The bound guards the page
-      the route's latency budget is measured against: a larger page costs
-      more. It is 200, not 50, because at 50 an N+1 cost too little to tell
-      from the join by a budget with Q37's margins.
+      Phase 39 part 2; 500 since Phase 40 part 1 (C1). GET
+      /products/details answers the first 500 products with their details,
+      in an envelope ({"products"}), and caps ?limit= at 500. A probe sends
+      no query, so what is counted is that default page, which holds 500
+      items. The bound guards the page the route's latency budget is
+      measured against: a larger page costs more, and a smaller one lets an
+      N+1 cost too little to tell from the join by a budget with room on
+      both sides (at 50 it measured about 16 ms; at 200, within 2.6 ms of a
+      20 ms budget on the fastest runner).

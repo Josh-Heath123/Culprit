@@ -6,6 +6,9 @@ conventions: read §1 here plus the phase being worked on. **Every standing
 invariant in `DIAGNOSTIC_PLAN.md` §3, and D1–D8 with their dated amendments,
 hold in every phase below.** Phase 36 starts only after Phase 35 is complete.
 
+**Complete, 2026-11-18.** Phases 36–39 are signed off. The plan of record
+after this one is `docs/DELIVERY_PLAN.md` (Phases 40–43).
+
 Each phase gets a "How Phase N is run" block and its parts at the review before
 it, as Phases 32 to 35 did.
 
@@ -2834,6 +2837,122 @@ request was marked ready.
 - no change to `verify`'s verdict rules, and no loosening of any existing
   precondition;
 - no reading of ORM source (D6), and no trace ingestion.
+
+**Architecture review of part 2, 2026-11-18 — merged as `33df658` (PR #48).
+Part 2 is signed off. Phase 39 is complete, and with it this plan.**
+
+**CI.** Read by id from GitHub's API:
+- Q38, Q39 and Q40 were each raised by a red `fault-library (2)`, and each was
+  ruled during the run (below).
+- Run 44321940704 on `a832381`, the first at the ruled budget: success on
+  every job, both fault-library shards included.
+- The report's commit `a39f3b4`, run 44326796071: success on every job on
+  attempt 1, finishing after the merge (`publish` and `deploy` skipped, as on
+  every pull request). PR #48 was merged at 14:41 UTC while that run was still
+  in progress; merging before a run ends is what Phase 41's required `gate`
+  prevents. `main` had not moved from `6b0de5d`, so the tree merged is
+  `a39f3b4`'s.
+- `main`'s push run 44327031951 on `33df658`: success on every job (`deploy`
+  skipped: deploy is paused).
+
+**The rulings made during the run.** Each was given as a message to Claude
+Code while the pull request was a draft, and carried out on the branch.
+- **Q38.** Decision 4 was the architecture session's error. It put the margins
+  on p95s, but `JudgeLatency` at 50 samples and 90% passes only when sample
+  50, the slowest, is within the budget, and fails only when sample 45 is over
+  it (92 and 99 at 100 samples, 186 and 195 at 200). Amended: across at least
+  two CI runs, the fixed route's slowest sample at most two-thirds of the
+  budget, and the fault's sample 45 at least 1.5 times it; the judge and the
+  50-request cap unchanged. The database was settled after every upgrade to
+  `0004`, and postgres's health check quietened. Rule 3: 25 ms if those
+  margins held, otherwise stop. They did not: the fixed route's slowest was
+  88.7 to 117.1 ms on its first request after the recreate, and 28.1 to 39.5
+  ms in `verify`'s first rerun. The run raised Q39.
+- **Q39.** Attributed in the architecture session's workspace (Python 3.12.13,
+  the image's version; PostgreSQL 16 with the million-row seed) to three
+  causes in the demo's own process: a cold first request (78 to 129 ms);
+  Python's first full collection after start (36 ms at request 120, about 7 s
+  in, and absent on 3.13); and the first console metrics export (23 to 26 ms,
+  10 to 12 s in, because the faults stack has no OTLP endpoint). Ruled: change
+  the demo, not the judge. The services warm their read paths before they
+  answer, run `gc.collect()` then `gc.freeze()` at the end of startup
+  (`shared/startup.py`), and export metrics hourly in the faults stack. Named
+  future work, a plan decision: an unmeasured warm-up request in
+  `probe.http.latency`. After it the fixed route's slowest was at most 13.1 ms
+  and both cases verified, but rule 3 failed on the fault's side on one runner
+  (sample 45 at 27.7 and 30.2 ms). The run raised Q40.
+- **Q40.** One route, one budget, two cases. On the fastest runner then seen,
+  the fault's sample 45 was 27.7 ms and the fix's slowest 13.1 ms: a ratio of
+  2.11, where amended decision 4 needs 2.25. Ruled: the budget is 20 ms at a
+  page of 200. The harness's p95-factor checks are removed on the details
+  route only: they tested the demo's headroom on whichever runner the job got,
+  not Culprit's answer. The check is the judge's verdict at the budget, with
+  the walk's root, `verify`'s verdict and `results.json`'s reproduction, and
+  every reading stays logged. The two N+1 results were committed as CI wrote
+  them.
+
+**Q40's headroom was the architecture session's second error in this part.**
+It reasoned from 27.7 ms as the fastest runner. The first run at 20 ms landed
+on a faster one: the fault's sample 45 at 22.6 and 23.5 ms, 2.6 ms over the
+budget. The run put this first in its report and changed nothing, as ruled,
+and the budget's `why` and LIMITS give the true range, 22.6 to 62.9 ms.
+Amended decision 4 was right to use the judge's terms, and wrong to ask fixed
+margins of a fault whose cost is the runner's round trip at a fixed page. The
+remedy is the page, not the margins: carried into Phase 40 part 1 as C1
+(below).
+
+**Verified on disk.** On `33df658`, in the architecture session's workspace
+(Go 1.27):
+- `go test` over `isolate`, `verify` and `model`: green.
+- **Mutations, each shown red and then restored:**
+  - the no-statement case read as ruled out
+    (`TestARequestWithNoVisibleStatementIsNotEvidence` fails);
+  - a named per-item statement read as ruled out
+    (`TestAStatementRunPerItemRootsAtTheRoute` fails).
+- `verify`'s verdict rules are untouched: its diff adds the per-item note to
+  the description, and nothing else.
+- `results.json` gains exactly the two N+1 entries, and every existing case
+  keeps its root and verdict. The accuracy block (9 of 9, of 11 planted) is
+  what `accuracy_readme.py` renders from it.
+- The README's N+1 walk is run 44321940704's log, readings and all.
+- `n_plus_one` is in Go, Python, the frontend's labels, the catalogue and
+  `investigation_conformance.json`.
+
+**The run's seven decisions: accepted, the first amended.**
+1. The page and the list bound of 200: amended by C1 to 500.
+2. The root is the route, and reproduction is asked of the latency reading
+   that found it slow. The per-item reading is evidence, and passes either
+   way.
+3. The not-isolated sentence says the walk does not run in an environment
+   declared isolated: the agent never sets isolation, whatever `culprit.yaml`
+   declares.
+4. An unexplored N+1 is a partial, as every unexplored database hypothesis is.
+5. The database fault's fix leaves the tree at `0001` to `0003`; every case
+   starts at `0004`.
+6. The warm-up skips and logs a read that fails.
+7. The one unpushed commit was re-authored with the GitHub noreply address,
+   set for this repository alone, after GitHub refused the push. Nothing
+   pushed was rewritten.
+
+**Accepted as left.** The invariant auditor was not re-run on the commits
+after `fc0a9c2` (the harness, the demo's startup, compose and documents); this
+review's checks cover them. Q40 removed a precondition this part had added, by
+ruling. No precondition from an earlier phase was loosened.
+
+**The plan's §5 is met.** The latency fault verifies with a budget (Phase 36).
+The library gained a missing index and an N+1, each diagnosed at its root and
+verified after its known fix, in CI, on every push. `culprit check` stops an
+oversized bundle, and a list over its bound fails its probe (Phase 38).
+`LLM_PROVIDER=none` changes nothing. The README's accuracy number includes the
+new faults, still labelled as planted.
+
+**Carried into Phase 40 part 1, as its first item: C1, the N+1 route's page.**
+`docs/DELIVERY_PLAN.md`, Phase 40, holds it: the details route's page and list
+bound go to 500 and its budget to 25 ms, with the workspace's measurements and
+the CI check that decides it.
+
+**Next:** `docs/DELIVERY_PLAN.md` (Phases 40–43) is the plan of record from
+2026-11-18.
 
 ---
 

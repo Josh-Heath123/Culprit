@@ -43,7 +43,7 @@ export function Dashboard() {
           <Button variant="outline" size="sm" onClick={() => setPaletteOpen(true)}>
             <SearchIcon aria-hidden />
             Jump to an incident
-            <kbd className="ml-1 rounded-sm border border-line bg-surface-2 px-1 font-mono text-2xs text-fg-subtle">
+            <kbd className="ml-1 rounded-sm border border-line bg-surface-sunken px-1 font-mono text-2xs text-fg-subtle">
               Ctrl K
             </kbd>
           </Button>
@@ -87,7 +87,7 @@ export function Dashboard() {
             <div className="flex flex-1 items-center justify-center px-6 py-10 text-center">
               <p className="text-sm text-fg-muted">
                 Choose an incident band on the timeline, or jump to one with{" "}
-                <kbd className="font-mono text-xs text-fg">Ctrl K</kbd>.
+                <kbd className="rounded-sm border border-line bg-surface-sunken px-1 font-mono text-2xs text-fg">Ctrl K</kbd>.
               </p>
             </div>
           )}

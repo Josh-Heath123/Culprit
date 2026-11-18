@@ -289,7 +289,7 @@
     {
       "name": "n-plus-one",
       "symptom": "GET http://inventory-service:8002/products/details",
-      "inject": "inventory-service recreated with N_PLUS_ONE_FAULT=details-per-product: GET /products/details reads its page of 200 products, then each product's details with a statement of its own",
+      "inject": "inventory-service recreated with N_PLUS_ONE_FAULT=details-per-product: GET /products/details reads its page of 500 products, then each product's details with a statement of its own",
       "vantage": "inventory-service",
       "environment": "faults-inventory-isolated",
       "root_subject": "http:inventory-service/GET /products/details",
@@ -309,7 +309,7 @@
         "http:inventory-service/GET /products/details -[symptom_of]-> component:inventory-service",
         "component:inventory-service -[caused_by]-> http:inventory-service/GET /products/details"
       ],
-      "statement_contains": "ran 200 times for the 200 items",
+      "statement_contains": "ran 500 times for the 500 items",
       "remediation_contains": "in one statement",
       "note": "Phase 39 part 2. Walked in an environment declared isolated, with the load generator stopped before the walk and through verify. The route is over its p95 budget and calls nothing on the request path, so, before the database pass, the walk brackets one GET of it with pg_stat_statements: the details statement ran once per item. The root is the route; the database pass is not run. Not discriminated: nothing on that path competes for a reading to rule out, as in missing-index. Reproduced by the route's latency reading run again: the per-item reading is evidence, and passes either way.",
       "attestation": "reproduced",

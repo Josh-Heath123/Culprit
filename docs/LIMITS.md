@@ -3193,9 +3193,10 @@ per item, and these are its limits.
   set against one page size says nothing about another: a smaller default
   page can bring an N+1 route under its budget, and a larger one push a
   sound route over it. The demo's `GET /products/details` budget is
-  measured against its default page of 200, its declared list bound: at
+  measured against its default page of 500, its declared list bound: at
   50, the N+1 measured 15.5 to 15.9 ms, too close to the join to be told
-  apart by a budget with room on both sides.
+  apart by a budget with room on both sides, and at 200 it came within
+  2.6 ms of a 20 ms budget on CI's fastest runner.
 - **A budget must clear the healthy route's slowest answer, not only its
   p95.** A p95 judged from 50 samples is placed under a budget only when
   the slowest of the 50 is under it. A route that answers in 5 ms but
@@ -3204,16 +3205,19 @@ per item, and these are its limits.
   this in CI (Phase 39 part 2; Q38 ruled that a budget is set in the
   judge's terms, the fixed route's slowest answer at most two-thirds of
   it; Q39 found and removed the demo's own slow answers).
-- **An N+1's cost is the runner's round trip.** Loading 200 items one by
-  one costs 200 round trips to the database, so the demo's N+1 route
-  measures what the machine's round trip is: its sample 45 has ranged
-  22.6 to 62.9 ms at a page of 200 across CI's runners. Q40 set its
-  budget to 20 ms, when the fastest runner seen gave 27.7 ms, about 7 ms
-  of headroom. The first run under that budget (44321940704) gave 22.6
-  and 23.5 ms: 2.6 ms of headroom, so a runner with round trips about a
-  tenth shorter could bring the fault under it. The library would then
-  read a pass where an N+1 is planted: a flake to attribute, not a wrong
-  answer, since the route would in fact be within its budget there.
+- **An N+1's cost is the runner's round trip.** Loading items one by one
+  costs one round trip to the database per item, so the demo's N+1 route
+  measures what the machine's round trip is: at a page of 200 its sample
+  45 ranged 22.6 to 62.9 ms across CI's runners, and the first run under
+  Q40's 20 ms budget (44321940704) left it only 2.6 ms over. Phase 40
+  part 1 (C1) raised the page to 500 and the budget to 25 ms: the join's
+  cost hardly moves with the page (its slowest 5.9 to 9.0 ms at 200, 400
+  and 600), the N+1's grows with it, so the fault's sample 45 is projected
+  at about 50 ms on the fastest runner seen, twice the budget. A runner
+  with round trips about half as long could still bring the fault under
+  it. The library would then read a pass where an N+1 is planted: a flake
+  to attribute, not a wrong answer, since the route would in fact be
+  within its budget there.
 - **A just-restarted service is not yet warm.** Its first request, and its
   runtime's first full garbage collection, can each exceed a tight budget
   (in the demo, 78 to 129 ms and a 36 ms pause about 7 s in, on Python
@@ -3224,3 +3228,23 @@ per item, and these are its limits.
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a
   probe sends no query).
+
+## The dashboard's contrast is measured on its surfaces, not on everything behind glass
+
+Phase 40 part 1 gave the dashboard its new identity (deep plum, electric
+violet, acid lime; `docs/DELIVERY_PLAN.md` §2). `scripts/tests/test_design_tokens.py`
+measures every text token at 4.5:1 on every surface and tint, every
+control's boundary at 3:1, and the violet focus ring at 3:1. Two things it
+does not cover:
+
+- **The focus ring is 3:1 only where controls sit.** Violet itself
+  (`#7540F5`) is 3.0 to 3.4:1 on the well, the page, a panel and glass, but
+  2.3 to 2.8:1 on the lighter inner surfaces and on every status tint. So
+  no control is placed on those; the test's `RING_SURFACES` says so, and
+  the rule is kept by review, not by a gate that reads the components. A
+  button or link put inside a tinted box would show a ring under 3:1.
+- **Glass is measured over the page, not over what scrolls under it.** The
+  header is translucent; text in it is measured composited over plum. Bright
+  content scrolling beneath it (there is little: the dashboard is dark
+  throughout) would lower the contrast of the header's muted text, softened
+  by the blur.

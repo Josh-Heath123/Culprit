@@ -84,7 +84,7 @@ export function AppHeader() {
           aria-describedby={undefined}
           className="top-16 max-w-none p-2"
         >
-          <DialogTitle className="px-3 pt-2 pb-1 text-2xs tracking-widest text-fg-subtle uppercase">
+          <DialogTitle className="px-3 pt-2 pb-1 font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">
             Menu
           </DialogTitle>
           <nav aria-label="Main" className="flex flex-col">
@@ -133,12 +133,12 @@ function NavItem({ item, block = false, ...props }: { item: Item; block?: boolea
         cn(
           "rounded-md px-2.5 py-1.5 text-sm transition-colors duration-150",
           block && "px-3 py-2.5",
-          isActive ? "bg-surface-3 text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+          isActive ? "bg-brand-tint text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
         )
       }
     >
       {item.label}
-      {item.history ? <span className="ml-1 text-2xs text-fg-subtle">history</span> : null}
+      {item.history ? <span className="ml-1.5 font-mono text-2xs tracking-label text-fg-subtle uppercase">history</span> : null}
     </NavLink>
   );
 }

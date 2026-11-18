@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { EmptyPanel, ErrorPanel, LoadingRows } from "@/components/ui/states";
+import { EmptyPanel, ErrorNote, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import { useAgents } from "@/hooks/useAgents";
 import { createPairingCode, revokeAgent, setAllowance } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
@@ -83,9 +83,9 @@ function PairingCard() {
           A pairing code works once and expires after 15 minutes. It is shown once: only its hash is kept.
         </p>
         {mutation.isError ? (
-          <p role="alert" className="text-xs text-fail">
+          <ErrorNote>
             {mutation.error instanceof Error ? mutation.error.message : "Couldn't create a pairing code."}
-          </p>
+          </ErrorNote>
         ) : null}
         <Button className="self-start" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
           {mutation.isPending ? "Creating…" : "Create a pairing code"}
@@ -97,7 +97,7 @@ function PairingCard() {
           <DialogContent aria-describedby="pairing-code-help" className="flex flex-col gap-4 p-5 sm:p-6">
             <DialogTitle className="text-base">Pairing code</DialogTitle>
             <p
-              className="rounded-md border border-line bg-surface-2 px-3 py-2 text-center font-mono text-lg tracking-wider break-all text-fg select-all"
+              className="rounded-md border border-line bg-surface-sunken px-3 py-2 text-center font-mono text-lg tracking-wider break-all text-fg select-all"
               data-testid="pairing-code"
             >
               {created.code}
@@ -108,7 +108,7 @@ function PairingCard() {
                 it now — it will not be shown again.
               </p>
               <p>Where the agent runs, after <code className="font-mono text-xs text-fg">culprit agent init</code>:</p>
-              <pre className="overflow-x-auto rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-xs text-fg">
+              <pre className="overflow-x-auto rounded-md border border-line bg-surface-sunken px-3 py-2 font-mono text-xs text-fg">
                 culprit agent pair --config agent.yaml --code -
               </pre>
               <p className="text-xs text-fg-subtle">
@@ -320,7 +320,7 @@ function AllowanceDialog({
               The change
             </h4>
             {changed ? (
-              <ul className="flex flex-col gap-1 rounded-md border border-line bg-surface-2 p-3 font-mono text-xs">
+              <ul className="flex flex-col gap-1 rounded-md border border-line bg-surface-sunken p-3 font-mono text-xs">
                 {diff.added.map((grant) => (
                   <li key={`+${grant}`} className="text-pass" data-change="added">
                     + {grant} <span className="font-sans text-fg-muted">— {grantWords(grant)}</span>
@@ -338,9 +338,9 @@ function AllowanceDialog({
           </section>
 
           {mutation.isError ? (
-            <p role="alert" className="text-xs text-fail">
+            <ErrorNote>
               {mutation.error instanceof Error ? mutation.error.message : "That change was not saved."}
-            </p>
+            </ErrorNote>
           ) : null}
 
           <div className="flex justify-end gap-2">
@@ -378,9 +378,9 @@ function RevokeDialog({ agentId, onClose }: { agentId: string; onClose: () => vo
           a new agent with a new key.
         </p>
         {mutation.isError ? (
-          <p role="alert" className="text-xs text-fail">
+          <ErrorNote>
             {mutation.error instanceof Error ? mutation.error.message : "The agent was not revoked."}
-          </p>
+          </ErrorNote>
         ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>
