@@ -2944,7 +2944,9 @@ Phase 37 part 3. `culprit diagnose` asks about a database's statements, and
 these are its limits.
 
 - **Third, and from the entry only.** The database pass runs only when the
-  error pass and the latency pass found no root strictly below the entry.
+  error pass and the latency pass found no root strictly below the entry,
+  and, in an environment declared isolated, the N+1 step named no statement
+  run per item ("N+1 in the walk").
   It asks about the databases the entry connects to, by an edge of any kind.
   A database only a deeper component reaches is not asked, even when the
   fault is there: walk from that component instead. That holds for a
@@ -3151,8 +3153,8 @@ is exact only where the counts are this request's alone.
   are counted, and the reason says so.
 - **Evidence, not a finding.** The reading passes whether or not a
   statement is named, and fails nothing on its own: a statement run per
-  item on a route nobody has declared slow is not a fault (Phase 39). It
-  is not in the walk yet.
+  item on a route nobody has declared slow is not a fault (Phase 39). The
+  walk asks it only beneath a route over its latency budget (below).
 - **The same refusals as the list probe.** One `GET`, no query, no
   credential, no redirect, 1 MiB; a response it cannot count is
   `inconclusive`, and nothing from the bracket is kept for it. The text of
@@ -3161,3 +3163,38 @@ is exact only where the counts are this request's alone.
 - **Timing.** The quiet window is 2 seconds, fixed; the probe's whole run
   is bounded by its 30-second timeout. A deadline with less than the quiet
   window and 5 seconds left sends nothing.
+
+### N+1 in the walk
+
+Phase 39 part 2. `culprit diagnose` asks whether a route runs one statement
+per item, and these are its limits.
+
+- **Only in an environment declared isolated, and there before the
+  database pass.** Elsewhere it is not asked: the diagnosis says so in one
+  sentence, and has no N+1 hypothesis. An N+1 in production, or in any
+  shared environment, is not found by the walk; reproduce it where nothing
+  else talks to the database, and declare that environment `isolated:
+  true`. The production agent never asks it, whatever `culprit.yaml`
+  declares. Where it is asked and names a statement, the database pass is
+  not run, so a slow statement on the same route is not looked for.
+- **Only beneath a slow route.** It is asked only when the entry's own
+  `GET` route is over its declared latency budget and nothing the entry
+  calls is slow. A route without a latency budget, or one within it, is
+  not asked, whatever it runs per item (Culprit does not choose a budget).
+  The route the latency pass found slow first is the one asked; another
+  slow route on the same component is not.
+- **A request with no visible statement is not evidence.** A bracket that
+  saw no statement on the route's database leaves N+1 unexplored and the
+  diagnosis partial, never ruled out: the route may read no database, read
+  another one, or reach it under Culprit's own role, which the bracket
+  leaves out.
+- **The budget depends on the page size.** What loading items one by one
+  costs grows with how many items one request returns. A latency budget
+  set against one page size says nothing about another: a smaller default
+  page can bring an N+1 route under its budget, and a larger one push a
+  sound route over it. The demo's `GET /products/details` budget is
+  measured against its default page of 50, its declared list bound.
+- **One request, measured once.** The walk brackets one `GET`; the
+  diagnosis cites that request's counts. A route whose per-item loads
+  depend on its query or its data is measured on the default page only (a
+  probe sends no query).
