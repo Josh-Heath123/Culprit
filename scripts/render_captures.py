@@ -58,13 +58,32 @@ FONT_SIZE = 13
 LINE_HEIGHT = 18
 CHAR_WIDTH = 7.85  # ~0.6em, the advance width of common monospace faces
 PAD = 16
-BG = "#0d1117"
-FG = "#c9d1d9"
-DIM = "#8b949e"
-PROMPT = "#58a6ff"
-FAIL = "#f85149"
-WARN = "#d29922"
-PASS = "#3fb950"
+INDEX_CSS = ROOT / "frontend" / "src" / "index.css"
+
+
+def token(name: str) -> str:
+    """A colour token from the dashboard's stylesheet (docs/DELIVERY_PLAN.md
+    I2), so the captures wear the same identity and type none of their own."""
+    block = re.search(r":root\s*\{(.*?)\n\}", INDEX_CSS.read_text(encoding="utf-8"), re.S)
+    if block is None:
+        sys.exit("frontend/src/index.css has no :root block")
+    body = re.sub(r"/\*.*?\*/", "", block.group(1), flags=re.S)
+    tokens = dict(re.findall(r"--([a-z0-9-]+)\s*:\s*([^;]+);", body))
+    value = tokens[name].strip()
+    reference = re.fullmatch(r"var\(--([a-z0-9-]+)\)", value)
+    return token(reference.group(1)) if reference else value
+
+
+# The one constant block (S1): each colour is I2's token for that role.
+BG = token("surface-sunken")  # a well, as code and readings are on the dashboard
+FG = token("fg")
+DIM = token("fg-subtle")
+PROMPT = token("brand")
+FAIL = token("fail")
+DEGRADES = token("degrades")
+INCONCLUSIVE = token("inconclusive")
+REFUSED = token("refused")
+PASS = token("pass")
 
 
 def elide(lines: list[str], header_prefix: str, keep: int) -> list[str]:
@@ -98,8 +117,12 @@ def colour_for(line: str) -> str:
         return PROMPT
     if "[breaks_request_path]" in line or stripped.startswith("FAILING"):
         return FAIL
-    if "[degrades]" in line or stripped.startswith(("INCONCLUSIVE", "REFUSED")):
-        return WARN
+    if "[degrades]" in line:
+        return DEGRADES
+    if stripped.startswith("INCONCLUSIVE"):
+        return INCONCLUSIVE
+    if stripped.startswith("REFUSED"):
+        return REFUSED
     if stripped.startswith("PASSING") or stripped.startswith("No divergences"):
         return PASS
     if stripped.startswith(("Not checked", "Refused")):
@@ -130,7 +153,7 @@ def render_svg(lines: list[str]) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" role="img">\n'
         f'<rect width="100%" height="100%" rx="8" fill="{BG}"/>\n'
-        f'<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" '
+        f'<g font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" '
         f'font-size="{FONT_SIZE}">\n' + "\n".join(body) + "\n</g>\n</svg>\n"
     )
 
