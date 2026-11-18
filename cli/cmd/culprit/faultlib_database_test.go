@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/josh-heath123/culprit/cli/internal/isolate"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -31,17 +32,25 @@ import (
 type demoTree int
 
 const (
-	treeHead         demoTree = iota // 0001-0003, the repository as it is
+	treeHead         demoTree = iota // 0001-0004, the repository as it is
 	treeFault                        // 0001-0002: the commit before 0003
 	treeCategoryOnly                 // 0001-0002 and the category-only migration
+	treeIndexFixed                   // 0001-0003: the commit that added 0003
 )
 
 const (
+	// The database fault's known fix: the revision that adds the index.
 	demoHeadRevision     = "0003_products_category_sku"
 	demoFaultRevision    = "0002_seed_products"
 	categoryOnlyRevision = "0003_products_category"
-	// The head's own migration file, absent from the tree at the fault.
+	// The index's own migration file, absent from the tree at the fault.
 	demoHeadMigration = "0003_index_products_category_sku.py"
+	// The demo's head since Phase 39 part 2: 0004 adds product_details, the
+	// relation the N+1 fault's route loads. Later than the commit that
+	// added 0003, so absent from the tree at the database fault and at its
+	// fix; every case starts with the database here (healthy).
+	demoTopRevision  = "0004_product_details"
+	demoTopMigration = "0004_create_product_details.py"
 	// The budgets the demo's culprit.yaml declares, which Q35's criteria
 	// are stated against (Q37 moved them from 20 and 30 ms).
 	productsStatementBudgetMs = 10.0
@@ -117,10 +126,12 @@ func (s *faultStack) copyBundle(container string) {
 	s.docker(nil, "cp", s.walkIn, container+":/tmp/walk")
 	switch s.tree {
 	case treeFault:
-		s.docker(nil, "exec", "-u", "0", container, "rm", bundleMigrations+demoHeadMigration)
+		s.docker(nil, "exec", "-u", "0", container, "rm", bundleMigrations+demoHeadMigration, bundleMigrations+demoTopMigration)
 	case treeCategoryOnly:
-		s.docker(nil, "exec", "-u", "0", container, "rm", bundleMigrations+demoHeadMigration)
+		s.docker(nil, "exec", "-u", "0", container, "rm", bundleMigrations+demoHeadMigration, bundleMigrations+demoTopMigration)
 		s.docker(nil, "cp", categoryOnlyMigration, container+":"+bundleMigrations)
+	case treeIndexFixed:
+		s.docker(nil, "exec", "-u", "0", container, "rm", bundleMigrations+demoTopMigration)
 	}
 	s.docker(nil, "exec", "-u", "0", container, "chmod", "-R", "a+rX", "/tmp/walk")
 	s.docker(nil, "exec", "-u", "0", container, "chmod", "755", "/tmp/walk/culprit")
@@ -142,8 +153,9 @@ func (s *faultStack) databaseRevision() string {
 		"psql", "-U", "postgres", "-d", "inventory", "-Atc", "SELECT version_num FROM alembic_version"))
 }
 
-// restoreDatabase puts the database and the tree back at the head: the
-// database fault's undo, and its known fix.
+// restoreDatabase puts the database and the tree at the commit that added
+// 0003: the database fault's undo, and its known fix. healthy() takes the
+// database on to the head (0004) before the next case.
 func (s *faultStack) restoreDatabase() {
 	s.t.Helper()
 	if s.databaseRevision() == categoryOnlyRevision {
@@ -153,15 +165,36 @@ func (s *faultStack) restoreDatabase() {
 	if got := s.databaseRevision(); got != demoHeadRevision {
 		s.t.Fatalf("inventory-service's database is at %s after the fix, want %s", got, demoHeadRevision)
 	}
-	s.tree = treeHead
+	s.tree = treeIndexFixed
+}
+
+// atTop puts inventory-service's database at the demo's head, 0004, when a
+// database fault left it lower: each case starts from the repository as it
+// is.
+func (s *faultStack) atTop() {
+	s.t.Helper()
+	if s.databaseRevision() == demoTopRevision {
+		return
+	}
+	if s.databaseRevision() == categoryOnlyRevision {
+		s.alembic("downgrade", "-1")
+	}
+	s.alembic("upgrade", demoTopRevision)
+	if got := s.databaseRevision(); got != demoTopRevision {
+		s.t.Fatalf("inventory-service's database is at %s, want the head %s", got, demoTopRevision)
+	}
 }
 
 // listProducts sends a bare GET /products from inside inventory-service and
 // returns the status.
-func (s *faultStack) listProducts() int {
+func (s *faultStack) listProducts() int { return s.list("/products") }
+
+// list sends a bare GET to one of inventory-service's list routes from
+// inside it and returns the status.
+func (s *faultStack) list(path string) int {
 	s.t.Helper()
-	script := "import urllib.request\nprint(urllib.request.urlopen('http://localhost:8002/products',timeout=15).status)"
-	output := strings.TrimSpace(s.docker(nil, "exec", s.container("inventory-service"), "python", "-c", script))
+	script := "import urllib.request,sys\nprint(urllib.request.urlopen('http://localhost:8002'+sys.argv[1],timeout=15).status)"
+	output := strings.TrimSpace(s.docker(nil, "exec", s.container("inventory-service"), "python", "-c", script, path))
 	var status int
 	if _, err := fmt.Sscanf(output, "%d", &status); err != nil {
 		s.t.Fatalf("listing products printed %q", output)
@@ -169,9 +202,10 @@ func (s *faultStack) listProducts() int {
 	return status
 }
 
-// checkRouteP95 holds the list route's p95, from the latency reading's own
+// checkRouteP95 holds a list route's p95, from the latency reading's own
 // samples, to factor times its budget: ">=" at the fault, "<=" when fixed.
-func (s *faultStack) checkRouteP95(reading model.Reading, op string, factor float64) {
+// Its MEASURED line is what a budget is set from (Q37).
+func (s *faultStack) checkRouteP95(reading model.Reading, budgetMs float64, op string, factor float64) {
 	s.t.Helper()
 	raw, _ := reading.Measured["samples_us"].([]any)
 	var samples []float64
@@ -186,11 +220,12 @@ func (s *faultStack) checkRouteP95(reading model.Reading, op string, factor floa
 	}
 	sort.Float64s(samples)
 	p95 := samples[int(math.Ceil(0.95*float64(len(samples))))-1]
-	bound := factor * productsRouteBudgetMs
-	s.t.Logf("GET /products p95 %.1f ms over %d samples (budget %.0f ms; want %s %.1f)",
-		p95, len(samples), productsRouteBudgetMs, op, bound)
+	bound := factor * budgetMs
+	route := isolate.Describe(reading.Target)
+	s.t.Logf("MEASURED %s p95 %.1f ms over %d samples (budget %.0f ms; want %s %.1f)",
+		route, p95, len(samples), budgetMs, op, bound)
 	if (op == ">=" && p95 < bound) || (op == "<=" && p95 > bound) {
-		s.t.Errorf("GET /products p95 %.1f ms, want %s %.1f ms", p95, op, bound)
+		s.t.Errorf("%s p95 %.1f ms, want %s %.1f ms", route, p95, op, bound)
 	}
 }
 

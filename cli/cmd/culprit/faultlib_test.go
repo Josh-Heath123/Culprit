@@ -181,6 +181,13 @@ func TestTheFaultLibrary(t *testing.T) {
 		}
 		t.Run(fault.Name, func(t *testing.T) {
 			stack.t = t
+			// Phase 39 part 2: in an environment declared isolated, the load
+			// generator, the database's only other client, is stopped before
+			// the walk and through verify, and started again afterwards.
+			if declaredIsolated(t, fault.Environment) {
+				stack.pauseLoad()
+				defer stack.resumeLoad()
+			}
 			inv, restore := stack.injectAndDiagnose(fault.symptom(library.Symptom), fault)
 			defer restore()
 			// Phase 36 part 1: the demo's latency budget, measured by the
@@ -193,8 +200,15 @@ func TestTheFaultLibrary(t *testing.T) {
 			// twice its budget, and the statement's mean in the walk's window
 			// at least 1.5 times its own.
 			if fault.Name == "missing-index" {
-				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictFail), ">=", 2)
+				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictFail), productsRouteBudgetMs, ">=", 2)
 				stack.checkStatementMean(investigationReadings(inv), ">=", 1.5*productsStatementBudgetMs)
+			}
+			// Phase 39 part 2 (decision 4): the N+1 route's p95 with the
+			// toggle, at least twice its budget; its MEASURED lines are the
+			// spread the budget is set from.
+			if fault.injection() == "n-plus-one" {
+				stack.checkRouteP95(stack.measureLatency(fault, detailsRoute, model.VerdictFail),
+					routeBudgetMs(t, detailsRoute.subject), ">=", 2)
 			}
 			// Phase 34: the loop closed. Apply the known fix, then verify
 			// from the same vantage with the change named.
@@ -204,9 +218,16 @@ func TestTheFaultLibrary(t *testing.T) {
 				stack.measureLatency(fault, readyRoute, model.VerdictPass)
 			}
 			if fault.Name == "missing-index" {
-				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictPass), "<=", 0.5)
+				stack.checkRouteP95(stack.measureLatency(fault, productsRoute, model.VerdictPass), productsRouteBudgetMs, "<=", 0.5)
 				// Phase 38 part 2: the list route within its bound.
-				stack.countProducts(fault)
+				stack.countList(fault, productsRoute)
+			}
+			if fault.injection() == "n-plus-one" {
+				// Fixed: at most half the budget. And the list probe counts the
+				// route's real page, not zero (Phase 38's count of 0, closed).
+				stack.checkRouteP95(stack.measureLatency(fault, detailsRoute, model.VerdictPass),
+					routeBudgetMs(t, detailsRoute.subject), "<=", 0.5)
+				stack.countList(fault, detailsRoute)
 			}
 			verification := stack.verify(fault, inv, state, fault.Fix.Change)
 			stack.checkVerification(verification, inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
@@ -339,6 +360,21 @@ func (stack *faultStack) injectAndWalk(symptom string, fault faultExpectation,
 	t := stack.t
 	t.Helper()
 	stack.healthy()
+	if fault.injection() == "n-plus-one" {
+		// The route answers on the healthy stack and with the toggle, which
+		// slows it without failing it.
+		if status := stack.list(detailsPath); status != 200 {
+			t.Fatalf("GET %s on the healthy stack answered %d, want 200", detailsPath, status)
+		}
+		restore := once(stack.inject(fault.injection()))
+		if status := stack.list(detailsPath); status != 200 {
+			t.Fatalf("GET %s with N_PLUS_ONE_FAULT answered %d, want 200", detailsPath, status)
+		}
+		inv := walk(symptom, fault)
+		stack.record(fault, inv, record)
+		checkDiagnosis(t, fault, inv)
+		return inv, restore
+	}
 	if fault.injection() == "missing-index" {
 		// The list route answers on the healthy stack and under the fault,
 		// which slows it without failing it. A GET, sent from inside
@@ -579,6 +615,7 @@ func (s *faultStack) healthy() {
 		"order-service", "inventory-service", "payments-service")
 	s.waitFor("order-service", "http://inventory-service:8002/ready", "http://payments-service:8003/ready",
 		"http://order-service:8001/health")
+	s.atTop()
 }
 
 func (s *faultStack) waitFor(from string, urls ...string) {
@@ -639,6 +676,14 @@ func (s *faultStack) inject(name string) func() {
 	case "latency":
 		s.post("order-service", "http://inventory-service:8002/admin/fault/latency", `{"delay_ms": 800, "duration_s": 300}`)
 		return func() { s.send("order-service", "DELETE", "http://inventory-service:8002/admin/fault", "") }
+	case "n-plus-one":
+		// Phase 39 part 2: a toggle, as CONTRACT_FAULT is. GET
+		// /products/details loads each product's details with a statement
+		// of its own. Its undo, and its known fix, recreate inventory-service
+		// without it.
+		s.compose(s.withToken(s.good, "N_PLUS_ONE_FAULT=details-per-product"), "up", "-d", "--force-recreate", "--no-deps", "inventory-service")
+		s.waitFor("order-service", "http://inventory-service:8002/ready")
+		return s.fixContract
 	case "missing-index":
 		// Planted in the database and in the tree (Q33 (2)): the database
 		// at 0002, and the walk's tree holding 0001-0002 only.
@@ -686,6 +731,11 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 	text, _ := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "diagnose", symptom,
 		"-f", fault.manifest(), "--env", fault.Environment, "--from", fault.Vantage,
 		"--format", "text", "--state-dir", containerState).Output()
+	if fault.Name == "n-plus-one" {
+		// The README quotes this from CI's log, never by hand (Phase 39
+		// part 2, item 6).
+		s.t.Logf("README OUTPUT (culprit diagnose, N+1):\n%s", text)
+	}
 	for _, secret := range s.secrets {
 		for format, printed := range map[string][]byte{"json": output, "text": text} {
 			if strings.Contains(string(printed), secret) {
@@ -703,7 +753,11 @@ type budgetedRoute struct{ subject string }
 var (
 	readyRoute    = budgetedRoute{"http:inventory-service/GET /ready"}
 	productsRoute = budgetedRoute{"http:inventory-service/GET /products"}
+	// Phase 39 part 2: the N+1 fault's route.
+	detailsRoute = budgetedRoute{"http:inventory-service/GET " + detailsPath}
 )
+
+const detailsPath = "/products/details"
 
 // latencyBudgetLocator is where the demo's culprit.yaml declares the p95
 // budget on subject, found by its subject rather than by its position, so
@@ -736,15 +790,17 @@ func budgetLocator(t *testing.T, subject, predicate string) string {
 	return locator
 }
 
-// countProducts runs probe.http.response_items on GET /products from the
-// fault's vantage, against the demo's response_items_max budget (Phase 38
-// part 2), and checks it passes: the criterion "culprit probe on the
-// faults stack passes GET /products at 50 items". It logs the count.
-func (s *faultStack) countProducts(fault faultExpectation) {
+// countList runs probe.http.response_items on one of inventory-service's
+// list routes from the fault's vantage, against the demo's
+// response_items_max budget (Phase 38 part 2), and checks it passes: the
+// criterion "culprit probe on the faults stack passes GET /products at 50
+// items". It logs the count. GET /products/details (Phase 39 part 2) must
+// count a real page, not zero.
+func (s *faultStack) countList(fault faultExpectation, route budgetedRoute) {
 	s.t.Helper()
 	container := s.container(fault.Vantage)
 	output, err := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "probe",
-		productsRoute.subject, "-p", model.ResponseItemsProbeID,
+		route.subject, "-p", model.ResponseItemsProbeID,
 		"--input", "base_url=http://inventory-service:8002",
 		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment,
 		"--no-plugins", "--format", "json", "--agent-id", "fault-library").Output()
@@ -759,20 +815,26 @@ func (s *faultStack) countProducts(fault faultExpectation) {
 		s.t.Fatalf("culprit probe printed no single reading (%v):\n%s", err, output)
 	}
 	reading := result.Readings[0]
-	s.t.Logf("GET /products: %s, measured %v against %v", reading.Verdict, reading.Measured, reading.Expected)
+	s.t.Logf("%s: %s, measured %v against %v", route.subject, reading.Verdict, reading.Measured, reading.Expected)
 	if reading.Verdict != model.VerdictPass {
-		s.t.Errorf("probe.http.response_items on GET /products: %s, want pass: %s", reading.Verdict, reading.Reason)
+		s.t.Errorf("probe.http.response_items on %s: %s, want pass: %s", route.subject, reading.Verdict, reading.Reason)
+	}
+	if items, _ := reading.Measured["items"].(float64); route == detailsRoute && items < 2 {
+		s.t.Errorf("probe.http.response_items counted %v items on %s, want its page", reading.Measured["items"], route.subject)
 	}
 	if err := reading.Validate(); err != nil {
 		s.t.Errorf("the list reading does not validate: %v", err)
 	}
 	if reading.ExpectedSource == nil ||
-		reading.ExpectedSource.Locator != budgetLocator(s.t, productsRoute.subject, "response_items_max") {
+		reading.ExpectedSource.Locator != budgetLocator(s.t, route.subject, "response_items_max") {
 		s.t.Errorf("the reading was not measured against the demo's list budget: %+v", reading.ExpectedSource)
 	}
 	// Expected is the judged form, read back from JSON.
 	if reading.Expected["response_items_max"] != float64(50) || reading.Expected["at"] != "/products" {
 		s.t.Errorf("judged against %v, want 50 items at /products", reading.Expected)
+	}
+	if route != productsRoute {
+		return
 	}
 	// The same command as the README shows it, in text, logged whole: the
 	// README quotes this output from CI's log, never by hand (Phase 39
@@ -923,7 +985,7 @@ func (s *faultStack) applyFix(name string, restore func()) {
 	case "config":
 		s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "payments-service")
 		s.waitFor("order-service", "http://payments-service:8003/ready")
-	case "network-partition", "error-rate", "latency", "missing-index":
+	case "network-partition", "error-rate", "latency", "missing-index", "n-plus-one":
 		// The database fault's undo is its known fix: the commit that adds
 		// 0003, with the database upgraded to it.
 		restore()
@@ -932,6 +994,8 @@ func (s *faultStack) applyFix(name string, restore func()) {
 	}
 }
 
+// fixContract recreates inventory-service from the healthy configuration:
+// the contract fault's fix, and the N+1 fault's.
 func (s *faultStack) fixContract() {
 	s.compose(s.withToken(s.good), "up", "-d", "--force-recreate", "--no-deps", "inventory-service")
 	s.waitFor("order-service", "http://inventory-service:8002/ready")
@@ -1139,4 +1203,50 @@ func (s *faultStack) checkVerification(verification model.Verification, inv mode
 		encoded, _ := json.MarshalIndent(verification, "", "  ")
 		t.Logf("verification:\n%s", encoded)
 	}
+}
+
+// declaredIsolated says the demo's culprit.yaml declares environment
+// `isolated: true`.
+func declaredIsolated(t *testing.T, environment string) bool {
+	t.Helper()
+	manifest, err := extract.LoadManifest(demoManifest)
+	if err != nil {
+		t.Fatalf("the demo's culprit.yaml: %v", err)
+	}
+	return manifest.Environments[environment].Isolated
+}
+
+// routeBudgetMs is the latency_p95_ms the demo's culprit.yaml declares on
+// subject, read from the file so the harness cannot drift from it.
+func routeBudgetMs(t *testing.T, subject string) float64 {
+	t.Helper()
+	manifest, err := extract.LoadManifest(demoManifest)
+	if err != nil {
+		t.Fatalf("the demo's culprit.yaml: %v", err)
+	}
+	for _, budget := range manifest.Budgets {
+		if budget.Subject == subject && budget.Predicate == "latency_p95_ms" {
+			if value, ok := budget.Value.(int); ok {
+				return float64(value)
+			}
+			if value, ok := budget.Value.(float64); ok {
+				return value
+			}
+		}
+	}
+	t.Fatalf("the demo's culprit.yaml declares no latency_p95_ms on %s", subject)
+	return 0
+}
+
+// pauseLoad stops the load generator: in an environment declared isolated,
+// nothing but Culprit may talk to the database (Phase 39 part 2).
+func (s *faultStack) pauseLoad() {
+	s.t.Helper()
+	s.compose(s.withToken(s.good), "stop", "load-generator")
+}
+
+// resumeLoad starts it again, for the cases after.
+func (s *faultStack) resumeLoad() {
+	s.t.Helper()
+	s.compose(s.withToken(s.good), "start", "load-generator")
 }
