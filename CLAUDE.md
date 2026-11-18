@@ -12,9 +12,9 @@ the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
 - **Current phase:** 39, part 2 (the walk and the fault) — on branch
-  `phase-39-walk`, PR #48 (draft); gates red, awaiting the architecture
-  session on Q40 (the N+1 route's budget). Part 1 is signed off, and
-  `docs/DIAGNOSTIC_PLAN.md` is complete.
+  `phase-39-walk`, PR #48; complete and awaiting review (CI green on
+  `a832381`). Part 1 is signed off, and `docs/DIAGNOSTIC_PLAN.md` is
+  complete.
 - **Plan of record:** `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35), then
   `docs/PERFORMANCE_PLAN.md` (Phases 36–39). Read §1 (D1–D8), §2 (the core
   model) and the phase you are working on — not the whole file.

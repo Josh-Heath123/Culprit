@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `gates red`, **awaiting decision on Q40**. Q38 and Q39 ruled and carried out. After Q39 the N+1 cases diagnose and verify `verified` in CI, but rule 3 fails on the fault's side on one runner (run 44307212906, attempt 2), so page and budget are unchanged. PR #48, a draft. Report in §5. |
+| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `complete`, awaiting review. PR #48; CI green on `a832381` (run 44321940704, every job and every PR check; no open alert). Q38–Q40 ruled and carried out. Report in §5; the fastest runner yet is its first item for the review. |
 | Previous phase | **39, part 1 — the measurement — merged as `6b0de5d` (PR #47) and signed off 2026-11-18.** The report's commit `1cc77cf` green on every job (run 44189651276) on the merge result. The three decisions of the run accepted; the real-Postgres tests rerun and two mutations shown red by the architecture session. Q37 closed on step 0's margins. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-39-walk`, from `origin/main` = `6b0de5d`; its first commit the review (`6349f84`). PR #48, left a draft: CI is red on the open question. `shared/uv.lock` not staged; the fault library not run locally. |
-| Blocking questions | **Q40** (§3): the fault's sample 45 is under rule 3's 37.5 ms on one runner (27.7 and 30.2 ms). |
+| Branch | `phase-39-walk`, from `origin/main` = `6b0de5d`; its first commit the review (`6349f84`). PR #48, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally. |
+| Blocking questions | None. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| 40 | **After Q39, the fixed route is fast enough; the fault is not slow enough on every runner.** Q39's changes removed the fixed route's slow answers: its slowest sample is at most 13.1 ms in both attempts of run 44307212906 (rule 3 wants ≤ 16.7), and both N+1 cases verify `verified`. But the fault's sample 45 was 46.3 and 46.1 ms in attempt 1 and 27.7 and 30.2 ms in attempt 2 (rule 3 wants ≥ 37.5): the N+1's cost is the runner's round trip, and has ranged 27.7 to 62.9 ms across runs at a page of 200. Per rule 3, page and budget unchanged. Open: what the budget and page should be given that spread (at 15 ms both sides would hold in both attempts in the judge's terms: slowest ≤ 10 and sample 45 ≥ 22.5), and whether the harness's own route checks move to amended decision 4's terms. §5 holds the table. | 2026-11-18, Phase 39 part 2 | **Blocking** — CI green, the README's N+1 case |
+| — | None open. Q38, Q39 and Q40 were ruled during Phase 39 part 2 and are recorded in §5 for the plan. | | |
 
 ---
 
@@ -122,7 +122,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 38, part 1 | Bundles | **complete** (PR #45, `3d9fb33`) | **Signed off 2026-11-17** (architecture session): run 44088509299 green on every job, read from GitHub; the report's commit green on attempt 2 of 44091691574. Decisions accepted; Q37 ruled. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
-| 39, part 2 | The walk and the fault | **gates red — awaiting decision (Q40)** (PR #48, draft) | **Run 2026-11-18:** built; the diagnosis holds in CI; the fix verifies `inconclusive` on the healthy route's slowest answer. Q38 and Q39 ruled and carried out; after Q39 the fixes verify, and rule 3 fails on the fault's side on one runner (Q40). Report in §5. **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 39, part 2 | The walk and the fault | **complete, awaiting review** (PR #48; CI green on `a832381`, run 44321940704) | **Run 2026-11-18:** built; Q38–Q40 ruled and carried out; the N+1 case diagnosed and verified in CI; budget 20 ms, page 200. Report in §5. **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -154,128 +154,169 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        39, part 2 — the walk and the fault (third report: Q39's
-              ruling carried out)
+Phase:        39, part 2 — the walk and the fault: n_plus_one, the demo's
+              relation and route, the library's two N+1 cases
 Branch:       phase-39-walk, from origin/main = 6b0de5d. 6349f84 the
-              review; the earlier commits through b958d2e (the second
-              report); then d923726 (Q39 a, b, c), and this report. PR #48,
-              a draft.
-Run:          2026-11-18, after Q39's ruling. Local gates one at a time, in
-              the foreground. The fault library not run locally.
-Status:       GATES RED, AWAITING DECISION (Q40, blocking). Q39's changes
-              removed the fixed route's slow answers, but rule 3 does not
-              hold in the second run, on the fault's side, so, as ruled,
-              nothing was changed: the page stays 200, the budget 15 ms.
+              review; items 1-6 (72df2ef, 74e01a7, eb23f87, 000c4a5,
+              c460697, with 8d11f70, d3ee1d5); the page and budget from CI
+              (1686be8, c58cc54); the invariant audit (fc0a9c2); Q38
+              (0ed3f4a), Q39 (d923726), Q40 (a832381); the earlier reports
+              (ae091f9, b958d2e, 07de8e6); then this report with the
+              README's N+1 case. PR #48.
+Run:          2026-11-18, /next, then Q38-Q40 as ruled. Local gates one at a
+              time, in the foreground. The fault library never run locally.
+Status:       COMPLETE pending review. CI green on a832381 (run
+              44321940704, every job and every PR check; no open alert).
+              Nothing blocking. One thing first for the review (below).
 
-Q39 — RULED (architecture session, 2026-11-18), recorded here for the plan
-  Attribution, reproduced on Python 3.12.13: three causes in the demo's own
-  process. (1) The first request after start is cold, 78 to 129 ms. (2)
-  Python's first full collection after start, 36 ms, at request #120,
-  about 7 s in; gone with gc.collect() then gc.freeze() at the end of
-  startup; not on 3.13. (3) The first console metrics export, 10 to 12 s
-  in, 23 to 26 ms; the faults stack has no OTLP endpoint, so shared/otel.py
-  dumps to the console every 10 s.
-  Ruling: change the demo, not the judge. (a) inventory-service warms its
-  read paths before /ready answers; (b) every demo service runs
-  gc.collect() then gc.freeze() at the end of startup, from one shared
-  place; (c) OTEL_METRIC_EXPORT_INTERVAL_MS "3600000" for the demo services
-  in the faults stack; (d) two CI runs, tabulated. Then rule 3 as amended
-  (fixed slowest <= 16.7 ms and the fault's sample 45 >= 37.5 ms in both:
-  budget 25 ms; otherwise stop, changing nothing). Every existing fault
-  case keeps its result. LIMITS: a just-restarted service's first request
-  and first full collection can exceed a tight budget. Not now: an
-  unmeasured warm-up request in probe.http.latency (a plan decision).
-  Q39 is deleted from §3.
+FIRST FOR THE REVIEW — THE FASTEST RUNNER YET, UNDER THE NEW BUDGET
+  Run 44321940704, the first at 20 ms, landed on a faster runner than any
+  before: the fault's sample 45 was 22.6 (n-plus-one) and 23.5 ms
+  (n-plus-one-shared), 2.6 and 3.5 ms over the budget; the fix's slowest
+  6.5 ms. Q40 reasoned from 27.7 ms (about 7 ms of headroom). Q40's stop
+  line for step 1 (sample 45 at 24 ms or less: Q41) applied to run
+  44313908008, whose lowest was 57.6 ms, so this run does not stop the
+  phase; but the same line on this run would have. The budget is
+  unchanged; LIMITS and the budget's why now give the true range (22.6 to
+  62.9 ms) and headroom (2.6 ms, a runner about a tenth faster could
+  flake).
 
-WHAT WAS DONE (d923726)
-  a, b: demo-services/shared/startup.py, one lifespan every demo service
-    is created with: the service's warm-up, then gc.collect() and
-    gc.freeze(), before it answers. Starlette 1.3 has no on_event, so it
-    is FastAPI's lifespan. inventory-service's warm-up calls GET /products
-    and GET /products/details once each (the query the toggle selects); a
-    read that fails is skipped and logged (the missing-index fault's
-    database at 0002 has no product_details; no database configured).
-    Checked locally: each service starts and freezes its heap.
-  c: OTEL_METRIC_EXPORT_INTERVAL_MS "3600000" on order-, inventory- and
-    payments-service in faults/docker-compose.yml.
-  LIMITS: "A just-restarted service is not yet warm", with the numbers.
-  The push of the first form of this commit was refused by GitHub (GH007:
-  the author's email private; the global git name had changed in the
-  session). With the human's answer, only that unpushed commit was
-  re-authored with the GitHub noreply address, set for this repository
-  alone (git config --local); nothing pushed was rewritten.
+Q40 — RULED (architecture session, 2026-11-18), recorded for the plan
+  On the fastest runner seen (44307212906 attempt 2) the fault's sample 45
+  was 27.7 ms and the fix's slowest 13.1 ms, a ratio of 2.11; amended
+  decision 4's margins need 2.25, so no budget at a page of 200 meets
+  both. Ruling: (1) add run 44313908008 to the table; stop as Q41 if any
+  fixed slowest >= 16 ms or fault sample 45 <= 24 ms; otherwise (2) the
+  details route's latency_p95_ms is 20, the page 200, the why the spread
+  and the ruling; (3) on the details route only, remove the harness's
+  p95-factor checks on both sides: the check is the judge's verdict at
+  the budget (measureLatency), with the walk's root, verify's verdict and
+  results.json, every reading still logged; (4) commit the two N+1
+  results.json entries exactly as 44313908008 wrote them, then just
+  accuracy-readme; (5) LIMITS: the ruling, and an N+1's cost is the
+  runner's round trip; (6) every existing case keeps its result. Q40 is
+  deleted from §3.
 
-TABLE — RUN 44307212906, ATTEMPTS 1 AND 2 (d923726; attempt 2 is shard 2
-rerun on the same commit). Slowest sample (index), and sample 45.
-                                         attempt 1          attempt 2
-  n-plus-one
-    fault, measured: sample 45           46.3               27.7
-    fixed, measured (just recreated)     5.0 (#1)           5.1 (#1)
-    verify r2 run 1, run 2               4.7, 4.4           4.7, 4.5
-    verify r4 run 1, run 2               4.4, 4.3           5.7, 9.7
-  n-plus-one-shared
-    fault, measured: sample 45           46.1               30.2
-    fixed, measured (just recreated)     4.7 (#1)           13.1 (#49)
-    verify r2 run 1, run 2               5.5, 5.1           4.4, 12.6
-  GET /products, every healthy reading   at most 4.7        (not logged
-                                                             in attempt 2)
-  Before Q39 (two runs, Q38's tables): the fixed route's slowest 88.7 to
-  117.1 ms on its first request and 28.1 to 39.5 ms in verify's first
-  rerun; after it, at most 13.1 ms anywhere.
+EARLIER RULINGS IN THIS RUN (recorded in the reports of ae091f9, b958d2e
+and 07de8e6, and in git log -p docs/HANDOFF.md)
+  Q38: decision 4 restated in the judge's terms (fixed slowest <= 2/3 of
+    the budget, fault sample 45 >= 1.5x, over two runs); the database
+    settled after 0004 and postgres's health check quiet. It did not move
+    the slow answers.
+  Q39: the slow answers were the demo's own process (cold first request,
+    Python 3.12's first full collection, the first console metrics
+    export). The demo warms its read paths, collects and freezes its
+    startup heap (shared/startup.py) and exports metrics hourly in the
+    faults stack. The fix's slowest fell from 28-117 ms to at most 13.1.
 
-RULE 3: NOT MET — the fault's side, in attempt 2
-  Fixed route's slowest <= 16.7 ms: 5.5 (attempt 1), 13.1 (attempt 2):
-    holds in both.
-  Fault's sample 45 >= 37.5 ms: 46.3, 46.1 (attempt 1); 27.7, 30.2
-    (attempt 2): does not hold in attempt 2.
-  So the budget stays 15 ms and the page 200; nothing was changed.
-  Across every run at a page of 200 the fault's sample 45 has ranged
-  27.7 to 62.9 ms (its p95 29.8 to 62.9): the N+1's cost is the runner's
-  round-trip time, two to one between runners.
+THE TABLE (GET /products/details, page 200, in the judge's terms)
+                                   fault: sample 45     fix: slowest
+  before Q39 (5 runs)              44.1 to 62.9         28.1 to 117.1
+  44307212906 attempt 1 (15 ms)    46.3, 46.1           5.5
+  44307212906 attempt 2 (15 ms)    27.7, 30.2           13.1
+  44313908008 (15 ms)              57.6, 58.0           6.0
+  44321940704 (20 ms)              22.6, 23.5           6.5
+  Q40's step 1 on 44313908008: slowest 6.0 < 16, sample 45 57.6 > 24: no
+  Q41.
 
-WHAT EACH CASE DID
-  Attempt 1: every case in shard 2 passed, both N+1 cases verified (the
-    first time); shard 1 green. The job failed on its last step only:
-    results.json, kept at main's since the second report, lacks the two
-    N+1 entries the run wrote (both verified).
-  Attempt 2: n-plus-one diagnosed and verified (verified), but failed the
-    harness's own fault-side check, still decision 4 as first written
-    (p95 29.8 ms, want >= 2 x 15 = 30); n-plus-one-shared, missing-index
-    and its wrong fix passed.
-  Every existing case kept its root and verdict in both attempts; shard 1
-    (every order fault) green in attempt 1.
+DECISIONS OF THIS RUN (for the review)
+  1. The page and the route's list bound are 200 (GET /products' cap);
+     at 50 the N+1 measured about 16 ms.
+  2. The root is the route; reproduced is asked of the latency reading
+     that found it slow (the per-item reading is evidence and passes
+     either way). The tree repeats the route as symptom and root.
+  3. The not-isolated sentence says "this walk does not run in an
+     environment declared isolated", because the agent never sets
+     Isolated whatever culprit.yaml declares.
+  4. An unexplored N+1 (no statement seen, inconclusive, refused) is a
+     partial, as every unexplored database hypothesis is.
+  5. The database fault's fix leaves the tree at 0001-0003 and the
+     database at 0003; every case starts at 0004 (atTop, then settled).
+  6. inventory-service's warm-up skips and logs a read that fails (at
+     the missing-index fault's 0002 there is no product_details).
+  7. One unpushed commit was re-authored with the GitHub noreply address,
+     set for this repository only, after GitHub refused the push (GH007)
+     and the human chose it; nothing pushed was rewritten.
 
-FOR THE REVIEW
-  - The harness's checks on the route are still decision 4's p95
-    factors (>= 2x, <= 0.5x); amended decision 4 is in the judge's terms
-    (sample 45 >= 1.5x, slowest <= 2/3). Changing them is part of setting
-    the budget, so it was not done.
-  - Earlier decisions (page and list bound 200; the root and its
-    reproduction; the not-isolated sentence; an unexplored N+1 is a
-    partial; the database fault's fix tree) are as in the first report.
+ITEMS
+  1 demo: 0004 product_details (one row per product, additive);
+    GET /products/details, a join or, with N_PLUS_ONE_FAULT, one
+    statement per product; budgets: latency_p95_ms 20, response_items_max
+    200 at /products; faults-inventory-isolated (isolated: true). Since
+    Q39: shared/startup.py, the warm-up, gc.freeze, hourly metrics.
+  2 n_plus_one ("One statement per item") in Go, Python, the frontend and
+    investigation_conformance.json; the probe discriminates it;
+    catalogue.json regenerated.
+  3 the walk: isolate/per_item.go, asked at the database pass's condition
+    and, isolated, before it; supported / ruled out / unexplored as
+    decision 7; the recommendation; the not-isolated sentence.
+  4 the library: n-plus-one (isolated, load generator stopped through
+    verify) and n-plus-one-shared, shard 2; every latency reading logged
+    in the judge's terms; results.json from run 44313908008.
+  5 verify: the description says whether the cited statement still runs
+    per item; a rerun with no statement is not measured; another per-item
+    statement is named. Verdict rules untouched.
+  6 documents: PROBES, LIMITS (N+1 in the walk; the slowest answer; a
+    just-restarted service; the round trip), and the README's N+1 case,
+    from run 44321940704's log; the accuracy number 9 of 9, rendered by
+    just accuracy-readme from results.json.
 
 CRITERIA
-  As in the first report, except: "with the fix, verify lands verified"
-  now holds in CI (attempt 1, both cases; attempt 2, both cases); CI green
-  on the merge result: FAIL (fault-library (2): results.json in attempt
-  1, the fault-side margin in attempt 2). README N+1 case and accuracy
-  number: left for green.
+  Isolated: root n_plus_one on the route, statement and counts named,
+    recommendation given                                  PASS (CI)
+  With the fix: within budget, verify verified, the
+    description says the statement no longer runs per item PASS (CI,
+    44313908008 and 44321940704)
+  Not declared isolated: no n_plus_one root, the line     PASS (CI, test)
+  The list probe counts the new route's page              PASS (items:200)
+  The join: every outcome by a walk test; the
+    no-statement -> ruled_out mutation red                PASS
+  n_plus_one: Go, Python, frontend agree                  PASS
+  0004 round-trips                                        PASS (local
+    Docker; CI migration-round-trip)
+  The budget's margins from >= 2 CI runs                  PASS as Q40
+    ruled (the table)
+  Unchanged elsewhere: every existing case's root and
+    verdict (shard 1 and missing-index green in every run
+    since); goldens; the demo's expected findings        PASS. Listed:
+    the missing-index statement ends with the not-isolated sentence;
+    its trees drop 0004 with 0003
+  CI green on the merge result                            PASS
+  LLM_PROVIDER=none changes nothing                       PASS (e2e (none))
+  Report committed before the PR is marked ready          PASS
+
+NOT BUILT (as the brief says)
+  No N+1 outside an isolated environment; no change to the probe's
+  measurement or verdicts; no statement budget from the bracket; no new
+  template, capability or role; verify's verdict rules unchanged; no ORM
+  source, no traces; no warm-up request in probe.http.latency (Q39: a
+  plan decision).
 
 AUDITS
-  Both ran in the first run (§5 of ae091f9). d923726 is demo startup,
-  compose and LIMITS; not re-audited.
+  invariant-auditor (6349f84..fc0a9c2): NOT CLEAN on V1 (two test
+    subjects formatted), with R1 and R2 in verify's note; all fixed in
+    fc0a9c2. Not re-run on the later commits (harness, demo startup,
+    compose, docs).
+  phase-auditor (6349f84..8e5b746): every criterion MET but verify
+    verified and CI green, both since met; its other items (the why, the
+    report, the README's N+1 case, the accuracy claim) done.
 
-LOCAL GATES (this run's changes)
-  just lint and just typecheck clean; each demo service started with
-  TestClient and froze its heap.
+LOCAL GATES (Windows, one at a time, in the foreground)
+  just lint (after every change), typecheck, lint-imports,
+  check-schema-drift, check-no-llm-imports, check-invariants,
+  check-scan-coverage, check_coupled_files: clean. go test -p 2 ./...:
+  every package ok. api 1,778, shared 686, worker 93, mcp_server 21,
+  extractors/python 19 (migrations), node 22, frontend 19. Docker:
+  TestTheDemoDatabase. The demo services' startup with TestClient. Not
+  run locally: the fault library (instructed), e2e, the frontend build.
 
 CI (PR #48)
-  44295169237 on b958d2e: fault-library (2) red (verify inconclusive),
-    everything else green; no open code-scanning alert.
-  44307212906 on d923726, attempt 1: every test case green; fault-library
-    (2) red on the results check; every other job green. Attempt 2 (shard
-    2 rerun): red on n-plus-one's fault-side p95 check. main had not
-    moved (6b0de5d): the merge result.
+  Runs 44263168879 to 44313908008: as in the earlier reports (the page
+    50, the budget, Q38, Q39, the results check).
+  44321940704 on a832381: success on every job (deploy and publish
+    skipped); fault-library (1) and (2) green; all 25 PR checks pass or
+    skipping; no open code-scanning alert (pr=48, refs/pull/48/merge,
+    refs/pull/48/head). main had not moved (6b0de5d): the merge result.
   This report's own commit runs on the pull request after it.
 ```
 

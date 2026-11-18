@@ -391,13 +391,15 @@ budgets:
       44313908008): with N_PLUS_ONE_FAULT, one statement per product,
       sample 45 from 27.7 to 58.0 ms; with the join, the slowest sample
       from 3.9 to 13.1 ms. The N+1's cost is the runner's round trip: at
-      this page its sample 45 has ranged 27.7 to 62.9 ms. No budget meets
+      this page its sample 45 has ranged 22.6 to 62.9 ms. No budget meets
       both of amended decision 4's margins (sample 45 at least 1.5 times
-      it, slowest at most two-thirds) on the fastest runner seen, a ratio
-      of 2.11 where they need 2.25, so Q40 set 20 ms: the fault 7.7 ms
-      over it on that runner, the fix 6.9 ms under it. A runner with round
-      trips about a quarter shorter could bring the fault under it: a
-      flake to attribute, not a wrong answer.
+      it, slowest at most two-thirds) on the fastest runner then seen, a
+      ratio of 2.11 where they need 2.25, so Q40 set 20 ms: the fault 7.7
+      ms over it on that runner, the fix 6.9 ms under it. The first run at
+      20 ms (44321940704) was faster still: the fault's sample 45 22.6 and
+      23.5 ms, 2.6 ms over; the fix's slowest 6.5 ms. A runner with round
+      trips about a tenth shorter could bring the fault under it: a flake
+      to attribute, not a wrong answer.
   - subject: "http:inventory-service/GET /products/details"
     predicate: response_items_max
     value: 200

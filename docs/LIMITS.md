@@ -3207,11 +3207,12 @@ per item, and these are its limits.
 - **An N+1's cost is the runner's round trip.** Loading 200 items one by
   one costs 200 round trips to the database, so the demo's N+1 route
   measures what the machine's round trip is: its sample 45 has ranged
-  27.7 to 62.9 ms at a page of 200 across CI's runners. Q40 set its
-  budget to 20 ms. That leaves about 7 ms of headroom over the budget on
-  the fastest runner seen, and a runner with round trips about a quarter
-  shorter could bring the fault under it. The library would then read a
-  pass where an N+1 is planted: a flake to attribute, not a wrong
+  22.6 to 62.9 ms at a page of 200 across CI's runners. Q40 set its
+  budget to 20 ms, when the fastest runner seen gave 27.7 ms, about 7 ms
+  of headroom. The first run under that budget (44321940704) gave 22.6
+  and 23.5 ms: 2.6 ms of headroom, so a runner with round trips about a
+  tenth shorter could bring the fault under it. The library would then
+  read a pass where an N+1 is planted: a flake to attribute, not a wrong
   answer, since the route would in fact be within its budget there.
 - **A just-restarted service is not yet warm.** Its first request, and its
   runtime's first full garbage collection, can each exceed a tight budget
