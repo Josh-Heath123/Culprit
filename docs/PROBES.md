@@ -141,7 +141,7 @@ readings are produced by the worker, which has the telemetry
 
 Phase 36. A latency is only a finding against a declared budget: a
 `budgets:` entry in `culprit.yaml`, or an OpenAPI operation's
-`x-culprit-budget` (the README's "Latency budgets"). With no budget, the
+`x-culprit-budget` (`docs/GUIDE.md`'s "Latency budgets"). With no budget, the
 probe sends nothing and is `inconclusive`. A route with both budgets is
 measured once and gives two readings, one per budget, judged from the same
 samples.

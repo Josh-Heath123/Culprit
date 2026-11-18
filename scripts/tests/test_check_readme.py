@@ -146,3 +146,17 @@ def test_a_document_that_quotes_no_figure_is_red(tmp_path: Path) -> None:
 def test_output_that_is_not_the_self_check_cannot_run(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="holds no"):
         gate.check_figures([_doc(tmp_path, "x\n")], "Error: no culprit.yaml", root=tmp_path)
+
+
+def test_a_figure_or_count_that_wraps_onto_the_next_line_is_still_read(tmp_path: Path) -> None:
+    """The phase audit's finding: the README's "9 gaps" ended a line and
+    "listed." began the next, so the figure was never compared."""
+    doc = _doc(
+        tmp_path,
+        "intro\n- **Culprit checks itself.** no divergences, 1,753 facts across\n"
+        "  631 subjects, 8 gaps\n  listed.\nIt runs all\nseventeen probes.\n",
+    )
+    failures = gate.check_figures([doc], SELF_CHECK, root=tmp_path)
+    assert failures == ["README.md:3: quotes 8 gaps; the self-check produced 9"]
+    counts = gate.check_probe_count([doc], 18, root=tmp_path)
+    assert counts == ["README.md:6: says seventeen probes; the catalogue holds 18"]

@@ -3242,3 +3242,34 @@ surface, tint and glass. One thing it does not cover:
   content scrolling beneath it (there is little: the dashboard is dark
   throughout) would lower the contrast of the header's muted text, softened
   by the blur.
+
+## The README's checks hold what they can name, and the rest is read by hand
+
+Phase 40 part 2 made the README an overview (`docs/GUIDE.md` holds the
+depth) and `scripts/check_readme.py` holds it to the tree: relative links,
+the probe count, the README's length, the diagrams' colours, and, in CI's
+self-check job, the self-check's figures. What it does not hold:
+
+- **A link's anchor is not checked.** `docs/GUIDE.md#how-it-works` passes
+  when the file exists, whether or not the heading does; a renamed heading
+  leaves GitHub opening the page at its top.
+- **A probe count is read only in two phrasings,** a number or a word up to
+  twenty before "probes" (`18 read-only probes`, `all 18 probes`), and only
+  in `README.md` and `docs/GUIDE.md`. A count phrased otherwise, or in
+  another document, is not compared with the catalogue.
+- **The self-check's figures are checked in CI only.** Locally, `just lint`
+  checks links, the count, the length and the colours; the figures need the
+  self-check's output, which the self-check job produces. A figure the
+  README quotes in a phrasing the check does not know is not compared.
+- **Every other number is audited by hand,** in the run report: versions,
+  "four checks", the plan's phase numbers. The accuracy block and the hero's
+  figure are rendered, and their tests fail when stale.
+- **The hero holds its figure, not its look.** `docs/brand/hero.json`
+  records the figure the images were drawn with, and a test holds it to the
+  fault library's results; a token changed in `index.css` after the hero
+  was rendered is not caught until `just readme-hero` runs again. The hero
+  needs `npm ci` in `frontend/` and Playwright's Chromium, and its
+  anti-aliasing can differ a little between Chromium versions.
+- **The diagrams are dark in GitHub's light theme.** Mermaid takes one
+  `init` theme per diagram, so the plum nodes are the same in both of
+  GitHub's themes; only the hero has a light variant.

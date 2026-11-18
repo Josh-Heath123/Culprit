@@ -4,8 +4,11 @@ The depth behind [the README](../README.md): every feature, how it works, the
 decisions behind it, installation, a tutorial end to end, the agent surface,
 testing and the project's layout. This text was the README's until Phase 40
 part 2 moved it here, as it was; only its relative links were rebased from the
-repository's root to `docs/`, and three sentences that pointed at the README's
-captures now link to them.
+repository's root to `docs/`, three sentences that pointed at the README's
+captures and accuracy section now link to them, and three statements that had
+gone stale were corrected from their sources: the probe count, twice, and the
+list of what the probes read, from the catalogue; the unverifiable surface,
+from the self-check.
 
 ## Key features
 
@@ -904,3 +907,11 @@ dogfooding, and it is why the "Not checked" list is never optional.
 | [`deploy/agent/`](../deploy/agent) | the agent's recipes: Docker, Compose, Kubernetes, systemd |
 | [`scripts/`](../scripts) | the repository's own invariant checks, bootstrap and capture tooling |
 | [`docs/`](../docs) | the plan, limits, permissions, probes, install and upgrade guides |
+
+## Limits
+
+Culprit states its limits rather than implying it has none:
+[`docs/LIMITS.md`](LIMITS.md) covers every threshold, heuristic and
+coverage gap, from what an extractor cannot see to why a timeout is never a
+failure. [`docs/PROBES.md`](PROBES.md) documents each probe and
+[`docs/PERMISSIONS.md`](PERMISSIONS.md) every grant.

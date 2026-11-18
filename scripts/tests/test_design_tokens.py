@@ -239,6 +239,21 @@ def test_the_anchors_are_the_identity() -> None:
     assert _resolve(TOKENS, "culprit").lower() == "#d6fa4a"
 
 
+def test_the_ring_is_violet_at_a_higher_lightness() -> None:
+    """C2: the ring is no longer pinned, so this keeps it violet's lighter
+    step. The 3:1 pairs alone would pass any bright colour, lime included,
+    which I2 forbids for interaction."""
+    fill = _rgba(_resolve(TOKENS, "brand-fill"))
+    ring = _rgba(_resolve(TOKENS, "ring"))
+    fill_hue, _ = hue_and_saturation(fill)
+    ring_hue, ring_saturation = hue_and_saturation(ring)
+    assert hue_distance(ring_hue, fill_hue) < 5, "--ring is not violet's hue"
+    assert ring_saturation >= GREY, "--ring is a grey, not violet"
+    fill_lightness = colorsys.rgb_to_hls(*(c / 255 for c in fill[:3]))[1]
+    ring_lightness = colorsys.rgb_to_hls(*(c / 255 for c in ring[:3]))[1]
+    assert ring_lightness > fill_lightness, "--ring is not lighter than the fill"
+
+
 def test_the_surfaces_are_plum_at_other_lightnesses() -> None:
     """I2: surfaces are derived from plum by lightness alone, one darker
     for wells and steps lighter for panels."""

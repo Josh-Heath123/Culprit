@@ -4,9 +4,7 @@
   <img src="docs/brand/hero-dark.png" width="800" alt="Culprit: finds where your system disagrees with itself. Beside it, how many of the faults planted in the demo services were verified fixed, the figure in the accuracy section below.">
 </picture>
 
-[Guide](docs/GUIDE.md) · [Quickstart](#quickstart) · [Limits](docs/LIMITS.md) ·
-[Probes](docs/PROBES.md) · [Permissions](docs/PERMISSIONS.md) ·
-[Install](docs/INSTALL.md) · [Security](docs/SECURITY.md)
+[Guide](docs/GUIDE.md) · [Quickstart](#quickstart) · [Limits](docs/LIMITS.md) · [Probes](docs/PROBES.md) · [Permissions](docs/PERMISSIONS.md) · [Install](docs/INSTALL.md) · [Security](docs/SECURITY.md)
 
 # Culprit
 
@@ -111,7 +109,9 @@ rank. Two sources that describe the same thing produce byte-identical
 subjects, so comparing them is a grouping, not a guess.
 
 **The walk.** `culprit diagnose` asks in a fixed order, cheapest and most
-fundamental first, and stops at the first question that finds a root:
+fundamental first, and stops at the first question that finds a root. A
+question it could not ask (a grant missing, a probe inconclusive) makes the
+diagnosis partial, and it says which:
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#221331", "primaryColor": "#261537", "primaryTextColor": "#fdfdfd", "primaryBorderColor": "#7540f5", "secondaryColor": "#2f1a44", "tertiaryColor": "#180e23", "lineColor": "#ab9dbd", "textColor": "#ab9dbd", "clusterBkg": "#180e23", "clusterBorder": "#452663", "edgeLabelBackground": "#221331", "titleColor": "#fdfdfd", "fontFamily": "Inter, sans-serif"}}}%%
@@ -121,7 +121,8 @@ flowchart TD
   latency["2 · latency<br/>each budgeted route, depth first"]
   isolated{"environment declared<br/>isolated, and the entry<br/>over its budget?"}
   nplusone["3 · N+1<br/>statements per item, one GET"]
-  database["4 · the database<br/>statement budget, generic plan,<br/>live indexes, migrations"]
+  database["4 · the database<br/>statement budgets; then the plan,<br/>live indexes and migrations"]
+  entryslow{"the entry itself<br/>over its budget?"}
   root["ROOT<br/>every edge cites its readings"]
   stopped["partial<br/>where the walk stopped, and why"]
 
@@ -134,8 +135,10 @@ flowchart TD
   isolated -- "no" --> database
   nplusone -- "one statement per item" --> root
   nplusone -- "none" --> database
-  database -- "all four agree" --> root
-  database -- "otherwise" --> stopped
+  database -- "a statement over its budget;<br/>a missing index when all four agree" --> root
+  database -- "none" --> entryslow
+  entryslow -- "yes: its own time" --> root
+  entryslow -- "no" --> stopped
 
   classDef answer fill:#d6fa4a,color:#221331,stroke:#d6fa4a
   class root answer
@@ -152,9 +155,9 @@ The full account, with the architecture diagrams, is in
 
 ## Engineering highlights
 
-- **The determinism boundary is linked, not promised.** Only two packages in
-  the binary may link `net/http`, and a test lists every package and fails on
-  any other: `TestTheNetworkBoundaryIsAnAllowlist` in
+- **The determinism boundary is linked, not promised.** Only the probe
+  package (with its one-file `guardedhttp`) and the agent's transport may
+  link `net/http`, and a test lists every package and fails on any other: `TestTheNetworkBoundaryIsAnAllowlist` in
   [`cli/cmd/culprit/check_test.go`](cli/cmd/culprit/check_test.go). Nothing
   in the binary opens a listener (`TestNothingInTheBinaryListens`).
 - **No LLM client outside narration.**
@@ -280,9 +283,7 @@ From the plans of record:
 | Backend | Python 3.12, FastAPI, SQLAlchemy, Alembic, `arq` jobs on Redis, managed with `uv` |
 | Data | PostgreSQL 16 with TimescaleDB and pgvector, one instance, least-privilege roles |
 | Frontend | React 18, Vite, TypeScript, Tailwind, shadcn/ui, TanStack Query, visx, cmdk |
-| Infrastructure and checks | Docker Compose, Caddy, GitHub Actions, Trivy, pytest, `go test`, pyright, ruff, import-linter, Playwright |
-
-The full table is in [the guide](docs/GUIDE.md#technology-stack).
+| Infrastructure and checks | Docker Compose, Caddy, GitHub Actions, Trivy, pytest, `go test`, pyright, ruff, import-linter, Playwright; the full table is in [the guide](docs/GUIDE.md#technology-stack) |
 
 ## Author and licence
 

@@ -80,22 +80,22 @@ FIGURES: tuple[tuple[str, re.Pattern[str], re.Pattern[str]], ...] = (
     (
         "facts",
         re.compile(r"(\d+) fact\(s\) compared across \d+ subject\(s\)"),
-        re.compile(r"\b([\d,]+) facts across [\d,]+ subjects\b"),
+        re.compile(r"\b([\d,]+)\s+facts\s+across\s+[\d,]+\s+subjects\b"),
     ),
     (
         "subjects",
         re.compile(r"\d+ fact\(s\) compared across (\d+) subject\(s\)"),
-        re.compile(r"\b[\d,]+ facts across ([\d,]+) subjects\b"),
+        re.compile(r"\b[\d,]+\s+facts\s+across\s+([\d,]+)\s+subjects\b"),
     ),
     (
         "gaps",
         re.compile(r"^Not checked \((\d+)\)", re.M),
-        re.compile(r"\b([\d,]+) gaps listed\b"),
+        re.compile(r"\b([\d,]+)\s+gaps\s+listed\b"),
     ),
     (
         "unverifiable",
         re.compile(r"^Unverifiable surface \((\d+)\)", re.M),
-        re.compile(r"\b([\d,]+) subjects only one source describes\b"),
+        re.compile(r"\b([\d,]+)\s+subjects\s+only\s+one\s+source\s+describes\b"),
     ),
 )
 
@@ -171,17 +171,38 @@ def catalogue_count(catalogue: Path = CATALOGUE) -> int:
     return len(probes)
 
 
+def _prose(text: str) -> tuple[str, list[int]]:
+    """The prose outside fenced code as one string, so a phrase that wraps
+    across lines is still read, and each of its lines' starting offsets."""
+    starts: list[int] = []
+    parts: list[str] = []
+    offset = 0
+    for _number, line in _prose_lines(text):
+        starts.append(offset)
+        parts.append(line)
+        offset += len(line) + 1
+    return "\n".join(parts), starts
+
+
+def _line_at(text: str, offset: int) -> int:
+    """The source line number of an offset into _prose(text)'s string."""
+    numbers = [number for number, _line in _prose_lines(text)]
+    _joined, starts = _prose(text)
+    index = max(i for i, start in enumerate(starts) if start <= offset) if starts else 0
+    return numbers[index] if numbers else 0
+
+
 def check_probe_count(paths: list[Path], count: int, root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     for path in paths:
-        for number, line in _prose_lines(path.read_text(encoding="utf-8")):
-            for said in PROBE_COUNT.findall(line):
-                value = int(said) if said.isdigit() else NUMBER_WORDS[said.lower()]
-                if value != count:
-                    where = path.relative_to(root).as_posix()
-                    failures.append(
-                        f"{where}:{number}: says {said} probes; the catalogue holds {count}"
-                    )
+        text = path.read_text(encoding="utf-8")
+        prose, _starts = _prose(text)
+        for match in PROBE_COUNT.finditer(prose):
+            said = match.group(1)
+            value = int(said) if said.isdigit() else NUMBER_WORDS[said.lower()]
+            if value != count:
+                where = f"{path.relative_to(root).as_posix()}:{_line_at(text, match.start())}"
+                failures.append(f"{where}: says {said} probes; the catalogue holds {count}")
     return failures
 
 
@@ -229,16 +250,17 @@ def check_figures(paths: list[Path], output: str, root: Path = ROOT) -> list[str
     failures: list[str] = []
     quoted_any = False
     for path in paths:
-        for number, line in _prose_lines(path.read_text(encoding="utf-8")):
-            for name, _produced, quoted in FIGURES:
-                for said in quoted.findall(line):
-                    quoted_any = True
-                    if int(said.replace(",", "")) != figures[name]:
-                        where = path.relative_to(root).as_posix()
-                        failures.append(
-                            f"{where}:{number}: quotes {said} {name}; the self-check "
-                            f"produced {figures[name]}"
-                        )
+        text = path.read_text(encoding="utf-8")
+        prose, _starts = _prose(text)
+        for name, _produced, quoted in FIGURES:
+            for match in quoted.finditer(prose):
+                quoted_any = True
+                said = match.group(1)
+                if int(said.replace(",", "")) != figures[name]:
+                    where = f"{path.relative_to(root).as_posix()}:{_line_at(text, match.start())}"
+                    failures.append(
+                        f"{where}: quotes {said} {name}; the self-check produced {figures[name]}"
+                    )
     if not quoted_any:
         failures.append("neither README.md nor docs/GUIDE.md quotes a self-check figure")
     return failures
