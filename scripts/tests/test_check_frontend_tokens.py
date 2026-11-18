@@ -154,6 +154,19 @@ def test_a_restricted_token_outside_its_components_turns_it_red(
     assert [(v.path, v.rule) for v in violations] == [(target, rule)]
 
 
+def test_the_summary_counts_a_misplaced_token_in_its_own_sentence(tmp_path: Path) -> None:
+    """C2: lime on a button is not a value that bypasses the tokens, and
+    the summary does not call it one."""
+    placed = gate.check_file(_page(tmp_path, '<span className="text-culprit" />'))
+    lines = gate.summary(placed)
+    assert len(lines) == 1 and lines[0].startswith("1 culprit or glass token(s)")
+    assert "bypass" not in lines[0]
+    both = placed + gate.check_file(_page(tmp_path, '<span className="text-red-500" />'))
+    lines = gate.summary(both)
+    assert [line.split(" ", 1)[0] for line in lines] == ["1", "1"]
+    assert "bypass the design tokens" in lines[0] and "culprit or glass" in lines[1]
+
+
 @pytest.mark.parametrize(
     "body",
     [
