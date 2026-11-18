@@ -16,6 +16,7 @@ export const HYPOTHESIS_LABELS: Readonly<Record<string, string>> = {
   latency_budget_exceeded: "Latency budget exceeded",
   statement_budget_exceeded: "Statement budget exceeded",
   missing_index: "Missing index",
+  n_plus_one: "One statement per item",
 };
 
 /** The label, or — for a kind this build does not know, stored by a newer

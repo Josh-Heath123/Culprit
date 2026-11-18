@@ -76,6 +76,7 @@ HYPOTHESIS_KINDS: frozenset[str] = frozenset(
         "latency_budget_exceeded",
         "statement_budget_exceeded",
         "missing_index",
+        "n_plus_one",
     }
 )
 

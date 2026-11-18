@@ -110,6 +110,11 @@ const (
 	// "No index serves the column this statement filters": supported only
 	// when OBSERVED, the plan, CONFIGURED and INTENT agree (Phase 37 part 3).
 	HypothesisMissingIndex = "missing_index"
+	// "This route runs one statement per item it returns" (Phase 39 part
+	// 2). Asked only beneath a route over its declared latency budget, and
+	// only in an environment declared isolated: evidence beneath a budget,
+	// never a finding of its own.
+	HypothesisNPlusOne = "n_plus_one"
 )
 
 // HypothesisKinds is every kind, for validating a manifest's discriminates.
@@ -117,7 +122,7 @@ var HypothesisKinds = []string{
 	HypothesisComponentFails, HypothesisConnectionUnreachable, HypothesisDatabaseUnreachable,
 	HypothesisTLSInvalid, HypothesisAuthAudience, HypothesisAuthRejected,
 	HypothesisContractMismatch, HypothesisConfigMissing, HypothesisLatencyBudgetExceeded,
-	HypothesisStatementBudgetExceeded, HypothesisMissingIndex,
+	HypothesisStatementBudgetExceeded, HypothesisMissingIndex, HypothesisNPlusOne,
 }
 
 // HypothesisLabels is each kind as a person reads it. The source is
@@ -137,6 +142,7 @@ var HypothesisLabels = map[string]string{
 	HypothesisLatencyBudgetExceeded:   "Latency budget exceeded",
 	HypothesisStatementBudgetExceeded: "Statement budget exceeded",
 	HypothesisMissingIndex:            "Missing index",
+	HypothesisNPlusOne:                "One statement per item",
 }
 
 // SymptomKind is how the symptom was named on the command line.
