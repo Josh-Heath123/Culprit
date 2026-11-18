@@ -381,10 +381,14 @@ budgets:
       storefront relies on.
   - subject: "http:inventory-service/GET /products/details"
     predicate: latency_p95_ms
-    value: 25
+    value: 15
     why: >-
-      Phase 39 part 2. PROVISIONAL: to be set from the spread measured
-      across CI's runners (Q37), against the default page of 200.
+      Phase 39 part 2. PROVISIONAL until a second CI run confirms it (Q37).
+      Measured on the fault library's stack against the default page of
+      200, run 44269336518: with N_PLUS_ONE_FAULT, one statement per
+      product, p95 46.0 and 46.4 ms; with the join, 4.6 and 5.1 ms. 15 ms
+      keeps the N+1's smallest p95 1.5 times over twice the budget and the
+      join's largest 1.5 times under half of it.
   - subject: "http:inventory-service/GET /products/details"
     predicate: response_items_max
     value: 200

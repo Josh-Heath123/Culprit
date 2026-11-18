@@ -3196,6 +3196,12 @@ per item, and these are its limits.
   measured against its default page of 200, its declared list bound: at
   50, the N+1 measured 15.5 to 15.9 ms, too close to the join to be told
   apart by a budget with room on both sides.
+- **A service just restarted may verify `inconclusive`.** Its first
+  requests open database connections. One slow answer in fifty is enough
+  to leave a p95 judged from 50 samples unplaced against a tight budget,
+  so a verification run straight after a restart can be `inconclusive`
+  where the fix worked. Send the route some traffic first, or verify
+  again. The fault library warms the demo's route after its fix.
 - **One request, measured once.** The walk brackets one `GET`; the
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a
