@@ -383,16 +383,18 @@ budgets:
     predicate: latency_p95_ms
     value: 15
     why: >-
-      Phase 39 part 2, pending Q39. Measured on the fault library's stack
+      Phase 39 part 2, pending Q40. Measured on the fault library's stack
       against the default page of 200, across two CI runs (44269336518,
       44273031843): with N_PLUS_ONE_FAULT, one statement per product, p95
       46.0 to 62.9 ms; with the join, 4.5 to 5.1 ms. 15 ms keeps the N+1's
       smallest p95 1.5 times over twice the budget and the join's largest
       1.5 times under half of it (decision 4 as first written). But the
       healthy route's slowest answer in a run of 50 has reached 28.1 to
-      39.5 ms, over the budget, so its fix verifies inconclusive. Q38
-      amended decision 4 to the judge's terms; its rule 3 does not hold
-      yet (Q39).
+      39.5 ms, over the budget, so its fix verified inconclusive until
+      Q39 warmed the demo and froze its startup heap; since then at most
+      13.1 ms. Q38 amended decision 4 to the judge's terms; its rule 3 is
+      not met on the fault's side on one runner (sample 45 27.7 and 30.2
+      ms): Q40.
   - subject: "http:inventory-service/GET /products/details"
     predicate: response_items_max
     value: 200

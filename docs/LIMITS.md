@@ -3203,7 +3203,8 @@ per item, and these are its limits.
   budget, and its fix verifies `inconclusive`. The demo's N+1 route does
   this in CI (Phase 39 part 2; Q38 ruled that a budget is set in the
   judge's terms, the fixed route's slowest answer at most two-thirds of
-  it; open as Q39).
+  it; Q39 found and removed the demo's own slow answers; the budget is
+  open as Q40).
 - **A just-restarted service is not yet warm.** Its first request, and its
   runtime's first full garbage collection, can each exceed a tight budget
   (in the demo, 78 to 129 ms and a 36 ms pause about 7 s in, on Python
