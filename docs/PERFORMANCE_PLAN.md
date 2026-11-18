@@ -2296,6 +2296,106 @@ The brief follows from that.
 - no item value, key or sample kept anywhere;
 - no N+1 (Phase 39).
 
+**Architecture review of part 2, 2026-11-17 — merged as `02bae0d` (PR #46).
+Part 2 is signed off, and Phase 38 is complete.**
+
+**How it landed.** The run stopped before its end. Malcolm's machine ran short
+of memory while the local gates ran in the background: `just lint` passed,
+`just typecheck` was killed, and the rest of the local set, `just test` and
+the auditors never ran. No run report was written. The branch, with all seven
+items through `6bec181`, was then pushed as PR #46 and merged at `6bec181`
+once CI was green. §5 still holds part 1's report; this block is part 2's
+record.
+
+**CI.** Read by id from GitHub's API:
+- PR #46's run 44167165860 on `6bec181`: success on every job on attempt 1
+  (19 jobs; `publish` and `deploy` skipped, as on every pull request). Both
+  fault-library shards, `self-check`, both e2e jobs, `kind-capture`,
+  `migration-round-trip`, and every image build and scan passed. `main` had
+  not moved from `3d9fb33`, so the branch was the merge result.
+- Every local gate the run did not reach also runs in CI on the merge
+  result: `lint-imports`, schema drift, `check_no_llm_imports`, scan
+  coverage, coupled files, migration symmetry, gofmt and `go vet`,
+  `go test`, and the Python suites. CI is their gate of record, and it is
+  green.
+- `main`'s push run 44170421496 on `02bae0d` was in progress at sign-off.
+  Phase 39 part 1's step 0 confirms it.
+- This run's step 0 (from its stop message): `main`'s run 44152778399 on
+  `3d9fb33` failed on attempt 1 in fault-library (2) alone, on Q37's
+  precondition (statement means of 29.6 and 28.5 ms against the old 30 ms
+  floor), and passed every job on attempt 2 (57.9 ms). That is Q37's
+  evidence, now recorded.
+- The job logs could not be read from the architecture session, so the
+  margins the new budgets leave in CI are not yet recorded. Phase 39 part
+  1's step 0 reads them.
+
+**Verified on disk, in place of the audits.** On `02bae0d`, in the
+architecture session's workspace (Go 1.27):
+- `go test` over `model`, `probe`, `guardedhttp`, `check`, `extract`,
+  `report` and `diverge`, and `shared/tests/test_lists.py` (30 tests): all
+  green.
+- **Mutations, each shown red and then restored:** dropping the two-arrays
+  guard in Python's `response_list` (the fixture test fails), and in Go's
+  `model.ResponseList` (the fixture test fails, naming the case); adding a
+  key to the probe's `measured` (`TestNoItemKeyOrValueIsKept` fails).
+- **The probe:** one GET through the guarded client, with no query,
+  fragment, userinfo, header or redirect followed. The body is read to the
+  1 MiB cap and dropped after counting. `measured` holds the URL, method,
+  `at`, status, and the count or why nothing was counted. The tests use a
+  real local server whose items hold secret-looking keys and values. Not
+  JSON, no array at the pointer, an object at the top, not 2xx, a redirect,
+  and a body over the cap are each `inconclusive`, saying why. It is not in
+  the walk.
+- **`at:`** is valid on `response_items_max` only (Go's "at on a latency"
+  case, and `budgets[].at` in the corpus). Both readers refuse `at: ""`;
+  the corpus found the split.
+- **The unbounded surface,** over the recorded spec, is exactly
+  `GET /orders`. `/products` is bounded by `maxItems` and `/tags` by its
+  budget. The two-array, no-array, non-JSON and error-only routes are not
+  lists.
+- **Q37:** the budgets are 10 ms and 25 ms. Only the constants and messages
+  moved: the preconditions' multipliers are unchanged. Both `why`s carry the
+  measured spread.
+- **Goldens:** none changed. The text headline changes only when a bundle is
+  over budget. JSON's summary gains `failing`, always present, which is an
+  additive change.
+
+**Accepted:**
+- **The unbounded surface is listed only when budgets are declared,** as the
+  unbudgeted surface is (part 1). A project that declares none is not told
+  that every list is unbounded.
+- **`failing` in JSON's summary** counts divergences and bundles over budget
+  together: what `--fail-on=any` fails on.
+
+**The brief was wrong about the demo.** It said `GET /products` "answers 50
+at most". That holds only for the default request: the route takes `?limit=`
+up to 200. A probe sends no query, so it counts the default page, which is
+the featured category, empty by design (Q35). In CI the probe therefore
+passes with 0 items. The run found this and said so in the budget's `why`
+and in LIMITS, which is right.
+
+Accepted for part 2. End to end, against a real service, the run shows that
+the GET is sent, the body is JSON, the pointer `/products` resolves to an
+array, and the reading is judged against the demo's own budget. Counting a
+real list, and failing over the bound, are shown against the test server.
+**Carried into Phase 39 part 2:** its list route's default answer holds
+items, and the list probe runs on it, so the end-to-end count is no longer
+zero. This is pattern 8 again: the brief described the route from its
+docstring, not from its code.
+
+**Carried into Phase 39 part 1, as small items:**
+- The README's list-budget section shows the command but no output. Take the
+  output from a real run (CI's log, or the quickstart where memory allows).
+  Never write it by hand.
+- Record what this run could not: Q37's margins in CI, from the database
+  case's `MEASURED` lines (its step 0).
+
+**On how a run ends.** A run that cannot hold its local gates goes on rather
+than stopping. It runs the gates one at a time, in the foreground. Any gate
+the machine cannot hold is reported as not run, and CI is its gate. The
+auditors still run, and the report is committed before the pull request is
+marked ready. "How Phase 39 is run" makes this binding.
+
 ---
 
 ### Phase 39 — N+1, where it can be seen cleanly
@@ -2357,6 +2457,165 @@ not measured.
 
 **17. Do NOT implement yet.** No trace ingestion; `telemetry.traces.read` stays
 unused. No analysis of ORM source. No N+1 detection in a shared environment.
+
+**How Phase 39 is run (2026-11-17).**
+
+Phase 39 is two parts, each its own `/next` run with a review after it:
+- **Part 1 — the measurement.** `isolated:` on an environment;
+  `probe.db.statements_per_request` in `culprit probe`; the per-item rule as
+  one pure function in Go and Python. Not in the walk.
+- **Part 2 — the walk and the fault.** `n_plus_one`, the walk's join,
+  `verify`, the demo's relation and list route, the library fault in an
+  isolated environment with the load generator paused, and the documents.
+  Its brief is written at part 1's review.
+
+**What the code holds today** (`git grep` on `02bae0d`):
+- Nothing reads `isolated`, and nothing names `n_plus_one`. It is in §2 of
+  this plan, but not in `model.HypothesisKinds` or `HYPOTHESIS_KINDS`.
+- The statistics read is one template in `dbsession`: per `queryid`, the
+  calls and time of every role but Culprit's own, in the current database.
+  `Window` takes two snapshots of it a fixed 30 seconds apart, in one
+  session, and reads `pg_stat_statements_info` to see a reset.
+- `guardedhttp.CountItems` (Phase 38 part 2) sends one GET and counts the
+  array at a pointer.
+- The demo's database holds one table, `products`, read with literal SQL. It
+  has no relation to load per item, and `GET /products` answers an empty
+  page by default.
+- `probe.db.plan` is the precedent for a probe whose reading is evidence,
+  not a finding: evidence verdicts and no expectation (Phase 37 part 3).
+
+**Decided now for both parts, so it is not re-argued:**
+1. **N+1 is evidence beneath a declared budget, not a finding of its own.**
+   `probe.db.statements_per_request` declares evidence verdicts (`pass`,
+   `inconclusive`, `refused`) and no expectation, as `probe.db.plan` does.
+   - A statement run once per item on a fast route is not a fault until
+     something declares the route fast (§0.1). A threshold Culprit invented
+     would be out of scope (§4).
+   - In part 2, `n_plus_one` is supported in the walk only beneath a route
+     over its declared latency budget.
+   - On its own, `culprit probe` reports the measurement, and its reason
+     names any statement run per item.
+2. **The rule, made exact.** With at least two items counted, a normalised
+   statement is run per item when its calls in the bracket are at least the
+   item count.
+   - With fewer than two items, the list's own statement cannot be told from
+     a per-item one, so the reading is `inconclusive`, saying so.
+   - It is one pure function in `model` and `culprit_model`, held to one
+     generated conformance fixture with hand-asserted anchors (pattern 9).
+3. **Isolation is declared, and checked where it can be.**
+   - `isolated: true` on an environment, typed strictly in both manifest
+     readers and in the generated corpus.
+   - It reaches the probe from the manifest through the runner, as the
+     grants do, and never as a probe input, so no caller can assert it. The
+     production agent stamps every request as not isolated.
+   - In an environment not declared isolated, nothing is sent, and the
+     reading is `inconclusive`, saying why (P7).
+   - Where it is declared, a quiet window comes first: two snapshots 2
+     seconds apart, before the GET. Any call by a role other than Culprit's
+     in that window means the declaration did not hold, and the reading is
+     `inconclusive`, giving the number of calls. This checks the declaration
+     with the same template. It cannot see traffic that arrives during the
+     GET itself, and LIMITS says so.
+4. **The bracket.** One database session takes the snapshots: before the
+   quiet window, after it, and after the GET.
+   - It uses only the existing statistics and `pg_stat_statements_info`
+     templates, with no new statement (field 12). Deltas, never a reset. A
+     reset or deallocation inside the bracket makes the reading
+     `inconclusive`.
+   - `dbsession` stays the only database boundary and makes no HTTP call.
+     How the GET is placed between its snapshots is the run's choice, as long
+     as the boundary tests still hold.
+5. **The GET** is `probe.http.response_items`'s: one GET, under the latency
+   probe's URL refusals, through `CountItems`. The items are counted from
+   that same response.
+   - **Where the list is:** an `at` input, a JSON pointer checked by the same
+     rule as a budget's `at:`; with none, the top level. In part 2 the walk
+     passes the route's `response_items_max` budget's `at:`.
+6. **Which database:** the route's component's schema database, by its
+   single `sql` edge (Q34). With none, or more than one, nothing is sent,
+   and the reading is `inconclusive`.
+7. **What is kept,** in `measured`: the URL, `at`, the status, the item
+   count, the quiet window's calls, and, per normalised statement in the
+   bracket, its `queryid` and calls.
+   - Statement text is kept only under Q29 and Q32's rules, through the one
+     redaction choke point. The statements kept are capped, as
+     `probe.db.statement_budget` caps them.
+   - Never a parameter, a row, an item, a key or a value.
+8. **Capabilities:** `db.stats.read` and `net.http.outbound`, both existing.
+   No new capability, role or template.
+9. **Runs on Malcolm's machine.** Run the local gates one at a time, in the
+   foreground. If the machine cannot hold a gate, report it as not run and
+   leave it to CI. The auditors always run. Commit the report before marking
+   the pull request ready. Never run the fault library locally.
+
+**Noted now for part 2's brief, not decided:**
+- The demo needs a relation to load per item: a second table, by a new
+  migration (`0004`), with no landed migration rewritten (Q35 (b)). The
+  relation must be distinct per item. An ORM's identity map loads a shared
+  row once, so the calls would fall below the item count and nothing would
+  be named.
+- The N+1 route's default answer must hold items, since a probe sends no
+  query. That also closes part 2's count of 0 (Phase 38).
+- The demo's own background traffic trips the quiet window if it reads the
+  database: the load generator, and any health check that does. Part 2
+  measures that before declaring an environment isolated.
+- The route's latency budget comes from the spread measured across CI's
+  runners, not from one machine (Q37).
+
+**Part 1 — the measurement. Brief and criteria, 2026-11-17.**
+
+**Work order.**
+0. **Commit the review first.**
+   - Confirm `main`'s push run 44170421496 on `02bae0d`, by id.
+   - From that run and from PR #46's run 44167165860, record the database
+     case's `MEASURED` lines (Q37's margins, which part 2 left unrecorded)
+     and the list probe's reading line (`gh run view <id> --log`).
+   - If fault-library (2) failed there on the database case's precondition,
+     do not rerun it to green. Stop and report: Q37 said the next step is a
+     larger table, not a looser test.
+   - Then `git apply ../phase-38-2-review.patch` and
+     `git commit -F ../phase-38-2-review.txt`.
+1. **The carried item:** the README's list budget, with the output of a real
+   run.
+2. **`isolated:`** in both manifest readers and the corpus.
+3. **The per-item rule,** in Go and Python, with its fixture.
+4. **The bracket,** in `dbsession`.
+5. **The probe,** in `culprit probe`, with isolation stamped wherever a
+   `probe.Request` is built (`diagnose`, `probe`, `verify`, the agent).
+6. **The documents:** PROBES, PERMISSIONS (no new grant, and it says so) and
+   LIMITS. LIMITS covers why shared environments are not measured, what the
+   quiet window cannot see, a relation shared by items, and fewer than two
+   items.
+
+**Acceptance criteria.**
+- **Against recorded statistics:** a bracket where one statement ran once
+  per item names that statement. One where the items were loaded together
+  names none. Fewer than two items, a reset, or calls in the quiet window
+  are each `inconclusive`, saying why.
+- **Not declared isolated:** `inconclusive`, with nothing sent. The fake
+  HTTP client and the fake database record no call.
+- **Against a real PostgreSQL 16** (the database boundary step): a local
+  test server answers a list of N items with one statement per item, and
+  that statement measures N calls in the bracket. The same list loaded in one
+  statement measures every statement at one call.
+- **The rule:** Go and Python agree over the generated fixture. A mutation in
+  each is shown red.
+- **`isolated:`:** both readers agree over the corpus. A test shows that a
+  probe input cannot set isolation.
+- **Values are never kept:** shown by a test whose items, and whose
+  statements' parameters, hold secret-looking strings.
+- **Unchanged elsewhere:** no hypothesis kind added, `isolate` unchanged, and
+  every existing golden unchanged.
+- **CI** is green on the merge result, and `LLM_PROVIDER=none` changes
+  nothing. The run report is committed before the pull request is marked
+  ready.
+
+**Do NOT implement in part 1:**
+- no `n_plus_one`, and no change to the walk or `verify`;
+- no demo route, migration or library fault;
+- no new statement template, capability or role;
+- no measurement in an environment not declared isolated;
+- no reading of ORM source (D6), and no trace ingestion.
 
 ---
 

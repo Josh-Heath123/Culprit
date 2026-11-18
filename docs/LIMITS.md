@@ -3100,3 +3100,64 @@ no bound is listed as unbounded.
   is refused.
 - **Not in the walk.** No hypothesis uses the probe, and the fault library
   plants no list fault: what an unbounded list costs is Phase 39's.
+
+## Statements per item
+
+Phase 39 part 1. `probe.db.statements_per_request` names the statements one
+`GET` of a list route runs once per item. It reads exact counts, and so it
+is exact only where the counts are this request's alone.
+
+- **Shared environments are not measured.** `pg_stat_statements` counts a
+  statement's calls by every client of the database, and one request's
+  calls cannot be told from another's of the same statement. So the probe
+  sends nothing unless `culprit.yaml` declares the environment
+  `isolated: true`, and says so (`inconclusive`). Production, and any
+  environment with a load generator, a scheduled job or a second user
+  running, is not isolated and must not be declared so. Isolation is never
+  inferred, and the production agent never measures as if it held.
+- **What the quiet window can see, and cannot.** Before the `GET`, two
+  snapshots 2 seconds apart must show no call by any role but Culprit's;
+  any call means the declaration did not hold, and nothing is sent. It
+  cannot see a client that starts during the `GET` itself, or one that
+  runs less often than every 2 seconds and happens to be idle in the
+  window: those calls land in the bracket, and a statement they share with
+  the route is over-counted.
+- **Culprit's role is left out, whoever uses it.** The snapshots leave out
+  the role Culprit connects as. A client, or the service itself,
+  connecting as that same role is invisible to the quiet window and to the
+  bracket: nothing it runs is counted or named. Give Culprit a role of its
+  own (PERMISSIONS.md).
+- **A relation shared by items.** The rule names a statement run at least
+  once per item. When items share the row they load (ten products of one
+  category, and an ORM that loads the category once and keeps it), the
+  statement runs fewer times than there are items and is not named,
+  though the code is written one load per item. The count is of what ran,
+  not of how the code is written.
+- **Fewer than two items** cannot be judged: with one, the list's own
+  statement runs once per item too. The reading is `inconclusive`, saying
+  so. An empty default page (a probe sends no query; see "List budgets")
+  gives nothing to measure.
+- **Two statements of one shape.** Statements are counted as Postgres
+  normalises them. A per-item statement that the code also runs once for
+  the list (the same `SELECT ... WHERE id = $1`) is counted together, and
+  is named when the sum reaches the item count.
+- **Only the route component's one database.** The database is the one
+  the route's component reads by its single `sql` connection in
+  `culprit.yaml`. A component with none, or with two, is not measured. A
+  per-item call to another service, rather than to the database, is not
+  seen at all.
+- **Twenty statements.** A reading keeps at most 20, most calls first, so
+  every statement it names is kept unless more than twenty are; the rest
+  are counted, and the reason says so.
+- **Evidence, not a finding.** The reading passes whether or not a
+  statement is named, and fails nothing on its own: a statement run per
+  item on a route nobody has declared slow is not a fault (Phase 39). It
+  is not in the walk yet.
+- **The same refusals as the list probe.** One `GET`, no query, no
+  credential, no redirect, 1 MiB; a response it cannot count is
+  `inconclusive`, and nothing from the bracket is kept for it. The text of
+  a statement is kept only as Postgres normalised it, under the rules in
+  "Statement budgets and plans"; parameters, rows and items never.
+- **Timing.** The quiet window is 2 seconds, fixed; the probe's whole run
+  is bounded by its 30-second timeout. A deadline with less than the quiet
+  window and 5 seconds left sends nothing.

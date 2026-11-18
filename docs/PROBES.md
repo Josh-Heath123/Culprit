@@ -100,6 +100,7 @@ from is the next section.
 | `probe.edge.impedance` | *none* | observe | `telemetry.metrics.read` | *none* | the connection's latency or error rate is ≥ 3 standard deviations from its own history |
 | `probe.http.latency` | `url`, or an `http:` target + `base_url` | interrogate (metered) | `net.http.outbound` | INTENT (`latency_p95_ms`, `latency_p50_ms`) | the declared budget's percentile is over budget at 90% confidence; one reading per budget on the route (below) |
 | `probe.http.response_items` | `url`, or an `http:` target + `base_url` | interrogate | `net.http.outbound` | INTENT (`response_items_max`) | the list at the budget's `at:` holds more items than its bound (below) |
+| `probe.db.statements_per_request` | an `http:` `GET` target + `base_url`, or `url`; optional `at` | interrogate | `db.stats.read`, `net.http.outbound` | *none* — evidence | never: it names the statements one `GET` of a list runs once per item, only in an environment declared `isolated: true`; inconclusive elsewhere (below) |
 
 Inputs are supplied with `--input key=value`, repeated. A list input
 (`expect_fields`, `expect_columns`) is built by repeating the same key:
@@ -320,6 +321,71 @@ from the statement reading, which is the only way a `queryid` reaches it.
 
 The walk sends no statement and makes no traffic: the window measures the
 system's own (LIMITS, "The database in the walk").
+
+## Statements per item — `probe.db.statements_per_request`
+
+Phase 39 part 1. An N+1 is a list route that runs one statement for the
+list and then one more per item. Measured per request it is exact, but
+only where nothing else is talking to the database: in a shared
+environment another client's calls of the same statement cannot be told
+from this request's. So the probe measures only where `culprit.yaml`
+declares the environment isolated:
+
+```yaml
+environments:
+  lab:
+    adapter: compose
+    isolated: true                   # nothing but Culprit talks to its databases while it measures
+```
+
+- **Isolation is declared, never asked for.** It reaches the probe from
+  `culprit.yaml` through the runner, which stamps it on every request and
+  overwrites whatever a caller set: no input can assert it, and the
+  production agent (`culprit agent`) never measures as if an environment
+  were isolated. Not declared: nothing is sent, and the reading is
+  `inconclusive`, saying so.
+- **Which database:** the one the route's component reads by its single
+  `sql` connection in `culprit.yaml`. With none, or more than one, nothing
+  is sent, and the reading is `inconclusive`.
+- **The quiet window checks the declaration.** One read-only session takes
+  a snapshot of `pg_stat_statements`, waits 2 seconds, and takes another.
+  Any call in that window by a role other than Culprit's means the
+  environment was not quiet: the `GET` is not sent, and the reading is
+  `inconclusive`, giving the number of calls.
+- **The bracket.** Then the `GET` (probe.http.response_items's: a `GET`
+  route only, the target's own path with no query, fragment or userinfo,
+  no header, no redirect followed, the body read to 1 MiB), and a third
+  snapshot in the same session. Each statement's calls between the second
+  and third snapshots are the request's. The items are counted from the
+  same response, at `at` (a JSON pointer, as a budget's `at:`; the top
+  level when there is none). Only the existing statistics templates are
+  sent: deltas, never a reset. A reset or eviction anywhere in the bracket
+  makes the reading `inconclusive`.
+- **The rule** (`model.JudgePerItem`, `culprit_model.per_item`): with at
+  least two items, a statement is run per item when its calls in the
+  bracket are at least the item count. With fewer than two, the list's own
+  statement cannot be told from a per-item one, so the reading is
+  `inconclusive`.
+- **What it keeps:** the url, `at`, the database, the quiet window and its
+  calls, the status, the item count, and per statement its `queryid`,
+  calls and text (only as Postgres normalised it, under the same rules as
+  `probe.db.statement_budget`), at most 20, most calls first, so every
+  statement it names is kept. `per_item` lists the named `queryid`s. Never
+  a parameter, a row, an item, a key or a value.
+- **Verdicts:** `pass` with a count, whether or not a statement is named:
+  the reason names each statement run per item, with its calls. It has no
+  `fail`. A statement run once per item on a fast route is not a fault
+  until something declares the route fast; Phase 39 part 2 puts it in the
+  walk only beneath a route over its declared latency budget.
+  `inconclusive` as above, and `refused` without `db.stats.read` and
+  `net.http.outbound`. A reading whose verdict or `per_item` is not its
+  own integers' is refused in Go and at the API.
+
+```
+culprit probe "http:inventory-service/GET /products" -p probe.db.statements_per_request     --input base_url=http://inventory-service:8002 --input at=/products --env lab
+```
+
+It is not in the walk, and the fault library plants no N+1 yet (part 2).
 
 ## What each probe rules out — `discriminates`
 

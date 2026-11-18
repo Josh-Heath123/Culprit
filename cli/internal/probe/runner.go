@@ -42,6 +42,9 @@ type Runner struct {
 	// (expect.go). Nil means none were supplied, which every probe that
 	// compares against a declaration reports as inconclusive.
 	expectations *Expectations
+	// isolated is the one environment culprit.yaml declares isolated, if
+	// this runner's is; "" for none (Phase 39 part 1).
+	isolated string
 }
 
 // Override is one entry of culprit.yaml's `probes:` section (field 10).
@@ -64,6 +67,11 @@ type Options struct {
 	// Expectations, when set, are resolved for every request that does
 	// not already carry one.
 	Expectations *Expectations
+	// IsolatedEnvironment is the environment culprit.yaml declares
+	// `isolated: true`, when the runner's environment is; "" when it is
+	// not, and always "" for the production agent. Every request's
+	// Isolated is stamped from it, whatever the caller set (Phase 39).
+	IsolatedEnvironment string
 }
 
 // NewRunner builds a Runner. A nil catalogue means the built-in one.
@@ -92,6 +100,7 @@ func NewRunner(options Options) *Runner {
 		concurrency:  concurrency,
 		overrides:    options.Overrides,
 		expectations: options.Expectations,
+		isolated:     options.IsolatedEnvironment,
 	}
 }
 
@@ -151,6 +160,9 @@ func (r *Runner) runOne(ctx context.Context, request Request) []model.Reading {
 	}
 
 	manifest := probe.Manifest()
+	// Isolation is the runner's to say, from culprit.yaml: never the
+	// caller's, and never an input's (Phase 39 part 1, decision 3).
+	request.Isolated = r.isolated != "" && request.Environment == r.isolated
 
 	if reason, disabled := r.disabled(manifest.ID, request.Environment); disabled {
 		return []model.Reading{r.emit(request, manifest, inconclusive(reason), nil)}

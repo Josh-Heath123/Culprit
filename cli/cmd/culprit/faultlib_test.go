@@ -774,6 +774,19 @@ func (s *faultStack) countProducts(fault faultExpectation) {
 	if reading.Expected["response_items_max"] != float64(50) || reading.Expected["at"] != "/products" {
 		s.t.Errorf("judged against %v, want 50 items at /products", reading.Expected)
 	}
+	// The same command as the README shows it, in text, logged whole: the
+	// README quotes this output from CI's log, never by hand (Phase 39
+	// part 1, item 1).
+	text, err := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "probe",
+		productsRoute.subject, "-p", model.ResponseItemsProbeID,
+		"--input", "base_url=http://inventory-service:8002",
+		"-f", "/tmp/walk/culprit.yaml", "--env", fault.Environment,
+		"--no-plugins", "--agent-id", "fault-library").CombinedOutput()
+	if err != nil {
+		s.t.Errorf("culprit probe probe.http.response_items in text in %s: %v\n%s", container, err, text)
+		return
+	}
+	s.t.Logf("README OUTPUT (culprit probe, list budget):\n%s", text)
 }
 
 // measureLatency runs probe.http.latency on one of inventory-service's

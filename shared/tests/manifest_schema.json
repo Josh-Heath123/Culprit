@@ -38,6 +38,7 @@
     "environments{}.endpoints{}.tls": "bool",
     "environments{}.exec{}[]": "str",
     "environments{}.grants{}": "grant",
+    "environments{}.isolated": "bool",
     "environments{}.kubernetes.context": "str",
     "environments{}.kubernetes.namespace": "str",
     "extract.components{}.artefacts[]": "str",

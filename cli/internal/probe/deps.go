@@ -133,6 +133,12 @@ type StatementInspector interface {
 	// Plan reads one statement by queryid from the database's statistics
 	// and returns its generic plan, under db.plan.read.
 	Plan(ctx context.Context, database string, queryID int64) (capture.StatementPlan, error)
+	// Bracket measures the database component reads by its one `sql` edge
+	// (Q34): a quiet window, then between, in one session, with the
+	// statistics templates only (Phase 39 part 1). It returns the
+	// database's name. With no `sql` edge, or more than one, nothing is
+	// sent: an UnavailableError.
+	Bracket(ctx context.Context, component string, between func(ctx context.Context) error) (capture.StatementBracket, string, error)
 }
 
 // UnavailableError is a data source saying a probe's preconditions are

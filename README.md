@@ -775,8 +775,18 @@ culprit probe "http:inventory-service/GET /products" -p probe.http.response_item
 
 The fault library runs exactly this in CI, inside the faults stack, and
 it passes: the probe asks for the default page, of the storefront's
-featured category, which is empty by design (step 5). The limits are in
-[`docs/LIMITS.md`](docs/LIMITS.md), "List budgets".
+featured category, which is empty by design (step 5). Its output there
+(CI run 44180363288, copied from the log):
+
+```text
+PASSING (1)
+  probe.http.response_items  http:inventory-service/GET /products
+      measured: at=/products items=0 method=GET status=200 url=http://inventory-service:8002/products
+
+0 failing, 0 inconclusive, 0 refused, 1 passing
+```
+
+The limits are in [`docs/LIMITS.md`](docs/LIMITS.md), "List budgets".
 
 **Databases.** A component's database is reached through a variable you
 name, never a connection string in the file:

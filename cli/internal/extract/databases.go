@@ -25,6 +25,26 @@ package extract
 // sqlEdge is the kind of connection a component reads its database by.
 const sqlEdge = "sql"
 
+// SQLDatabases are the components component connects to by a `sql` edge,
+// in the order declared. probe.db.statements_per_request measures the one
+// database a route's component reads (Phase 39 part 1, decision 6), and
+// sends nothing when there is none or more than one: unlike SchemaDatabase,
+// it has no fallback name to guess.
+func (m *Manifest) SQLDatabases(component string) []string {
+	var targets []string
+	if m == nil {
+		return targets
+	}
+	if found, ok := m.componentNamed(component); ok {
+		for _, connection := range found.Connections {
+			if connection.Kind == sqlEdge {
+				targets = append(targets, connection.To)
+			}
+		}
+	}
+	return targets
+}
+
 // SchemaDatabase is the database component's schema facts are on.
 func (m *Manifest) SchemaDatabase(component string) string {
 	if m != nil {

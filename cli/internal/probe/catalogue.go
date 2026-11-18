@@ -104,6 +104,8 @@ func builtIn() []Probe {
 		httpLatency{},
 		// Phase 38 part 2.
 		httpResponseItems{},
+		// Phase 39 part 1.
+		dbStatementsPerRequest{},
 	}
 }
 

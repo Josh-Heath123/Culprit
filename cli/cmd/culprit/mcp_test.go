@@ -494,6 +494,8 @@ func TestEveryCatalogueInputIsClassified(t *testing.T) {
 		"method": true, "token": true, "token_env": true, "key": true, "package": true, "schema": true,
 		"table": true, "expect_fields": true, "expect_columns": true, "expect_audience": true,
 		"expect_issuer": true, "expect_version": true,
+		// A JSON pointer into the response (Phase 39 part 1): never an address.
+		"at": true,
 	}
 	for _, manifest := range catalogue().Manifests() {
 		properties, _ := manifest.Inputs["properties"].(map[string]any)

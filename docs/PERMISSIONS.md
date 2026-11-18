@@ -200,6 +200,15 @@ read-only session:
 Culprit never resets these statistics: that is a write. Implies no other
 capability.
 
+**`probe.db.statements_per_request` needs no new capability** (Phase 39
+part 1). It takes the same snapshots with the same three statements, in
+one read-only session: one, a second 2 seconds later (the quiet window),
+and a third after one `GET` under `net.http.outbound`. It needs both
+grants, and with either withheld nothing is sent. It runs only in an
+environment `culprit.yaml` declares `isolated: true`; that declaration is
+not a grant and widens nothing: it says only that the counts can be read
+as one request's. No new role, statement or template was added for it.
+
 ### `db.plan.read`
 
 **Used by `probe.db.plan`, and by `probe.db.statement_budget` to know
@@ -310,8 +319,10 @@ For a component's declared `endpoint` (a host and a port):
 **Used since Phase 31.** This is the one grant that lets Culprit make an
 application request to your running service, and it is what
 `probe.http.reachable`, `probe.http.route_conformance`,
-`probe.http.schema_conformance`, `probe.auth.propagation` and, since
-Phase 36, `probe.http.latency` need.
+`probe.http.schema_conformance`, `probe.auth.propagation`, since Phase
+36 `probe.http.latency`, since Phase 38 `probe.http.response_items` and,
+since Phase 39, `probe.db.statements_per_request` (one `GET`, with
+`db.stats.read`; above) need.
 
 What it permits is deliberately narrow: `GET` and `OPTIONS` only. The
 HTTP client has no method that can send a body and no way to express any

@@ -36,7 +36,9 @@ because it has a silent-wrong-answer failure mode:
    the API wherever a reading arrives. A `probe.db.statement_budget`
    reading (Phase 37 part 2) and a `probe.http.response_items` reading
    (Phase 38 part 2, `culprit_model.lists.judge_response_items`) are held
-   the same way.
+   the same way, and so is a `probe.db.statements_per_request` reading
+   (Phase 39 part 1, `culprit_model.per_item.judge_per_item`), whose
+   `per_item` list must also be the one its integers give.
 
 The `readings` table (migration `c07a5f31d8e4`) already carries every
 field below; Phase 31 populates it for the first time.
@@ -51,6 +53,7 @@ from culprit_model.capabilities import Capability
 from culprit_model.facts import Provenance
 from culprit_model.latency import LATENCY_PROBE_ID, LatencyShapeError, judge
 from culprit_model.lists import RESPONSE_ITEMS_PROBE_ID, ListShapeError, judge_response_items
+from culprit_model.per_item import STATEMENTS_PER_REQUEST_PROBE_ID, judge_per_item
 from culprit_model.planes import Plane
 from culprit_model.redaction import looks_like_credential, redact_credentials
 from culprit_model.statements import STATEMENT_PROBE_ID, judge_statements
@@ -362,6 +365,43 @@ class Reading(BaseModel):
             raise ValueError(
                 f"a list reading says {self.verdict.value}, "
                 f"but its own count and bound give {verdict}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _a_per_item_verdict_is_its_integers(self) -> "Reading":
+        """Phase 39 part 1: a probe.db.statements_per_request reading's verdict,
+        and the statements it names, are re-judged from its own integers
+        (culprit_model.per_item)."""
+        if self.probe_id != STATEMENTS_PER_REQUEST_PROBE_ID or self.verdict is Verdict.REFUSED:
+            return self
+        if "statements" not in self.measured:
+            # Nothing was bracketed: not isolated, a quiet window that was not
+            # quiet, a reset, no count. Only "could not tell" is honest.
+            if self.verdict is not Verdict.INCONCLUSIVE:
+                raise ValueError(
+                    f"a {self.verdict.value} per-item reading must carry the statements "
+                    "it was judged on"
+                )
+            if "per_item" in self.measured:
+                raise ValueError("a per-item reading names statements it does not carry")
+            return self
+        try:
+            verdict, _, per_item = judge_per_item(self.measured)
+        except LatencyShapeError as exc:
+            raise ValueError(
+                f"a per-item reading's measurement is not the rule's input: {exc}"
+            ) from None
+        if verdict != self.verdict.value:
+            raise ValueError(
+                f"a per-item reading says {self.verdict.value}, but its own integers give {verdict}"
+            )
+        claimed = self.measured.get("per_item")
+        if not isinstance(claimed, list) or not all(isinstance(item, str) for item in claimed):
+            raise ValueError("a per-item reading's per_item must be a list of text")
+        if claimed != per_item:
+            raise ValueError(
+                f"a per-item reading names {claimed}, but its own integers give {per_item}"
             )
         return self
 
