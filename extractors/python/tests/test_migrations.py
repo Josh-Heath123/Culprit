@@ -359,7 +359,13 @@ def test_the_demo_migrations_declare_their_indexes() -> None:
     from culprit_model import build
 
     declared = {
-        "products": {"id": True, "sku": True, "category": True, "name": False, "price_cents": False},
+        "products": {
+            "id": True,
+            "sku": True,
+            "category": True,
+            "name": False,
+            "price_cents": False,
+        },
         # 0004 (Phase 39 part 2): the relation the N+1 route loads, one row
         # per product, keyed by its primary key.
         "product_details": {"product_id": True, "description": False, "weight_grams": False},
