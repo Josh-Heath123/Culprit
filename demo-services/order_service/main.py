@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from shared.faults import FaultState, build_fault_router
 from shared.middleware import TelemetryFaultMiddleware
 from shared.otel import configure_otel
+from shared.startup import startup
 
 SERVICE_NAME = "order-service"
 configure_otel(SERVICE_NAME)
@@ -35,7 +36,7 @@ DOWNSTREAM_TIMEOUT_S = float(os.environ.get("DOWNSTREAM_TIMEOUT_S", "3"))
 INVENTORY_TOKEN = os.environ.get("INVENTORY_TOKEN", "")
 
 fault_state = FaultState()
-app = FastAPI(title=SERVICE_NAME)
+app = FastAPI(title=SERVICE_NAME, lifespan=startup())
 app.add_middleware(
     TelemetryFaultMiddleware,  # pyright: ignore[reportArgumentType]
     service_name=SERVICE_NAME,

@@ -38,6 +38,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      # Q39: nothing in this stack reads the services' metrics, and the
+      # console dump every 10 s is the stack's own background work, which
+      # has no place inside a measurement.
+      OTEL_METRIC_EXPORT_INTERVAL_MS: "3600000"
       INVENTORY_SERVICE_URL: http://inventory-service:8002
       PAYMENTS_SERVICE_URL: http://payments-service:8003
       INVENTORY_TOKEN: ${INVENTORY_TOKEN:?the fault library mints this}
@@ -46,6 +50,10 @@ services:
     <<: *demo
     command: uvicorn inventory_service.main:app --host 0.0.0.0 --port 8002
     environment:
+      # Q39: nothing in this stack reads the services' metrics, and the
+      # console dump every 10 s is the stack's own background work, which
+      # has no place inside a measurement.
+      OTEL_METRIC_EXPORT_INTERVAL_MS: "3600000"
       EXPECTED_AUDIENCE: inventory-service
       DEMO_TOKEN_SECRET: ${DEMO_TOKEN_SECRET:?the fault library mints this}
       CONTRACT_FAULT: ${CONTRACT_FAULT:-}
@@ -63,6 +71,11 @@ services:
   payments-service:
     <<: *demo
     command: uvicorn payments_service.main:app --host 0.0.0.0 --port 8003
+    environment:
+      # Q39: nothing in this stack reads the services' metrics, and the
+      # console dump every 10 s is the stack's own background work, which
+      # has no place inside a measurement.
+      OTEL_METRIC_EXPORT_INTERVAL_MS: "3600000"
 
   # ---- inventory-service's database (Phase 37 part 3) ------------------------
   #

@@ -6,13 +6,14 @@ from pydantic import BaseModel
 from shared.faults import FaultState, build_fault_router
 from shared.middleware import TelemetryFaultMiddleware
 from shared.otel import configure_otel
+from shared.startup import startup
 
 SERVICE_NAME = "payments-service"
 configure_otel(SERVICE_NAME)
 logger = logging.getLogger(SERVICE_NAME)
 
 fault_state = FaultState()
-app = FastAPI(title=SERVICE_NAME)
+app = FastAPI(title=SERVICE_NAME, lifespan=startup())
 app.add_middleware(
     TelemetryFaultMiddleware,  # pyright: ignore[reportArgumentType]
     service_name=SERVICE_NAME,

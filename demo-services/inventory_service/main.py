@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from shared.faults import FaultState, build_fault_router
 from shared.middleware import TelemetryFaultMiddleware
 from shared.otel import configure_otel
+from shared.startup import startup
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from inventory_service.db import engine
 from shared import demo_auth
@@ -16,7 +18,7 @@ configure_otel(SERVICE_NAME)
 logger = logging.getLogger(SERVICE_NAME)
 
 fault_state = FaultState()
-app = FastAPI(title=SERVICE_NAME)
+app = FastAPI(title=SERVICE_NAME, lifespan=startup(lambda: _warm()))
 app.add_middleware(
     TelemetryFaultMiddleware,  # pyright: ignore[reportArgumentType]
     service_name=SERVICE_NAME,
@@ -181,6 +183,21 @@ def list_product_details(limit: int = DETAILS_PAGE) -> dict:
             for sku, name, description, weight in rows
         ],
     }
+
+
+def _warm() -> None:
+    """Startup's warm-up (Q39): each database read path once, before /ready
+    answers, so no request a probe times is the process's first. A read
+    that fails is skipped and logged: the database may be at a revision
+    without product_details (the missing-index fault holds it at 0002), or
+    not configured at all."""
+    if engine() is None:
+        return
+    for read in (list_products, list_product_details):
+        try:
+            read()
+        except SQLAlchemyError as error:
+            logger.info("startup warm-up of %s skipped: %s", read.__name__, type(error).__name__)
 
 
 @app.post("/reserve", status_code=201)

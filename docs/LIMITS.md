@@ -3204,6 +3204,12 @@ per item, and these are its limits.
   this in CI (Phase 39 part 2; Q38 ruled that a budget is set in the
   judge's terms, the fixed route's slowest answer at most two-thirds of
   it; open as Q39).
+- **A just-restarted service is not yet warm.** Its first request, and its
+  runtime's first full garbage collection, can each exceed a tight budget
+  (in the demo, 78 to 129 ms and a 36 ms pause about 7 s in, on Python
+  3.12). Verify a restarted service once it has warmed. The demo services
+  warm their read paths and freeze their startup heap before they answer
+  (Q39).
 - **One request, measured once.** The walk brackets one `GET`; the
   diagnosis cites that request's counts. A route whose per-item loads
   depend on its query or its data is measured on the default page only (a
