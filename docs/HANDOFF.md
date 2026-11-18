@@ -63,11 +63,11 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `complete`, awaiting review. PR #48; CI green on `a832381` (run 44321940704, every job and every PR check; no open alert). Q38–Q40 ruled and carried out. Report in §5; the fastest runner yet is its first item for the review. |
-| Previous phase | **39, part 1 — the measurement — merged as `6b0de5d` (PR #47) and signed off 2026-11-18.** The report's commit `1cc77cf` green on every job (run 44189651276) on the merge result. The three decisions of the run accepted; the real-Postgres tests rerun and two mutations shown red by the architecture session. Q37 closed on step 0's margins. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
+| Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
+| Current phase | **40, part 1 — the new identity: the dashboard** — `not started`. Brief: `docs/DELIVERY_PLAN.md` §2 (I1–I7) and Phase 40, "Part 1 — the dashboard", with C1 (carried from Phase 39) first. Step 0: `main`'s push run 44327031951 on `33df658`. |
+| Previous phase | **39, part 2 — the walk and the fault — merged as `33df658` (PR #48) and signed off 2026-11-18.** Run 44321940704 on `a832381`, the report's run 44326796071 and `main`'s push run 44327031951 on `33df658` green on every job, read from GitHub. Q38–Q40 ruled and carried out; two mutations of the join shown red by the architecture session; the run's seven decisions accepted, the first amended by C1. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`, which is complete. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-39-walk`, from `origin/main` = `6b0de5d`; its first commit the review (`6349f84`). PR #48, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally. |
+| Branch | `phase-40-identity`, to be cut from `origin/main` = `33df658`. Its first commit is the review: `git apply ../phase-39-2-review.patch`, then `git commit -F ../phase-39-2-review.txt` (`docs/DELIVERY_PLAN.md`, `docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Then C1, as its own commit, pushed at once. Open a draft pull request and mark it ready when the run report is committed. Run the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. Do not commit the owner's reference image. |
 | Blocking questions | None. |
 
 ---
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q38, Q39 and Q40 were ruled during Phase 39 part 2 and are recorded in §5 for the plan. | | |
+| — | None open. Q38, Q39 and Q40 are recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. | | |
 
 ---
 
@@ -122,7 +122,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 38, part 1 | Bundles | **complete** (PR #45, `3d9fb33`) | **Signed off 2026-11-17** (architecture session): run 44088509299 green on every job, read from GitHub; the report's commit green on attempt 2 of 44091691574. Decisions accepted; Q37 ruled. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
-| 39, part 2 | The walk and the fault | **complete, awaiting review** (PR #48; CI green on `a832381`, run 44321940704) | **Run 2026-11-18:** built; Q38–Q40 ruled and carried out; the N+1 case diagnosed and verified in CI; budget 20 ms, page 200. Report in §5. **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 39, part 2 | The walk and the fault | **complete** (PR #48, `33df658`) | **Signed off 2026-11-18** (architecture session): runs 44321940704, 44326796071 (the report) and 44327031951 (`main`'s push) green on every job, read from GitHub; Q38–Q40 ruled and carried out; the walk's and `verify`'s tests rerun and two mutations of the join shown red; the run's seven decisions accepted, the first amended by C1. Phase 39 is complete, and with it `PERFORMANCE_PLAN.md`. Recorded at the end of Phase 39 there. |
+| 40, part 1 | The new identity: the dashboard | not started | **Brief (2026-11-18):** `docs/DELIVERY_PLAN.md` §2 (the identity, I1–I7) and Phase 40, "Part 1 — the dashboard": C1, the N+1 route's page carried from Phase 39, first, as its own commit pushed at once; then the work order from item 0, the assessment, written into the report before any screen changes; its criteria and what not to do. Step 0: `main`'s push run 44327031951 on `33df658`. Branch `phase-40-identity` from `origin/main` = `33df658`; its first commit is the review (`../phase-39-2-review.patch`, message `../phase-39-2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. The report shows every screen at 1280 px and one at 375 px. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
