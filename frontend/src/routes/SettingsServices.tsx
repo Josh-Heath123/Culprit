@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { ErrorPanel, LoadingRows } from "@/components/ui/states";
+import { ErrorNote, ErrorPanel, LoadingRows } from "@/components/ui/states";
 import {
   useAcceptTopologySuggestion,
   useDismissTopologySuggestion,
@@ -101,7 +101,7 @@ function NewKeyDialog({
               This is shown once. It cannot be retrieved again — copy it now.
             </p>
           </div>
-          <code className="wrap-anywhere rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-xs text-fg">
+          <code className="wrap-anywhere rounded-md border border-line bg-surface-sunken px-3 py-2 font-mono text-xs text-fg">
             {apiKey}
           </code>
           <div className="flex justify-end gap-2">
@@ -283,15 +283,15 @@ function AddServiceForm({ existing }: { existing: ComponentOut[] }) {
         ) : null}
 
         {mutation.isError ? (
-          <p className="font-mono text-xs text-fail">
+          <ErrorNote>
             {mutation.error instanceof Error ? mutation.error.message : "Couldn't create component."}
-          </p>
+          </ErrorNote>
         ) : null}
         {failedConnections.length > 0 ? (
-          <p className="font-mono text-xs text-fail">
+          <ErrorNote>
             Created, but these connections were not: {failedConnections.join(", ")}. Add them
             below.
-          </p>
+          </ErrorNote>
         ) : null}
 
         <Button type="submit" size="sm" className="self-start" disabled={!nameValid || mutation.isPending}>
@@ -476,14 +476,14 @@ function ConnectionsPanel({
       ) : null}
 
       {add.isError ? (
-        <p className="font-mono text-xs text-fail">
+        <ErrorNote>
           {add.error instanceof Error ? add.error.message : "Couldn't add that connection."}
-        </p>
+        </ErrorNote>
       ) : null}
       {(reclassify.error ?? remove.error) ? (
-        <p className="font-mono text-xs text-fail">
+        <ErrorNote>
           {(reclassify.error ?? remove.error)?.message || "That change was not saved."}
-        </p>
+        </ErrorNote>
       ) : null}
     </div>
   );
@@ -610,9 +610,9 @@ function ComponentRow({
         <NewKeyDialog serviceName={component.name} apiKey={issuedKey} onClose={() => setIssuedKey(null)} />
       ) : null}
       {(setKind.error ?? toggleDisabled.error ?? issueKey.error ?? revoke.error) ? (
-        <p className="font-mono text-xs text-fail">
+        <ErrorNote>
           {(setKind.error ?? toggleDisabled.error ?? issueKey.error ?? revoke.error)?.message || "That change was not saved."}
-        </p>
+        </ErrorNote>
       ) : null}
     </li>
   );
@@ -664,9 +664,9 @@ function TopologySuggestionRow({ suggestion }: { suggestion: TopologySuggestionO
         </Button>
       </div>
       {(accept.error ?? dismiss.error) ? (
-        <p className="font-mono text-xs text-fail">
+        <ErrorNote>
           {(accept.error ?? dismiss.error)?.message || "That suggestion was not updated."}
-        </p>
+        </ErrorNote>
       ) : null}
     </li>
   );

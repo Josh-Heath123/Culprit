@@ -49,7 +49,7 @@ export function InvestigationList() {
 
       {items.length > 0 ? (
         <section aria-labelledby="list-heading" className="flex flex-col gap-3">
-          <h2 id="list-heading" className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">
+          <h2 id="list-heading" className="font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">
             {items.length} investigation{items.length === 1 ? "" : "s"}, newest first
           </h2>
           <ul className="flex flex-col gap-2">
@@ -75,7 +75,7 @@ function Row({ item }: { item: InvestigationSummary }) {
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 lg:flex-row lg:items-center lg:gap-6">
         <div className="flex min-w-0 flex-col gap-1 lg:w-2/5">
           <span className="font-mono text-sm font-medium wrap-anywhere text-fg">{item.symptom_subject}</span>
-          <span className="text-2xs text-fg-subtle">
+          <span className="font-mono text-2xs text-fg-subtle">
             {item.environment} ·{" "}
             <time dateTime={item.opened_at}>{formatDateTime(item.opened_at)}</time>
           </span>
@@ -106,8 +106,8 @@ function Outcome({ item }: { item: InvestigationSummary }) {
       <span
         className={
           complete
-            ? "flex items-center gap-1 text-2xs font-semibold tracking-widest text-highlight uppercase"
-            : "flex items-center gap-1 text-2xs font-semibold tracking-widest text-inconclusive uppercase"
+            ? "flex items-center gap-1 font-mono text-2xs font-medium tracking-label text-culprit uppercase"
+            : "flex items-center gap-1 font-mono text-2xs font-medium tracking-label text-inconclusive uppercase"
         }
       >
         {complete ? <CrosshairIcon aria-hidden className="size-3" /> : <SignpostIcon aria-hidden className="size-3" />}

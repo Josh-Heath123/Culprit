@@ -72,14 +72,64 @@ test("investigation: a complete diagnosis, with the four review changes", async 
   const flag = page.locator("code", { hasText: "--reference" }).first();
   await expect(flag).toBeVisible();
   await expect(flag).toHaveCSS("white-space", "nowrap");
-  // The walk's own words: no plan phase, no raw kind, in what it wrote.
+  // The walk's own words: no plan phase, no raw kind, in what it wrote —
+  // the statement, in the heading since Phase 40, and the rest.
+  await expect(page.getByTestId("diagnosis-heading")).not.toContainText(/phase \d/i);
   await expect(page.getByTestId("diagnosis")).not.toContainText(/phase \d/i);
   await atEveryWidth(page, "investigation-complete", () => expect(page.getByTestId("root-subject")).toBeVisible());
+});
+
+/** Every transition and animation on the page, in milliseconds, longest
+ * first: what the computed styles say, for each element that has one. */
+async function motion(page: Page): Promise<number[]> {
+  return page.evaluate(() => {
+    const ms = (value: string) =>
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .map((part) => (part.endsWith("ms") ? parseFloat(part) : parseFloat(part) * 1000));
+    const found: number[] = [];
+    for (const element of Array.from(document.querySelectorAll("*"))) {
+      const style = getComputedStyle(element);
+      if (style.transitionProperty !== "none") found.push(...ms(style.transitionDuration).filter((d) => d > 0));
+      if (style.animationName !== "none") found.push(...ms(style.animationDuration).filter((d) => d > 0));
+    }
+    return found.sort((a, b) => b - a);
+  });
+}
+
+// I6 (Phase 40 part 1): motion is 150 to 220 ms, ease-out; with reduced
+// motion asked for, nothing transitions or animates.
+test("motion: 150 to 220 ms, and none under reduced motion", async ({ page }) => {
+  const { complete } = state();
+  await go(page, `/investigations/${complete}`);
+  await expect(page.getByTestId("root-subject")).toBeVisible();
+  // The view may keep an edge open from an earlier test on the same route.
+  const toggle = page.getByTestId("edge-toggle").first();
+  if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+  await expect(page.getByTestId("edge-readings").first()).toBeVisible();
+  const normal = await motion(page);
+  expect(normal.length, "no transition at all: the motion this test guards is gone").toBeGreaterThan(0);
+  expect(normal[0], "a transition longer than 220 ms").toBeLessThanOrEqual(220);
+  expect(normal[normal.length - 1], "a transition shorter than 150 ms").toBeGreaterThanOrEqual(150);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  try {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    await expect(page.getByTestId("edge-readings").first()).toBeVisible();
+    const reduced = await motion(page);
+    expect(reduced.filter((d) => d > 0.1), "motion under prefers-reduced-motion: reduce").toEqual([]);
+  } finally {
+    await page.emulateMedia({ reducedMotion: null });
+  }
 });
 
 test("investigation: a partial diagnosis", async ({ page }) => {
   const { partialRefused } = state();
   await go(page, `/investigations/${partialRefused}`);
+  await expect(page.getByTestId("diagnosis-heading")).not.toContainText(/phase \d/i);
   await expect(page.getByTestId("diagnosis")).not.toContainText(/phase \d/i);
   await atEveryWidth(page, "investigation-partial", () => expect(page.getByTestId("stopped-at")).toBeVisible());
 });

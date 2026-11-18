@@ -3,9 +3,11 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-/** A small label. The status variants (pass, fail, ...) exist for the
- * badges in status.tsx, which always add an icon and the word — use those
- * for a verdict or a severity, never a bare coloured Badge. */
+/** A small label, in mono. The status variants (pass, fail, ...) exist for
+ * the badges in status.tsx, which always add an icon and the word — use
+ * those for a verdict or a severity, never a bare coloured Badge. There is
+ * no lime variant: lime marks the culprit, and only where it is declared
+ * (I7). */
 const badgeVariants = cva(
   "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-2xs font-medium leading-none whitespace-nowrap",
   {
@@ -14,7 +16,6 @@ const badgeVariants = cva(
         default: "border-line bg-surface-2 text-fg-muted",
         outline: "border-line-strong text-fg-muted",
         primary: "border-brand-line bg-brand-tint text-brand",
-        highlight: "border-highlight-line bg-highlight-tint text-highlight",
         pass: "border-pass-line bg-pass-tint text-pass",
         fail: "border-fail-line bg-fail-tint text-fail",
         inconclusive: "border-inconclusive-line bg-inconclusive-tint text-inconclusive",

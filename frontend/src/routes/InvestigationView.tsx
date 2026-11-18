@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { SourceLink } from "@/components/layout/SourceLink";
-import { DiagnosisCard } from "@/components/investigation/Diagnosis";
+import { DiagnosisCard, DiagnosisHeading } from "@/components/investigation/Diagnosis";
 import { FaultTree } from "@/components/investigation/FaultTree";
 import { Hypotheses } from "@/components/investigation/Hypotheses";
 import { Narration } from "@/components/investigation/Narration";
@@ -35,7 +35,7 @@ export function InvestigationView() {
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
         <Link
           to="/investigations"
-          className="flex items-center gap-1 self-start rounded-sm text-xs text-fg-muted transition-colors duration-150 hover:text-fg"
+          className="flex items-center gap-1 self-start rounded-sm font-mono text-2xs tracking-label text-fg-subtle uppercase transition-colors duration-150 hover:text-fg"
         >
           <ChevronLeftIcon aria-hidden className="size-3.5" />
           All investigations
@@ -80,10 +80,7 @@ function InvestigationBody({ investigation }: { investigation: InvestigationTree
     : null;
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <h1 className="font-mono text-lg font-semibold wrap-anywhere text-fg sm:text-2xl">{symptom.subject}</h1>
-        {symptom.description ? <p className="text-sm leading-relaxed text-fg-muted">{symptom.description}</p> : null}
-      </div>
+      <DiagnosisHeading diagnosis={diagnosis} symptom={symptom} />
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-5 lg:col-span-2">
@@ -106,11 +103,12 @@ function InvestigationBody({ investigation }: { investigation: InvestigationTree
   );
 }
 
-/** Glass: the one summary layer on the page, beside the dense data. */
+/** Solid, as every panel of data is (I5): the symptom's attestation and
+ * where and when the walk ran. */
 function SymptomCard({ investigation }: { investigation: InvestigationTree }) {
   const { symptom } = investigation;
   return (
-    <Card surface="glass" aria-labelledby="symptom-heading">
+    <Card aria-labelledby="symptom-heading">
       <CardHeader id="symptom-heading" title="Symptom" />
       <CardBody className="flex flex-col gap-4">
         <Attestation symptom={symptom} />

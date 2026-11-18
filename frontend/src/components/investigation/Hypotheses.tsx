@@ -23,12 +23,12 @@ export function Hypotheses({ groups }: { groups: InvestigationTree["hypotheses"]
           const items: Hypothesis[] = groups[key];
           return (
             <section key={key} className="flex flex-col gap-2" data-testid={`hypotheses-${key}`}>
-              <h3 className="text-sm font-medium text-fg">
-                {title} <span className="font-mono text-xs text-fg-subtle">{items.length}</span>
+              <h3 className="flex items-baseline gap-2 font-mono text-2xs font-medium tracking-label text-fg uppercase">
+                {title} <span className="text-fg-subtle">{items.length}</span>
               </h3>
               <p className="text-xs text-fg-muted">{caption}</p>
               {items.length > 0 ? (
-                <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
+                <ul className="flex flex-col divide-y divide-line rounded-md border border-line bg-surface-sunken">
                   {items.map((h) => (
                     <li key={h.id} className="flex min-w-0 flex-col gap-1 px-3 py-2.5">
                       <span className="text-sm font-medium text-fg" data-testid="hypothesis-label">

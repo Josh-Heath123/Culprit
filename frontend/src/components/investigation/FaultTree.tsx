@@ -7,9 +7,10 @@ import { cn } from "@/lib/utils";
 import type { TreeEdge } from "@/lib/types";
 
 /** The fault tree from the symptom down, on a solid surface — glass never
- * goes on dense data. Every edge expands to the readings that established
- * it. The boundary is marked: the root when the walk finished, "walk
- * stopped here" when it did not (Phase 32.1 field 14). An edge whose
+ * goes on dense data (I5). Every edge expands to the readings that
+ * established it. The boundary is marked: the root, in the culprit's lime
+ * outline glow (I4), when the walk finished; "walk stopped here", never
+ * lime, when it did not (Phase 32.1 field 14). An edge whose
  * parent is not reachable from the symptom is shown as a start of its
  * own: the view never drops an established edge because it does not fit
  * the shape it expected. */
@@ -80,7 +81,7 @@ function SubjectNode({ subject, context, seen }: { subject: string; context: Con
         className={cn(
           "flex flex-wrap items-center gap-2 self-start rounded-md border px-2.5 py-1.5",
           isBoundary && context.complete
-            ? "border-highlight-line bg-highlight-tint"
+            ? "border-culprit-line bg-culprit-tint shadow-culprit"
             : isBoundary
               ? "border-inconclusive-line bg-inconclusive-tint"
               : "border-line bg-surface-2",
@@ -88,19 +89,25 @@ function SubjectNode({ subject, context, seen }: { subject: string; context: Con
       >
         <span className="font-mono text-xs wrap-anywhere text-fg">{subject}</span>
         {subject === context.symptom ? (
-          <span className="flex items-center gap-1 text-2xs font-medium text-fg-muted">
+          <span className="flex items-center gap-1 font-mono text-2xs tracking-label text-fg-subtle uppercase">
             <ZapIcon aria-hidden className="size-3" />
             symptom
           </span>
         ) : null}
         {isBoundary && context.complete ? (
-          <span className="flex items-center gap-1 text-2xs font-semibold text-highlight" data-testid="root-marker">
+          <span
+            className="flex items-center gap-1 font-mono text-2xs font-medium tracking-label text-culprit uppercase"
+            data-testid="root-marker"
+          >
             <CrosshairIcon aria-hidden className="size-3" />
             root
           </span>
         ) : null}
         {isBoundary && !context.complete ? (
-          <span className="flex items-center gap-1 text-2xs font-semibold text-inconclusive" data-testid="stopped-marker">
+          <span
+            className="flex items-center gap-1 font-mono text-2xs font-medium tracking-label text-inconclusive uppercase"
+            data-testid="stopped-marker"
+          >
             <SignpostIcon aria-hidden className="size-3" />
             walk stopped here
           </span>
@@ -141,7 +148,7 @@ function EdgeNode({ edge, context, seen }: { edge: TreeEdge; context: Context; s
       >
         <ChevronRightIcon
           aria-hidden
-          className={cn("size-3.5 transition-transform duration-150", open && "rotate-90")}
+          className={cn("size-3.5 transition-transform duration-200 ease-out", open && "rotate-90")}
         />
         <span className="font-medium text-fg">{relationLabel(edge, context.complete)}</span>
         <span>
@@ -149,7 +156,7 @@ function EdgeNode({ edge, context, seen }: { edge: TreeEdge; context: Context; s
         </span>
       </button>
       {open ? (
-        <div id={panel} className="pb-1">
+        <div id={panel} className="pb-1 duration-200 animate-in fade-in-0 slide-in-from-top-1">
           <Evidence readings={edge.readings} />
         </div>
       ) : null}

@@ -10,6 +10,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { createTask, fetchTask } from "@/lib/api";
 import { grantWords, INVESTIGATION_NEEDS, missingForInvestigation } from "@/lib/grants";
 import type { AgentSummary, TaskView } from "@/lib/types";
+import { ErrorNote } from "@/components/ui/states";
 
 /** Open an investigation through an agent (Phase 33 part 3): choose an agent
  * and a symptom, watch the task, and land on the investigation when the
@@ -125,9 +126,9 @@ export function InvestigateThroughAgent() {
             {!ready && agent ? <WhyNot agent={agent} environment={env} missing={missing} /> : null}
 
             {start.isError ? (
-              <p role="alert" className="text-xs text-fail">
+              <ErrorNote>
                 {start.error instanceof Error ? start.error.message : "The investigation was not started."}
-              </p>
+              </ErrorNote>
             ) : null}
 
             <Button type="submit" className="self-start" disabled={!ready || !symptom.trim() || start.isPending}>
@@ -200,16 +201,16 @@ function TaskProgress({ agentId, taskId, onReset }: { agentId: string; taskId: s
         <Step done={data?.completed_at != null} label={stepLabel(data)} />
       </ol>
       {isError ? (
-        <p role="alert" className="text-xs text-fail">
+        <ErrorNote>
           {error instanceof Error ? error.message : "The task could not be read."}
-        </p>
+        </ErrorNote>
       ) : null}
       {data?.completed_at && !landed ? (
         <div className="flex flex-col gap-2">
-          <p role="alert" className="text-sm text-fail">
+          <ErrorNote>
             The agent {data.outcome === "refused" ? "refused the task" : "could not finish it"}
             {data.reason ? `: ${data.reason}` : "."}
-          </p>
+          </ErrorNote>
           <Button variant="outline" size="sm" className="self-start" onClick={onReset}>
             Start another
           </Button>

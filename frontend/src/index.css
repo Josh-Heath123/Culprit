@@ -3,52 +3,86 @@
 
 /* Self-hosted — no external font CDN calls from an ops tool that should
    work the same regardless of network conditions. Weights chosen to
-   cover UI chrome (400/500/600) and data/mono (400/500) without
+   cover UI chrome (400/500/600), the display weight for editorial
+   headings (700, DELIVERY_PLAN I3), and data/mono (400/500), without
    shipping the full variable-weight range. */
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
 
 /*
- * Culprit's design tokens (DIAGNOSTIC_PLAN.md Phase 32.1).
+ * Culprit's design tokens (DELIVERY_PLAN.md §2, I1–I7; Phase 40 part 1).
  *
  * Dark only: :root IS the theme. Every colour the interface uses is
- * declared once, in :root below, and nowhere else — pages style
+ * declared once, in :root below, and nowhere else — components style
  * themselves through the Tailwind utilities @theme generates from these
  * (bg-surface-1, text-fg-muted, border-line, ...). Two gates hold that:
  *
- *   scripts/check_frontend_tokens.py   no raw colour or arbitrary value
- *                                      in a page component
- *   scripts/tests/test_design_tokens.py  every text-and-background pair
- *                                      below meets WCAG 2.2 AA (4.5:1)
+ *   scripts/check_frontend_tokens.py     no raw colour or arbitrary value
+ *                                        in a component; the culprit and
+ *                                        glass tokens only in the
+ *                                        components declared for them (I7)
+ *   scripts/tests/test_design_tokens.py  every text token 4.5:1 on every
+ *                                        surface; every boundary and the
+ *                                        focus ring 3:1; lime and violet
+ *                                        kept apart from every status
  *
- * Identity: midnight black dominant; electric blue the one primary
- * accent (actions, interactive elements, key data); cantaloupe orange a
- * sparing secondary accent, used for the fault tree's boundary and the
- * brand mark only; clean white for primary text; greys for everything
- * secondary. Status — the four verdicts and the four severities — is its
- * own token set, always paired with an icon and a word so it is never
- * carried by colour alone, and orange is in none of it.
+ * The identity (I2) comes from four anchors and nothing else:
  *
- * Since Phase 32.1 part 2 every route uses these names; the shadcn/ui
- * aliases (--background, --primary, ...) the earlier screens used are
- * gone, so there is one name for each colour.
+ *   Deep Plum        #221331  the page. Every surface is plum at another
+ *                             lightness (hue 270°, saturation 44%): one
+ *                             step darker for wells, steps lighter for
+ *                             raised panels.
+ *   Cream            #FDFDFD  text, with muted and subtle steps toward
+ *                             plum.
+ *   Electric Violet  #7540F5  brand and interaction: primary fills, the
+ *                             focus ring, selection. Never body text on
+ *                             plum (3.2:1); violet text is --brand, a
+ *                             lighter tint.
+ *   Acid Lime        #D6FA4A  the culprit, and only that: the walk's
+ *                             root, the diagnosis line, the mark. Never a
+ *                             button, a link or decoration. Text on lime
+ *                             is plum.
+ *
+ * Status (the verdicts and the severities) is its own set, re-derived so
+ * none can be taken for lime or violet: pass teal-green, fail and breaks
+ * coral-red, inconclusive sky blue, degrades orange; refused, cosmetic
+ * and unknown plum-greys. Always with an icon and a word. Each tint is
+ * its colour at 13% over plum, each line at 38%.
  */
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
-  /* Type scale: Tailwind's xs..3xl, plus one step below xs for
-     metadata, so no page needs an arbitrary text-[11px]. */
+  /* Type scale (I3): Tailwind's xs..3xl; one step below xs for mono
+     labels and metadata; and two editorial steps, a page's title and a
+     screen's answer. Restrained: the answer is 1.75rem on a phone and
+     2.25rem from sm. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  --text-title: 1.5rem;
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.02em;
+  --text-display: 1.75rem;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -0.025em;
+  --text-display-lg: 2.25rem;
+  --text-display-lg--line-height: 1.1;
+  --text-display-lg--letter-spacing: -0.03em;
   /* Inline code inside prose: a touch smaller, so mono does not look
      larger than the sans around it. */
   --text-code: 0.92em;
+  /* Mono labels, upper-case and letter-spaced: I3's technical voice. */
+  --tracking-label: 0.14em;
 
-  /* Surfaces, from the page up. */
+  /* Spacing: Tailwind's 4 px step, stated here so it is a token too. */
+  --spacing: 0.25rem;
+
+  /* Surfaces, from the well up. */
+  --color-surface-sunken: var(--surface-sunken);
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
@@ -62,20 +96,26 @@
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
 
-  /* Lines. */
+  /* Lines, the focus ring and the graticule. */
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-ring: var(--ring);
+  --color-graticule: var(--graticule);
+  --color-graticule-mark: var(--graticule-mark);
 
-  /* Accents. */
+  /* Violet: brand and interaction. */
   --color-brand: var(--brand);
   --color-brand-fill: var(--brand-fill);
   --color-brand-fill-hover: var(--brand-fill-hover);
   --color-on-brand-fill: var(--on-brand-fill);
   --color-brand-tint: var(--brand-tint);
   --color-brand-line: var(--brand-line);
-  --color-highlight: var(--highlight);
-  --color-highlight-tint: var(--highlight-tint);
-  --color-highlight-line: var(--highlight-line);
+
+  /* Lime: the culprit. I7 allows these only where the answer is marked. */
+  --color-culprit: var(--culprit);
+  --color-on-culprit: var(--on-culprit);
+  --color-culprit-tint: var(--culprit-tint);
+  --color-culprit-line: var(--culprit-line);
 
   /* Verdicts (§2.7) and severities (§2.5): fg, tint, line each. */
   --color-pass: var(--pass);
@@ -103,90 +143,117 @@
   --color-unknown-tint: var(--unknown-tint);
   --color-unknown-line: var(--unknown-line);
 
+  /* Radius steps. */
   --radius-sm: var(--radius-1);
   --radius-md: var(--radius-2);
   --radius-lg: var(--radius-3);
   --radius-xl: var(--radius-4);
 
+  /* Shadow steps: raised, overlay and glass; and the culprit's lime
+     outline glow (I4), for the fault tree's root node only. */
   --shadow-raised: var(--shadow-1);
   --shadow-overlay: var(--shadow-2);
   --shadow-glass: var(--shadow-3);
+  --shadow-culprit: var(--shadow-culprit-glow);
 
-  --blur-glass: 16px;
+  --blur-glass: 18px;
+
+  /* Motion (I6): 150–220 ms, ease-out. Every transition-* utility takes
+     these unless it names its own; the reduced-motion rule below turns
+     all of it off. */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root {
-  /* ---- surfaces: midnight, a faint blue in the black ---- */
-  --surface-0: #05070c;
-  --surface-1: #0a0e17;
-  --surface-2: #0f1420;
-  --surface-3: #151b2a;
-  /* Glass: layered elements only (navigation, dialogs, popovers, cards
-     over content), never tables or the fault tree. Checked for contrast
-     composited over --surface-0. */
-  --glass: rgba(15, 20, 32, 0.72);
-  --glass-line: rgba(255, 255, 255, 0.07);
+  /* ---- surfaces: plum at other lightnesses ---- */
+  --surface-sunken: #180e23;
+  --surface-0: #221331;
+  --surface-1: #261537;
+  --surface-2: #2f1a44;
+  --surface-3: #392053;
+  /* Glass (I5): layered elements only — navigation, the command palette,
+     dialogs, popovers, tooltips. Never tables, the fault tree, evidence,
+     forms or settings. Checked for contrast composited over --surface-0. */
+  --glass: rgba(38, 21, 55, 0.8);
+  --glass-line: rgba(253, 253, 253, 0.09);
   /* Behind a dialog. */
-  --scrim: rgba(5, 7, 12, 0.78);
+  --scrim: rgba(16, 9, 24, 0.78);
 
-  /* ---- text ---- */
-  --fg: #f3f5fa;
-  --fg-muted: #a7afc0;
-  --fg-subtle: #8a93a8;
+  /* ---- text: cream, and two steps toward plum ---- */
+  --fg: #fdfdfd;
+  --fg-muted: #cbc1d8;
+  --fg-subtle: #ab9dbd;
 
   /* ---- lines ---- */
-  --line: #1c2333;
-  --line-strong: #2a3348;
+  /* A hairline between regions: decoration, with no contrast bar. */
+  --line: #452663;
+  /* A boundary that identifies a control (an input, an outline button):
+     3:1 on every surface (WCAG 1.4.11). */
+  --line-strong: #8f73ad;
+  /* The focus ring: violet itself, 3:1 on every surface a focusable
+     element sits on (the well, the page, a panel, glass). */
+  --ring: #7540f5;
+  /* The graticule's hairlines (I4): decoration, never behind data. */
+  --graticule: rgba(171, 157, 189, 0.13);
+  --graticule-mark: rgba(203, 193, 216, 0.38);
 
-  /* ---- electric blue ---- */
-  --brand: #5b9cff;
-  --brand-fill: #1f5fff;
-  --brand-fill-hover: #1a52e0;
-  --on-brand-fill: #ffffff;
-  --brand-tint: #0c1a36;
-  --brand-line: #24427a;
+  /* ---- electric violet ---- */
+  /* Violet as text (links, labels): a tint that clears 4.5:1. */
+  --brand: #b69cff;
+  --brand-fill: #7540f5;
+  --brand-fill-hover: #6633dd;
+  --on-brand-fill: #fdfdfd;
+  --brand-tint: #2d194a;
+  --brand-line: #42247b;
+  /* Selection, and the sign-in page's radial glow (I4). */
+  --selection: #7540f5;
+  --glow-violet: rgba(117, 64, 245, 0.34);
 
-  /* ---- cantaloupe ---- */
-  --highlight: #ffb073;
-  --highlight-tint: #2a1a0d;
-  --highlight-line: #6b4321;
+  /* ---- acid lime: the culprit ---- */
+  --culprit: #d6fa4a;
+  --on-culprit: #221331;
+  --culprit-tint: #393134;
+  --culprit-line: #666b3a;
+  --shadow-culprit-glow: 0 0 0 1px rgba(214, 250, 74, 0.6), 0 0 20px -4px rgba(214, 250, 74, 0.5);
 
   /* ---- verdicts ---- */
-  --pass: #44d69a;
-  --pass-tint: #0b2219;
-  --pass-line: #1d5a41;
-  --fail: #ff6f7d;
-  --fail-tint: #2c1015;
-  --fail-line: #6e2a33;
-  --inconclusive: #b9a6ff;
-  --inconclusive-tint: #1b1733;
-  --inconclusive-line: #463c78;
-  --refused: #a3afc4;
-  --refused-tint: #161c28;
-  --refused-line: #3a4458;
+  --pass: #3ddbae;
+  --pass-tint: #262d41;
+  --pass-line: #2c5f60;
+  --fail: #ff8070;
+  --fail-tint: #3f2139;
+  --fail-line: #763c49;
+  --inconclusive: #6cc6ff;
+  --inconclusive-tint: #2c2a4c;
+  --inconclusive-line: #3e577f;
+  --refused: #b6a9c6;
+  --refused-tint: #352644;
+  --refused-line: #5a4c6a;
 
   /* ---- severities ---- */
-  --breaks: #ff6f7d;
-  --breaks-tint: #2c1015;
-  --breaks-line: #6e2a33;
-  --degrades: #f2d75b;
-  --degrades-tint: #262109;
-  --degrades-line: #5f5420;
-  --cosmetic: #a3afc4;
-  --cosmetic-tint: #161c28;
-  --cosmetic-line: #3a4458;
-  --unknown: #8a93a8;
-  --unknown-tint: #12161f;
-  --unknown-line: #2f3646;
+  --breaks: #ff8070;
+  --breaks-tint: #3f2139;
+  --breaks-line: #763c49;
+  --degrades: #ffaa52;
+  --degrades-tint: #3f2735;
+  --degrades-line: #764c3e;
+  --cosmetic: #b6a9c6;
+  --cosmetic-tint: #352644;
+  --cosmetic-line: #5a4c6a;
+  --unknown: #a99bbb;
+  --unknown-tint: #342543;
+  --unknown-line: #554765;
 
   /* ---- shape and depth ---- */
   --radius-1: 0.375rem;
   --radius-2: 0.5rem;
   --radius-3: 0.75rem;
   --radius-4: 1rem;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow-2: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
-  --shadow-3: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 32px -16px rgba(0, 0, 0, 0.8);
+  --shadow-1: 0 1px 2px rgba(10, 5, 16, 0.5);
+  --shadow-2: 0 18px 44px -14px rgba(10, 5, 16, 0.75);
+  --shadow-3: inset 0 1px 0 rgba(253, 253, 253, 0.07), 0 14px 36px -18px rgba(10, 5, 16, 0.85);
 }
 
 html {
@@ -220,16 +287,32 @@ pre {
 }
 
 ::selection {
-  background: var(--brand-tint);
-  color: var(--fg);
+  background: var(--selection);
+  color: var(--on-brand-fill);
 }
 
-/* One visible focus treatment for everything focusable. Components may
-   draw their own ring, but none may remove this one without replacing
-   it. */
+/* One visible focus treatment for everything focusable: a violet ring,
+   2 px, offset (I2). Components may draw their own ring, but none may
+   remove this one without replacing it. */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+/* ---- motifs (I4), used sparingly ---- */
+
+/* The graticule (components/layout/Graticule.tsx): hairlines every
+   48 px with a + at each crossing, like an instrument's measuring grid.
+   This only fades it toward the edges. Sign-in, empty states and not
+   found; never behind data. */
+.graticule-fade {
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%);
+}
+
+/* The violet radial glow: the sign-in page only (and the README's hero,
+   which is rendered on its own). */
+.glow-violet {
+  background-image: radial-gradient(closest-side, var(--glow-violet), transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

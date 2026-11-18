@@ -27,7 +27,7 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
     <div className="flex h-full flex-col" data-testid="incident-detail">
       <div className="flex items-start justify-between gap-2 border-b border-line px-4 py-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex items-center gap-1 text-2xs font-semibold tracking-widest text-fg-subtle uppercase">
+          <span className="flex items-center gap-1 font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">
             <HistoryIcon aria-hidden className="size-3" />
             Incident · history
           </span>
@@ -75,14 +75,14 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
             </dl>
 
             <section className="flex flex-col gap-2 border-t border-line pt-4" aria-labelledby="incident-cause">
-              <h3 id="incident-cause" className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">
+              <h3 id="incident-cause" className="font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">
                 The engine's conclusion
               </h3>
               {/* Phase 32 part 2: the correlation engine and the narrative
                   job are gone, and the incident tables are read-only. This
                   is the record of what that engine concluded, kept as
                   history; there is nothing left to regenerate it. */}
-              <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-xs leading-relaxed text-fg-muted">
+              <p className="rounded-md border border-line bg-surface-sunken px-3 py-2 text-xs leading-relaxed text-fg-muted">
                 From the earlier incident-correlation engine, kept as history. New diagnoses are{" "}
                 <Link to="/investigations" className="text-brand underline-offset-2 hover:underline">
                   investigations
@@ -113,7 +113,7 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
             </section>
 
             <section className="flex flex-col gap-2 border-t border-line pt-4" aria-labelledby="incident-anomalies">
-              <h3 id="incident-anomalies" className="text-2xs font-semibold tracking-widest text-fg-subtle uppercase">
+              <h3 id="incident-anomalies" className="font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">
                 Anomalies <span className="font-mono">{incident.anomalies.length}</span>
               </h3>
               <ul className="flex flex-col gap-1.5">
@@ -122,7 +122,7 @@ export function IncidentDetailPanel({ incidentId, onClose }: IncidentDetailPanel
                   return (
                     <li
                       key={anomaly.id}
-                      className="flex items-center justify-between gap-2 rounded-md border border-line bg-surface-2 px-3 py-2"
+                      className="flex items-center justify-between gap-2 rounded-md border border-line bg-surface-sunken px-3 py-2"
                     >
                       <div className="flex min-w-0 flex-col">
                         <span className="truncate font-mono text-xs text-fg">{anomaly.metric_name}</span>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 32 32">
+  <title>Culprit — the mark</title>
+  <!-- A measuring ring with its four ticks, and the culprit at its centre in
+       Acid Lime: what a walk finds. Plum #221331, cream #FDFDFD, the subtle
+       text step #AB9DBD, lime #D6FA4A (docs/DELIVERY_PLAN.md I2). The same
+       drawing as frontend/public/favicon.svg and Brand.tsx's Mark. -->
+  <rect width="32" height="32" rx="7" fill="#221331"/>
+  <circle cx="16" cy="16" r="9" fill="none" stroke="#fdfdfd" stroke-width="2"/>
+  <path d="M16 2.5v5M16 24.5v5M2.5 16h5M24.5 16h5" fill="none" stroke="#ab9dbd" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="16" cy="16" r="4" fill="#d6fa4a"/>
+</svg>

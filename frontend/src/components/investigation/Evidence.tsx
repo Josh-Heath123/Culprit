@@ -16,7 +16,7 @@ export function Evidence({ readings }: { readings: InvestigationReading[] }) {
   return (
     <ol className="flex flex-col gap-2" data-testid="edge-readings">
       {readings.map(({ id, reading }) => (
-        <li key={id} className="flex min-w-0 flex-col gap-2 rounded-md border border-line bg-surface-2 p-3">
+        <li key={id} className="flex min-w-0 flex-col gap-2 rounded-md border border-line bg-surface-sunken p-3">
           <div className="flex flex-wrap items-center gap-2">
             <VerdictBadge verdict={reading.verdict} />
             <span className="font-mono text-xs font-medium wrap-anywhere text-fg">{reading.probe_id}</span>
@@ -48,7 +48,7 @@ function Values({ label, values }: { label: string; values: Record<string, unkno
   if (entries.length === 0) return null;
   return (
     <div className="min-w-0">
-      <h4 className="mb-1 text-2xs font-semibold tracking-widest text-fg-subtle uppercase">{label}</h4>
+      <h4 className="mb-1 font-mono text-2xs font-medium tracking-label text-fg-subtle uppercase">{label}</h4>
       <dl className="flex flex-col gap-0.5 font-mono text-2xs">
         {entries.map(([key, value]) => (
           <div key={key} className="flex min-w-0 gap-2">
