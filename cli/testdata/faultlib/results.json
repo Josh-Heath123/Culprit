@@ -54,18 +54,6 @@
       "root_subject": "schema:inventory-db/public.products.category",
       "complete": true,
       "verdict": "verified"
-    },
-    {
-      "name": "n-plus-one",
-      "root_subject": "http:inventory-service/GET /products/details",
-      "complete": true,
-      "verdict": "verified"
-    },
-    {
-      "name": "n-plus-one-shared",
-      "root_subject": "component:inventory-service",
-      "complete": true,
-      "verdict": "verified"
     }
   ],
   "scenarios": [

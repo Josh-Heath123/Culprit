@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/PERFORMANCE_PLAN.md` (Phases 36–39). `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) is complete; its D1–D8 and standing invariants still bind. |
-| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `not started`. Brief: `docs/PERFORMANCE_PLAN.md`, end of Phase 39, "Part 2 — the walk and the fault". Step 0: `main`'s push run 44257273844 on `6b0de5d`. |
+| Current phase | **39, part 2 — the walk and the fault: `n_plus_one`, the demo's relation and route, the library fault** — `gates red`, **awaiting decision on Q38**. Built and diagnosing in CI; the N+1 case's fix verifies `inconclusive`, not `verified`, so fault-library (2) is red (runs 44269336518, 44273031843, 44277466463). PR #48, a draft. Report in §5. |
 | Previous phase | **39, part 1 — the measurement — merged as `6b0de5d` (PR #47) and signed off 2026-11-18.** The report's commit `1cc77cf` green on every job (run 44189651276) on the merge result. The three decisions of the run accepted; the real-Postgres tests rerun and two mutations shown red by the architecture session. Q37 closed on step 0's margins. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-39-walk`, to be cut from `origin/main` = `6b0de5d`. Its first commit is the review: `git apply ../phase-39-1-review.patch`, then `git commit -F ../phase-39-1-review.txt` (`docs/PERFORMANCE_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Open a draft pull request and mark it ready when the run report is committed. Run the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
-| Blocking questions | None. |
+| Branch | `phase-39-walk`, from `origin/main` = `6b0de5d`; its first commit the review (`6349f84`). PR #48, left a draft: CI is red on the open question. `shared/uv.lock` not staged; the fault library not run locally. |
+| Blocking questions | **Q38** (§3): the N+1 route's latency budget cannot both keep decision 4's margins and verify its fix. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Phase 39 part 1's decisions are accepted at the end of Phase 39 in `PERFORMANCE_PLAN.md`. | | |
+| 38 | **Decision 4 sets a route budget from p95s; the latency judge needs the slowest sample under it.** At a page of 200, `GET /products/details` measured p95 46.0–62.9 ms with the N+1 and 4.0–5.1 ms fixed over three CI runs, so 15 ms keeps both of decision 4's margins. But `probe.http.latency` places a p95 from 50 samples by the slowest of them, and the fixed route's slowest answer in a run reached 28.2–30.3 ms (once 113.4 ms), mid-run, so its fix verifies `inconclusive` in both N+1 cases. No budget is over ~30 ms and at most half of 46 ms. Options: change how the budget is chosen (phase-auditor proposes "the fixed route's slowest sample across ≥ 2 runs under the budget, the fault's p95 at least twice it"), a larger page (a third change of the list bound), a change to the demo's runtime to remove the pause (not diagnosed: a garbage-collection pause is a guess), or accept a library case that verifies `inconclusive`. The judge is not to be loosened. | 2026-11-18, Phase 39 part 2 | **Blocking** — part 2's criterion "verify lands verified", CI green, and the README's N+1 case |
 
 ---
 
@@ -122,7 +122,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 38, part 1 | Bundles | **complete** (PR #45, `3d9fb33`) | **Signed off 2026-11-17** (architecture session): run 44088509299 green on every job, read from GitHub; the report's commit green on attempt 2 of 44091691574. Decisions accepted; Q37 ruled. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
-| 39, part 2 | The walk and the fault | not started | **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 39, part 2 | The walk and the fault | **gates red — awaiting decision (Q38)** (PR #48, draft) | **Run 2026-11-18:** built; the diagnosis holds in CI; the fix verifies `inconclusive` on the healthy route's slowest answer (Q38). Report in §5. **Brief (2026-11-18):** `docs/PERFORMANCE_PLAN.md` Phase 39, "Part 2 — the walk and the fault": its decisions, work order, criteria and what not to build. Step 0: `main`'s push run 44257273844 on `6b0de5d`. Branch `phase-39-walk` from `origin/main` = `6b0de5d`; its first commit is the review (`../phase-39-1-review.patch`, message `../phase-39-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -154,172 +154,155 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        39, part 1 — the measurement: isolated:, the per-item rule,
-              the bracket, probe.db.statements_per_request
-Branch:       phase-39-statements, from origin/main = 02bae0d. 13b5246 the
-              review (applied cleanly), then 5909362 (item 2), e616873
-              (item 3), 081b071 (item 4), 9ec6ddc (item 5), 6ffceda and
-              3a2c932 (item 1), 2fcfdbb (item 6), 61a6228 and ef17f24 (CI
-              and local gates), 95eae4b (phase audit), 275f5fb (invariant
-              audit), then this report. PR #47.
-Run:          2026-11-17/18, /next. Local gates run one at a time, in the
-              foreground (memory); none was left unrun but those named.
-Status:       COMPLETE pending review. CI green on 275f5fb (below). Both
-              audits run. Nothing blocking; three decisions for the review.
+Phase:        39, part 2 — the walk and the fault: n_plus_one, the demo's
+              relation and route, the library's two N+1 cases
+Branch:       phase-39-walk, from origin/main = 6b0de5d. 6349f84 the review
+              (applied cleanly), then 72df2ef (item 1), 74e01a7 (item 2),
+              eb23f87 (items 3, 5), 000c4a5 (item 4), 8d11f70 and d3ee1d5
+              (gates), c460697 (item 6), 1686be8 and c58cc54 (page and
+              budget from CI), fc0a9c2 (invariant audit), 8e5b746 (the
+              warm-up out), then this report. PR #48, a draft.
+Run:          2026-11-18, /next then /ci. Local gates one at a time, in
+              the foreground. The fault library not run locally.
+Status:       GATES RED, AWAITING DECISION (Q38, blocking). Every criterion
+              but one holds: the N+1 case's fix verifies inconclusive, not
+              verified, in CI, so fault-library (2) is red. The PR stays a
+              draft.
 
 STEP 0
-  main's push run 44170421496 on 02bae0d: success on every job (deploy
-  skipped), read by id. fault-library (2) passed on both runs read, so
-  nothing was rerun.
-  Q37's margins, from the logs (budgets 10 ms statement, 25 ms route p95):
-                                   44170421496 (02bae0d)  44167165860 (PR #46)
-  cli, MEASURED, no index          225 calls, 107.660 ms  365 calls, 65.213 ms
-  cli, MEASURED, category alone    225 calls, 107.951 ms  363 calls, 65.323 ms
-  cli, MEASURED, (category, sku)   1200 calls, 0.021 ms   1855 calls, 0.008 ms
-  library, fault: route p95        90.2 ms (want >= 50)   129.4 ms
-  library, fault: statement mean   41.188, 41.576 (>= 15) 59.089, 59.083
-  library, fixed: route p95        3.8 ms (want <= 12.5)  4.4 ms
-  library, fixed: statement mean   0.097-0.099 (< 2)      0.097-0.100
-  library, wrong fix: mean         41.084-41.944 (> 10)   58.978-59.245
-  Tightest: the fault's p95 at 1.8x its 50 ms floor (02bae0d); the
-  statement mean at 2.7x its 15 ms floor. The list probe's reading line,
-  both runs: "GET /products: pass, measured map[at:/products items:0
-  method:GET status:200 url:http://inventory-service:8002/products]
-  against map[at:/products response_items_max:50]".
+  main's push run 44257273844 on 6b0de5d: success on every job (deploy
+  skipped), read by id once fault-library (1) had finished.
 
-FOR THE REVIEW — THREE DECISIONS OF THIS RUN
-  1. How the GET sits in the bracket: StatsReader.Bracket(ctx, dsn,
-     between func(ctx) error). dbsession calls the function between its
-     second and third snapshots and reads nothing back; the connection is
-     never in its reach. The probe's closure makes the GET through
-     guardedhttp.CountItems. dbsession stays one file, makes no HTTP call,
-     and sends only the three existing statistics templates.
-  2. Isolation is a runner option, IsolatedEnvironment, which stamps every
-     request's Isolated and overwrites what a caller set. culprit probe,
-     diagnose and verify set it from culprit.yaml (isolatedIn); the
-     agent's three runners pass "". So the walk's and verify's runners
-     already carry it in a declared environment (phase-auditor's risk):
-     the walk does not choose the probe yet (no discriminates); part 2
-     does.
-  3. The database is the route component's single sql edge, by a new
-     Manifest.SQLDatabases with no fallback: SchemaDatabase's
-     `<component>-db` fallback would have measured a guessed database.
+Q38 — WHY IT STOPS (§3)
+  Decision 4 sets the budget from p95s: the fault's smallest at least
+  twice it, the fix's largest at most half. At a page of 200 that holds at
+  15 ms over three runs. But probe.http.latency places a p95 from 50
+  samples by the slowest of them, and the healthy route's slowest answer
+  in a run has been 28.2, 28.8, 30.3, 30.3 and once 113.4 ms (mid-run:
+  sample 21 and 27 of 50, not a cold start). So its fix reads
+  inconclusive, and verify says so. No budget is over ~30 ms and at most
+  half of the fault's 46 ms. Tuning past this (the page again, the judge,
+  the demo's runtime) is the architecture session's choice, not this run's.
 
-ITEM 1 — THE README'S LIST BUDGET (6ffceda, 3a2c932, 95eae4b)
-  The fault library now also runs the README's command in text and logs
-  it ("README OUTPUT"); the README quotes run 44180363288's log verbatim
-  (PASSING (1) ... items=0 ... 1 passing). The phase audit found the
-  block's closing fence followed by text; fixed.
+THE SPREAD (GET /products/details, page 200, from the MEASURED lines)
+                         44269336518   44273031843   44277466463
+  toggle (N+1) p95       46.0, 46.4    61.3, 62.9    58.7, 59.0
+  join (fixed) p95       4.6, 5.1      4.5, 4.7      4.0, 5.1
+  budget then            25 ms         15 ms         15 ms
+  At page 50 (44263168879): toggle 15.5, 15.9 ms, under the 20 ms then
+  provisional; no budget fits at 50, so the page and the route's
+  response_items_max are 200, GET /products' own cap (decision for review).
 
-ITEM 2 — isolated: (5909362)
-  environments{}.isolated, bool, strictly typed in both readers, as tls:.
-  manifest_schema.json: 64 fields (5909362's message says 63: miscounted).
-  Corpus re-recorded through the API: 6,080 cases; 1,019 hashes changed
-  (field cases, the base gained isolated:); no outcome flipped. Accepted:
-  true, True, TRUE, false, !!bool true; yes/on/1/"true" refused by both.
+FOR THE REVIEW — DECISIONS OF THIS RUN
+  1. The page is 200 and the route's list bound 200, not 50 (above).
+  2. The root is the route, and reproduced is asked of the latency reading
+     that found it slow: the per-item reading is evidence and passes either
+     way. The tree is symptom(route) -[symptom_of]-> component
+     -[caused_by]-> route; the subject repeats, which FaultTree renders.
+  3. The not-isolated sentence says "this walk does not run in an
+     environment declared isolated", not "environment X is not declared",
+     because the agent never sets Isolated whatever culprit.yaml declares.
+  4. An unexplored N+1 (no statement seen, inconclusive, refused) is a
+     partial, as every unexplored database hypothesis is.
+  5. The database fault's fix leaves the tree at 0001-0003 (the commit
+     that added 0003) and the database at 0003; every case starts at 0004
+     (atTop). Its expected result is unchanged.
 
-ITEM 3 — THE RULE (e616873, 95eae4b)
-  model.JudgePerItem, culprit_model.per_item.judge_per_item: with >= 2
-  items, calls >= items is per item; with < 2, inconclusive. Evidence:
-  pass whether or not one is named, the reason naming each with its
-  calls. Order: calls descending, then queryid.
-  per_item_conformance.json, generated (test_per_item.py --write): 75
-  cases, hand anchors in both languages, and (95eae4b) the boundary
-  asserted against the rule itself. Reading validation in Go and Python
-  re-judges the verdict and per_item.
-  Mutations (>= to >) red in Go (3 tests) and Python (the fixture, the
-  reading and the boundary tests); restored.
-
-ITEM 4 — THE BRACKET (081b071, 275f5fb)
-  Three snapshots, one read-only session: before a 2 s quiet window,
-  after it, after the request. Any other role's call in the window: the
-  request is not made, and QuietCalls says how many. A reset anywhere (a
-  count backwards, dealloc or stats_reset moving): Reset. A deadline
-  short of the window and 5 s: nothing opened. 275f5fb: any wait error
-  ends the bracket (it went on while the context was live; invariant
-  audit).
-
-ITEM 5 — THE PROBE (9ec6ddc, 275f5fb)
-  probe.db.statements_per_request: evidence verdicts, no expectation,
-  interrogate, db.stats.read and net.http.outbound, 30 s timeout; inputs
-  url/base_url and at. Not isolated: inconclusive, nothing sent. Target an
-  http: GET route; urlOffRoute; CountItems from the same response.
-  measured: url, method, at, database, quiet_window_s, quiet_calls,
-  status, items or not_counted, statements (queryid, calls, text under
-  Q29/Q32, redacted; at most 20, in the rule's order), other_statements,
-  statements_too_large, per_item. The catalogue has 18 probes; the API's
-  mirror is regenerated; culprit mcp's input table lists `at` as not an
-  address.
-
-ITEM 6 — THE DOCUMENTS (2fcfdbb)
-  PROBES (the catalogue row and a section), PERMISSIONS (no new grant,
-  under db.stats.read; the probe and probe.http.response_items under
-  net.http.outbound), LIMITS "Statements per item" (shared environments;
-  what the quiet window cannot see; Culprit's own role left out, whoever
-  uses it; a relation shared by items; fewer than two items; two
-  statements of one shape; one database; twenty statements; evidence;
-  the refusals; timing).
+ITEMS
+  1 (72df2ef, 1686be8): 0004 product_details, one row per product,
+    additive. GET /products/details: one join, or with
+    N_PLUS_ONE_FAULT=details-per-product one statement per product.
+    culprit.yaml: the route (exists), latency_p95_ms 15 (pending Q38),
+    response_items_max 200 at /products, faults-inventory-isolated.
+  2 (74e01a7): n_plus_one, "One statement per item", in Go, Python, the
+    frontend and investigation_conformance.json; the probe discriminates
+    it; catalogue.json regenerated.
+  3 (eb23f87, fc0a9c2): isolate/per_item.go. Asked at the database pass's
+    condition when the entry's own GET route is slow; isolated: before the
+    database pass, at from the list budget; supported roots at the route;
+    ruled out when statements were seen and none named; unexplored for no
+    statement seen, inconclusive, refused. Not isolated: one sentence, no
+    hypothesis. The agent never sets Isolated.
+  4 (000c4a5 ... 8e5b746): n-plus-one (isolated, load generator stopped
+    before the walk and through verify) and n-plus-one-shared, both in
+    shard 2. p95 checked against the budget read from culprit.yaml; the
+    list probe counts the page; the README's N+1 output is logged.
+  5 (eb23f87, fc0a9c2): verify's description says whether the cited
+    statement still runs per item; a rerun that saw no statement is not
+    measured (decision 7); another statement now run per item is named.
+    Verdict rules untouched.
+  6 (c460697, 8e5b746): PROBES (discriminates; In the walk), LIMITS (N+1
+    in the walk: only isolated, before the database pass; only beneath a
+    slow route; no visible statement is not evidence; the budget depends
+    on the page; a budget must clear the slowest answer, Q38).
+    README: NOT DONE. Its N+1 case waits for Q38, since the case does not
+    verify; the accuracy number is left at main's 7 of 7 (results.json as
+    on main), because CI has never verified the two N+1 cases.
 
 CRITERIA
-  Recorded statistics: per item named; together none; < 2 items, a
-    reset, quiet-window calls each inconclusive, saying why       PASS
-  Not declared isolated: inconclusive, the fake HTTP client and
-    database record no call                                        PASS
-  Real PostgreSQL 16, a local server, N = 6: /items' per-item
-    statement 6 calls, named; /joined every statement 1 call      PASS (local,
-    and CI's database boundary step from 44180363288 on)
-  The rule: Go and Python agree over the fixture; a mutation red
-    in each                                                        PASS
-  isolated:: both readers agree over the corpus; an input, the
-    caller's field, another environment cannot set it              PASS
-  Values never kept (secret-looking items and statement texts,
-    unit and real Postgres)                                        PASS
-  Unchanged elsewhere: no hypothesis kind, isolate and verify
-    untouched, no golden changed                                   PASS
-  CI green on the merge result                                     PASS (below)
-  LLM_PROVIDER=none changes nothing                                PASS (CI's
-    e2e (none); the binary calls no model; not run separately locally)
-  Report committed before the PR is marked ready                   PASS
+  Isolated case: root n_plus_one on the route, statement and counts
+    named, recommendation given                    PASS (CI, 3 runs:
+    "statement 8878744738955718652 (SELECT description, weight_grams FROM
+    product_details WHERE product_id = $1) ran 200 times for the 200 items")
+  With the fix: the route keeps its budget,
+    verify lands verified                          FAIL (inconclusive; Q38)
+  Its description: the statement no longer runs
+    per item                                       PASS (CI log)
+  Not declared isolated: no n_plus_one root, the
+    line saying why                                PASS (walk test; CI
+    diagnosis checks held, verify inconclusive as above)
+  The list probe counts the new route's page       PASS (items:200, CI)
+  The join: each outcome by a walk test            PASS
+  Mutation, no-statement -> ruled_out, red         PASS (shown red by me
+    and again by phase-auditor; restored)
+  n_plus_one: Go, Python, frontend agree           PASS
+  0004 round-trips                                 PASS (TestTheDemoDatabase,
+    local Docker; CI's migration-round-trip green)
+  Budget margins from >= 2 CI runs                 PASS for decision 4's
+    p95 margins (3 runs, above); the budget is pending Q38
+  Unchanged elsewhere: existing cases (missing-index and its wrong fix
+    green in every run; expected.json only appends), goldens, the demo's
+    expected findings                              PASS. Listed: the
+    missing-index statement now ends with the not-isolated sentence (its
+    statement_contains still holds); the database fault's trees drop 0004
+  CI green on the merge result                     FAIL (fault-library (2))
+  LLM_PROVIDER=none changes nothing                PASS (e2e (none) green)
+  Report committed before ready                    the PR stays a draft
 
 NOT BUILT (as the brief says)
-  No n_plus_one, no walk or verify change, no demo route, migration or
-  library fault, no new template, capability or role, no ORM reading, no
-  traces.
+  No N+1 asked outside an isolated environment; no change to the probe's
+  measurement or verdicts; no statement budget from the bracket; no new
+  template, capability or role; no change to verify's verdict rules; no
+  ORM source, no traces.
 
 AUDITS
-  phase-auditor (13b5246..3a2c932): every executable criterion MET; the
-    Do-NOT list respected. Acted on (95eae4b): the README fence; the
-    Python boundary anchor. Left for the review: the walk's runners carry
-    isolation (decision 2); the e2e's not-isolated case asserts no HTTP
-    request, the unit test the database side.
-  invariant-auditor (13b5246..95eae4b): CLEAN. Acted on (275f5fb): the
-    wait error; the GET's error redacted where it is written. Left, in
-    LIMITS: a service using Culprit's own role is invisible, and the
-    reading is then a pass naming nothing.
+  invariant-auditor (6349f84..fc0a9c2 on disk): NOT CLEAN on V1 (two test
+    subjects formatted, not built), plus R1 (verify's note read a rerun
+    with no statement as fixed) and R2 (another per-item statement
+    unnamed). All three fixed in fc0a9c2. Not re-audited.
+  phase-auditor (6349f84..8e5b746): PHASE NOT COMPLETE. NOT MET: verify
+    verified; CI green; the budget's why (fixed since); the report
+    (this); the README's N+1 case (left for Q38). Its proposal for Q38:
+    word decision 4 as "the fixed route's slowest sample across >= 2 runs
+    is under the budget, and the fault's p95 is at least 2x it".
 
 LOCAL GATES (Windows, one at a time, in the foreground)
   just lint, typecheck, lint-imports, check-schema-drift,
   check-no-llm-imports, check-invariants, check-scan-coverage,
   check_coupled_files: clean. go test -p 2 ./...: every package ok.
-  api 1,775 passed and 1 failed (the catalogue's 17), fixed in ef17f24
-  and rerun; worker 93, mcp_server 21, extractors/python 39, node 22
-  passed. Docker: TestTheBracketAgainstARealPostgres and
-  TestStatementsPerRequestAgainstARealPostgres pass. After the audits:
-  dbsession, probe, test_per_item, lint and vet rerun. Not run locally:
-  the fault library (instructed), the migration round trip, e2e, the
-  frontend build; CI runs them.
+  api 1,778 passed (after d3ee1d5), shared 686, worker 93, mcp_server 21,
+  extractors/python 19 (migrations), node 22, frontend 19. Docker:
+  TestTheDemoDatabase passes. Not run locally: the fault library
+  (instructed), the migration round trip job, e2e, the frontend build.
 
-CI
-  44179969936 on 6ffceda: failure, lint (two lines over 100 columns).
-  44180363288 on 61a6228: failure, test only (the API's 18 == 17); every
-    other job green, both fault-library shards and the cli job's new
-    Postgres tests included; the README's output is from its log.
-  44182484917 on ef17f24: success on every job.
-  44186455846 on 275f5fb: success on every job; deploy and publish
-    skipped; fault-library (1) and (2) green. Every check on PR #47 pass
-    or skipping (CodeQL and its four analyses included); no open
-    code-scanning alert (pr=47, refs/pull/47/merge, refs/pull/47/head).
-    main had not moved (02bae0d), so the branch was the merge result.
+CI (PR #48)
+  44263168879 on 8d11f70: test (the demo-budget test) and fault-library
+    (2) (page 50: the route under its budget) red.
+  44269336518 on 1686be8: fault-library (2) red, verify inconclusive.
+  44273031843 on c58cc54: fault-library (2) red, verify inconclusive.
+  44277466463 on 8e5b746: fault-library (2) red, verify inconclusive;
+    every other job green, fault-library (1) included. main had not moved
+    (6b0de5d), so each was the merge result.
   This report's own commit runs on the pull request after it.
 ```
 
