@@ -32,7 +32,7 @@ export function LoginScreen() {
 
   return (
     <Standalone glow>
-      <Card surface="raised" className="w-full max-w-sm p-6 sm:p-8">
+      <Card className="w-full max-w-sm p-6 shadow-overlay sm:p-8">
         <h1 className="text-title font-bold text-fg">Sign in</h1>
         <p className="mt-1 text-sm text-fg-muted">to this Culprit control plane.</p>
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">

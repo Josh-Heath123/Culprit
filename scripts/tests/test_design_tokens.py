@@ -49,8 +49,12 @@ GLASS = ("glass",)
 #: Boundaries that identify a control: 3:1 on every surface and on glass.
 BOUNDARIES = ("line-strong",)
 #: Where a focusable element sits, and so where its offset ring is drawn:
-#: the well, the page, a panel, glass. surface-2 and surface-3 are inner
-#: items and hover states, under an element and never under its ring.
+#: the well, the page, a panel (every Card), glass. Violet itself is under
+#: 3:1 on surface-2, surface-3 and every tint (2.3 to 2.8), so no control is
+#: placed on them: they are inner items, nodes, badges and hover states.
+#: Phase 40's audit found three controls on them (the sign-in card, the
+#: services connections box, the agent notice's link); all three moved to
+#: a panel or a well, and Card lost its surface-2 variant.
 RING_SURFACES = ("surface-sunken", "surface-0", "surface-1", "glass")
 #: The identity colours no status may be mistaken for (I2): the culprit's
 #: lime, and the brand's violet as fill and as text.

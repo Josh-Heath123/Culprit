@@ -151,7 +151,7 @@ function WhyNot({
   missing: { notAllowed: string[]; notHeld: string[] };
 }) {
   return (
-    <div role="status" className="flex flex-col gap-1.5 rounded-md border border-degrades-line bg-degrades-tint p-3 text-sm text-fg" data-testid="investigate-unavailable">
+    <div role="status" className="flex flex-col gap-1.5 rounded-md border border-degrades-line bg-surface-sunken p-3 text-sm text-fg" data-testid="investigate-unavailable">
       <p>
         An investigation needs {INVESTIGATION_NEEDS.map((g) => `${g}`).join(" and ")}, to tell whether a connection or
         a service fails. {agent.id} cannot use {missing.notAllowed.length + missing.notHeld.length === 1 ? "one" : "them"}{" "}

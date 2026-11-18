@@ -3,16 +3,17 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-/** A surface, always solid (I5). `solid` is for data — the fault tree,
- * readings, lists, forms, settings — where reading wins; `raised` lifts a
- * panel one step. Glass is not a card: it belongs to layered elements
+/** A surface, always solid (I5): for data — the fault tree, readings,
+ * lists, forms, settings — where reading wins. One variant, on surface-1,
+ * because a card holds controls and the violet focus ring is measured at
+ * 3:1 only where controls sit (scripts/tests/test_design_tokens.py,
+ * RING_SURFACES). Glass is not a card: it belongs to layered elements
  * (navigation, dialogs, tooltips), which scripts/check_frontend_tokens.py
  * holds to the components declared for it. */
 const cardVariants = cva("rounded-lg border", {
   variants: {
     surface: {
       solid: "border-line bg-surface-1",
-      raised: "border-line bg-surface-2 shadow-raised",
     },
   },
   defaultVariants: { surface: "solid" },

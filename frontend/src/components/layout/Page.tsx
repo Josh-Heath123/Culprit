@@ -48,12 +48,20 @@ export function Page({
 }
 
 /** A page with no session behind it — sign-in, not found, admins only:
- * the brand, then one centred panel, over the graticule (I4). `glow` adds
- * the violet radial glow, which belongs to the sign-in page alone. */
-export function Standalone({ children, glow = false }: { children: React.ReactNode; glow?: boolean }) {
+ * the brand, then one centred panel. Sign-in and not found are expressive
+ * (I4): the graticule, and on sign-in alone the violet radial glow. */
+export function Standalone({
+  children,
+  glow = false,
+  graticule = true,
+}: {
+  children: React.ReactNode;
+  glow?: boolean;
+  graticule?: boolean;
+}) {
   return (
     <div className="relative isolate flex min-h-screen flex-col overflow-hidden">
-      <Graticule className="-z-10" />
+      {graticule ? <Graticule className="-z-10" /> : null}
       {glow ? (
         <div
           aria-hidden

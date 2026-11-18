@@ -366,7 +366,7 @@ function ConnectionsPanel({
   const candidates = components.filter((c) => c.name !== component.name);
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-2 p-3">
+    <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-sunken p-3">
       <span className="text-xs font-medium text-fg-muted">Connections</span>
 
       {connections.length === 0 ? (
