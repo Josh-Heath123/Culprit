@@ -487,30 +487,62 @@ func perItemNote(inv model.Investigation, reran []model.Rerun) string {
 		}
 		still, settled := 0, 0
 		var unsettled []string
+		others := map[string]bool{}
 		for _, run := range rerun.Runs {
 			if run.Verdict != model.VerdictPass {
 				unsettled = append(unsettled, fmt.Sprintf("%s: %s", run.Verdict, run.Reason))
+				continue
+			}
+			if !sawStatements(run) {
+				// Not evidence either way (decision 7): the request made no
+				// statement Culprit could see on that database.
+				unsettled = append(unsettled, "the request made no statement Culprit could see")
 				continue
 			}
 			settled++
 			for _, named := range namedPerItem(run) {
 				if named == queryID {
 					still++
+				} else {
+					others[named] = true
 				}
 			}
 		}
 		lead := fmt.Sprintf("; statement %s, which ran once per item at diagnosis (%s), ", queryID, readingID)
+		note := ""
 		switch {
 		case len(unsettled) > 0:
 			return lead + "could not be measured again on both runs: " + strings.Join(unsettled, "; ")
 		case still == settled:
-			return lead + "still runs once per item on both runs"
+			note = lead + "still runs once per item on both runs"
 		case still == 0:
-			return lead + "no longer runs once per item on either run"
+			note = lead + "no longer runs once per item on either run"
+		default:
+			note = lead + "runs once per item on one run and not on the other"
 		}
-		return lead + "runs once per item on one run and not on the other"
+		if len(others) > 0 {
+			var named []string
+			for queryID := range others {
+				named = append(named, queryID)
+			}
+			sort.Strings(named)
+			note += fmt.Sprintf("; statement(s) %s now run once per item", strings.Join(named, ", "))
+		}
+		return note
 	}
 	return ""
+}
+
+// sawStatements says a per-item reading's bracket held at least one
+// statement.
+func sawStatements(reading model.Reading) bool {
+	switch list := reading.Measured["statements"].(type) {
+	case []any:
+		return len(list) > 0
+	case []map[string]any:
+		return len(list) > 0
+	}
+	return false
 }
 
 // namedPerItem are the queryids a per-item reading names as run per item.

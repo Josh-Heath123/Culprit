@@ -761,7 +761,8 @@ var (
 	readyRoute    = budgetedRoute{"http:inventory-service/GET /ready"}
 	productsRoute = budgetedRoute{"http:inventory-service/GET /products"}
 	// Phase 39 part 2: the N+1 fault's route.
-	detailsRoute = budgetedRoute{"http:inventory-service/GET " + detailsPath}
+	detailsRoute = budgetedRoute{model.MustBuildSubject(model.KindHTTP, model.Parts{
+		"component": "inventory-service", "method": "GET", "path": detailsPath})}
 )
 
 const detailsPath = "/products/details"

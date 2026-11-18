@@ -10,8 +10,12 @@ import (
 // perItemReading is a statements_per_request reading naming the given
 // queryids as run per item.
 func perItemReading(verdict model.Verdict, named ...string) model.Reading {
+	statements := []any{map[string]any{"queryid": "1111", "calls": 1}}
+	for _, queryID := range named {
+		statements = append(statements, map[string]any{"queryid": queryID, "calls": 200})
+	}
 	reading := model.Reading{ProbeID: model.StatementsPerRequestProbeID, Verdict: verdict,
-		Measured: map[string]any{"per_item": append([]string{}, named...)}}
+		Measured: map[string]any{"per_item": append([]string{}, named...), "statements": statements}}
 	if verdict != model.VerdictPass {
 		reading.Reason = "the quiet window was not quiet"
 	}
@@ -21,7 +25,9 @@ func perItemReading(verdict model.Verdict, named ...string) model.Reading {
 func nPlusOneInvestigation(status model.HypothesisStatus) model.Investigation {
 	return model.Investigation{
 		Hypotheses: []model.Hypothesis{{ID: "h1", Kind: model.HypothesisNPlusOne, Status: status,
-			Subject: "http:inventory-service/GET /products/details", Readings: []string{"r2", "r1"}}},
+			Subject: model.MustBuildSubject(model.KindHTTP, model.Parts{
+				"component": "inventory-service", "method": "GET", "path": "/products/details"}),
+			Readings: []string{"r2", "r1"}}},
 		Readings: []model.InvestigationReading{
 			{ID: "r1", Reading: model.Reading{ProbeID: model.LatencyProbeID, Verdict: model.VerdictFail}},
 			{ID: "r2", Reading: perItemReading(model.VerdictPass, "7777")},
@@ -45,7 +51,10 @@ func TestTheDescriptionSaysWhetherTheStatementStillRunsPerItem(t *testing.T) {
 		"fixed":     {rerun(pass(), pass()), "statement 7777, which ran once per item at diagnosis (r2), no longer runs once per item on either run"},
 		"not fixed": {rerun(pass("7777"), pass("7777")), "still runs once per item on both runs"},
 		"flips":     {rerun(pass("7777"), pass()), "on one run and not on the other"},
-		"another":   {rerun(pass("8888"), pass("8888")), "no longer runs once per item on either run"},
+		"another":   {rerun(pass("8888"), pass("8888")), "no longer runs once per item on either run; statement(s) 8888 now run once per item"},
+		"no statement seen": {rerun(pass(), model.Reading{ProbeID: model.StatementsPerRequestProbeID,
+			Verdict: model.VerdictPass, Measured: map[string]any{"per_item": []string{}, "statements": []any{}}}),
+			"could not be measured again on both runs: the request made no statement Culprit could see"},
 		"unsettled": {rerun(pass(), perItemReading(model.VerdictInconclusive)), "could not be measured again on both runs: inconclusive"},
 	} {
 		if got := perItemNote(inv, c.reran); !strings.Contains(got, c.want) || !strings.HasPrefix(got, "; ") {
