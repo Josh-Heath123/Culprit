@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Phase 43 (D7, decision 4): keeps the workflows' action pins current. Every
+# external action is pinned to a full commit SHA with its version as a
+# comment (scripts/tests/test_ci_workflow.py holds it); Dependabot moves both
+# together. Weekly, every update in one pull request, which must pass `gate`
+# like any other. No other ecosystem's version updates (security updates are
+# a repository setting, the owner's).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"

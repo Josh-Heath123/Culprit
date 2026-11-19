@@ -449,3 +449,80 @@ def test_a_timeout_go_reads_as_longer_is_named(workflow, justfile, flag):
     job["steps"] = [{"run": f"cd cli && go test ./cmd/culprit -run X {flag}"}]
     problems = check_go_timeouts({"jobs": {"fault-library": job}}, justfile)
     assert len(problems) == 1 and "over half the job's 35" in problems[0], problems
+
+
+# Phase 43 (D7, decision 3): every external action pinned to a commit.
+
+#: A `uses:` line, as written (YAML drops the comment that names the version).
+USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s+(\S+)(.*)$", re.M)
+#: An action pinned to a full commit: owner/repo[/path]@<40 hex>.
+PINNED_ACTION = re.compile(r"[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}")
+#: The version the pin was resolved from, as a comment: `# v4.4.0`.
+VERSION_COMMENT = re.compile(r"\s+# v\d+\.\d+\.\d+")
+
+DEPENDABOT = ROOT / ".github" / "dependabot.yml"
+
+#: A full commit SHA, for the cases below.
+CHECKOUT_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+
+
+def check_pins(text: str, name: str) -> list[str]:
+    """Why an action in a workflow's text is not pinned to a commit, or []."""
+    problems = []
+    for target, rest in USES_LINE.findall(text):
+        if target.startswith("./"):
+            continue  # a reusable workflow in this repository, not an action
+        if not PINNED_ACTION.fullmatch(target):
+            problems.append(f"{name}: `{target}` is not pinned to a full commit SHA")
+        elif not VERSION_COMMENT.fullmatch(rest.rstrip()):
+            problems.append(f"{name}: `{target}` names no version in a `# vX.Y.Z` comment")
+    return problems
+
+
+def workflow_texts() -> dict[str, str]:
+    return {p.name: p.read_text(encoding="utf-8") for p in sorted(WORKFLOWS.glob("*.yml"))}
+
+
+def test_every_action_is_pinned_to_a_commit():
+    texts = workflow_texts()
+    assert set(texts) >= {"ci-cd.yml", "images.yml", "cli-release.yml"}, sorted(texts)
+    read = sum(len(USES_LINE.findall(t)) for t in texts.values())
+    assert read > 40, f"the check reads {read} uses: lines: too few"
+    problems = [p for name, text in texts.items() for p in check_pins(text, name)]
+    assert problems == []
+
+
+@pytest.mark.parametrize(
+    ("line", "problem"),
+    [
+        ("      - uses: actions/checkout@v4", "not pinned to a full commit SHA"),
+        ("        uses: pypa/gh-action-pypi-publish@release/v1", "not pinned to a full commit SHA"),
+        ("      - uses: actions/checkout@11d5960", "not pinned to a full commit SHA"),
+        ("      - uses: docker://alpine:3.20", "not pinned to a full commit SHA"),
+        (f"      - uses: actions/checkout@{CHECKOUT_SHA}", "names no version"),
+        (f"      - uses: actions/checkout@{CHECKOUT_SHA} # v4", "names no version"),
+    ],
+)
+def test_an_unpinned_action_is_named(line, problem):
+    problems = check_pins(f"jobs:\n  a:\n    steps:\n{line}\n", "w.yml")
+    assert len(problems) == 1 and problem in problems[0], problems
+
+
+def test_a_pinned_action_and_a_local_workflow_pass():
+    text = (
+        f"      - uses: actions/checkout@{CHECKOUT_SHA} # v4.4.0\n"
+        "    uses: ./.github/workflows/images.yml\n"
+        f"      - uses: github/codeql-action/upload-sarif@{CHECKOUT_SHA} # v4.39.3\n"
+    )
+    assert check_pins(text, "w.yml") == []
+
+
+def test_dependabot_keeps_the_action_pins_current():
+    config = yaml.safe_load(DEPENDABOT.read_text(encoding="utf-8"))
+    assert config["version"] == 2
+    (update,) = config["updates"]  # one ecosystem: no other version updates
+    assert update["package-ecosystem"] == "github-actions"
+    assert update["directory"] == "/"
+    assert update["schedule"]["interval"] == "weekly"
+    (group,) = update["groups"].values()  # every update in one pull request
+    assert group["patterns"] == ["*"]

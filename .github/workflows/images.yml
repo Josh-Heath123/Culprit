@@ -85,7 +85,7 @@ jobs:
             context: cli
             dockerfile: cli/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # frontend/src/lib/api-types.generated.ts is gitignored — it's
       # regenerated from api's live OpenAPI schema, same as local dev's
@@ -98,7 +98,7 @@ jobs:
       # of this; api and worker skip these three steps entirely.
       - name: Set up uv (frontend type generation only)
         if: matrix.image == 'frontend'
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
       - name: Dump api's OpenAPI schema
@@ -139,10 +139,10 @@ jobs:
         if: matrix.image == 'frontend'
         run: cd frontend && npm ci && npm run generate-types
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build (local, for scanning)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -153,7 +153,7 @@ jobs:
             ${{ matrix.image == 'frontend' && 'VITE_API_URL=/api' || '' }}
 
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: local/${{ matrix.image }}:ci
           severity: CRITICAL,HIGH
@@ -174,7 +174,7 @@ jobs:
         run: docker save local/${{ matrix.image }}:ci | gzip > image-${{ matrix.image }}.tar.gz
       - name: Keep it for the publish job
         if: inputs.publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: image-${{ matrix.image }}
           path: image-${{ matrix.image }}.tar.gz
@@ -198,14 +198,14 @@ jobs:
       matrix:
         image: [api, worker, frontend, mcp_server, cli]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: image-${{ matrix.image }}
       - name: Load the scanned image
         run: gunzip -c image-${{ matrix.image }}.tar.gz | docker load
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
