@@ -3273,3 +3273,39 @@ self-check job, the self-check's figures. What it does not hold:
 - **The diagrams are dark in GitHub's light theme.** Mermaid takes one
   `init` theme per diagram, so the plum nodes are the same in both of
   GitHub's themes; only the hero has a light variant.
+
+## The gate holds every job, and the shards hold what they declare
+
+Phase 41 made `gate` the one check that decides a pull request:
+`scripts/ci_gate.py` passes only when every job it needs concluded
+`success`, and `scripts/tests/test_ci_workflow.py` fails when a job is
+added and left out of it. What that does not give you:
+
+- **A shard is balanced on declared seconds, not on this run's.** Each case
+  in `cli/testdata/faultlib/expected.json` (and each MCP loop) declares how
+  long it took in CI, and the shards are filled longest first from those
+  numbers, with no shard over 480 declared seconds. A case that grows
+  slower is not moved until its `seconds` is updated; until then its shard
+  simply runs longer. The four shards declared 383 to 389 seconds and took
+  7.3 to 8.0 minutes in the first run.
+- **Every job has a hard timeout,** twice its slowest run in the ten green
+  runs before Phase 41, rounded up to five minutes, at least ten: `cli` 20,
+  `e2e` 30, `fault-library` 35, `images.yml`'s build 15, every other job
+  10. In `cli` and `e2e`, the job's limit comes before an inner `go test
+  -timeout` (20 and 30 minutes): a hung test there ends as a killed job,
+  without the stack dump that names it. The fault library's 30-minute
+  `go test -timeout` stays inside its job's 35.
+- **A newer push to a pull request cancels the run in progress.** The
+  cancelled run's `gate` still runs, and fails; only the newest commit's
+  checks decide the merge. A push to `main`, a tag or a hand-started run is
+  never cancelled.
+- **The critical path is `e2e`.** With the fault library after `lint`, the
+  slowest leg is `e2e (stub)`, about 9 to 12 minutes, which builds every
+  image from the commit; a pull request's run takes about 12.5 minutes.
+- **Locally, `go test` does not notice the workflow changing.**
+  `TestTheFaultLibraryShardsCoverEveryCaseOnce` reads `ci-cd.yml`'s matrix,
+  but the file is outside the Go module, so a cached pass survives an edit
+  to it; run it with `-count=1`. CI runs it under `-count=1` in every
+  fault-library shard.
+- **`main`'s ruleset is the owner's.** Until it requires `gate`, strict and
+  with no bypass, a red pull request can still be merged by hand.

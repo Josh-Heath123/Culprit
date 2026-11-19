@@ -35,7 +35,8 @@ jobs:
   # build-push-action, trivy-action) with nothing that can write a package.
   build:
     runs-on: ubuntu-latest
-    # Twice the slowest of the last ten green runs (frontend, 5.3 minutes),
+    # Twice the slowest of the last ten green CI/CD runs before Phase 41
+    # (44321940704 to 44390448565): frontend, 5.3 minutes in 44321940704,
     # rounded up to 5 (Phase 41).
     timeout-minutes: 15
     permissions:
