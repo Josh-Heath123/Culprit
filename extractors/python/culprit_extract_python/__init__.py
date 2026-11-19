@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """`culprit-extract-python` — the Python intent extractor (D3).
 
 Installed as a dev-dependency in the *target* project's own virtualenv,

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Local quickstart (Phase 17) -- distinct from docker-compose.yml (local
 # dev infra only: Postgres/Redis/Grafana/Tempo, no app containers) and
 # docker-compose.prod.yml (pulls published ghcr.io images, no bind

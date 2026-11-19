@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP-level integration tests for the postmortem write path (Phase 18,
 docs/SELF_HOSTED_PLAN.md), following test_registry_api.py's pattern
 exactly: a minimal FastAPI app (postmortems_router only, behind

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 26 regression test: bootstrap_env writes the real image path.
 
 The defect: `scripts/bootstrap_env.py` still emitted

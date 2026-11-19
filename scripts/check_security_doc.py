@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Every "cannot" in docs/SECURITY.md names a test that exists (Phase 33 part 3).
 
 The threat model says what each compromise cannot do. A "cannot" nobody

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Generate infra/.env.prod (Phase 17).
 
 Runs on the target machine only — never in CI (docs/SELF_HOSTED_PLAN.md's

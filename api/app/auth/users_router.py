@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Admin user management (Phase 16) — mounted at /users in
 api/app/main.py, gated by require_admin (not the plain require_auth
 /auth/* uses; /model/* shares this stricter gate) — see

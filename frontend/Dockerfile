@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Multi-stage: build the SPA with Node, then serve it from a Caddy image
 # that also reverse-proxies to the api container — see Caddyfile's
 # comment for why this is one image/container, not build-artifact-plus-

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Building Facts, so no reader in this package has to.
 
 One place that knows the capture id, the timestamp, the component name

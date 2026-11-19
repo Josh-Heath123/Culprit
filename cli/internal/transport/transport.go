@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package transport is how a paired agent talks to the control plane
 // (docs/DIAGNOSTIC_PLAN.md Phase 33 part 2): it claims tasks, reports
 // results, posts readings and investigations, and ships the agent's audit

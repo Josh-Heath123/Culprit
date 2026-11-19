@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The §2.6 Reading and ProbeManifest contract, held to the Go side by a
 shared fixture.
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Stop hook: run the fast deterministic gates before Claude is allowed to
 # finish its turn. Exit 2 feeds stderr back into the session as actionable
 # context, so "I've implemented it" becomes "show me it actually works" —

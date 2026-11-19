@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Tests for app.memory.link_job (Phase 23, docs/AI_NATIVE_PLAN.md).
 
 Two kinds of coverage:

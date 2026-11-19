@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Tests for the scan-coverage checker itself (standing invariant 9).
 
 A checker that cannot fail is not a gate, and a *coverage* checker that

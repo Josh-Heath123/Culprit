@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 15: oversized/gzip-bomb payloads must be rejected before they
 ever reach otlp_decode.py's protobuf parsing, and the ingest rate
 limiter must bucket by authenticated service, not client IP — every

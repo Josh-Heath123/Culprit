@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Structural proof of invariant 8 (docs/AI_NATIVE_PLAN.md §1) and this
 phase's own Out of scope ("Any tool that calls an LLM itself"): no tool
 implementation in mcp_server/tools.py calls anything on the Voyage client

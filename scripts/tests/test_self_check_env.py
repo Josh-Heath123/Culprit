@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The self-check's placeholder environment must be the same everywhere.
 
 `api/app/*/config.py` reads several variables at import time and refuses

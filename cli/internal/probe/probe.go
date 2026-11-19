@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package probe runs probes: active readings taken at a chosen point.
 //
 // Phase 31. Passive comparison (internal/diverge) can tell you that two

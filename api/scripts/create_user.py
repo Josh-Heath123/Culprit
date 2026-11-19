@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Create the first admin, or any other user, on the host (Phase 16).
 
 Deliberately runs here, not as a public bootstrap HTTP endpoint — an

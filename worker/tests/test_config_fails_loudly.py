@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 26 regression test: the worker refuses to start without its DB URLs.
 
 The api-side twin of this file is `api/tests/test_config_fails_loudly.py`;

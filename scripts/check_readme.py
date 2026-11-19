@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Holds what the README says to what the repository holds (docs/DELIVERY_PLAN.md
 S4; Phase 40 part 2, decision 4). Standard library only.
 

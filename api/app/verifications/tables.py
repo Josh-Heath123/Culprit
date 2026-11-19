@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`verifications`, as a Core table (migrations/versions/f2b7d4e9a1c6_verifications.py).
 
 Core rather than ORM for the reason app/investigations/tables.py gives:

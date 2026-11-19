@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Least-privilege assertion for the `mcp-reader` role (Phase 24,
 docs/AI_NATIVE_PLAN.md), same pattern every prior phase's own
 role-scoped test already establishes (e.g.

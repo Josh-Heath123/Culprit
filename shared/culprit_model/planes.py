@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Planes, provenance source kinds and intent confidence ranks.
 
 docs/DIAGNOSTIC_PLAN.md §2.1 and §2.4. Three planes, not four: a

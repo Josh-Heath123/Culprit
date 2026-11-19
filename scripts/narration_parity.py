@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Narration changes nothing but the prose — Phase 35 part 2.
 
 CI runs the e2e job twice, with narration on (the stub provider) and off

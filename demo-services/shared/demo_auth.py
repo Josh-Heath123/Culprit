@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Service-to-service bearer tokens for the demo — the audience check that
 Phase 32's fault library breaks on purpose.
 

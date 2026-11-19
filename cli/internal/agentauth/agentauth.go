@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package agentauth is how an agent proves who it is to the control plane
 // (docs/DIAGNOSTIC_PLAN.md Phase 33, "Per-agent credentials are Ed25519
 // keys that sign every request, not mutual TLS").

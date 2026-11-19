@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Production deployment (Phase 11) — distinct from docker-compose.yml
 # (local dev infra only). References built ghcr.io images by tag, never
 # local Dockerfiles or bind mounts. All app secrets come from ONE

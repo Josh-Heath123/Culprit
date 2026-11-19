@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fails if a package declared deterministic imports an LLM client.
 
 Phase 26 (docs/DIAGNOSTIC_PLAN.md field 4). Generalises the AST test

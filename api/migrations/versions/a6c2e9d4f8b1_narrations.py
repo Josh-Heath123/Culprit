@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """narrations: one append-only record per narration attempt, and the narrator role
 
 Revision ID: a6c2e9d4f8b1

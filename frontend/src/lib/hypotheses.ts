@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** Hypothesis kinds as words: the label reads as English, and the exact
  * kind is shown beneath it in monospace. The source is
  * shared/tests/investigation_conformance.json's hypothesis_labels, which the

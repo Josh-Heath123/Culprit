@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** Every capability an agent can report or be allowed, in plain words
  * (Phase 33 part 3: "grants shown in plain language"). Held to the shared
  * vocabulary — shared/tests/capability_conformance.json, which the Go CLI

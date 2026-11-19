@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Database schema and migration head.
 
 Two claims, both INTENT and both about what the *code* expects — not

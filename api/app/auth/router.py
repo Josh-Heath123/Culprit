@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Self-service auth endpoints (Phase 16 rewrite): login, "who am I",
 and changing your own password. Admin user-management lives in
 app/auth/users_router.py, mounted separately at /users.

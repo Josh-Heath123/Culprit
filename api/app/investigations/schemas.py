@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Response shapes for the investigation routes. The request body is
 `culprit_model.investigations.Investigation` itself — exactly what
 `culprit diagnose --format json` writes."""

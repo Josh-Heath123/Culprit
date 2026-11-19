@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Engineering-memory API (Phase 21, docs/AI_NATIVE_PLAN.md) — mounted at
 the repo root in api/app/main.py (no router-level auth dependency, unlike
 every other router in this app — see below for why).

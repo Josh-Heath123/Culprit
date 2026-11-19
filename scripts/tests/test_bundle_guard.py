@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The self-check job's bundle guard (Phase 38 part 1) is a script inside
 .github/workflows/ci-cd.yml. A syntax slip in it is only seen once CI runs,
 and it was: a newline inside one of its strings broke the workflow file

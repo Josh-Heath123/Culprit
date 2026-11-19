@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Pairing, allowances, tasks and the audit log (Phase 33 part 2).
 
 Each function takes the session of the one role its statements need

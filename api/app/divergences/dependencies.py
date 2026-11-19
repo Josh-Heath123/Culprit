@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The session for the divergence writer.
 
 A separate session factory from `app/facts/`'s even though both run as

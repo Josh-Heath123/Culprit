@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """probe readings: a probe-writer role, and api-reader on readings
 
 Revision ID: a9d2c40f7e18

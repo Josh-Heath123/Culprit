@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Unit tests for scripts/check_coupled_files.py (Phase 22,
 docs/AI_NATIVE_PLAN.md). Tests the pure check() function directly with a
 synthetic pairs list -- the four behaviors the phase's own Tests section

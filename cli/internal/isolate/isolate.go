@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package isolate is the isolation walk (docs/DIAGNOSTIC_PLAN.md Phase 32):
 // given a symptom, it builds the hypothesis space from the system model,
 // chooses probes by what they discriminate, bisects down the request path,

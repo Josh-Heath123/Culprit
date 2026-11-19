@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fails if the migration chain cannot round-trip against a real database.
 
 Standing invariant 8 (docs/DIAGNOSTIC_PLAN.md §3), added 2026-09-09 after

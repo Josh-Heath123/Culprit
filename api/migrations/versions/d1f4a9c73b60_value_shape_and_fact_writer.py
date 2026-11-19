@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """narrow configured_facts.value_shape, add the fact-writer role
 
 Revision ID: d1f4a9c73b60

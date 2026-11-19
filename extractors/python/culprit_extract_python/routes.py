@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """HTTP route extraction by runtime introspection (rank 90).
 
 Why introspection rather than parsing decorators: every framework here

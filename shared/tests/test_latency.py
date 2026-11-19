@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The latency rule (Phase 36 part 1), held to the fixture Go reads too.
 
 Verdicts and reasons must match exactly in both languages, so the fixture

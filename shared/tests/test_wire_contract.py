@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The Go binary's output is a valid Python `CaptureBundle`.
 
 This is the contract that makes the whole architecture work, and until

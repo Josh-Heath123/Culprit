@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Multi-stage build for both of api/'s deployable processes — the
 # dashboard API (app/main.py) and ingest-gateway (app/ingest_gateway/
 # main.py). One image, two containers in production (see

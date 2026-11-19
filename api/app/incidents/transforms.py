@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Pure ORM-row -> API-response transforms. No I/O — unit-tested directly
 (api/tests/test_incidents_transforms.py) without a database, same
 convention as the worker's pure/impure split (e.g. app/anomaly/scorer.py

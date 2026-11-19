@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """scripts/narration_parity.py: what it ignores, and what it must not.
 
 The parity gate compares the agent loop's records with narration on and

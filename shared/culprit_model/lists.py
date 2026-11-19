@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Lists — Phase 38 part 2 (docs/PERFORMANCE_PLAN.md, "Part 2 — lists").
 
 A list route is bounded only where a bound is declared: `maxItems` in the

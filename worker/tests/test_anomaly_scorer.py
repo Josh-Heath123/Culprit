@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Property tests for the pure scorer (app/anomaly/scorer.py).
 
 Written and passing before any Redis/DB/arq wiring exists, per the plan's

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Postmortem write path (Phase 18) — mounted at /postmortems in
 api/app/main.py, gated by the same require_auth dependency
 app/incidents/router.py uses. Unlike the registry/users routers, this is

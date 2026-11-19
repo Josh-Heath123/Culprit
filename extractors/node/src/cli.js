@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The protocol driver: one JSON object in on stdin, one out on stdout.
  *

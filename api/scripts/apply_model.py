@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Declarative system-model sync (Phase 27) — `culprit.yaml` in, model out.
 
 Was `apply_services.py` (Phase 14), which read a `services:` list and

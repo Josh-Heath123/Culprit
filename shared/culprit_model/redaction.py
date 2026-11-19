@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Whether free text carries something credential-shaped.
 
 The Python half of `cli/internal/model/redact.go`, with the same patterns.

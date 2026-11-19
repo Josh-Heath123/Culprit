@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The protocol driver: one JSON object in, one JSON object out.
 
 `docs/EXTRACTOR_PROTOCOL.md` is the contract. This module implements the

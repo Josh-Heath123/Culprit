@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Phase 32's fault library: the three demo services and nothing of Culprit's
 # — no API or worker, because the isolation walk runs in the binary and
 # reads nothing but the system (DIAGNOSTIC_PLAN.md Phase 32, "How Phase 32

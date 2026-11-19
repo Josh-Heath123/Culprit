@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Integration tests for retrieve_similar_records (Phase 21,
 docs/AI_NATIVE_PLAN.md) and a light regression check on
 retrieve_similar_postmortems (Phase 6, untouched) — against a real

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP-level integration tests for the engineering-memory API (Phase 21,
 docs/AI_NATIVE_PLAN.md), following test_postmortems_api.py's pattern
 exactly: a minimal FastAPI app (memory_router only) against a real,

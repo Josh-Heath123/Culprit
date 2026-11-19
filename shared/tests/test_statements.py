@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The statement rule (Phase 37 part 2), held to the fixture the Go rule
 (cli/internal/model/statements.go) is held to."""
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Build context for cli/Dockerfile. The binary is built inside the image;
 # local build outputs and test fixtures are not needed by it.
 bin/

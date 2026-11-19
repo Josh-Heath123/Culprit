@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Whether narration is on — the operator's `LLM_PROVIDER`, in `.env.prod`.
 
 The API never talks to a provider; only the worker's narrator does

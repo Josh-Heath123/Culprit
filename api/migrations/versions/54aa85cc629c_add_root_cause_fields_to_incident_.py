@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """add root cause fields to incident candidates
 
 Revision ID: 54aa85cc629c

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { splitFlags } from "@/lib/prose";
 
 /** Text from the walk or the API, with every command-line flag in it

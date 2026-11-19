@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """DB access for the `users` table (Phase 16) — the auth-service role for
 writes, whatever engine the caller passes for reads (app/auth/router.py
 wires auth-service for everything under /auth and /users; app/auth/

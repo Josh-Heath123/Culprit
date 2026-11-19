@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Shell-level test for .claude/hooks/check_invariants.sh (Phase 22,
 # docs/AI_NATIVE_PLAN.md's own Tests section calls for exactly this
 # pattern, matching Phase 21's test_capture_ai_change.sh: synthetic

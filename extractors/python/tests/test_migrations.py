@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The migration-chain reader.
 
 The tests worth reading twice are the refusals. This module's whole

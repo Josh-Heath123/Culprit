@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The agent tables, as Core tables (migrations/versions/d7a3e5f1b9c2_agents.py).
 
 Core rather than ORM for the reason app/investigations/tables.py gives: each

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 from app.env import require_env
 
 #: registry-admin role (Phase 14) — SELECT/INSERT/UPDATE/DELETE on

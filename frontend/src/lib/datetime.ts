@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** The one date-and-time format in the interface (Phase 32.1 review):
  * `4 Nov 2026, 18:18` — day, short month, year, 24-hour clock, in the
  * reader's local time. Unambiguous in every locale, which the

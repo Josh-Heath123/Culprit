@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The narrator's settings — the operator's, in `.env.prod`.
 
 `LLM_PROVIDER` is `none` (the default: nothing is narrated), `anthropic`

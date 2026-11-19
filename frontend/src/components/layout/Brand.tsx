@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** The mark: a measuring ring with its four ticks, and the culprit at its
  * centre in lime — what a walk finds (DELIVERY_PLAN I2; the same drawing
  * as public/favicon.svg and docs/brand/mark.svg). */

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Regenerate the README's terminal captures from real runs.
 
 Every image under docs/captures/ is the output of a command this script

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package mcp is the Model Context Protocol, as `culprit mcp` speaks it
 // (Phase 35 part 1): JSON-RPC 2.0, one message per line, on stdin and
 // stdout. Nothing else.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fails if a page component styles itself with anything but the design
 tokens (DIAGNOSTIC_PLAN.md Phase 32.1, field 13).
 

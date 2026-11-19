@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Subject URIs — the join key of the whole model.
 
 docs/DIAGNOSTIC_PLAN.md §2.3 and Phase 26's field 7:

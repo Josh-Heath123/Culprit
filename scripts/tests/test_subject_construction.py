@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Field 7 of Phase 26: subject URIs are built in exactly one place.
 
 `culprit_model.subjects.build()` is the only sanctioned constructor

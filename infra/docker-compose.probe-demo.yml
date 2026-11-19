@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Phase 31.1 — what the probe demonstrations need, layered on the quickstart.
 #
 #   just cli-release            # cli/dist/culprit_<version>_linux_amd64

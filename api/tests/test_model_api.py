@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP-level tests for the system model (Phase 27).
 
 Same shape as `test_registry_api.py`, and for the same reasons: a minimal

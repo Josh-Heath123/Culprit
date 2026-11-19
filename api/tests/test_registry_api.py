@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP-level tests for what `app/registry/` still owns — ingest API keys
 and the Phase 19 topology-suggestion queue — plus the component CRUD
 behaviour the Phase 14 registry tests first pinned down, all driven

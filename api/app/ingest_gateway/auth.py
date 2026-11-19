@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """API key authentication for ingest-gateway.
 
 Phase 14: keys are now issued through the service registry

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package model is the Go half of the three-plane core model
 // (docs/DIAGNOSTIC_PLAN.md §2), mirroring shared/culprit_model/.
 //

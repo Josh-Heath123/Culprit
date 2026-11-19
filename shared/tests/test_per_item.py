@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The per-item rule (Phase 39 part 1), held between Python and Go.
 
 shared/tests/per_item_conformance.json is generated here. Its cases cross an

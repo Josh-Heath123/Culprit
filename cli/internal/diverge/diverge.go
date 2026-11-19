@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package diverge is the comparator (Phase 29, D7).
 //
 // **It knows nothing about HTTP, SQL or auth.** It groups facts by

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Run ON THE VM — .github/workflows/ci-cd.yml SSHes in and invokes this,
 # it never talks to the production DB directly from the CI runner.
 #

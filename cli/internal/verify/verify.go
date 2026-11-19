@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package verify is the verification loop (docs/DIAGNOSTIC_PLAN.md Phase
 // 34): after someone applies a change, it measures again every reading an
 // investigation took, compares the environment with the record of it kept

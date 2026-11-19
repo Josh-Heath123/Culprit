@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """API key generation for the service registry.
 
 Hashing reuses app.ingest_gateway.auth._hash_key rather than

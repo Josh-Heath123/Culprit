@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 from app.env import require_env
 
 #: capture-writer role (Phase 30) — INSERT + SELECT on captures, INSERT on

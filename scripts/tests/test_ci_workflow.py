@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The CI workflow's shape that makes `gate` mean something (Phase 41).
 
 `gate` is the one check `main`'s ruleset requires (docs/DELIVERY_PLAN.md,

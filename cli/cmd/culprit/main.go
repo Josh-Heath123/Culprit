@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Command culprit is the Culprit CLI and, from Phase 31, the probe agent
 // (D2 — one static binary, two subcommands).
 //

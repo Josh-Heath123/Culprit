@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The agent request-signing contract, the Python half (Phase 33 part 2).
 
 The Go half is `cli/internal/agentauth`; both are held to

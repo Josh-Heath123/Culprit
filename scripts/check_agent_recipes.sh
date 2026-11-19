@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # The agent's Kubernetes and systemd recipes, checked for real (Phase 33
 # part 3), against a running quickstart. CI's e2e job runs it after the
 # browser journeys, which ran the Compose recipe (frontend/e2e/agents.spec.ts).

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Sessions for the investigation routes: the writer for POST, api-reader
 for every read. Separate factories, as for readings and divergences: an
 upload is its own transaction."""

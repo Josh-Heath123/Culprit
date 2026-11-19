@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Renders the README's accuracy section from the fault library's results.
 
 Phase 34 part 2 (docs/DIAGNOSTIC_PLAN.md): "the README's number,

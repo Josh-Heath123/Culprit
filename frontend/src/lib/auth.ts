@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // In-memory only, deliberately never localStorage/sessionStorage: this is
 // a JWT session token, and both storages are readable by any script that
 // runs on the page (XSS blast radius). A page refresh means logging in

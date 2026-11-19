@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Shell-level test for .claude/hooks/capture_ai_change.sh (Phase 21,
 # docs/AI_NATIVE_PLAN.md's own Tests section calls for exactly this: a
 # synthetic stdin JSON payload against a real throwaway git repo,

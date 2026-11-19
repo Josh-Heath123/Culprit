@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`POST /investigations` and the reads — Phase 32, part 2.
 
 The write takes the project token (CI posting what `culprit diagnose`

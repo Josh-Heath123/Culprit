@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Reading a narration, and checking it again before serving it.
 
 The worker runs `culprit_model.narration.check` before it writes a

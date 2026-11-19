@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # The demo system, described declaratively (Phase 27, field 15).
 #
 # This replaces infra/demo-services.yaml, and it replaces

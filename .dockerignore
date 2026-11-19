@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Used by api/Dockerfile and worker/Dockerfile — both build with the
 # repo root as context (not their own subdirectory) so the build can
 # also see shared/, which culprit-shared's path dependency needs (see

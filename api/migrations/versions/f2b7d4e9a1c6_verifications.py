@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """verifications: an append-only record per verification, and a verify task
 
 Revision ID: f2b7d4e9a1c6

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Finding the application object to introspect.
 
 Runtime introspection needs something to introspect, and there is no

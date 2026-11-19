@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Set up inventory-service's own database (Phase 37 part 1, P8).
 
 The demo's setup, run once by `just quickstart` (and by the Docker tests),

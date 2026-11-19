@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Table-driven tests for canonicalisation (§2.3, Phase 26 field 13).
 
 Path templating is called out in the plan as "the single highest-risk

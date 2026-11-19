@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Per-request auth dependencies (Phase 16 rewrite).
 
 require_auth used to just decode a JWT and return the username inside

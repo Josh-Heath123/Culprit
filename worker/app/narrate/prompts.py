@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """What the narrator is told, and how its evidence is written out.
 
 The system prompt is a constant. The user message is the numbered evidence

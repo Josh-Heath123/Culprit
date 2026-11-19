@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Drives the shipped agent recipes against a running quickstart (Phase 33
 # part 3). Used by the browser journeys (frontend/e2e/agents.spec.ts) and by
 # `just agent-recipes` in CI. Nothing here is a recipe: it writes CI's own

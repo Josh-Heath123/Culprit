@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Phase 27 field 13: graph tests for request-path derivation on a
 branching topology.
 

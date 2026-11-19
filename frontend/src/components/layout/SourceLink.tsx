@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** Where this build's source is (Phase 33 part 3). Culprit is AGPL-3.0, and
  * section 13 asks anyone who runs a modified copy as a network service to
  * offer its users that copy's source. Every page links to it, so honouring

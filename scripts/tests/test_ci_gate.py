@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """scripts/ci_gate.py: the gate passes only when every needed job succeeded.
 
 Phase 41 (D1). Each result a job can have is here: `success` passes, and

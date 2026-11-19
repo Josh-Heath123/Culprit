@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Shared Ruff config for api/ and worker/ — Ruff discovers this file by
 # walking up from whichever directory it's invoked in, so both projects
 # lint/format against identical rules without duplicating config.

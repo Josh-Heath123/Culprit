@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The per-item rule — Phase 39 part 1.
 
 `probe.db.statements_per_request` brackets one GET of a list route with

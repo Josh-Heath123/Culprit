@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** Splits prose that came from the walk or the API into text and
  * command-line flags, so a flag renders as code and never breaks across a
  * line (Phase 32.1 review: "(--reference)" wrapped as

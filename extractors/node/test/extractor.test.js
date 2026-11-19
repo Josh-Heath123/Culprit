@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The Node extractor, against the fixture corpus, plus the shared
  * conformance fixtures.

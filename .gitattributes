@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Every text file is stored and checked out with LF, on every platform.
 # This overrides core.autocrlf, so a Windows checkout no longer shows the
 # whole tree as modified from line-ending churn alone.

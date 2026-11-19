@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """DB access for the postmortem write path (Phase 18) — the
 postmortem-writer role for writes, whatever engine the caller passes for
 reads (api/app/main.py wires api-reader for GET /postmortems,

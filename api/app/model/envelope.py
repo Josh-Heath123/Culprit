@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Opening a sealed capture envelope — the Python half of
 `cli/internal/capture/envelope.go`.
 

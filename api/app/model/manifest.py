@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`culprit.yaml` — the declarative, committed description of a system.
 
 docs/DIAGNOSTIC_PLAN.md Phase 27, fields 4 and 10. The point of this file

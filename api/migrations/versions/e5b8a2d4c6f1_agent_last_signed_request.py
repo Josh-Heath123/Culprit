@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """agents: when each agent last made a signed request — api-reader reads agent_nonces
 
 Revision ID: e5b8a2d4c6f1

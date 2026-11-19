@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """investigations: the walk's output, stored, with field 7's rule held by the database
 
 Revision ID: c4e8a1f2b3d5

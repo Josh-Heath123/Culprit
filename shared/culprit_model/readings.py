@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """ProbeManifest and Reading — the OBSERVED plane's atomic units.
 
 `docs/DIAGNOSTIC_PLAN.md` §2.6. A `Fact` is a claim about how something is

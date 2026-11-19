@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """slowapi Limiter for ingest-gateway (Phase 15), in its own module for
 the same reason app/incidents/limiter.py is: app/ingest_gateway/main.py
 (exception handler + middleware) and the route decorators need the same

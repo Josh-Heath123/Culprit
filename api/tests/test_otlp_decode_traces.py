@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Unit tests for decode_traces_request (Phase 19, Option A).
 
 Payloads are built directly with the generated protobuf message classes

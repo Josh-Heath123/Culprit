@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package extract
 
 // The schema database rule (Q34, PERFORMANCE_PLAN.md, end of Phase 37).

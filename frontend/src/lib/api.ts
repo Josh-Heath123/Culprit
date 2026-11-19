@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Thin fetch + JSON + error-shaping wrapper only — retries, caching, and
 // background refetch are all TanStack Query's job (see src/hooks/), not
 // reimplemented here.

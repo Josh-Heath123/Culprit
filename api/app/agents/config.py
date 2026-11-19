@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The agent roles' connection strings (migrations/versions/d7a3e5f1b9c2_agents.py).
 
 One per write surface, so a leaked credential reaches only its own:

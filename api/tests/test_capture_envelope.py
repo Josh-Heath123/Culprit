@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The Python half of the capture envelope — against what Go actually seals.
 
 `shared/tests/capture_envelope_conformance.json` is a real envelope,

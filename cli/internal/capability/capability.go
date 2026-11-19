@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package capability is Phase 30's permission model (§2.7): grant
 // parsing, enforcement, and the `refused` path.
 //

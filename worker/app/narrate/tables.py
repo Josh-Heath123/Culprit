@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The tables the narrator reads and the one it writes, as Core tables.
 
 Here and not in app/db.py on purpose: a table defined in `app.narrate` can

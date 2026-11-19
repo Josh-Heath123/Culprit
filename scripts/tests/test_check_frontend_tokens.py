@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Tests for scripts/check_frontend_tokens.py (Phase 32.1).
 
 A gate that cannot fail is not a gate (standing invariant 10), so each

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The narration job — Phase 35 part 2.
 
 Every tick, the newest investigations that have no complete narration and

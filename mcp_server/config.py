@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Startup configuration for the Culprit MCP server (Phase 24,
 docs/AI_NATIVE_PLAN.md). Fails loudly and immediately on missing config,
 matching every existing `_require_env`-style pattern already used

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fails if worker/app/db.py's Core Table columns drift from
 api/app/db/models.py's ORM columns for the same tables.
 
