@@ -19,7 +19,10 @@ on:
   push:
     tags: ["v*"]
   # Manually runnable so the release path can be exercised without
-  # cutting a tag. Uploads nothing in that mode.
+  # cutting a tag. Uploads nothing in that mode: no release, no package.
+  # It does attest the binaries it built (Phase 43), which records them
+  # in Sigstore's public log, so that the attestation path is proved
+  # before a tag needs it.
   workflow_dispatch:
 
 permissions:
@@ -28,6 +31,13 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Phase 43 (D7, decision 5): contents: write as before, to create the
+    # release; and the two attestation permissions, which only this job
+    # holds (scripts/tests/test_ci_workflow.py holds every job's).
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       # One static binary, no libc dependency. Acceptance criterion 5,
       # and the reason `curl | sh` works without a runtime.
@@ -95,6 +105,29 @@ jobs:
           # Acceptance criterion 2, checked against the published
           # artefact rather than only in a unit test.
           diff /tmp/a.json /tmp/b.json
+
+      # Phase 43 (D7, decision 5): build provenance for every binary, by its
+      # SHA-256, signed with this run's OIDC identity through Sigstore and
+      # stored by GitHub; then each binary verified against it, here. On a
+      # hand-started run too, so the path is proved before a tag needs it.
+      - name: Attest the binaries' build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: cli/dist/culprit_*
+
+      - name: Verify every binary's attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=0
+          for binary in cli/dist/culprit_*; do
+            gh attestation verify "$binary" --repo "$GITHUB_REPOSITORY"
+            count=$((count + 1))
+          done
+          if [ "$count" -ne 5 ]; then
+            echo "verified ${count} binaries, want 5" >&2
+            exit 1
+          fi
 
       - name: Publish
         if: github.event_name == 'push'

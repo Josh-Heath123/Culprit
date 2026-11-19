@@ -526,3 +526,144 @@ def test_dependabot_keeps_the_action_pins_current():
     assert update["schedule"]["interval"] == "weekly"
     (group,) = update["groups"].values()  # every update in one pull request
     assert group["patterns"] == ["*"]
+
+
+# Phase 43 (D7, decision 6): every job's permissions, declared.
+
+READ = {"contents": "read"}
+ATTEST = {"id-token": "write", "attestations": "write"}
+
+#: What each workflow grants by default, and what each job ends up with:
+#: its own `permissions:` where it sets them, the workflow's otherwise. Only
+#: the two jobs that attest hold the attestation permissions.
+PERMISSIONS = {
+    "ci-cd.yml": {
+        "workflow": READ,
+        "jobs": {
+            "lint": READ,
+            "typecheck": READ,
+            "cli": READ,
+            "self-check": {**READ, "security-events": "write"},
+            "kind-capture": READ,
+            "fault-library": READ,
+            "test": READ,
+            "migration-round-trip": READ,
+            "e2e": READ,
+            "narration-parity": READ,
+            # It calls images.yml, whose jobs cannot hold more than this.
+            "build": {**READ, "packages": "write", **ATTEST},
+            "deploy": READ,
+            "gate": READ,
+        },
+    },
+    "images.yml": {
+        "workflow": READ,
+        "jobs": {
+            "build": READ,
+            "publish": {**READ, "packages": "write", **ATTEST},
+        },
+    },
+    "cli-release.yml": {
+        "workflow": {"contents": "write"},
+        "jobs": {
+            "release": {"contents": "write", **ATTEST},
+            "publish-pypi": {"id-token": "write"},
+            "publish-npm": {"id-token": "write"},
+        },
+    },
+}
+
+
+def check_permissions(name: str, workflow: dict, declared: dict) -> list[str]:
+    problems = []
+    if workflow.get("permissions") != declared["workflow"]:
+        granted = workflow.get("permissions")
+        problems.append(f"{name}: the workflow grants {granted}, declared {declared['workflow']}")
+    jobs = workflow["jobs"]
+    for job in sorted(set(jobs) - set(declared["jobs"])):
+        problems.append(f"{name}: job {job} has no declared permissions")
+    for job in sorted(set(declared["jobs"]) - set(jobs)):
+        problems.append(f"{name}: declared job {job} does not exist")
+    for job in sorted(set(jobs) & set(declared["jobs"])):
+        effective = jobs[job].get("permissions", workflow.get("permissions"))
+        if effective != declared["jobs"][job]:
+            problems.append(f"{name}: {job} holds {effective}, declared {declared['jobs'][job]}")
+    return problems
+
+
+@pytest.mark.parametrize("name", sorted(PERMISSIONS))
+def test_every_job_holds_its_declared_permissions(name):
+    assert check_permissions(name, load(WORKFLOWS / name), PERMISSIONS[name]) == []
+
+
+def test_only_the_attesting_jobs_hold_the_attestation_permissions():
+    holders = sorted(
+        f"{name}/{job}"
+        for name, declared in PERMISSIONS.items()
+        for job, granted in declared["jobs"].items()
+        # publish-pypi and publish-npm held id-token: write before Phase 43,
+        # for trusted publishing; they attest nothing.
+        if granted.get("attestations") or (granted.get("id-token") and "publish-" not in job)
+    )
+    # ci-cd.yml's build only passes them on to images.yml's publish.
+    assert holders == ["ci-cd.yml/build", "cli-release.yml/release", "images.yml/publish"]
+
+
+def test_a_widened_or_new_job_is_named(workflow):
+    jobs = dict(workflow["jobs"])
+    jobs["lint"] = {**jobs["lint"], "permissions": {**READ, "packages": "write"}}
+    jobs["new-job"] = {"runs-on": "ubuntu-latest"}
+    problems = check_permissions("ci-cd.yml", {**workflow, "jobs": jobs}, PERMISSIONS["ci-cd.yml"])
+    assert problems == [
+        "ci-cd.yml: job new-job has no declared permissions",
+        "ci-cd.yml: lint holds {'contents': 'read', 'packages': 'write'}, "
+        "declared {'contents': 'read'}",
+    ]
+
+
+# Phase 43 (D7, decision 5): what is published is attested, then verified.
+
+#: Each attesting job, the attestation actions it runs, and how many
+#: `gh attestation verify` calls must follow them in a later step.
+ATTESTING = {
+    ("images.yml", "publish"): (["actions/attest-build-provenance", "actions/attest-sbom"], 2),
+    ("cli-release.yml", "release"): (["actions/attest-build-provenance"], 1),
+}
+
+
+def check_attests(job: dict, actions: list[str], verifies: int) -> list[str]:
+    steps = job.get("steps", [])
+    uses = [str(step.get("uses", "")).split("@")[0] for step in steps]
+    problems = []
+    last_attest = -1
+    for action in actions:
+        if action not in uses:
+            problems.append(f"no {action} step")
+        else:
+            last_attest = max(last_attest, uses.index(action))
+    verified = sum(
+        str(step.get("run", "")).count("gh attestation verify")
+        for index, step in enumerate(steps)
+        if index > last_attest >= 0
+    )
+    if verified < verifies:
+        problems.append(f"{verified} gh attestation verify after the attestations, want {verifies}")
+    return problems
+
+
+@pytest.mark.parametrize(("name", "job"), sorted(ATTESTING))
+def test_what_is_published_is_attested_and_verified(name, job):
+    actions, verifies = ATTESTING[(name, job)]
+    assert check_attests(load(WORKFLOWS / name)["jobs"][job], actions, verifies) == []
+
+
+def test_a_verify_before_the_attestation_is_named():
+    job = {
+        "steps": [
+            {"run": "gh attestation verify x --repo r"},
+            {"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"},
+        ]
+    }
+    assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
+        "0 gh attestation verify after the attestations, want 1"
+    ]

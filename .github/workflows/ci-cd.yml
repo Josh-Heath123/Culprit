@@ -805,9 +805,15 @@ jobs:
     # publishing nothing (images.yml). A job that calls a workflow cannot
     # set timeout-minutes; images.yml's jobs carry theirs.
     uses: ./.github/workflows/images.yml
+    # A called workflow's jobs hold no more than this. images.yml's build
+    # holds contents: read alone; only its publish, which runs on main and
+    # tags, takes packages: write and the two attestation permissions
+    # (Phase 43). test_ci_workflow.py holds both workflows' tables.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     with:
       # A push to main or a version tag publishes. So does a hand-started
       # deploy of main: it publishes this commit as :sha and :latest first,
