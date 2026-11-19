@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP shapes for the system model (Phase 27, field 9).
 
 Components and connections are addressed by **name** in every request

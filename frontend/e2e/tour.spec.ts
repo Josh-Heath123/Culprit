@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Page } from "@playwright/test";
 
 import { atEveryWidth, expect, go, open, state, test as base } from "./fixtures.ts";

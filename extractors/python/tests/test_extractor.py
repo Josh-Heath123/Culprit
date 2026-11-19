@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The Python extractor, against the fixture corpus.
 
 Two of these fixtures were written by other people, in a framework this

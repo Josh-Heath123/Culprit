@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { useAuthToken } from "@/hooks/useAuth";

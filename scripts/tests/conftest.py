@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Adds scripts/ (this directory's parent) to sys.path so
 test_check_*.py can `import check_coupled_files` / `import
 check_migration_symmetry` directly -- both are standalone modules (no

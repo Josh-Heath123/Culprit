@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Import-time environment for the worker's tests.
 
 Phase 26 (docs/DIAGNOSTIC_PLAN.md) removed `app/main.py`'s fail-open

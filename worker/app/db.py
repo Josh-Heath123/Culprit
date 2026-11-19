@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Minimal Core table definitions for the worker's own queries/inserts.
 
 Deliberately not the api/ ORM models: worker and api are separate uv

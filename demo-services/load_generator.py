@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Steady baseline traffic against the demo services.
 
 Without a baseline, "error rate" and "latency" are meaningless — Phase 4's

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Same uv+Docker pattern as api/Dockerfile — see that file's comments,
 # including why the build context is the repo root rather than this
 # directory (culprit-shared's path dependency needs shared/ visible).

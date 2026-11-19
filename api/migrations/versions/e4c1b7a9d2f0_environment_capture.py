@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """environment capture: value_shape.scheme, capture provenance, capture-writer
 
 Revision ID: e4c1b7a9d2f0

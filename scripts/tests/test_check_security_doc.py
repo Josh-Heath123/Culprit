@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """scripts/check_security_doc.py: the real document passes, and each way a
 "cannot" can go untested fails it."""
 

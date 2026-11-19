@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`GET /probes` and `POST /probes/{id}/run` (Phase 31).
 
 Two things are being held down here.

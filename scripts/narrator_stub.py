@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """A stub narration provider for tests and CI — Phase 35 part 2.
 
 It speaks the one Ollama route the narrator uses (`POST /api/chat`), so CI

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Every route, and the credentials it accepts (Phase 33 part 2).
 
 The project token is a single shared bearer credential a CI job holds. After

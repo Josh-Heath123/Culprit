@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Diffing two stored CONFIGURED captures, and rendering a fact safely.
 
 Phase 30 field 9: `GET /captures/diff?a=&b=`. Deterministic and pure —

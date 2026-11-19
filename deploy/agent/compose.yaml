@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Culprit agent — Docker Compose recipe (Phase 33 part 3).
 #
 # The agent joins the network your services are on and reaches its control

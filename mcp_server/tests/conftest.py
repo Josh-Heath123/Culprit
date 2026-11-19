@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Sets a dummy MCP_READER_DATABASE_URL before any test module is
 collected -- mcp_server/config.py reads it at import time with no
 default (Known Trap 3: fail loudly on missing config), so importing

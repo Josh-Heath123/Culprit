@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """DB queries for Phase 7's read endpoints — I/O only, no transformation
 logic (see app/incidents/transforms.py for the pure ORM-row -> API-shape
 mapping). Read-only throughout: the api-reader role (Phase 1) only has

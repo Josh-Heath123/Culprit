@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Persisting a capture bundle (Phase 28 field 8/9).
 
 One bundle becomes one `captures` row and N `intent_facts` rows, in one

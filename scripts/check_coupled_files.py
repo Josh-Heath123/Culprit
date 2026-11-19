@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fails if a file declared in scripts/coupled_files.yaml as "must
 change together with" another file changed alone (Phase 22,
 docs/AI_NATIVE_PLAN.md) -- generalizes the one hardcoded pairing

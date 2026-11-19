@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The statement rule — Phase 37 part 2.
 
 `probe.db.statement_budget` takes two snapshots of `pg_stat_statements`, a

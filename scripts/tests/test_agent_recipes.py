@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The agent's deployment recipes keep their promises (Phase 33 part 3).
 
 Read as files, not run: CI runs them too (the Compose recipe against the

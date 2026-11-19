@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The providers, behind one interface: one call, a system prompt and one
 user message in, text out. No tools are offered, and nothing is streamed.
 

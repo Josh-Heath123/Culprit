@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The CI workflow's shape that makes `gate` mean something (Phase 41).
 
 `gate` is the one check `main`'s ruleset requires (docs/DELIVERY_PLAN.md,
@@ -18,8 +21,14 @@ D1), so what it needs is what a merge is held to. This parses
 - The fault library needs `lint` alone (decision 4).
 - Nothing lets a job's failure through, or skips one by the files a change
   touches (D5): no `continue-on-error`, no path filter.
+- Every `go test` a job runs, in a step or in a `just` recipe a step calls,
+  times out in at most half the job's `timeout-minutes` (Phase 42, C3), so
+  Go's own timeout fires first and prints the stack that names a hung test.
+  A `go test` without `-timeout` has Go's default, 10 minutes.
 """
 
+import math
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +54,23 @@ CANCEL = "${{ github.event_name == 'pull_request' }}"
 
 #: The least timeout-minutes a job may have (decision 6).
 FLOOR_MINUTES = 10
+
+JUSTFILE = ROOT / "justfile"
+
+#: `go test`'s own timeout when none is given.
+GO_DEFAULT_TIMEOUT_MINUTES = 10.0
+
+#: A `go test` command, to the end of its line or an unquoted &, ; or |
+#: (a -run pattern's | is inside quotes).
+GO_TEST = re.compile(r"""\bgo test\b(?:[^\n&;|'"]|'[^'\n]*'|"[^"\n]*")*""")
+#: `-timeout` (or `-test.timeout`) and its value, as Go reads it.
+GO_TIMEOUT = re.compile(r"-(?:test\.)?timeout[= ](\S+)")
+#: One part of a Go duration ("1h30m" is two).
+GO_DURATION_PART = re.compile(r"(\d+(?:\.\d+)?)(h|ms|us|µs|ns|m|s)")
+GO_DURATION_MINUTES = {"h": 60, "m": 1, "s": 1 / 60, "ms": 1 / 60_000,
+                       "us": 1 / 60_000_000, "µs": 1 / 60_000_000, "ns": 1 / 60_000_000_000}
+JUST_CALL = re.compile(r"\bjust ([a-z_][a-z0-9_-]*)")
+RECIPE = re.compile(r"^@?([a-z_][a-z0-9_-]*)(?: [^:\n]*)?:(?!=)(.*)$")
 
 
 def load(path: Path) -> dict:
@@ -144,6 +170,86 @@ def check_no_way_around(path: Path) -> list[str]:
     return problems
 
 
+def recipes(justfile: str) -> dict[str, tuple[list[str], str]]:
+    """Each recipe in a justfile: the recipes it depends on, and its body."""
+    found: dict[str, tuple[list[str], str]] = {}
+    name, deps, body = None, [], []
+    # A line at column 0 that is not a recipe ends the one before it; the
+    # sentinel ends the last.
+    for line in [*justfile.splitlines(), "# end"]:
+        header = RECIPE.match(line)
+        if header and not line.startswith((" ", "\t")):
+            if name:
+                found[name] = (deps, "\n".join(body))
+            name, body = header.group(1), []
+            deps = [d.strip("@") for d in header.group(2).split("#")[0].split()]
+            deps = [d for d in deps if re.fullmatch(r"[a-z_][a-z0-9_-]*", d)]
+        elif name and (line.startswith((" ", "\t")) or not line.strip()):
+            body.append(line)
+        elif name:
+            found[name] = (deps, "\n".join(body))
+            name, deps, body = None, [], []
+    return found
+
+
+def go_tests(text: str, justfile: dict, seen: frozenset = frozenset()) -> list[str]:
+    """Every `go test` command in `text`, and in the recipes it calls."""
+    commands = [m.group(0).strip() for m in GO_TEST.finditer(text)]
+    for recipe in JUST_CALL.findall(text):
+        commands += recipe_go_tests(recipe, justfile, seen)
+    return commands
+
+
+def recipe_go_tests(recipe: str, justfile: dict, seen: frozenset) -> list[str]:
+    """Every `go test` a recipe runs: its dependencies first, then its body."""
+    if recipe in seen or recipe not in justfile:
+        return []
+    deps, body = justfile[recipe]
+    commands: list[str] = []
+    for dep in deps:
+        commands += recipe_go_tests(dep, justfile, seen | {recipe})
+    return commands + go_tests(body, justfile, seen | {recipe})
+
+
+def go_timeout_minutes(command: str) -> float:
+    """The minutes after which Go stops `command`: its `-timeout`, read as a
+    whole Go duration ("1h30m", "30m0s"), or Go's default. `-timeout 0`
+    turns Go's timeout off, so it, and a value that is not a duration, are
+    read as never: over any job's half."""
+    match = GO_TIMEOUT.search(command)
+    if not match:
+        return GO_DEFAULT_TIMEOUT_MINUTES
+    value = match.group(1).strip("'\"")
+    parts = GO_DURATION_PART.findall(value)
+    if not parts or "".join(n + u for n, u in parts) != value:
+        return math.inf
+    minutes = sum(float(n) * GO_DURATION_MINUTES[u] for n, u in parts)
+    return minutes if minutes > 0 else math.inf
+
+
+def check_go_timeouts(workflow: dict, justfile: dict) -> list[str]:
+    """Why a job's `go test` could outlast half the job, or []."""
+    problems = []
+    for name, job in workflow["jobs"].items():
+        minutes = job.get("timeout-minutes")
+        if not isinstance(minutes, int):
+            continue  # check_timeouts names it
+        text = "\n".join(str(step.get("run", "")) for step in job.get("steps", []))
+        for command in go_tests(text, justfile):
+            inner = go_timeout_minutes(command)
+            if inner > minutes / 2:
+                problems.append(
+                    f"{name}: `{command[:60]}` times out at {inner:g} minutes, "
+                    f"over half the job's {minutes}"
+                )
+    return problems
+
+
+@pytest.fixture(scope="module")
+def justfile() -> dict:
+    return recipes(JUSTFILE.read_text(encoding="utf-8"))
+
+
 @pytest.fixture(scope="module")
 def workflow() -> dict:
     return load(WORKFLOW)
@@ -159,6 +265,18 @@ def test_every_job_has_a_timeout(workflow):
 
 def test_only_a_pull_request_run_is_cancelled(workflow):
     assert check_concurrency(workflow) == []
+
+
+def test_every_go_test_times_out_before_its_job(workflow, justfile):
+    assert check_go_timeouts(workflow, justfile) == []
+    # The rule reads what it must: the jobs that run Go, and the recipe e2e
+    # calls for the agent's test.
+    seen = {
+        name
+        for name, job in workflow["jobs"].items()
+        if go_tests("\n".join(str(s.get("run", "")) for s in job.get("steps", [])), justfile)
+    }
+    assert {"cli", "kind-capture", "fault-library", "e2e"} <= seen, seen
 
 
 def test_the_fault_library_needs_lint_alone(workflow):
@@ -245,3 +363,89 @@ def test_a_way_around_is_named(tmp_path):
         "w.yml: a continues on error",
         "w.yml: a step of a continues on error",
     ]
+
+
+def test_a_go_test_outlasting_half_its_job_is_named(workflow, justfile):
+    job = dict(workflow["jobs"]["fault-library"])
+    job["steps"] = [{"run": "cd cli && go test ./cmd/culprit -run X -timeout 30m"}]
+    assert check_go_timeouts({"jobs": {"fault-library": job}}, justfile) == [
+        "fault-library: `go test ./cmd/culprit -run X -timeout 30m` times out at 30 "
+        "minutes, over half the job's 35"
+    ]
+
+
+def test_a_go_test_with_no_timeout_has_gos_default(workflow, justfile):
+    job = {**workflow["jobs"]["kind-capture"], "steps": [{"run": "cd cli && go test ./..."}]}
+    assert check_go_timeouts({"jobs": {"kind-capture": job}}, justfile) == [
+        "kind-capture: `go test ./...` times out at 10 minutes, over half the job's 10"
+    ]
+
+
+def test_a_recipe_a_step_calls_is_read():
+    justfile = recipes(
+        "agent-e2e: build\n    cd cli && go test ./cmd/culprit -timeout 30m\n\n"
+        "build:\n    go test ./x -timeout 1h\n"
+    )
+    job = {"timeout-minutes": 30, "steps": [{"run": "just agent-e2e"}]}
+    assert check_go_timeouts({"jobs": {"e2e": job}}, justfile) == [
+        "e2e: `go test ./x -timeout 1h` times out at 60 minutes, over half the job's 30",
+        "e2e: `go test ./cmd/culprit -timeout 30m` times out at 30 minutes, over half the job's 30",
+    ]
+
+
+#: The tools `just lint` and CI's lint job run by uvx, pinned (Phase 42).
+PINNED_TOOLS = ["reuse[charset-normalizer]==", "cffconvert@"]
+
+
+def tool_pins(text: str) -> dict[str, list[str]]:
+    pins: dict[str, list[str]] = {}
+    for tool in PINNED_TOOLS:
+        at = 0
+        while (at := text.find(tool, at)) >= 0:
+            start = at + len(tool)
+            end = start
+            while end < len(text) and (text[end].isalnum() or text[end] == "."):
+                end += 1
+            pins.setdefault(tool, []).append(text[start:end])
+            at = end
+    return pins
+
+
+def test_the_lint_tools_are_pinned_alike_locally_and_in_ci(workflow, justfile):
+    lint_job = "\n".join(str(s.get("run", "")) for s in workflow["jobs"]["lint"]["steps"])
+    lint_recipe = justfile["lint"][1]
+    ci, local = tool_pins(lint_job), tool_pins(lint_recipe)
+    for tool in PINNED_TOOLS:
+        assert ci.get(tool), f"CI's lint job does not run {tool}"
+        assert local.get(tool), f"`just lint` does not run {tool}"
+        versions = set(ci[tool]) | set(local[tool])
+        assert len(versions) == 1, f"{tool} is pinned to {sorted(versions)}"
+        assert all(part.isdigit() for part in versions.pop().split(".")), tool
+
+
+@pytest.mark.parametrize(
+    ("flag", "minutes"),
+    [
+        ("-timeout 17m", 17),
+        ("-timeout=17m", 17),
+        ("-timeout 30m0s", 30),
+        ("-timeout 1h30m", 90),
+        ("-timeout 1m30s", 1.5),
+        ("-timeout 90s", 1.5),
+        ("-test.timeout 20m", 20),
+        ("", 10),
+        ("-timeout 0", math.inf),
+        ("-timeout 0s", math.inf),
+        ("-timeout forever", math.inf),
+    ],
+)
+def test_a_go_timeout_is_read_as_go_reads_it(flag, minutes):
+    assert go_timeout_minutes(f"go test ./cmd/culprit -run X {flag}".strip()) == minutes
+
+
+@pytest.mark.parametrize("flag", ["-timeout 0", "-timeout 30m0s", "-timeout 1h30m"])
+def test_a_timeout_go_reads_as_longer_is_named(workflow, justfile, flag):
+    job = dict(workflow["jobs"]["fault-library"])
+    job["steps"] = [{"run": f"cd cli && go test ./cmd/culprit -run X {flag}"}]
+    problems = check_go_timeouts({"jobs": {"fault-library": job}}, justfile)
+    assert len(problems) == 1 and "over half the job's 35" in problems[0], problems

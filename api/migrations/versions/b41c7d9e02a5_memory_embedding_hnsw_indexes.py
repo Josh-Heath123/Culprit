@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """memory embedding hnsw indexes
 
 Revision ID: b41c7d9e02a5

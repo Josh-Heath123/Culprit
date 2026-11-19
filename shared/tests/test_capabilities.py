@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The §2.7 capability set, held to the Go one by a shared fixture.
 
 `cli/internal/capability/capability_test.go` reads the same file. A

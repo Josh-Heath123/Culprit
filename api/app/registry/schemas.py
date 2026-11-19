@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP shapes for the two things `app/registry/` still owns: ingest API
 keys and the Phase 19 topology-suggestion queue.
 

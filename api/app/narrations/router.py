@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`GET /investigations/{id}/narration` — Phase 35 part 2.
 
 Read-only, under a user session and `api-reader`. There is no write

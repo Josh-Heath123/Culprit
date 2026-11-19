@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { SearchIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";

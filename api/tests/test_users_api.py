@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """HTTP-level integration tests for Phase 16's auth/users API — drives
 the real routers through FastAPI's TestClient against a real, migrated
 Postgres container (see api/tests/conftest.py), same approach as

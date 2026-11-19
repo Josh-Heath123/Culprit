@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """system model: components, connections, contracts
 
 Revision ID: 7c2e94b1f0aa

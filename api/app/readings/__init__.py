@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`/readings` and `/probes` — Phase 31, the OBSERVED plane's HTTP surface.
 
 Three routes, and the split between them is the honest part.

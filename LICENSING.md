@@ -13,8 +13,19 @@ Three directories are licensed under the **Apache License, version 2.0**
 | `extractors/python/` | Apache License 2.0 | `Apache-2.0` | [`extractors/python/LICENSE`](extractors/python/LICENSE) |
 | `extractors/node/` | Apache License 2.0 | `Apache-2.0` | [`extractors/node/LICENSE`](extractors/node/LICENSE) |
 | `shared/` | Apache License 2.0 | `Apache-2.0` | [`shared/LICENSE`](shared/LICENSE) |
-| `cli/testdata/fixtures/third-party/*/` | Each project's own licence | — | The `LICENSE` file in each fixture directory |
-| Everything else: `api/`, `worker/`, `mcp_server/`, `demo-services/`, `frontend/`, `cli/`, `infra/`, `scripts/`, `docs/`, `examples/`, `claude-setup/`, `.github/`, `.claude/` and the files at the root | GNU AGPL 3.0 only | `AGPL-3.0-only` | [`LICENSE`](LICENSE) |
+| `cli/testdata/fixtures/third-party/flask-tutorial/` | Its own: BSD 3-Clause, © 2010 Pallets | `BSD-3-Clause` | [`LICENSE.txt`](cli/testdata/fixtures/third-party/flask-tutorial/LICENSE.txt) |
+| `cli/testdata/fixtures/third-party/express-route-separation/` | Its own: MIT, © its Express authors | `MIT` | [`LICENSE`](cli/testdata/fixtures/third-party/express-route-separation/LICENSE) |
+| `cli/testdata/fixtures/third-party/flask-tutorial/culprit.yaml`, `cli/testdata/fixtures/third-party/express-route-separation/culprit.yaml` (the manifests Culprit added) | GNU AGPL 3.0 only | `AGPL-3.0-only` | [`LICENSE`](LICENSE) |
+| Everything else: `api/`, `worker/`, `mcp_server/`, `demo-services/`, `frontend/`, `cli/`, `infra/`, `deploy/`, `scripts/`, `docs/`, `examples/`, `claude-setup/`, `.github/`, `.claude/` and the files at the root | GNU AGPL 3.0 only | `AGPL-3.0-only` | [`LICENSE`](LICENSE) |
+
+Every file says which of these it is under, in the form the
+[REUSE specification](https://reuse.software) (3.3) defines: an
+`SPDX-License-Identifier` header where the file can hold a comment, and
+[`REUSE.toml`](REUSE.toml) for the rest (data a test compares byte for byte,
+generated files, images, lock files and Markdown). [`LICENSES/`](LICENSES)
+holds each licence's text. `reuse lint` runs in `just lint` and in CI, and
+`scripts/check_licensing_map.py` holds this table to what it reports, file by
+file.
 
 ## Why the split
 

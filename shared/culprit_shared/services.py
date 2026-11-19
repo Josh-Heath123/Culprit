@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The demo services' API-key environment variables. Nothing else.
 
 Phase 27 removed this module's last piece of topology fixture data

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Culprit, described to itself (Phase 28).
 #
 # This repository is a Python+React system — a FastAPI API, an arq

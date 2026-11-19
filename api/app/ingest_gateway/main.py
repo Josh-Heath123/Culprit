@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 import time
 import zlib
 from collections.abc import AsyncIterator, Awaitable, Callable

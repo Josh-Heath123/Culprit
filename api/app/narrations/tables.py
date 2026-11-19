@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`narrations`, as a Core table (migrations/versions/a6c2e9d4f8b1_narrations.py).
 
 The API only reads it, through `api-reader`; the worker's narrator is the

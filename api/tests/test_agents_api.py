@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The agent routes (Phase 33 part 2), against a real database under the
 real roles: agent-admin, agent-registrar, agent-gateway, api-reader, and
 probe-writer and investigation-writer for what an agent stores.

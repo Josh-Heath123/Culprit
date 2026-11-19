@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Static extraction: config-key reads and test status-code assertions.
 
 The third preference tier (`.claude/rules/model.md`): used only for what

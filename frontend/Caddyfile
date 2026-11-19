@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # This container is the whole "frontend" deployment unit — it serves the
 # built SPA AND acts as the reverse proxy/TLS terminator for the api
 # container. Deliberately not a separate nginx-for-statics plus

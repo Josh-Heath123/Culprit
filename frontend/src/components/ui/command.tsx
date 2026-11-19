@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { SearchIcon } from "lucide-react";

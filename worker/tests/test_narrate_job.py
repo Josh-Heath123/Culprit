@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The narration job (Phase 35 part 2), against a real Postgres.
 
 Each attempt is one call, with the investigation's evidence and nothing

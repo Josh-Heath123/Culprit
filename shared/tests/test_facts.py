@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Fact and Divergence invariants (§2.2, §2.5).
 
 Both rules tested here have the same failure mode if left to callers: a

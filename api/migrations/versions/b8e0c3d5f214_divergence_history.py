@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """divergence history: identity, explanation, and the fact-writer grant
 
 Revision ID: b8e0c3d5f214

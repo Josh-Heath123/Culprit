@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`POST /divergences/captures` — Phase 29 field 9.
 
 History, and only history. Local use needs no API at all: `culprit

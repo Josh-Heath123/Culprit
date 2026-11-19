@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The extraction itself: walk the tree, build facts, report the gaps.
  *

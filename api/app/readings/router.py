@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`POST /readings`, `GET /probes`, `POST /probes/{probe_id}/run` — Phase 31.
 
 Mounted in app/main.py with no router-level dependency, like the other

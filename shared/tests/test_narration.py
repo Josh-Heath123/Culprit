@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The narration check, held to `narration_conformance.json` — Phase 35 part 2.
 
 Field 13's test, and the most important one in the phase: a narration that

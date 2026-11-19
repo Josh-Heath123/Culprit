@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The Phase 34 Verification contract, held to the Go side by a shared fixture.
 
 `cli/internal/model/verification_test.go` reads the same file.

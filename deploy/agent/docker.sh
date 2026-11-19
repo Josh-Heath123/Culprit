@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Culprit agent — plain Docker recipe (Phase 33 part 3).
 #
 # The same container compose.yaml describes, as `docker run` commands, for

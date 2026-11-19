@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The README's accuracy number (Phase 34 part 2): rendered by a committed
 command from the fault library's committed results, saying it is planted
 faults, with its method and its count — and never stale."""

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fails if a migration's upgrade()/downgrade() aren't structurally
 symmetric (Phase 22, docs/AI_NATIVE_PLAN.md). Purely static -- parses
 each file with Python's `ast` module, no alembic import and no DB

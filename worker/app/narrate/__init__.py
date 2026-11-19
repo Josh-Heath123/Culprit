@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The narrator — Phase 35 part 2, docs/DIAGNOSTIC_PLAN.md D8.
 
 The one place in the system that talks to a language model. It renders a

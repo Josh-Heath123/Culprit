@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """grant ingest-gateway column-level update on api_keys.last_used_at
 
 Revision ID: 162c7130818c

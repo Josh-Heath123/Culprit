@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The signing contract, held to shared/tests/agent_signing_conformance.json
 — the Python half of cli/internal/agentauth's test (Phase 33 part 2).
 

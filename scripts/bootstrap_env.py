@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Generate infra/.env.prod (Phase 17).
 
 Runs on the target machine only — never in CI (docs/SELF_HOSTED_PLAN.md's
@@ -334,7 +337,9 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     # create_user.py's stdin -- see infra/docker-compose.quickstart.yml.
     # Blank for a real-VM install: docs/SELF_HOSTED_PLAN.md Phase 17
     # Known Trap 4 requires the admin password be *prompted for* there,
-    # via `just create-user` on the host, not generated/printed.
+    # via `just create-user` on the host, not generated. Never printed in
+    # either mode (Q41, 2026-11-19): `just quickstart` shows it at the
+    # end, locally, read from this file.
     admin_password = _gen_password() if local else ""
     env["QUICKSTART_ADMIN_USERNAME"] = "admin" if local else ""
     env["QUICKSTART_ADMIN_PASSWORD"] = admin_password
@@ -395,20 +400,20 @@ def main() -> int:
         )
         return 1
 
-    env, admin_password = build_env(local=args.local, domain=args.domain)
+    env, _admin_password = build_env(local=args.local, domain=args.domain)
 
     write_private(ENV_PROD_PATH, render_env_file(env))
 
     print(f"wrote {ENV_PROD_PATH} (mode 0600)")
-    print(f"generated {len(GENERATED_SECRETS)} secrets; no secret value is printed above.")
+    print(f"generated {len(GENERATED_SECRETS)} secrets; no secret value is printed.")
     if args.local:
-        # Handed to docker-compose.quickstart.yml's bootstrap service via
-        # QUICKSTART_ADMIN_PASSWORD, piped into create_user.py's stdin --
-        # never passed as a CLI arg. Printed once, to stdout, specifically
-        # because Known Trap 4 says the quickstart path (unlike
-        # docs/INSTALL.md's real-VM path, which always prompts) is allowed
-        # to print a generated admin password to a local terminal.
-        print(f"QUICKSTART_ADMIN_PASSWORD={admin_password}")
+        # The admin password is generated too, and written to the file
+        # only: docker-compose.quickstart.yml's bootstrap service pipes
+        # QUICKSTART_ADMIN_PASSWORD into create_user.py's stdin, never as a
+        # CLI argument. It is not printed here (Q41, 2026-11-19: CodeQL's
+        # py/clear-text-logging-sensitive-data, alert #3); where it is, is.
+        # `just quickstart` shows it at the end, locally, read from the file.
+        print(f"the admin's password is QUICKSTART_ADMIN_PASSWORD in {ENV_PROD_PATH}")
         print("next: just quickstart-up")
     else:
         print(

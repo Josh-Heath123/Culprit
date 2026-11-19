@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Pure — maps an anomaly's z-score to a severity bucket. Every anomaly
 // reaching this app already crossed worker/app/anomaly/scorer.py's
 // ANOMALY_THRESHOLD (3.0), so this only distinguishes "anomalous" from

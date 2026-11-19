@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 set shell := ["bash", "-uc"]
 
 default:
@@ -51,6 +54,12 @@ lint:
     # its diagrams' colours. The self-check's figures are checked in CI's
     # self-check job, where they are produced.
     uv run --no-project python scripts/check_readme.py
+    # Phase 42 (D8): every file states its licence (REUSE 3.3: a header, or
+    # REUSE.toml), and LICENSING.md's table says the same, file by file; and
+    # CITATION.cff is valid. Both tools pinned, run by uvx, in no project's
+    # dependencies; the same pins as CI's lint job (test_ci_workflow.py).
+    uvx --from 'reuse[charset-normalizer]==6.3.0' reuse lint --json | uv run --no-project python scripts/check_licensing_map.py -
+    uvx --python 3.12 cffconvert@2.0.0 --validate -i CITATION.cff
 
 # Enforce module-isolation contracts (e.g. anomaly detection vs RAG/LLM)
 lint-imports:
@@ -412,20 +421,14 @@ quickstart:
         # argument that looks like a Unix absolute path (e.g. /repo)
         # into a Windows path before docker ever sees it, breaking -w.
         # A no-op everywhere else (Linux/macOS bash don't look at it).
-        # Under CI (GitHub Actions sets CI=true) the generated admin
-        # password is not echoed: a public repository's job logs are
-        # readable by anyone. Locally it is printed, as Known Trap 4 allows.
+        # It prints no secret, so nothing is filtered under CI (Q41): the
+        # admin's password is shown at the end, locally, from the file.
         # --user: the script writes infra/.env.prod with mode 0600. As
         # root, on Linux, that file would be root's and unreadable by the
         # `docker compose --env-file` and `just e2e` that follow (Docker
         # Desktop does not enforce the ownership, which is why it only
         # showed on a Linux runner).
-        bootstrap_out=$(MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --local)
-        if [ -n "${CI:-}" ]; then
-            printf '%s\n' "$bootstrap_out" | grep -v '^QUICKSTART_ADMIN_PASSWORD=' || true
-        else
-            printf '%s\n' "$bootstrap_out"
-        fi
+        MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --local
     else
         echo "==> infra/.env.prod already exists, reusing it"
     fi
@@ -655,7 +658,9 @@ agent-e2e:
     # Phase 34 part 2: the investigation it verified, for `just e2e-verified`.
     export CULPRIT_E2E_VERIFIED_OUT="$(pwd)/cli/bin/agent-e2e-verified.txt"
     mkdir -p cli/bin && rm -f "$CULPRIT_E2E_VERIFIED_OUT"
-    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 30m
+    # Phase 42 (C3): 15 minutes, half e2e's job timeout, so Go's own timeout
+    # fires first and names a hung test; it takes about 2.5.
+    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 15m
 
 # Phase 34 part 2: the investigation `just agent-e2e` verified through an
 # agent — a wrong fix, then the right one — on its page in the browser.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package agent is `culprit agent` (docs/DIAGNOSTIC_PLAN.md Phase 33): a
 // long-lived process that takes tasks — run a named probe, or walk from a
 // symptom — from a source, runs them under the grants its own

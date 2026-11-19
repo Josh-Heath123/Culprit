@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package report renders findings (Phase 29, field 4).
 //
 // Four formats, and they are not four ways of saying the same thing —

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 7 (minimal): the three endpoints Phase 8's dashboard needs.
 GET /incidents (paginated), GET /incidents/{id} (detail), and
 and, until Phase 32 part 2, POST /incidents/{id}/regenerate-root-cause —

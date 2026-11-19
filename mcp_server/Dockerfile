@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Unlike api/worker/demo-services, mcp_server has no culprit-shared
 # dependency (Step 1, docs/AI_NATIVE_PLAN.md Phase 24) -- context is this
 # directory itself, not the repo root. Not wired into

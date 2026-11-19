@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Who is calling: a signed agent, or the project token (Phase 33 part 2).
 
 `require_agent` is the whole of an agent's authentication. It rebuilds the

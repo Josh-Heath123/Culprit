@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`POST /facts/captures` (Phase 28 field 9), against a real database.
 
 Drives the router through FastAPI's TestClient under the real

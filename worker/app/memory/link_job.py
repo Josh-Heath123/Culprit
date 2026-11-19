@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """arq cron job: links recently-opened incidents to AI change records that
 plausibly caused them (Phase 23, docs/AI_NATIVE_PLAN.md) — the second half
 of "wiring the flywheel," alongside .claude/hooks/check_invariants.sh's

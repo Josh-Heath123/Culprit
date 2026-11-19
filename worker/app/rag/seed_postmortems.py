@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Seed postmortem fixtures for Phase 6's RAG corpus.
 
 Fixture data only — no UI for writing postmortems exists or is in scope

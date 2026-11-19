@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Latency budgets, and the rule that judges a latency reading — Phase 36.
 
 A declared budget is the reference a measured latency diverges from

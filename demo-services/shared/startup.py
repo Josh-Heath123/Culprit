@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The demo services' startup, in one place (Phase 39 part 2, Q39).
 
 Every demo service is created with `FastAPI(lifespan=startup(...))`. Its

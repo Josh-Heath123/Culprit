@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The extractor plugin protocol, and the capture bundle it rolls up into.
 
 docs/DIAGNOSTIC_PLAN.md Phase 28 fields 7, 8 and 9; the prose contract is

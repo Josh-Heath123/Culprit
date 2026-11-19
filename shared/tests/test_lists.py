@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Lists (Phase 38 part 2): the spec's lists and the probe's judgement, held
 between Python and Go.
 

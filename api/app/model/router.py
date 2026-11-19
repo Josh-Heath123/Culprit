@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """System model admin API (Phase 27, field 9) — mounted at `/model` in
 api/app/main.py behind `require_admin`, the same gate the Phase 14
 registry router had had since Phase 16.

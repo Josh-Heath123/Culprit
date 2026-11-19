@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 26 regression test: no service starts with an unset DB URL.
 
 The defect: `app/auth/config.py`, `app/registry/config.py`,

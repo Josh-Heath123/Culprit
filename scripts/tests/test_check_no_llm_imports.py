@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Tests for scripts/check_no_llm_imports.py (Phase 26).
 
 A check that cannot fail is not a check, so most of this file is about

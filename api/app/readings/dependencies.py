@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The session for the probe writer.
 
 Its own session factory, like `app/divergences/dependencies.py`'s and for

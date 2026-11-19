@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Trigger fault injection against a demo service's admin endpoint.
 
     uv run python fault_cli.py latency inventory-service --delay-ms 800 --duration-s 30

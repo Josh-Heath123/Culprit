@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Rendering a validation failure without rendering what failed.
 
 `str(pydantic.ValidationError)` includes an `input_value=...` for each

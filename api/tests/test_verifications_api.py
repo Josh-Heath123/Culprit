@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Verifications and outcomes in the control plane (Phase 34 part 2), against
 a real database under the real roles: `verification-writer` for the write,
 `api-reader` for every read and for the checks the write makes first.

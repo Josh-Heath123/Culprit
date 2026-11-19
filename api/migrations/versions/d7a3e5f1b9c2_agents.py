@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """agents: pairing, allowances, tasks, nonces and an audit log no role can rewrite
 
 Revision ID: d7a3e5f1b9c2

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { Link, useLocation } from "react-router-dom";
 
 import { Standalone } from "@/components/layout/Page";

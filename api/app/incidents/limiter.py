@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """slowapi Limiter, in its own module so both app/main.py (registers the
 exception handler + middleware) and app/incidents/router.py (decorates
 the one endpoint that needs it) import the same instance.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """arq jobs: embed_postmortem (Phase 18), embed_architecture_decision and
 embed_ai_change_record (Phase 21, docs/AI_NATIVE_PLAN.md) — all three
 thin wrappers over `_embed_record` below, which holds the shared

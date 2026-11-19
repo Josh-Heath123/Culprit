@@ -3291,10 +3291,11 @@ added and left out of it. What that does not give you:
 - **Every job has a hard timeout,** twice its slowest run in the ten green
   runs before Phase 41, rounded up to five minutes, at least ten: `cli` 20,
   `e2e` 30, `fault-library` 35, `images.yml`'s build 15, every other job
-  10. In `cli` and `e2e`, the job's limit comes before an inner `go test
-  -timeout` (20 and 30 minutes): a hung test there ends as a killed job,
-  without the stack dump that names it. The fault library's 30-minute
-  `go test -timeout` stays inside its job's 35.
+  10. Every `go test` a job runs times out in at most half its job's limit
+  (Phase 42): `cli`'s 10, the agent's 15 in `e2e`, the fault library's 17,
+  `kind-capture`'s 5. A test that runs longer is stopped by Go, which
+  prints the stack that names it. Locally, `just fault-library` runs every
+  case at once and keeps 30.
 - **A newer push to a pull request cancels the run in progress.** The
   cancelled run's `gate` still runs, and fails; only the newest commit's
   checks decide the merge. A push to `main`, a tag or a hand-started run is
@@ -3309,3 +3310,42 @@ added and left out of it. What that does not give you:
   fault-library shard.
 - **`main`'s ruleset is the owner's.** Until it requires `gate`, strict and
   with no bypass, a red pull request can still be merged by hand.
+
+## The licence records say what each file is under, not more
+
+Phase 42 put ownership on the record: every file states its licence (REUSE
+3.3), `scripts/check_licensing_map.py` holds `LICENSING.md`'s table to what
+REUSE reports, and `NOTICE`, `AUTHORSHIP.md`, `CONTRIBUTING.md`,
+`TRADEMARKS.md`, `SECURITY.md` and `CITATION.cff` exist. What they do not
+do:
+
+- **Test data is annotated as a whole.** `REUSE.toml` covers everything
+  under `cli/testdata/` and `api/tests/data/` by directory, because a header
+  there would change bytes a golden file or a line number compares. A file
+  added there needs no header and is not caught by `reuse lint`; it is
+  Culprit's unless it sits in one of the two third-party fixtures. Everywhere
+  else, `REUSE.toml` names file types (JSON, Markdown, images, lock files),
+  never a directory, so a new source file without a header fails.
+- **NOTICE lists what this repository holds and the fonts its builds ship,
+  not every dependency.** The dashboard's bundle, the binary and the
+  container images contain the packages their lock files name, under their
+  own licences; there is no software bill of materials yet (Phase 43).
+- **The contributor agreement is named, not signed or copied.**
+  `CONTRIBUTING.md` names the Harmony individual CLA 1.0 with its choices
+  (Option Five) and links to its text; outside code contributions are not
+  accepted until a lawyer has read it, and the governing law is not chosen.
+- **`AUTHORSHIP.md` counts commits on one day.** Its figures (308 commits,
+  109 with a `Co-Authored-By: Claude` trailer, 51 pull requests merged by
+  the owner) are as of `3928f0a`, with the commands that give them; nothing
+  keeps them current. A trailer records that a commit was made with Claude,
+  not how much of it.
+- **A document that quotes a tag is tagged.** REUSE reads
+  `SPDX-License-Identifier:` and `SPDX-FileCopyrightText:` followed by a
+  value on any line of any file, Markdown included, ahead of `REUSE.toml`.
+  Quoting one in prose (a report, a plan) gives that file whatever follows
+  it; the map check then fails, which is how this run found it. Write the
+  tag inside backticks with its value on the same line only when the value
+  is the file's own, or describe it instead.
+- **The tools are pinned and fetched.** `just lint` and CI run `reuse` 6.3.0
+  and `cffconvert` 2.0.0 through `uvx`, which downloads them on first use; a
+  machine with no network access cannot run those two checks.

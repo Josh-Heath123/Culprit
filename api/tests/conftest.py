@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Loads api/.env before any test module is collected — some modules
 (e.g. app/auth/config.py) read required env vars at import time, and
 conftest.py is guaranteed to run before pytest imports test files in

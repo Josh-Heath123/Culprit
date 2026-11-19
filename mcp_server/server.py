@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """FastMCP application instance for the Culprit MCP server (Phase 24,
 docs/AI_NATIVE_PLAN.md). Stdio transport only (Out of scope: no shared,
 multi-client streamable-HTTP deployment in this phase).

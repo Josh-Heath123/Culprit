@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 14: worker/app/anomaly/job.py stops scoring every metric a
 service happens to send and instead honours that service's
 monitored_metrics allowlist (services.monitored_metrics). An empty list

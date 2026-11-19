@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Integration tests for the four Culprit MCP tools (Phase 24,
 docs/AI_NATIVE_PLAN.md), against a real Postgres+pgvector container --
 same justification as worker/tests/test_rag_retrieval.py's own docstring:

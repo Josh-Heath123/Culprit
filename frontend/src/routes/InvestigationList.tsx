@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { ChevronRightIcon, CrosshairIcon, SignpostIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 

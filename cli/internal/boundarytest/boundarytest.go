@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package boundarytest holds the structural checks behind Q27's package
 // isolation (docs/PERFORMANCE_PLAN.md, end of Phase 37): that a boundary
 // package has one non-test file, that its exported surface names no type

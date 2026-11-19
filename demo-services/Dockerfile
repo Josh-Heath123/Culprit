@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Same uv+Docker pattern as api/Dockerfile and worker/Dockerfile (see
 # api/Dockerfile's comments for the full reasoning) -- demo-services/
 # didn't have an image at all before Phase 17 (docs/SELF_HOSTED_PLAN.md

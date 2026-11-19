@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Tests for scripts/check_frontend_tokens.py (Phase 32.1).
 
 A gate that cannot fail is not a gate (standing invariant 10), so each
@@ -225,7 +228,7 @@ def test_the_scope_is_all_of_frontend_src() -> None:
 
 
 def test_dates_are_formatted_in_one_place(tmp_path: Path) -> None:
-    """Malcolm's review of part 1: one date format, from lib/datetime.ts.
+    """Joshua's review of part 1: one date format, from lib/datetime.ts.
     A page that calls toLocaleString() itself is refused; the formatter
     is the one file allowed to."""
     page = _page(tmp_path, "<span>{new Date(when).toLocaleString()}</span>")

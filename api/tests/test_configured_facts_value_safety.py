@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 26.1: an ungranted config value is unrepresentable in the database.
 
 `.claude/rules/model.md` requires that facts carry config names and

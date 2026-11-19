@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Derived from api-types.generated.ts (openapi-typescript, run via `npm
 // run generate-types` — see package.json and justfile's `generate-types`
 // recipe), which is itself generated from api/app/incidents/schemas.py's

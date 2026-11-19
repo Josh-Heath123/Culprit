@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 26 regression test: bootstrap_env writes the real image path.
 
 The defect: `scripts/bootstrap_env.py` still emitted
@@ -212,3 +215,41 @@ def test_the_demo_database_password_is_generated_not_written() -> None:
     for line in urls:
         assert "postgresql://inventory:${INVENTORY_DB_PASSWORD:-}@" in line, line
     assert "not-a-secret@" not in compose
+
+
+@pytest.mark.parametrize("local", [True, False], ids=["local", "vm"])
+def test_no_secret_value_is_printed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], local: bool
+) -> None:
+    """Q41 (2026-11-19): nothing main() prints holds a value it generated,
+    the local admin password included. The password is in the file, and the
+    output says where."""
+    target = tmp_path / ".env.prod"
+    monkeypatch.setattr(bootstrap_env, "ENV_PROD_PATH", target)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["bootstrap_env.py", "--force", *(["--local"] if local else ["--domain", "example.test"])],
+    )
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+    assert bootstrap_env.main() == 0
+    out = capsys.readouterr()
+    printed = out.out + out.err
+    written = dict(
+        line.split("=", 1)
+        for line in target.read_text(encoding="utf-8").splitlines()
+        if "=" in line and not line.startswith("#")
+    )
+    secrets = [
+        v
+        for k, v in written.items()
+        if v
+        and len(v) >= 16
+        and k not in {"IMAGE_REGISTRY", "CORS_ORIGINS", "PUBLIC_URL", "DOMAIN"}
+    ]
+    assert secrets, "the file holds no generated secret: the test would be vacuous"
+    for value in secrets:
+        assert value not in printed, "a generated secret was printed"
+    if local:
+        assert written["QUICKSTART_ADMIN_PASSWORD"] in secrets
+        assert "QUICKSTART_ADMIN_PASSWORD in" in printed

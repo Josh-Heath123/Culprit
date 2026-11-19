@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Decode real OTLP/HTTP protobuf payloads.
 
 Uses the generated opentelemetry-proto message classes to parse the wire

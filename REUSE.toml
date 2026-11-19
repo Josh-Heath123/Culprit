@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# REUSE (https://reuse.software, specification 3.3), Phase 42. Every file
+# that can hold a comment carries its own SPDX header. These annotations
+# cover the rest: data a test compares byte for byte, generated files,
+# images, lock files and Markdown, none of which is edited to hold a
+# header. LICENSING.md is the map in words; scripts/check_licensing_map.py
+# (tested by scripts/tests/test_check_licensing_map.py) holds it to what
+# REUSE reports.
+#
+# Outside the test data they name file types, not directories, so a new
+# source file without a header is not covered by anything here and
+# `reuse lint` fails on it. The test data (cli/testdata/, api/tests/data/)
+# is annotated by directory, since a header there would change the bytes a
+# golden file or a line number compares.
+#
+# Where more than one annotation matches a file, the last one wins.
+
+version = 1
+
+# Culprit's own files that cannot hold a comment, and its test data.
+[[annotations]]
+path = [
+    "**.json",
+    "**.md",
+    "**.png",
+    "**.svg",
+    "**.lock",
+    "**/go.sum",
+    "VERSION",
+    "NOTICE",
+    "**/.gitkeep",
+    "api/migrations/script.py.mako",
+    "cli/testdata/**",
+    "api/tests/data/**",
+]
+SPDX-FileCopyrightText = "2026 Joshua Heath"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+# The same, in the three Apache-2.0 directories (LICENSING.md).
+[[annotations]]
+path = [
+    "shared/**.json",
+    "shared/**.md",
+    "shared/**.lock",
+    "extractors/python/**.md",
+    "extractors/python/**.lock",
+    "extractors/node/**.json",
+    "extractors/node/**.md",
+]
+SPDX-FileCopyrightText = "2026 Joshua Heath"
+SPDX-License-Identifier = "Apache-2.0"
+
+# Third-party fixtures, vendored unmodified (cli/testdata/fixtures/README.md),
+# under their own licences and holders, from their own LICENSE files.
+# Nothing of Culprit's is claimed over them.
+[[annotations]]
+path = "cli/testdata/fixtures/third-party/flask-tutorial/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2010 Pallets"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "cli/testdata/fixtures/third-party/express-route-separation/**"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "2009-2014 TJ Holowaychuk",
+    "2013-2014 Roman Shtylman",
+    "2014-2015 Douglas Christopher Wilson",
+]
+SPDX-License-Identifier = "MIT"
+
+# The one file in each fixture that is Culprit's: the manifest added so the
+# fixture can be checked (Phase 28).
+[[annotations]]
+path = [
+    "cli/testdata/fixtures/third-party/flask-tutorial/culprit.yaml",
+    "cli/testdata/fixtures/third-party/express-route-separation/culprit.yaml",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Joshua Heath"
+SPDX-License-Identifier = "AGPL-3.0-only"

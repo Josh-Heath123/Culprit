@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """inventory-service's own database (Phase 37 part 1, P8).
 
 Optional: with INVENTORY_DATABASE_URL unset the list route answers 503 and

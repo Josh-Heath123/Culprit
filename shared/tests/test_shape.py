@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """`ValueShape` cannot carry a literal — proved by attempting it.
 
 Phase 28 acceptance criterion 3: "A `Fact` about a config key **cannot be

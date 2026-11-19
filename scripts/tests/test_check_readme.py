@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """scripts/check_readme.py (docs/DELIVERY_PLAN.md S4; Phase 40 part 2,
 decision 4): the tree passes, and each check fails on the mutation it exists
 for."""

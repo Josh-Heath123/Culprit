@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The agent routes — Phase 33, part 2: the agent meets the control plane.
 
 Three kinds of caller, each declared per route so a route added later

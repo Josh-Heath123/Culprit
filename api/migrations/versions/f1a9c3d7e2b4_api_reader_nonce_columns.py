@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """agents: api-reader reads two columns of agent_nonces, not the nonces
 
 Revision ID: f1a9c3d7e2b4

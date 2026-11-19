@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Storing and reading investigations (Phase 32, part 2).
 
 `POST /investigations` takes exactly what `culprit diagnose --format json`

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`/captures` — Phase 30 field 9: `POST /captures`, `GET /captures/{id}`,
 `GET /captures/diff?a=&b=`.
 

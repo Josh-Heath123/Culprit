@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The three-plane core model (docs/DIAGNOSTIC_PLAN.md §2).
 
 Phase 26 lands this package alongside the existing pipeline without

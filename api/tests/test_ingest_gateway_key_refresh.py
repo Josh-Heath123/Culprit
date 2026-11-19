@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 14: api/app/ingest_gateway/auth.py's ApiKeyStore stopped being a
 load-once-at-startup cache and became reactively self-refreshing (see
 that module's own docstring) — a key created after the process booted,

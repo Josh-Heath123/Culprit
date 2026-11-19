@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """No new DB URL constant here, unlike every other domain package's own
 config.py (app/postmortems/config.py, app/registry/config.py). Phase 21
 (docs/AI_NATIVE_PLAN.md) deliberately extends `postmortem-writer`'s

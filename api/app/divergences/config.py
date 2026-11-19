@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The database URL for the divergence writer.
 
 Reuses `FACT_WRITER_DATABASE_URL` rather than introducing a role of its

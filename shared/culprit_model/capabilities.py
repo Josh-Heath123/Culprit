@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The §2.7 capability vocabulary — the Python half of `cli/internal/capability`.
 
 Phase 30. The Go CLI parses grants from `culprit.yaml` and enforces them;

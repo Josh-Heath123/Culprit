@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The `value_shape` CHECK constraint, against a real database.
 
 Phase 28's half of the Phase 26.1 remediation (docs/HANDOFF.md §3, Q5).

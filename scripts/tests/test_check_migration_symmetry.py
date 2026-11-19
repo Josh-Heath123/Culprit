@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Unit tests for scripts/check_migration_symmetry.py (Phase 22,
 docs/AI_NATIVE_PLAN.md). scripts/ has no test precedent before this
 phase (see that module's own docstring) -- this sets it.

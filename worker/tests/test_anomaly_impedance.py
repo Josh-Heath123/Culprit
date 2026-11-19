@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 31: worker/app/anomaly/job.py emits an impedance reading beside
 each score it already wrote an anomaly for.
 

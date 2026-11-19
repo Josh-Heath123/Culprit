@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Phase 26 regression test: one bad stream entry must not wedge the drain.
 
 The defect: `_drain_batch` parsed a whole batch in a list comprehension.

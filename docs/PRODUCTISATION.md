@@ -1,6 +1,6 @@
 # Project Finalisation, Productisation & Premium UI Overhaul
 
-> **Status (2026-11-03).** Malcolm's productisation brief, kept verbatim below
+> **Status (2026-11-03).** Joshua's productisation brief, kept verbatim below
 > as the requirements its phases cite. It is folded into
 > `docs/DIAGNOSTIC_PLAN.md` rather than run as one overhaul, because the web UI
 > today is the incident copilot that Phase 32 replaces:

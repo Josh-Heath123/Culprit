@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Unit tests for the pure ORM-row -> API-response transforms
 (app/incidents/transforms.py). No database — ORM models are instantiated
 in-memory (never flushed to a session), same convention as the worker's

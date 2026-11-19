@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`POST /readings` (Phase 31), against a real database, under the real
 roles: `probe-writer` for the write, `api-reader` for the read-back.
 

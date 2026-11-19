@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Intentionally empty. Do not add entries.
 #
 # This file is root-level and applies to every image CI scans. Until

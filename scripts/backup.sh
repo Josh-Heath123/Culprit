@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Backs up the running deployment's Postgres database via `pg_dump` inside
 # the already-running `postgres` container — no separate pg_dump/psql
 # client needed on the host, same reasoning as infra/deploy.sh running

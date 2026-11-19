@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The narrator's input, and the check its prose must pass — Phase 35 part 2.
 
 The narrator is the one LLM call in the system (D8). It is given a settled

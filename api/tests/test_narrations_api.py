@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Narrations in the control plane (Phase 35 part 2), against a real
 database under the real roles: `narrator` writes, `api-reader` reads, and
 the API runs the narration check again before it serves prose.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Storing and reading CONFIGURED captures (Phase 30, fields 5 and 9).
 
 `POST /captures` takes the sealed envelope `culprit env capture` writes,

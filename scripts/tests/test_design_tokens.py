@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Every text-and-background pair in frontend/src/index.css meets WCAG 2.2
 AA (Phase 32.1, field 13); every boundary and the focus ring reach 3:1; and
 neither the culprit's lime nor the brand's violet can be taken for a

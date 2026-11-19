@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Project-token auth for `POST /facts/captures`.
 
 Phase 28 field 9: "Authenticated with a project token, not a user JWT."

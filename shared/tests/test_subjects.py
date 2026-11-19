@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Conformance tests for subject-URI construction (§2.3).
 
 Table-driven off `subject_conformance.json` rather than inline cases, so

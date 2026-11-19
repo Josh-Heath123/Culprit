@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Voyage AI embedding calls for Phase 6 (RAG retrieval).
 
 The only module in app.rag that talks to Voyage. voyage-4's default

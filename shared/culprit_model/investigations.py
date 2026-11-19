@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Investigation, Hypothesis and FaultEdge — docs/DIAGNOSTIC_PLAN.md §2.8.
 
 An incident is something that happened to you; an investigation is

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Redis persistence for anomaly-scorer state.
 
 Keeps the pure scoring math (scorer.py) free of I/O. This is the only

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Structural proof of invariant 8 (docs/AI_NATIVE_PLAN.md §1): none of
 Phase 22's deterministic-check scripts import an LLM/embedding client,
 for the same reason `lint-imports` already enforces invariant 1

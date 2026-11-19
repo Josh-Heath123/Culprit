@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The five investigation tables, as Core tables.
 
 Core, not ORM, for the reason app/readings/service.py gives: the ORM writes

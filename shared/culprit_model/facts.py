@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """Fact, Provenance and Divergence — the atomic units of the model.
 
 docs/DIAGNOSTIC_PLAN.md §2.2 and §2.5. Pydantic models rather than plain

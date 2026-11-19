@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Drains otel-metrics/otel-logs/otel-traces Redis Streams into Postgres.
 
 Runs as arq cron jobs (see app/main.py), not a bare while-True loop.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """`culprit.yaml`'s `budgets:` on the control-plane side (Phase 36 part 1).
 
 The control plane does not act on budgets — the `culprit` binary turns

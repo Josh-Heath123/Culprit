@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The gate's decision: every job the `gate` job needs succeeded.
 
 Phase 41 (docs/DELIVERY_PLAN.md, D1): `gate` is the one check `main`'s

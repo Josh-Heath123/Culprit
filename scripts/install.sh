@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 # Install the `culprit` CLI.
 #
 #   curl -fsSL https://raw.githubusercontent.com/Josh-Heath123/Culprit/main/scripts/install.sh | sh

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Package guardedhttp is the one place the binary builds and sends an
 // HTTP request to a system under test, and the only package that can
 // (Q27, ruled 2026-11-12, docs/PERFORMANCE_PLAN.md end of Phase 37).

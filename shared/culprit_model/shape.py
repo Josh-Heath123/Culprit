@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """`ValueShape` — what a config value *is*, with no way to say what it *says*.
 
 docs/DIAGNOSTIC_PLAN.md §2.2, and the Phase 26.1 remediation the Phase 27

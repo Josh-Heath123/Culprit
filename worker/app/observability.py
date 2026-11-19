@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Self-observability setup for the worker/ project (Phase 10) — OTel
 traces to Tempo, structlog JSON logs to stdout, with the active span's
 trace_id/span_id attached to every log entry. That correlation (a log

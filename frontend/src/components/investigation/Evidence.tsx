@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { VerdictBadge } from "@/components/ui/status";
 import type { InvestigationReading } from "@/lib/types";
 import { Prose } from "@/components/ui/prose";

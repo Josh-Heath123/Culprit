@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Joshua Heath
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Renders the README's hero and the social preview (docs/DELIVERY_PLAN.md
 // S2; Phase 40 part 2, decision 3). Run it with `just readme-hero`.
 //

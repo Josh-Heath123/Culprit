@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Unit tests for app.rag.embed_job.embed_postmortem (Phase 18) and its
 two Phase 21 siblings, embed_architecture_decision/embed_ai_change_record
 (docs/AI_NATIVE_PLAN.md) — all three share the _embed_record helper this

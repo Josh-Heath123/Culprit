@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """The four read-only MCP tools (Phase 24, docs/AI_NATIVE_PLAN.md) a
 coding agent can call before making a change. Every tool is a plain SQL
 read (via the `mcp-reader` role, granted SELECT only -- see the phase's

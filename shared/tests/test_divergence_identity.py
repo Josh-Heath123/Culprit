@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: Apache-2.0
+
 """The Go and Python divergence identities must agree, byte for byte.
 
 Read from the same fixture `cli/internal/model/divergence_identity_test.go`

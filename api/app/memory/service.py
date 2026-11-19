@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """DB access for engineering-memory records (Phase 21,
 docs/AI_NATIVE_PLAN.md) — the `postmortem-writer` role for writes
 (reused, not a new role — invariant 10), whatever engine the caller
