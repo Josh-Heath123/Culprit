@@ -2409,7 +2409,7 @@ the CLI's and the agent's job.
 
 Phase 35 part 2. An optional narrator writes prose for a stored
 investigation, shown beside it on its page, labelled as derived. Off by
-default (`LLM_PROVIDER=none`); the README's "Narration, if you want it" says
+default (`LLM_PROVIDER=none`); `docs/GUIDE.md`'s "Narration, if you want it" says
 how to turn it on, and `docs/PERMISSIONS.md` exactly what is sent.
 
 ### The check holds identifiers, not meaning
@@ -3234,17 +3234,42 @@ per item, and these are its limits.
 Phase 40 part 1 gave the dashboard its new identity (deep plum, electric
 violet, acid lime; `docs/DELIVERY_PLAN.md` §2). `scripts/tests/test_design_tokens.py`
 measures every text token at 4.5:1 on every surface and tint, every
-control's boundary at 3:1, and the violet focus ring at 3:1. Two things it
-does not cover:
+control's boundary at 3:1, and the violet focus ring at 3:1 on every
+surface, tint and glass. One thing it does not cover:
 
-- **The focus ring is 3:1 only where controls sit.** Violet itself
-  (`#7540F5`) is 3.0 to 3.4:1 on the well, the page, a panel and glass, but
-  2.3 to 2.8:1 on the lighter inner surfaces and on every status tint. So
-  no control is placed on those; the test's `RING_SURFACES` says so, and
-  the rule is kept by review, not by a gate that reads the components. A
-  button or link put inside a tinted box would show a ring under 3:1.
 - **Glass is measured over the page, not over what scrolls under it.** The
   header is translucent; text in it is measured composited over plum. Bright
   content scrolling beneath it (there is little: the dashboard is dark
   throughout) would lower the contrast of the header's muted text, softened
   by the blur.
+
+## The README's checks hold what they can name, and the rest is read by hand
+
+Phase 40 part 2 made the README an overview (`docs/GUIDE.md` holds the
+depth) and `scripts/check_readme.py` holds it to the tree: relative links,
+the probe count, the README's length, the diagrams' colours, and, in CI's
+self-check job, the self-check's figures. What it does not hold:
+
+- **A link's anchor is not checked.** `docs/GUIDE.md#how-it-works` passes
+  when the file exists, whether or not the heading does; a renamed heading
+  leaves GitHub opening the page at its top.
+- **A probe count is read only in two phrasings,** a number or a word up to
+  twenty before "probes" (`18 read-only probes`, `all 18 probes`), and only
+  in `README.md` and `docs/GUIDE.md`. A count phrased otherwise, or in
+  another document, is not compared with the catalogue.
+- **The self-check's figures are checked in CI only.** Locally, `just lint`
+  checks links, the count, the length and the colours; the figures need the
+  self-check's output, which the self-check job produces. A figure the
+  README quotes in a phrasing the check does not know is not compared.
+- **Every other number is audited by hand,** in the run report: versions,
+  "four checks", the plan's phase numbers. The accuracy block and the hero's
+  figure are rendered, and their tests fail when stale.
+- **The hero holds its figure, not its look.** `docs/brand/hero.json`
+  records the figure the images were drawn with, and a test holds it to the
+  fault library's results; a token changed in `index.css` after the hero
+  was rendered is not caught until `just readme-hero` runs again. The hero
+  needs `npm ci` in `frontend/` and Playwright's Chromium, and its
+  anti-aliasing can differ a little between Chromium versions.
+- **The diagrams are dark in GitHub's light theme.** Mermaid takes one
+  `init` theme per diagram, so the plum nodes are the same in both of
+  GitHub's themes; only the hero has a light variant.

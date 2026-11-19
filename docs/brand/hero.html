@@ -1,0 +1,202 @@
+<!doctype html>
+<!--
+  The README's hero and the social preview (docs/DELIVERY_PLAN.md S2), the
+  source that `just readme-hero` (scripts/render_hero.mjs) renders with the
+  Playwright and the fontsource fonts frontend/ already installs. Nothing in
+  the PNGs is drawn by hand:
+
+  - every colour is a token read from frontend/src/index.css at render time
+    and set on :root by the renderer; this file names none;
+  - the figure is scripts/accuracy_readme.py's figure() of the fault
+    library's committed results, the README accuracy block's own headline,
+    and the renderer records it in hero.json;
+  - the mark is mark.svg, beside this file.
+
+  Dark: the plum field, the violet glow and the graticule; the figure in
+  lime. Light: cream, plum text, violet accents; lime only as a filled block
+  with plum on it (I2).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Culprit</title>
+<style>
+  @font-face {
+    font-family: "Inter";
+    font-weight: 400;
+    src: url("../../frontend/node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Inter";
+    font-weight: 700;
+    src: url("../../frontend/node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "JetBrains Mono";
+    font-weight: 500;
+    src: url("../../frontend/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2") format("woff2");
+  }
+
+  /* The two themes, from the tokens the renderer sets on :root. */
+  :root[data-theme="dark"] {
+    --field: var(--surface-0);
+    --ink: var(--fg);
+    --ink-quiet: var(--fg-muted);
+    --accent: var(--brand);
+    --grid: var(--graticule);
+    --grid-mark: var(--graticule-mark);
+    --figure-ink: var(--culprit);
+    --figure-fill: transparent;
+    --glow: var(--glow-violet);
+  }
+  :root[data-theme="light"] {
+    --field: var(--fg);
+    --ink: var(--surface-0);
+    --ink-quiet: var(--surface-3);
+    --accent: var(--brand-fill);
+    --grid: color-mix(in srgb, var(--surface-0) 9%, transparent);
+    --grid-mark: color-mix(in srgb, var(--surface-0) 26%, transparent);
+    --figure-ink: var(--on-culprit);
+    --figure-fill: var(--culprit);
+    --glow: color-mix(in srgb, var(--brand-fill) 16%, transparent);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    position: relative;
+    overflow: hidden;
+    background: var(--field);
+    color: var(--ink);
+    font-family: "Inter", sans-serif;
+  }
+
+  /* The graticule (I4): hairlines every 48 px, a + at each crossing,
+     fading toward the edges. */
+  .graticule {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    -webkit-mask-image: radial-gradient(ellipse at 30% 50%, #000 15%, transparent 75%);
+    mask-image: radial-gradient(ellipse at 30% 50%, #000 15%, transparent 75%);
+  }
+  .graticule .line { stroke: var(--grid); stroke-width: 1; fill: none; }
+  .graticule .mark { stroke: var(--grid-mark); stroke-width: 1.25; fill: none; }
+
+  /* The violet radial glow (I4): the login page and this, only. */
+  .glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 55% 85% at 26% 50%, var(--glow), transparent 70%);
+  }
+
+  .layout {
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 112px;
+    gap: 64px;
+  }
+  .identity { display: flex; flex-direction: column; gap: 30px; }
+  .wordmark { display: flex; align-items: center; gap: 30px; }
+  .wordmark img { width: 112px; height: 112px; }
+  .wordmark span {
+    font-weight: 700;
+    font-size: 128px;
+    line-height: 1;
+    letter-spacing: -0.045em;
+  }
+  .label {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+  .promise { font-size: 20px; color: var(--ink-quiet); }
+  .promise b { color: var(--accent); font-weight: 500; }
+
+  .figure {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .figure .value {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 500;
+    font-size: 104px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--figure-ink);
+    background: var(--figure-fill);
+  }
+  :root[data-theme="light"] .figure .value { padding: 10px 22px 14px; border-radius: 10px; }
+  .figure .what { font-size: 20px; color: var(--ink); }
+  .figure .scope { font-size: 14px; letter-spacing: 0.1em; color: var(--ink-quiet); }
+
+  /* The social preview: 1280x640, stacked. */
+  :root[data-variant="social"] .layout {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0 96px;
+    gap: 56px;
+  }
+  :root[data-variant="social"] .wordmark span { font-size: 112px; }
+  :root[data-variant="social"] .wordmark img { width: 100px; height: 100px; }
+  :root[data-variant="social"] .figure .value { font-size: 72px; }
+  :root[data-variant="social"] .figure { flex-direction: row; align-items: center; gap: 28px; }
+  :root[data-variant="social"] .figure .words { display: flex; flex-direction: column; gap: 10px; }
+</style>
+</head>
+<body>
+  <svg class="graticule" aria-hidden="true"></svg>
+  <div class="glow"></div>
+  <div class="layout">
+    <div class="identity">
+      <div class="wordmark"><img src="mark.svg" alt=""><span>Culprit</span></div>
+      <p class="label promise">Finds where your system <b>disagrees with itself</b></p>
+    </div>
+    <div class="figure">
+      <span class="value" id="value"></span>
+      <div class="words">
+        <p class="label what">Planted faults verified fixed</p>
+        <p class="label scope" id="scope"></p>
+      </div>
+    </div>
+  </div>
+<script>
+  // window.HERO is set by the renderer before this runs:
+  // { theme, variant, tokens: {name: value}, figure: {verified, decided, share, planted} }
+  const hero = window.HERO;
+  const root = document.documentElement;
+  root.dataset.theme = hero.theme;
+  root.dataset.variant = hero.variant;
+  for (const [name, value] of Object.entries(hero.tokens)) root.style.setProperty(`--${name}`, value);
+  document.getElementById("value").textContent = `${hero.figure.verified} of ${hero.figure.decided}`;
+  document.getElementById("scope").textContent =
+    `${hero.figure.share} of those decided · ${hero.figure.planted} planted in demo services`;
+
+  const svg = document.querySelector(".graticule");
+  const ns = "http://www.w3.org/2000/svg";
+  const step = 48, arm = 5;
+  const { innerWidth: w, innerHeight: h } = window;
+  let lines = "", marks = "";
+  for (let x = step; x < w; x += step) lines += `M${x + 0.5} 0V${h}`;
+  for (let y = step; y < h; y += step) lines += `M0 ${y + 0.5}H${w}`;
+  for (let x = step; x < w; x += step * 2)
+    for (let y = step; y < h; y += step * 2)
+      marks += `M${x - arm + 0.5} ${y + 0.5}h${arm * 2}M${x + 0.5} ${y - arm + 0.5}v${arm * 2}`;
+  for (const [cls, d] of [["line", lines], ["mark", marks]]) {
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("class", cls);
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+  }
+</script>
+</body>
+</html>

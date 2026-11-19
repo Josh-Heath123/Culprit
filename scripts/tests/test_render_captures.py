@@ -56,3 +56,23 @@ def test_a_crashed_extractor_is_recognised_and_an_honest_gap_is_not() -> None:
     honest = "  api  client_calls  culprit-extract-python@0.1.0 does not extract client_calls"
     assert rc.CRASHED_EXTRACTOR.search(crashed)
     assert not rc.CRASHED_EXTRACTOR.search(honest)
+
+
+def test_every_capture_colour_is_a_dashboard_token() -> None:
+    """S1: the captures wear I2's tokens, read from index.css, and type
+    none of their own."""
+    css = rc.INDEX_CSS.read_text(encoding="utf-8")
+    for colour in (
+        rc.BG,
+        rc.FG,
+        rc.DIM,
+        rc.PROMPT,
+        rc.FAIL,
+        rc.DEGRADES,
+        rc.INCONCLUSIVE,
+        rc.REFUSED,
+        rc.PASS,
+    ):
+        assert f": {colour};" in css
+    assert rc.token("surface-sunken") == rc.BG
+    assert rc.colour_for("FAILING (1)") == rc.token("fail")

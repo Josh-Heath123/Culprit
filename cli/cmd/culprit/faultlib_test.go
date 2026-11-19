@@ -752,8 +752,8 @@ func (s *faultStack) diagnose(symptom string, fault faultExpectation) model.Inve
 		"-f", fault.manifest(), "--env", fault.Environment, "--from", fault.Vantage,
 		"--format", "text", "--state-dir", containerState).Output()
 	if fault.Name == "n-plus-one" {
-		// The README quotes this from CI's log, never by hand (Phase 39
-		// part 2, item 6).
+		// docs/GUIDE.md (the README's until Phase 40 part 2) quotes this
+		// from CI's log, never by hand (Phase 39 part 2, item 6).
 		s.t.Logf("README OUTPUT (culprit diagnose, N+1):\n%s", text)
 	}
 	for _, secret := range s.secrets {
@@ -858,9 +858,9 @@ func (s *faultStack) countList(fault faultExpectation, route budgetedRoute) {
 	if route != productsRoute {
 		return
 	}
-	// The same command as the README shows it, in text, logged whole: the
-	// README quotes this output from CI's log, never by hand (Phase 39
-	// part 1, item 1).
+	// The same command as docs/GUIDE.md shows it, in text, logged whole:
+	// the guide quotes this output from CI's log, never by hand (Phase 39
+	// part 1, item 1; the README's until Phase 40 part 2).
 	text, err := exec.Command("docker", "exec", container, "/tmp/walk/culprit", "probe",
 		productsRoute.subject, "-p", model.ResponseItemsProbeID,
 		"--input", "base_url=http://inventory-service:8002",

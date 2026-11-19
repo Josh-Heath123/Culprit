@@ -51,6 +51,12 @@ jobs:
       # one consistent ruff root list across the justfile and CI --
       # which scripts/tests/test_scan_coverage.py asserts.
       - run: cd extractors/python && uv run ruff check .
+      # Phase 40 part 2 (S4): the README and docs/*.md hold only what this
+      # tree holds: every relative link resolves, the probe count is the
+      # catalogue's, the README is under 300 lines and its diagrams wear
+      # index.css's tokens. Standard library only; the self-check job below
+      # checks the figures the self-check produces. Same as `just lint`.
+      - run: python3 scripts/check_readme.py
 
   typecheck:
     needs: lint
@@ -407,7 +413,15 @@ jobs:
           VERIFICATION_WRITER_DATABASE_URL: postgresql+asyncpg://localhost:5432/culprit-intent-placeholder
         run: |
           cd cli
-          go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any || true
+          go run ./cmd/culprit check -f ../culprit.yaml --unverifiable --fail-on=any > ../self-check.txt 2>&1 || true
+          cat ../self-check.txt
+
+      # Phase 40 part 2 (S4, decision 4): the self-check's figures are checked
+      # where they are produced. Every figure README.md or docs/GUIDE.md
+      # quotes (facts, subjects, gaps, the unverifiable surface) must be what
+      # the run above printed; output that holds none of them cannot run (2).
+      - name: The README's self-check figures are this run's
+        run: python3 scripts/check_readme.py --self-check self-check.txt
 
       - name: Upload SARIF as a build artifact
         if: always()

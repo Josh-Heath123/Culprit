@@ -120,3 +120,22 @@ def test_only_the_database_fault_names_a_commit() -> None:
     # walk, the wrong latency fix (Phase 36 part 2), and the database
     # fault's wrong fix (Phase 37 part 3).
     assert len([c for c in named if c.startswith("action:")]) == 6
+
+
+def test_the_hero_drew_the_figure_the_committed_results_give() -> None:
+    """Phase 40 part 2, decision 2: the hero's figure is figure() of the
+    committed results, the README block's own headline. `just readme-hero`
+    records what it drew in docs/brand/hero.json; change the results without
+    rendering the hero again and this fails."""
+    results = json.loads(accuracy.RESULTS.read_text(encoding="utf-8"))
+    drawn = json.loads(accuracy.HERO.read_text(encoding="utf-8"))["figure"]
+    assert drawn == accuracy.figure(results), "the hero is stale: run `just readme-hero`"
+
+
+def test_the_headline_is_built_from_the_figure() -> None:
+    figure = accuracy.figure(_results())
+    assert figure == {"verified": 1, "decided": 2, "share": "50%", "planted": 3}
+    section = accuracy.render(_results())
+    assert (
+        f"**{figure['verified']} of {figure['decided']} planted faults verified fixed**" in section
+    )

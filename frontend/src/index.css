@@ -38,8 +38,9 @@
  *                             raised panels.
  *   Cream            #FDFDFD  text, with muted and subtle steps toward
  *                             plum.
- *   Electric Violet  #7540F5  brand and interaction: primary fills, the
- *                             focus ring, selection. Never body text on
+ *   Electric Violet  #7540F5  brand and interaction: primary fills and
+ *                             selection; the focus ring is its lighter
+ *                             step, #8F63FF (C2). Never body text on
  *                             plum (3.2:1); violet text is --brand, a
  *                             lighter tint.
  *   Acid Lime        #D6FA4A  the culprit, and only that: the walk's
@@ -192,9 +193,11 @@
   /* A boundary that identifies a control (an input, an outline button):
      3:1 on every surface (WCAG 1.4.11). */
   --line-strong: #8f73ad;
-  /* The focus ring: violet itself, 3:1 on every surface a focusable
-     element sits on (the well, the page, a panel, glass). */
-  --ring: #7540f5;
+  /* The focus ring: violet's lighter step (C2, Phase 40 part 2). The
+     fill, #7540f5, falls to 2.3:1 on the lighter surfaces and the tints;
+     this clears 3:1 on every surface, every tint and glass, so a control
+     may sit anywhere. */
+  --ring: #8f63ff;
   /* The graticule's hairlines (I4): decoration, never behind data. */
   --graticule: rgba(171, 157, 189, 0.13);
   --graticule-mark: rgba(203, 193, 216, 0.38);

@@ -205,6 +205,29 @@ def check(root: Path = ROOT, scope: tuple[str, ...] = SCOPE) -> list[Violation]:
     return violations
 
 
+def summary(violations: list[Violation]) -> list[str]:
+    """One sentence per kind of failure: a value that bypasses the tokens,
+    and a restricted token placed outside its components (I7), which is
+    not a bypass and is not counted as one."""
+    restricted = {rule for rule, _pattern, _allowed in RESTRICTED}
+    placed = sum(1 for v in violations if v.rule in restricted)
+    bypassing = len(violations) - placed
+    lines: list[str] = []
+    if bypassing:
+        lines.append(
+            f"{bypassing} styling value(s) bypass the design tokens in frontend/src/index.css. "
+            "Use a token utility (bg-surface-1, text-fg-muted, text-2xs, ...), or add a token "
+            "there, where its contrast is measured."
+        )
+    if placed:
+        lines.append(
+            f"{placed} culprit or glass token(s) used outside the components declared for them "
+            "(I7): lime marks only the answer, glass only layered components. Move it, or "
+            "declare the component in CULPRIT_COMPONENTS or GLASS_COMPONENTS with what it marks."
+        )
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     del argv
     try:
@@ -216,13 +239,9 @@ def main(argv: list[str] | None = None) -> int:
     for violation in violations:
         print(violation.__str__().replace(str(ROOT) + "\\", "").replace(str(ROOT) + "/", ""))
     if violations:
-        print(
-            f"\n{len(violations)} styling value(s) bypass the design tokens in "
-            "frontend/src/index.css. "
-            "Use a token utility (bg-surface-1, text-fg-muted, text-2xs, ...), or add a token "
-            "there, where its contrast is measured.",
-            file=sys.stderr,
-        )
+        print("", file=sys.stderr)
+        for line in summary(violations):
+            print(line, file=sys.stderr)
         return 1
     print(f"check_frontend_tokens: {len(files)} file(s), tokens only.")
     return 0

@@ -47,6 +47,10 @@ lint:
     # its root list, and a `just cli-lint` line there would be one more
     # thing for it to misread.
     just cli-lint
+    # Phase 40 part 2 (S4): links, the probe count, the README's length and
+    # its diagrams' colours. The self-check's figures are checked in CI's
+    # self-check job, where they are produced.
+    uv run --no-project python scripts/check_readme.py
 
 # Enforce module-isolation contracts (e.g. anomaly detection vs RAG/LLM)
 lint-imports:
@@ -129,6 +133,16 @@ probe-catalogue:
 # README's evidence.
 readme-captures:
     uv run --no-project python scripts/render_captures.py
+
+# Render the README's hero (docs/brand/hero-dark.png, hero-light.png) and
+# the social preview from docs/brand/hero.html, with the Playwright and
+# fontsource fonts frontend/ installs (`npm ci` in frontend/ and
+# `npx playwright install chromium` once). Its colours are index.css's
+# tokens, its figure scripts/accuracy_readme.py's; it records the figure
+# in docs/brand/hero.json, which test_accuracy_readme.py holds to the
+# fault library's committed results.
+readme-hero:
+    node scripts/render_hero.mjs
 
 # Cross-compile every released platform into cli/dist/ (what CI publishes)
 cli-release:

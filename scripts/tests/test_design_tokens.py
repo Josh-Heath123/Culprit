@@ -48,14 +48,11 @@ SURFACES = ("surface-sunken", "surface-0", "surface-1", "surface-2", "surface-3"
 GLASS = ("glass",)
 #: Boundaries that identify a control: 3:1 on every surface and on glass.
 BOUNDARIES = ("line-strong",)
-#: Where a focusable element sits, and so where its offset ring is drawn:
-#: the well, the page, a panel (every Card), glass. Violet itself is under
-#: 3:1 on surface-2, surface-3 and every tint (2.3 to 2.8), so no control is
-#: placed on them: they are inner items, nodes, badges and hover states.
-#: Phase 40's audit found three controls on them (the sign-in card, the
-#: services connections box, the agent notice's link); all three moved to
-#: a panel or a well, and Card lost its surface-2 variant.
-RING_SURFACES = ("surface-sunken", "surface-0", "surface-1", "glass")
+#: The focus ring is measured against every surface, every tint (any token
+#: named `*-tint`, found by name, so a tint added tomorrow is measured the
+#: day it exists) and glass: a control may sit on any of them (C2, Phase 40
+#: part 2). Before C2 the ring was violet's fill, under 3:1 on the lighter
+#: surfaces and the tints, and only placement kept controls off them.
 #: The identity colours no status may be mistaken for (I2): the culprit's
 #: lime, and the brand's violet as fill and as text.
 IDENTITY = ("culprit", "brand-fill", "brand")
@@ -157,7 +154,13 @@ def _non_text_pairs(tokens: dict[str, str]) -> list[tuple[str, str, float]]:
         for boundary in BOUNDARIES
         for background, value in backgrounds.items()
     ]
-    pairs += [("ring", name, contrast(colour["ring"], backgrounds[name])) for name in RING_SURFACES]
+    tints = sorted(name for name in colour if name.endswith("-tint"))
+    assert tints, "index.css declares no tint"
+    for name in tints:
+        backgrounds[name] = _over(colour[name], page)
+    pairs += [
+        ("ring", name, contrast(colour["ring"], value)) for name, value in backgrounds.items()
+    ]
     return pairs
 
 
@@ -227,13 +230,28 @@ def test_no_status_colour_can_be_taken_for_lime_or_violet(status: str, identity:
 
 
 def test_the_anchors_are_the_identity() -> None:
-    """I2's four anchors, exactly: the page, the text, violet for fills and
-    the ring, lime for the culprit."""
+    """I2's four anchors, exactly: the page, the text, violet for fills
+    and selection, lime for the culprit. The ring is violet's lighter step
+    (C2), held by the 3:1 pairs above rather than pinned here."""
     assert _resolve(TOKENS, "surface-0").lower() == "#221331"
     assert _resolve(TOKENS, "fg").lower() == "#fdfdfd"
     assert _resolve(TOKENS, "brand-fill").lower() == "#7540f5"
-    assert _resolve(TOKENS, "ring").lower() == "#7540f5"
     assert _resolve(TOKENS, "culprit").lower() == "#d6fa4a"
+
+
+def test_the_ring_is_violet_at_a_higher_lightness() -> None:
+    """C2: the ring is no longer pinned, so this keeps it violet's lighter
+    step. The 3:1 pairs alone would pass any bright colour, lime included,
+    which I2 forbids for interaction."""
+    fill = _rgba(_resolve(TOKENS, "brand-fill"))
+    ring = _rgba(_resolve(TOKENS, "ring"))
+    fill_hue, _ = hue_and_saturation(fill)
+    ring_hue, ring_saturation = hue_and_saturation(ring)
+    assert hue_distance(ring_hue, fill_hue) < 5, "--ring is not violet's hue"
+    assert ring_saturation >= GREY, "--ring is a grey, not violet"
+    fill_lightness = colorsys.rgb_to_hls(*(c / 255 for c in fill[:3]))[1]
+    ring_lightness = colorsys.rgb_to_hls(*(c / 255 for c in ring[:3]))[1]
+    assert ring_lightness > fill_lightness, "--ring is not lighter than the fill"
 
 
 def test_the_surfaces_are_plum_at_other_lightnesses() -> None:

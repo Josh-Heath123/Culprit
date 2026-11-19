@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **40, part 1 — the new identity: the dashboard** — `complete`, awaiting review. PR #49; CI green on `1f3080a` (run 44340916627, every job and every PR check; no open alert). C1 met over runs 44333504867 and 44336394900. Report in §5; the screenshots in `docs/screenshots/phase-40-review/` are its first item for the review. |
-| Previous phase | **39, part 2 — the walk and the fault — merged as `33df658` (PR #48) and signed off 2026-11-18.** Run 44321940704 on `a832381`, the report's run 44326796071 and `main`'s push run 44327031951 on `33df658` green on every job, read from GitHub. Q38–Q40 ruled and carried out; two mutations of the join shown red by the architecture session; the run's seven decisions accepted, the first amended by C1. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`, which is complete. |
+| Current phase | **40, part 2 — the new identity: the repository** — `complete`, awaiting review. PR #50; CI green on `18bf5a2` (run 44386033657, every job and every PR check; no open alert). Report in §5; its first item is the README as GitHub renders it on the branch, for the owner to look at in the light and dark themes before merging. |
+| Previous phase | **40, part 1 — the new identity: the dashboard — merged as `624c6e3` (PR #49) and signed off 2026-11-18.** Runs 44340916627 on `1f3080a` and 44346373804 on the report, `b234e12`, green on every job, read from GitHub. C1 met over two runs. Three mutations shown red by the architecture session; the run's five decisions accepted, the third amended by C2. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-40-identity`, from `origin/main` = `33df658`; its first commit the review (`1ad98c7`). PR #49, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally; the reference image not committed. |
+| Branch | `phase-40-repository`, from `origin/main` = `624c6e3`; its first commit the review (`fbce521`), then C2 (`9a25806`). PR #50, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally; the reference image not committed. |
 | Blocking questions | None. |
 
 ---
@@ -123,7 +123,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 38, part 2 | Lists | **complete** (PR #46, `02bae0d`) | **Signed off 2026-11-17** (architecture session): run 44167165860 green on every job on attempt 1, read from GitHub; the criteria checked on disk in place of the audits the run did not reach. The demo's count of 0 is accepted and carried to Phase 39 part 2. Phase 38 is complete. Recorded at the end of Phase 38 in `PERFORMANCE_PLAN.md`. |
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | 39, part 2 | The walk and the fault | **complete** (PR #48, `33df658`) | **Signed off 2026-11-18** (architecture session): runs 44321940704, 44326796071 (the report) and 44327031951 (`main`'s push) green on every job, read from GitHub; Q38–Q40 ruled and carried out; the walk's and `verify`'s tests rerun and two mutations of the join shown red; the run's seven decisions accepted, the first amended by C1. Phase 39 is complete, and with it `PERFORMANCE_PLAN.md`. Recorded at the end of Phase 39 there. |
-| 40, part 1 | The new identity: the dashboard | **complete, awaiting review** (PR #49; CI green on `1f3080a`, run 44340916627) | **Run 2026-11-18:** C1 met over two runs (page 500, budget 25 ms); items 0-8 built; the phase audit's ring finding fixed; every screen at 1280 px and one at 375 px in `docs/screenshots/phase-40-review/`. Report in §5. **Brief (2026-11-18):** `docs/DELIVERY_PLAN.md` §2 (the identity, I1–I7) and Phase 40, "Part 1 — the dashboard": C1, the N+1 route's page carried from Phase 39, first, as its own commit pushed at once; then the work order from item 0, the assessment, written into the report before any screen changes; its criteria and what not to do. Step 0: `main`'s push run 44327031951 on `33df658`. Branch `phase-40-identity` from `origin/main` = `33df658`; its first commit is the review (`../phase-39-2-review.patch`, message `../phase-39-2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. The report shows every screen at 1280 px and one at 375 px. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 40, part 1 | The new identity: the dashboard | **complete** (PR #49, `624c6e3`) | **Signed off 2026-11-18** (architecture session): runs 44340916627 and 44346373804 (the report) green on every job, read from GitHub; C1 met over two runs; three mutations shown red; the run's five decisions accepted, the third amended by C2 (the focus ring). Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
+| 40, part 2 | The new identity: the repository | **complete, awaiting review** (PR #50; CI green on `18bf5a2`, run 44386033657) | **Run 2026-11-18:** C2 built (ring `#8F63FF`, tested by token name and held violet); the hero, captures, walk diagram, README (298 lines), `docs/GUIDE.md` and `check_readme.py` under the eight decisions; both audits' findings fixed. Report in §5. **Brief (2026-11-18):** `docs/DELIVERY_PLAN.md` §3 (S1–S4) and Phase 40, "Part 2 — the repository", with "Part 2 — brief" beneath the review of part 1: C2, the focus ring, first, as its own commit (with the review copies of the screenshots removed); then the hero, the captures, the diagram, the README, `docs/GUIDE.md` and `scripts/check_readme.py`, under its eight decisions; its criteria and what not to do. Step 0: `main`'s push run 44375710199 on `624c6e3`. Branch `phase-40-repository` from `origin/main` = `624c6e3`; its first commit is the review (`../phase-40-1-review.patch`, message `../phase-40-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed; the report links the README as GitHub renders it on the branch. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -155,206 +156,199 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        40, part 1 — the new identity: the dashboard (with C1, carried
-              from Phase 39)
-Branch:       phase-40-identity, from origin/main = 33df658. 1ad98c7 the
-              review; 61a0546 C1; 329171d the assessment (item 0, before
-              any screen changed); 8cba501 items 1-8; ded4f19 the audit's
-              findings; 1f3080a the e2e fix; then this report with the
-              README's N+1 case and the screenshots. PR #49.
-Run:          2026-11-18, /next. Local gates one at a time, in the
-              foreground. The fault library never run locally.
-Status:       COMPLETE pending review. CI green on 1f3080a (run
-              44340916627, every job; all 25 PR checks pass or skipping; no
-              open code-scanning alert). main has not moved (33df658), so
-              that is the merge result. Nothing blocking; no Q41.
+Phase:        40, part 2 — the new identity: the repository (with C2,
+              the focus ring, carried from part 1)
+Branch:       phase-40-repository, from origin/main = 624c6e3. fbce521 the
+              review; 9a25806 C2; 8b0d65b the hero; 870dad5 the captures;
+              b6d0328 the README, docs/GUIDE.md, the diagram,
+              check_readme.py; eb8f53a the audits' findings; 18bf5a2 the
+              README's screenshots retaken by e2e; then this report. PR #50.
+Run:          2026-11-18, /next. Step 0: main's push run 44375710199 on
+              624c6e3 read by id — success on every job, deploy skipped.
+              Local gates one at a time, in the foreground. The fault
+              library never run locally.
+Status:       COMPLETE pending review, and the owner's look at the README in
+              both themes. CI green on 18bf5a2 (run 44386033657, every job;
+              all 25 PR checks pass or skipping; no open code-scanning
+              alert). main has not moved (624c6e3), so that is the merge
+              result. Nothing blocking; no Q41.
 
-FIRST FOR THE REVIEW — THE LOOK
-  docs/screenshots/phase-40-review/ holds every screen at 1280 px and the
-  investigation at 375 px, from run 44340916627's e2e artifact
-  (e2e-screenshots-none), none touched by hand. Start with
-  investigation-complete-1280.png, investigation-complete-375.png,
-  investigations-1280.png and sign-in-1280.png. The folder is for this
-  review; remove it when the look is approved (32.1 part 2 did the same).
-  The README's four screenshots in docs/screenshots/ are from the same run.
+FIRST FOR THE REVIEW — THE README AS GITHUB RENDERS IT
+  https://github.com/Josh-Heath123/Culprit/blob/phase-40-repository/README.md
+  Look at it in GitHub's light and dark themes (Settings, Appearance):
+  the hero swaps through <picture>; the walk diagram is plum in both
+  (LIMITS, "The README's checks hold what they can name"). The guide:
+  https://github.com/Josh-Heath123/Culprit/blob/phase-40-repository/docs/GUIDE.md
 
-C1 — THE DETAILS ROUTE'S PAGE 500, BUDGET 25 MS (61a0546)
-  DETAILS_PAGE 500 (the default page and the ?limit= cap);
-  response_items_max 500 at /products; latency_p95_ms 25. The whys and
-  LIMITS give page 500 and the measured range; test_manifest_budgets.py
-  pins 25 and 500; the library expects "ran 500 times for the 500 items".
-  No harness check added back (Q40). Every existing case kept its root and
-  verdict (both shards green in all three runs).
-  The check, from the LATENCY lines (fault: sample 45 >= 37.5 ms; fix:
-  slowest <= 16.7 ms, measured and in verify's runs):
-                               fault: sample 45      fix: slowest
-    44333504867 (61a0546)      144.3, 142.6          <= 12.3 (6.5, 7.0 measured)
-    44336394900 (8cba501)      102.1, 98.5           <= 6.2  (6.2, 5.8 measured)
-  MET in every reading of two runs. These runners were slower than the
-  architecture session's projection (about 50 ms at 500): the fault's
-  margin is wide; the fix's slowest stayed at the join's few ms.
-  The README's N+1 case retaken from run 44333504867's log (the README
-  OUTPUT block, copied by script; nothing typed): page 500, 25 ms,
-  "ran 500 times for the 500 items", sample 45 at least 143.653 ms.
+C2 — THE FOCUS RING (9a25806, and eb8f53a)
+  --ring #8F63FF; the fill stays #7540F5. test_design_tokens.py measures
+  the ring against every surface, every token named *-tint (found by
+  name) and glass; RING_SURFACES gone; the anchors test pins the fill.
+  New, from the invariant audit: the ring must stay violet's hue (within
+  5 degrees), not a grey, and lighter than the fill. LIMITS: "The focus
+  ring is 3:1 only where controls sit" removed. check_frontend_tokens.py
+  counts a misplaced culprit or glass token in its own sentence
+  (summary(), tested). docs/screenshots/phase-40-review/ removed.
+  Mutations red: the ring back to #7540f5 (12 pairs: surface-2,
+  surface-3, every tint); a new --probe-tint #5a3a80 (1 pair); the ring
+  set to lime #d6fa4a (it passes every 3:1 pair; the hue test fails).
+  My slip: C2 was pushed without running lint; its run 44380261151 failed
+  lint on one 101-character line, fixed in b6d0328.
 
-ITEM 0 — THE ASSESSMENT (committed in 329171d, before any screen changed)
-  Routes and their jobs
-    /login                    sign in to this control plane
-    /investigations           every stored walk, newest first; an admin
-                              can start one through an agent
-    /investigations/:id       one walk: its diagnosis, verification,
-                              narration, fault tree, symptom, hypotheses
-    /incidents[/:id]          the retired correlation engine's record,
-                              read-only (timeline, detail, Ctrl K palette)
-    /postmortems[/new|/:id]   write, read and delete postmortems
-    /settings/services        the system model (admin)
-    /settings/users           accounts and roles (admin)
-    /settings/agents          pairing and grants (admin)
-    *                         not found; admins-only for a member
-  The most important information on each screen
-    investigation view   the root (or where the walk stopped) and its
-                         statement; then the four checks; then the edges
-    investigations       per row: the symptom and its root or stop
-    login                the two fields and the one action
-    settings             the list being managed, then the form
-    incidents            that it is history; the timeline
-    postmortems          titles and their embedding status
-    not found            the path that was asked for, and the way back
-  Inconsistencies found
-    1 the answer was not the editorial moment (the h1 was the symptom);
-    2 glass on data (the Symptom card) and on a form (sign-in);
-    3 cantaloupe on the brand dot and an unused badge as well as the root;
-    4 "complete" and "admin" in the brand tone of links and the button;
-    5 three title sizes; 6 three field styles; 7 error text two ways
-    (boxed, bare, and mono in services); 8 labels uppercase sans in some
-    places, sentence case in others; 9 motion only colour, 150 ms, default
-    easing; 10 Vite's favicon, a CSS dot for a mark.
-  Data-heavy (dense, solid, quiet): the investigation view, the lists,
-  settings, incidents, postmortems. Expressive (graticule; glow on
-  sign-in only): sign-in, empty states, not found.
+THE EIGHT DECISIONS, AS BUILT
+  1 The review copies removed in C2's commit.
+  2 accuracy_readme.py's figure() gives the README block's headline and
+    the hero's figure; render_hero.mjs records what it drew in
+    docs/brand/hero.json; test_accuracy_readme.py fails when it is not
+    figure() of results.json. Red: hero.json verified 9 -> 8; a verified
+    fault in results.json flipped to not_resolved (the README test and
+    the hero test both).
+  3 just readme-hero: docs/brand/hero.html rendered by frontend's
+    Playwright 1.64.1 with the fontsource Inter 700 and JetBrains Mono
+    500: hero-dark.png, hero-light.png (3200x800), social-preview.png
+    (1280x640). Every colour is an index.css token read at render time;
+    hero.html names none. Light: cream, plum text, violet accents, lime
+    only as a filled block with plum. The fonts are checked loaded
+    before each screenshot. No dependency.
+  4 check_readme.py (standard library) in `just lint` and CI's lint job:
+    relative links and images in README.md and docs/*.md resolve
+    (fenced and inline code skipped); every probe count in README.md and
+    docs/GUIDE.md is the catalogue's; the README is under 300 lines; every
+    Mermaid colour is an index.css token. The self-check job writes
+    `culprit check --unverifiable`'s output to self-check.txt and runs
+    `check_readme.py --self-check` on it: facts, subjects, gaps and the
+    unverifiable surface, wherever README.md or the guide quotes them,
+    across line breaks. Output holding none of them exits 2. Red on the
+    tree: a broken image link; "17 read-only probes"; #ccff00 in the
+    diagram; a 300-line README; self-check output of 1754 facts and 536
+    unverifiable; the README's "8 gaps" against 9.
+    Before it existed it found three stale statements in the old README:
+    "Thirteen read-only probes" and "all seventeen probes" (the
+    catalogue holds 18), and "the 368 subjects only one source
+    describes" (the self-check gives 535). All three corrected.
+  5 The walk as Mermaid, themed by an init block from I2's tokens, the
+    root lime with plum text by a classDef: errors; latency; N+1 where
+    isolated and the entry over budget; the database pass. A statement
+    over its budget roots it (a missing index when the four planes
+    agree); with none, an entry over its own budget roots at its own
+    time; otherwise partial. Checked against isolate.go's Diagnose and
+    database.go (the phase audit corrected my first labels). The guide's
+    two older diagrams take the same init block.
+  6 The README: 298 lines, S3's order — the hero and a line of links;
+    the problem; see it work (captures and screenshots, captions as they
+    were); what it does, eight rows, budgets among them; how it works
+    (planes, the walk, why no model decides); engineering highlights,
+    each naming its file or test; the accuracy block; quickstart; status
+    from the plans; the documentation map; technology; author and
+    licence. docs/GUIDE.md holds what the README no longer does, moved
+    as it was: key features, how it works, the control plane,
+    narration, the technology table, the decisions, installation, the
+    tutorial, culprit mcp, testing, layout, limits. Changed in the move,
+    and only these: relative links rebased to docs/; three
+    cross-references now link to the README; the three corrected
+    statements above, with the probe row's list of what the probes read
+    completed to match the 18. A script compared every line of the old
+    README with the new README and the guide: nothing else lacks a home.
+    References into the moved text (LIMITS, PERMISSIONS, PROBES,
+    UPGRADING, faultlib_test.go's comments) point at the guide.
+  7 The captures: render_captures.py's one constant block reads each
+    colour from index.css by role (a well; fg, fg-subtle, brand; fail,
+    degrades, inconclusive, refused, pass; inconclusive and refused were
+    one yellow before), JetBrains Mono first; a test holds each to a
+    token. Regenerated by `just readme-captures`: apart from colour and
+    font, only the probe capture's ephemeral port changed. The optional
+    `culprit diagnose` capture is not added: no command renders a
+    recorded walk as text, so it could not come from a real record (S1).
+    The dashboard screenshots: the README's four copied as they are from
+    run 44383181239's e2e-screenshots-none (b6d0328, after C2); three
+    differ (the run's times and ids), one is byte-identical.
+  8 This report links the README on the branch (above).
 
-ITEMS 1-8 (8cba501, ded4f19, 1f3080a)
-  1 Tokens. Surfaces are plum at other lightnesses (hue 270, saturation
-    44%): a well #180e23, the page #221331, panels #261537 .. #392053;
-    cream #fdfdfd, muted #cbc1d8, subtle #ab9dbd; violet fill and ring
-    #7540f5, violet text #b69cff; --culprit #d6fa4a (was --highlight),
-    plum on it; verdicts and severities re-derived (pass #3ddbae, fail and
-    breaks #ff8070, inconclusive #6cc6ff, degrades #ffaa52, plum-greys);
-    tints at 13% over plum, lines at 38%; a title and two display steps,
-    a mono label tracking, the spacing step, radius and shadow steps, a
-    culprit glow, 180 ms ease-out by default. test_design_tokens.py: the
-    new sets; every boundary 3:1 on every surface; the ring 3:1 where
-    controls sit; the anchors exactly; the surfaces plum by lightness
-    alone; the hue-separation test (30 degrees from lime and violet, or a
-    grey under 25% saturation).
-  2 Restraint. check_frontend_tokens.py allows culprit utilities only in
-    Diagnosis, FaultTree, InvestigationList (a row's root) and Brand (the
-    mark), glass only in AppHeader, dialog and tooltip; a declared file
-    that no longer uses its token fails.
-  3 Components: violet primary, quiet secondary/outline/ghost, a press;
-    one field style (a well inside a 3:1 boundary); no lime badge; Card
-    solid only; a mono Label; ErrorNote and SuccessNote (21 failure
-    paragraphs became ErrorNote); the graticule on empty states; glass
-    dialogs, palette and tooltips; violet ring 2 px, offset.
-  4 Screens. The investigation's h1 is its answer: the root in mono
-    display under the lime "Root" marker, a lime rule beside the
-    statement (the diagnosis line), the symptom a label above; a partial
-    is "Walk stopped at" in the inconclusive tone, never lime. The fault
-    tree's root node in the lime outline glow. Symptom card and sign-in
-    solid. One title scale; labels in mono capitals; code and readings
-    in wells.
-  5 Motion: 150-220 ms ease-out on hover, press, the tree's edges and
-    dialogs; nothing animates data.
-  6 The mark: a measuring ring with four ticks and a lime centre, in
-    Brand.tsx, frontend/public/favicon.svg (replacing Vite's),
-    docs/brand/mark.svg and wordmark.svg.
-  7 The screenshots retaken by e2e (above).
-  8 PRODUCTISATION §2's status line.
-
-DECISIONS OF THIS RUN (for the review)
-  1 The answer's heading is the root subject (mono, display), with the
-    statement beneath it as the diagnosis line, rather than the whole
-    statement at display size: statements run to 300+ characters.
-  2 Lime marks four places: the investigation's root and diagnosis line,
-    the tree's root node, a list row's root, and the mark (the plan names
-    the mark's dot).
-  3 The ring is violet itself, as I2 says, so controls stay on the well,
-    the page, a panel or glass, where it measures 3.0-3.4:1. Violet is
-    2.3-2.8:1 on surface-2, surface-3 and the tints: no control sits there
-    (LIMITS, new entry). The alternative was a lighter ring.
-  4 The graticule is an SVG (two paths), because a pattern fill would
-    need a colour prop the token gate refuses.
-  5 A complete diagnosis with no remediation now says "The walk suggests
-    no fix for this root." (before: nothing).
+EVERY NUMBER IN THE README (S4: held, or audited by hand)
+  Held by a check: the accuracy block (accuracy_readme --check); the
+  hero's figure (test_accuracy_readme); "18 read-only probes"
+  (check_readme); "1,753 facts across 631 subjects", "9 gaps listed"
+  (--self-check, in CI); the diagram's colours and the length.
+  Audited by hand, true: the demo's five components, three services and
+  two databases, and "five divergences" in check.svg's alt text
+  (cli/testdata/demo, the SVG); four confidence checks; Go 1.27, Node
+  22, Python 3.12, PostgreSQL 16, React 18; the phase numbers from the
+  plans; D1-D8. Corrected after the phase audit: "only two packages may
+  link net/http" (the allowlist names three: probe, guardedhttp,
+  transport). Not verified by count: "two lint-imports contracts" around
+  narration (the determinism rule's wording; worker has six in all).
+  Removed rather than left unheld: "six read-only tools", "fourteen
+  roles" (both still in the guide, as they were).
 
 CRITERIA
-  Every colour from a token; check-frontend-tokens and
-    test_design_tokens pass, with the restrictions and the hue
-    test; each mutation red                                   PASS
-  Contrast: text 4.5:1 on every surface; boundaries and the
-    ring 3:1                                                  PASS, the
-    ring as decision 3 (after the audit's finding, ded4f19)
-  Lime only where the answer is marked; glass only on
-    layered components                                        PASS (gate)
-  reducedMotion 'reduce': no transition (e2e)                 PASS (CI,
-    "motion: 150 to 220 ms, and none under reduced motion")
-  Nothing lost: every e2e assertion holds at four widths,
-    every route, keyboard-only                                PASS (CI
-    44340916627, e2e (none) and (stub)); the e2e diff only adds
-  The report shows every screen at 1280 and one at 375        PASS (above)
-  Do NOT: no functionality removed, no dependency (Inter 700
-    is in the installed package), no light theme, no data
-    animated, the reference image not committed               PASS
-  C1 as above                                                 PASS
-
-MUTATIONS SHOWN RED (each restored; the tree checked after)
-  bg-culprit on the primary button     check: "culprit token outside the
-                                       answer", button.tsx:17, exit 1
-  bg-glass on Evidence                 check: "glass token outside a
-                                       layered component", exit 1
-  --degrades back to #f2d75b           hue test: degrades-culprit
-  --inconclusive back to #b9a6ff       hue test: inconclusive-brand-fill,
-                                       inconclusive-brand
-  --line-strong #5a4c6a                3:1 test: 6 pairs
-  --surface-1 one step lighter         ring test: ring-on-surface-1
-  and five parametrised restriction mutations in the check's own tests.
+  README under 300 lines, S3's order, every number read
+    from its source on the merge result               PASS (298, gated);
+                                                      numbers as above
+  check_readme.py passes, and its mutations are red   PASS
+  The hero's figure equals the accuracy block's       PASS (test)
+  Every capture regenerated, none edited by hand      PASS
+  The owner has looked at the rendered README in
+    light and dark                                    NOT RUN: the
+                                                      owner's, before
+                                                      merge (link above)
+  Do NOT: no badge, no emoji, no dependency, nothing drawn or typed by
+    hand, no tutorial text without a home, the reference image not
+    committed                                         PASS
 
 AUDITS
-  invariant-auditor (1ad98c7..8cba501): CLEAN. No gate weakened; C1
-    touched only the route's page, budgets, pins, the library's expected
-    text and LIMITS. Risks noted: the four decorative tokens are exempt
-    from contrast; the 25 ms budget was a projection (now measured, C1).
-  phase-auditor (1ad98c7..8cba501): NOT COMPLETE on one criterion — the
-    ring under 3:1 on controls this phase placed on surface-2 (sign-in
-    card, services connections box) and degrades-tint (the agent
-    notice's link). Fixed in ded4f19: all three on a panel or a well;
-    Card lost its surface-2 variant; RING_SURFACES says why. Its scope
-    note (the graticule on admins-only, not named by I4) also taken. Not
-    re-run after the fixes.
+  invariant-auditor (fbce521..b6d0328): CLEAN. No gate weaker: the ring
+    test wider, the restrictions unchanged, two accuracy tests added; the
+    self-check job's new step fails where it used to pass silently.
+    Risk 1 (nothing kept the unpinned ring violet) taken in eb8f53a.
+    Risk 2: the ring test composites brand-tint and culprit-tint over
+    the page while the text pairs use them raw; both are opaque, so the
+    numbers are the same. Left.
+  phase-auditor (fbce521..b6d0328): NOT COMPLETE on four points, all
+    fixed in eb8f53a: the README's wrapped "9 gaps / listed." was not
+    read (the checks now read across line breaks; red shown); the
+    diagram's database edges; the net/http sentence; two references
+    (PROBES, UPGRADING) into moved text; and the old "Limits" paragraph
+    now has a home. Its readability note on the hero ("9 of 9" above
+    "11 planted") taken: the subline says "100% of those decided". Not
+    re-run after the fixes. Its proposed rewording of the criterion is
+    for the architecture session: "every number the README states is
+    held by a named check whose mutation is red, or listed in the report
+    as audited by hand, with its source." Noted, older than this change:
+    the LIMITS heading "The README's number is five planted faults" is
+    stale.
 
-LOCAL GATES (Windows, one at a time, in the foreground)
-  just lint, typecheck, lint-imports, check-schema-drift,
-  check-no-llm-imports, check-invariants, check-scan-coverage,
-  check-frontend-tokens, check_coupled_files: clean. just test: api 1,840
-  (6 skipped), worker 93, mcp_server 21, 39. Frontend: tsc -b, vite
-  build, oxlint (three only-export-components warnings, as on main), node
-  tests. Not run locally: the fault library (instructed), e2e.
+LOCAL GATES (Windows, one at a time, in the foreground, on b6d0328;
+  `just lint` again on 18bf5a2)
+  just lint (with check_readme), typecheck, lint-imports,
+  check-schema-drift, check-no-llm-imports, check-invariants,
+  check-scan-coverage, check-frontend-tokens, check_coupled_files:
+  clean. just test: api 1,877 (6 skipped), worker 93, mcp_server 21, 39,
+  node conformance. Frontend: vite build, node tests 19, oxlint (the
+  three only-export-components warnings, as on main). After eb8f53a:
+  the touched tests (183) and ruff. Not run locally: the fault library
+  (instructed), e2e.
 
-CI (PR #49)
-  44333504867 on 61a0546 (C1): success on every job.
-  44336394900 on 8cba501: e2e (none) and (stub) red on one tour test —
-    DiagnosisHeading was a <header>, so locator('header') found two;
-    every other job green, fault library included (C1's second run).
-  44338092108 on ded4f19: the same e2e failure, for the same reason.
-  44340916627 on 1f3080a: success on every job (deploy, publish
-    skipped); 25 PR checks pass or skipping; no open code-scanning alert
-    on refs/pull/49/merge. main not moved: the merge result.
+CI (PR #50)
+  44380261151 on 9a25806 (C2): lint red, one line over 100 characters
+    (my slip, above); every other job green.
+  44383181239 on b6d0328: success on every job (publish, deploy
+    skipped), both fault-library shards included. Its e2e artifact gave
+    the README's screenshots.
+  44386033657 on 18bf5a2: success on every job (publish, deploy
+    skipped); 25 PR checks pass or skipping, CodeQL included; the three
+    code-scanning queries (pr=50, refs/pull/50/merge, refs/pull/50/head)
+    empty. check_readme ran in lint ("links, length, probe counts,
+    diagram colours: true") and in self-check ("... self-check
+    figures: true", beside "No divergences. 1753 fact(s) compared across
+    631 subject(s)."). main not moved: the merge result.
   This report's own commit runs on the pull request after it.
 
-NOT BUILT (as the brief says)
-  No light theme; no dependency; nothing removed; no data animated; the
-  reference image not committed; the README rewrite, hero, captures and
-  diagrams are part 2.
+NOT BUILT
+  No badge, emoji or dependency; no light theme for the diagrams (one
+  Mermaid theme per diagram); no diagnose capture (no real record to
+  render); the reference image not committed. Human steps: before
+  merge, look at the README in both themes; after merge, upload
+  social-preview.png and set the description and topics.
 ```
 
 ## §6. Escalate to the architecture session when

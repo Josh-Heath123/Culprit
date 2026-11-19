@@ -222,7 +222,7 @@ create the role without the password, and the worker will not start without
 the URL — even with narration off. `LLM_PROVIDER` may be left out (it means
 `none`). To narrate, set `LLM_PROVIDER=ollama` with `NARRATOR_MODEL` and
 `OLLAMA_URL`, or `anthropic` with `NARRATOR_MODEL` and `ANTHROPIC_API_KEY`
-(the README's "Narration, if you want it"); restart the worker and the api.
+(`docs/GUIDE.md`'s "Narration, if you want it"); restart the worker and the api.
 
 - **`a6c2e9d4f8b1` adds `narrations`**, append-only like `verifications`.
   A script that runs `TRUNCATE investigations CASCADE` now reaches it too and

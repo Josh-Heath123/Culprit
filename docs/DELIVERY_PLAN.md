@@ -394,6 +394,139 @@ work goes on.**
 **Human steps, after merge:** upload `social-preview.png`, and set the
 repository's description and topics. The review gives the text.
 
+### Review of part 1, 2026-11-18 — merged as `624c6e3` (PR #49)
+
+**Part 1 is signed off.**
+
+**CI.** Read by id from GitHub's API:
+- 44333504867 on `61a0546` (C1): success on every job.
+- 44336394900 on `8cba501` and 44338092108 on `ded4f19`: `e2e (none)` and `e2e
+  (stub)` red on one tour test, because the diagnosis heading was a second
+  `<header>` and `locator('header')` found two. Fixed in `1f3080a`. Every
+  other job was green, both fault-library shards included.
+- 44340916627 on `1f3080a`: success on every job.
+- 44346373804 on `b234e12`, the report: success on every job. The pull request
+  was merged after it finished. `main` had not moved from `33df658`, so the
+  tree merged is `b234e12`'s.
+- `main`'s push run 44375710199 on `624c6e3` was running at sign-off, with no
+  job red; part 2's step 0 confirms it.
+
+**C1 is met.** The fault's sample 45 and the fix's slowest answer, from the
+LATENCY lines of two runs:
+- 44333504867: the fault 144.3 and 142.6 ms; the fix at most 12.3 ms.
+- 44336394900: the fault 102.1 and 98.5 ms; the fix at most 6.2 ms.
+
+The bars were 37.5 and 16.7 ms. Those runners were slower than the projection
+from the fastest one seen (about 50 ms), so the fault's margin is wide; the
+fix stayed at the join's few milliseconds. On disk: `DETAILS_PAGE` 500,
+`response_items_max` 500 and `latency_p95_ms` 25, the test pins, the library's
+expected text ("ran 500 times for the 500 items"), and `results.json`
+unchanged.
+
+**Verified on disk,** on `624c6e3`, in the architecture session's workspace:
+- `test_design_tokens.py` and `test_check_frontend_tokens.py`: 187 passed.
+  `check_frontend_tokens.py`: 74 files, tokens only.
+- **Three mutations of its own, each shown red and then restored:**
+  - `text-culprit` in `Evidence.tsx`: the check exits 1, "culprit token
+    outside the answer";
+  - `--pass` moved to a lime-like `#b8e05a`: the hue test fails on pass
+    against the culprit;
+  - `--ring` darkened to `#6a39dd`: four ring pairs and the anchors test fail.
+- No dependency changed: `frontend/package.json` and its lock file are
+  untouched. The reference image is not committed. The e2e diff removes one
+  comment and adds the motion test.
+- The screenshots were looked at, at 1280 and 375 px. The investigation's
+  answer is the page's heading, with the lime marker and rule; the fault
+  tree's root carries the lime outline; a list row's root is lime and a
+  stopped walk is sky blue; sign-in carries the graticule and the glow, on a
+  solid card. The look is the owner's call: he approves it by starting part 2.
+
+**The run's five decisions:**
+1. The answer's heading is the root subject, in mono at display size, with the
+   statement beneath as the diagnosis line: statements run past 300
+   characters. Accepted.
+2. Lime marks four places: the investigation's root and diagnosis line, the
+   tree's root node, a list row's root, and the mark. A row's root is that
+   row's answer. Accepted.
+3. The ring is `#7540F5` itself, so controls must sit only on the well, the
+   page, a panel or glass, where it measures 3.0 to 3.4:1; LIMITS says so.
+   **Amended by C2:** nothing holds that placement, so a control put in a
+   tinted box tomorrow would show a ring under 3:1 and no gate would notice.
+   The ring becomes a lighter violet that clears 3:1 everywhere.
+4. The graticule is an SVG of two paths, since a pattern fill would need a
+   colour property the token gate refuses. Accepted.
+5. A complete diagnosis with no remediation says "The walk suggests no fix for
+   this root." It is true, and shown only in that case. Accepted.
+
+**Accepted as left:** the phase auditor was not re-run after `ded4f19`; this
+review's checks cover the change. **Noted, for C2:**
+`check_frontend_tokens.py` ends a restriction failure with its summary line
+about values that "bypass the design tokens", which is the wrong sentence for
+it.
+
+### Part 2 — brief (2026-11-18)
+
+**Carried from part 1 — C2, the focus ring. First, as its own commit after the
+review's.**
+- `--ring` becomes `#8F63FF`, the violet at a higher lightness. Measured here,
+  it clears 3.25:1 on all fifteen surfaces and tints (the lowest is
+  `culprit-tint`), where `#7540F5` falls to 2.29:1. `#7540F5` stays the fill.
+  I2 is amended: violet's fill is the anchor, and the ring is its lighter
+  step.
+- The ring test is built from the token names, as the text pairs are: the ring
+  against every surface, every tint and glass. `RING_SURFACES` goes; the
+  anchors test pins the fill, not the ring. The LIMITS entry "The focus ring
+  is 3:1 only where controls sit" is removed.
+- Mutations shown red: the ring back to `#7540F5`, and a new tint too light
+  for it.
+- The check's summary line counts restriction failures in a sentence of their
+  own.
+- The screenshots change only where a ring shows; e2e retakes them.
+
+**Decided now for part 2:**
+1. **The review copies go.** `docs/screenshots/phase-40-review/` is removed in
+   C2's commit. Starting this part is the owner's approval of the look.
+2. **One function gives the figure.** `scripts/accuracy_readme.py`, which
+   already renders the README's accuracy block from `results.json`, also gives
+   the hero its figure. The hero's renderer records the figure it drew in
+   `docs/brand/hero.json`. `scripts/tests/test_accuracy_readme.py`, which
+   already fails when the README's block is not what `results.json` renders,
+   also fails when that file's figure is not: a stale hero is red. Its
+   mutation is shown red.
+3. **The hero is rendered** by the Playwright that `frontend/` already
+   installs, from `docs/brand/hero.html`, with the installed fontsource fonts,
+   through one recipe, `just readme-hero`. It writes `hero-dark.png` and
+   `hero-light.png` (3200×800) and `social-preview.png` (1280×640) under
+   `docs/brand/`. The README shows the pair through `<picture>` with
+   `prefers-color-scheme`. No new dependency.
+4. **Where each truth check runs.** `scripts/check_readme.py`, standard
+   library only, joins `lint` for what a checkout holds: every relative link
+   and image in `README.md` and `docs/*.md` resolves, and every probe count
+   the README states equals the catalogue's. The self-check's figures are
+   checked where they are produced: the self-check job hands its output to
+   `check_readme.py`, which fails if a figure the README or `docs/GUIDE.md`
+   quotes differs. Each check's mutation is shown red.
+5. **The walk's diagram** is Mermaid, which GitHub renders, themed by an
+   `init` block from I2's anchors; the root is lime with plum text, by a
+   `classDef`. It shows the order the walk asks: errors, latency, N+1 where
+   isolated, then the database pass.
+6. **The README** follows S3's order and stays under 300 lines. The tutorial
+   moves verbatim to `docs/GUIDE.md`, and every link into it is updated.
+   "Future work" becomes S3's status section, read from the plans. The probe
+   count says what the catalogue holds.
+7. **The captures** take I2's colours in `render_captures.py`'s one constant
+   block and are regenerated by `just readme-captures`. The dashboard's
+   screenshots stay e2e's.
+8. **The report** links the README as GitHub renders it on the branch, so that
+   the owner can look at it in GitHub's light and dark themes before merging,
+   as part 2's criteria ask.
+
+**Do NOT:**
+- add a shields.io badge, an emoji, or a dependency;
+- draw any picture or type any figure by hand;
+- delete any tutorial text without its home in `docs/GUIDE.md`;
+- commit the owner's reference image.
+
 ---
 
 ## Phase 41 — The gate
