@@ -59,10 +59,12 @@ the `MSYS_NO_PATHCONV` prefix only matters on Windows Git Bash, harmless elsewhe
 This prompts for `VOYAGE_API_KEY` (optional: it embeds postmortems for
 search; without it they are stored and marked as not embedded), generates
 every database-role password and the JWT signing key, and writes
-`infra/.env.prod` with mode `0600`. No secret value is ever printed to the
-terminal in this mode (contrast with `just quickstart`'s local path, which
-does print a generated admin password — see Known Trap 4 in
-`docs/SELF_HOSTED_PLAN.md` Phase 17 for why that split is deliberate).
+`infra/.env.prod` with mode `0600`. No secret value is printed to the
+terminal. (`just quickstart`'s local path also generates an admin password,
+which this mode never does — see Known Trap 4 in `docs/SELF_HOSTED_PLAN.md`
+Phase 17 for why that split is deliberate. It too is written to
+`infra/.env.prod` only, and `just quickstart` shows it at the end, locally,
+read from that file.)
 
 Move the generated file to where the deploy step (step 6) expects it:
 

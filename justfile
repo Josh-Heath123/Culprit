@@ -421,20 +421,14 @@ quickstart:
         # argument that looks like a Unix absolute path (e.g. /repo)
         # into a Windows path before docker ever sees it, breaking -w.
         # A no-op everywhere else (Linux/macOS bash don't look at it).
-        # Under CI (GitHub Actions sets CI=true) the generated admin
-        # password is not echoed: a public repository's job logs are
-        # readable by anyone. Locally it is printed, as Known Trap 4 allows.
+        # It prints no secret, so nothing is filtered under CI (Q41): the
+        # admin's password is shown at the end, locally, from the file.
         # --user: the script writes infra/.env.prod with mode 0600. As
         # root, on Linux, that file would be root's and unreadable by the
         # `docker compose --env-file` and `just e2e` that follow (Docker
         # Desktop does not enforce the ownership, which is why it only
         # showed on a Linux runner).
-        bootstrap_out=$(MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --local)
-        if [ -n "${CI:-}" ]; then
-            printf '%s\n' "$bootstrap_out" | grep -v '^QUICKSTART_ADMIN_PASSWORD=' || true
-        else
-            printf '%s\n' "$bootstrap_out"
-        fi
+        MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/repo" -w /repo python:3.12-slim python scripts/bootstrap_env.py --local
     else
         echo "==> infra/.env.prod already exists, reusing it"
     fi
