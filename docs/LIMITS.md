@@ -2268,16 +2268,16 @@ the wrong root, then fixed, is counted under that root's class. A
 `verified` outcome shows the fix for the diagnosed root was seen to fix
 what the walk saw failing — not that the diagnosis named the true cause.
 
-### The README's number is five planted faults
+### The README's number is faults we planted
 
-The README's accuracy section is rendered by `just accuracy-readme` from
-the fault library's committed results (`cli/testdata/faultlib/
-results.json`), which CI's fault-library job must reproduce exactly. It is
-one fault per class, planted in Culprit's own three demo services, and a
-sample that size says the loop works on the faults it was built against —
-nothing about faults on anyone's real system. The two partial diagnoses
-(`latency`, and the audience fault under narrower grants) are listed and
-not counted; the library's deliberate wrong fixes are not outcomes.
+The README's accuracy section, and the figure on its hero image, are rendered
+by one function (`scripts/accuracy_readme.py`) from the fault library's
+committed results (`cli/testdata/faultlib/results.json`), which CI's
+fault-library job must reproduce exactly. The faults are planted in Culprit's
+own three demo services, a few per fault class, and a sample that size says
+the loop works on the faults it was built against — nothing about faults on
+anyone's real system. Partial diagnoses are listed and not counted; the
+library's deliberate wrong fixes are not outcomes.
 
 ### The state directory holds what a capture holds
 

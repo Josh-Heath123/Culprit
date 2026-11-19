@@ -527,6 +527,72 @@ review's.**
 - delete any tutorial text without its home in `docs/GUIDE.md`;
 - commit the owner's reference image.
 
+### Review of part 2, 2026-11-19 — merged as `cdc5032` (PR #50)
+
+**Part 2 is signed off. Phase 40 is complete.**
+
+**CI.** Read by id from GitHub's API:
+- 44380261151 on `9a25806` (C2): `lint` red on one line over 100 characters,
+  pushed before `just lint` ran; fixed in `b6d0328`. Every other job green.
+- 44383181239 on `b6d0328` and 44386033657 on `18bf5a2`: success on every job,
+  both fault-library shards included.
+- 44390448565 on `721edfe`, the report: success on every job. The pull request
+  was merged after it. `main` had not moved from `624c6e3`, so the tree merged
+  is `721edfe`'s.
+- `main`'s push run 44498857049 on `cdc5032`: running at sign-off, with no job
+  red; Phase 41's step 0 confirms it.
+
+**Verified on disk,** on `cdc5032`, in the architecture session's workspace:
+- The token, restriction, README and capture tests: 229 passed;
+  `test_accuracy_readme.py`: 8 passed. `check_readme.py`: 22 documents, true.
+  `check_frontend_tokens.py`: 74 files, tokens only.
+- **Four mutations of its own, each shown red and then restored:**
+  - `hero.json`'s verified count set to 8: the hero test fails;
+  - "19 read-only probes" in the README: "says 19 probes; the catalogue holds
+    18";
+  - a link to a file that does not exist, in `docs/GUIDE.md`: "does not
+    resolve";
+  - self-check output with 10 gaps: both quotes of "9 gaps" fail, in the
+    README and the guide. Output holding no figure at all exits 2, cannot run,
+    rather than passing.
+- **Nothing was lost in the move.** Of the old README's 855 non-empty lines,
+  all but 15 appear in the new README or `docs/GUIDE.md` with only their links
+  rebased. The 15 are the three corrected statements, three cross-references,
+  two headings and the "Future work" section, which became "Status" and still
+  names the demonstration video.
+- The hero, light and dark, and the social preview were looked at: the plum
+  field, the graticule and the violet glow; the mark and the wordmark; the
+  promise in mono capitals; and the one lime figure, "9 of 9", beside "100% of
+  those decided · 11 planted in demo services". In the light variant, lime is
+  a filled block with plum text.
+- No dependency changed. The reference image is not committed.
+
+**The run's notes:**
+- **The optional `culprit diagnose` capture was not added,** as S1's own
+  condition says: no command renders a recorded walk as text. Accepted.
+- **The diagrams stay plum in GitHub's light theme,** since Mermaid takes one
+  theme per diagram; LIMITS says so. Accepted.
+- **The phase auditor was not re-run after `eb8f53a`;** this review's checks
+  cover the fixes.
+- **C2 was pushed before `just lint`.** The run said so plainly; Phase 41's
+  gate makes a red `lint` unmergeable: the protection is the gate, not
+  discipline.
+
+**The criterion "every number in it is read from its source" is amended,** as
+the phase auditor proposed: every number the README states is held by a named
+check whose mutation is red, or listed in the run's report as audited by hand,
+with its source. Prose numbers cannot all be checked; the report lists which
+are held and which were audited.
+
+**Fixed in this review:** LIMITS's "The README's number is five planted
+faults" was out of date. It is rewritten to say what holds now, with no count
+in it to go stale.
+
+**The owner merged on 2026-11-19,** after the report asked him to look at the
+README in both themes. His remaining steps are GitHub settings: the social
+preview, and the description and topics, whose text the architecture session
+gave him in chat.
+
 ---
 
 ## Phase 41 — The gate
@@ -546,6 +612,74 @@ review's.**
 **After merge (owner):** require `gate` in the ruleset, strict, with no
 bypass actors. Check that a red throwaway pull request cannot merge, then
 close it.
+
+### Brief (2026-11-19)
+
+**What the workflow holds today** (`ci-cd.yml` on `cdc5032`, and three green
+runs):
+- The graph: `lint` → `typecheck` → `test` and `migration-round-trip`; `lint`
+  → `cli` → `self-check`, `kind-capture`, `fault-library` (two shards) and,
+  with `test`, `build`; `lint` → `e2e` (two narrations) → `narration-parity`;
+  `deploy` only on a manual dispatch.
+- **The critical path is `lint` → `cli` → `fault-library (2)`:** 22.0, 23.4
+  and 24.2 minutes in runs 44383181239, 44386033657 and 44390448565. `cli`
+  takes 6.1–8.2 minutes, shard 1 11.8–12.2, shard 2 15.5–16.4, and `e2e`
+  9.0–11.1.
+- **The fault library uses nothing `cli` produces:** its job checks out, sets
+  up Go, and runs the library, which builds the binary itself.
+- **No job has `timeout-minutes`** except `e2e` (75) and `narration-parity`
+  (5). There is no `concurrency:` block.
+- **Shards are assigned by a rule over the library** (`shardOf`: the inventory
+  environments' cases in shard 2), held by
+  `TestTheFaultLibraryShardsCoverEveryCaseOnce`; `faultLibraryShards` is a
+  constant beside the workflow's matrix.
+
+**Decided now:**
+1. **The gate's decision is code.** `scripts/ci_gate.py`, standard library
+   only, reads `toJSON(needs)` and fails unless every needed job's result is
+   `success`, printing each job and its result.
+   `scripts/tests/test_ci_gate.py` holds it on success, failure, skipped and
+   cancelled, each a mutation shown red.
+2. **The `gate` job runs `if: always()`.** On GitHub a skipped required check
+   counts as passed, so a gate skipped because `lint` failed would let the
+   pull request merge. Run always, it fails on the skips instead.
+3. **What the gate needs is held structurally.** A test parses `ci-cd.yml` and
+   requires `gate`'s `needs` to be every job but `gate` and `deploy`. `deploy`
+   is named, with its reason: it runs only on a manual dispatch, after `build`
+   and `e2e`. A job added later and left out of the gate fails that test. The
+   same test requires `timeout-minutes` on every job, and that `concurrency:`
+   cancels superseded runs on pull requests only, never a push to `main`.
+4. **The fault library needs `lint` only.** The shards start when `cli` does.
+5. **Shards: as many as the target needs, four to start.** They are balanced
+   from per-case times read from CI's logs (`--- PASS` lines), by a rule over
+   the library or a field declared in `expected.json`, never a list of names.
+   The shard test also requires the workflow's matrix to be exactly 1 to
+   `faultLibraryShards`. Each shard keeps the results check.
+6. **Timeouts:** each job's is twice its slowest run in the last ten green
+   runs, rounded up to 5 minutes, and at least 10. The library's own `go test
+   -timeout` stays.
+7. **Docker layer caching only if two runs show the gain.** Any action it adds
+   is pinned to a commit SHA, ahead of D7.
+8. **D4's "the database boundary as its own job" is dropped:** `test` takes
+   about 3 minutes and is not on the critical path.
+9. **Measured.** The report gives the table before (the three runs above) and
+   after (at least two runs): the wall time, the critical path and each job's
+   time. If `e2e` (9–11 minutes) becomes the critical path and the 12-minute
+   target is missed, report what bounds it; nothing in `e2e` is removed for
+   time.
+10. **Every red job in the run's CI is attributed** in the report (D6),
+    including any won on a rerun.
+
+**Do NOT:**
+- add a path filter, a retry, `continue-on-error` or a merge queue;
+- remove, skip or loosen any test, check or precondition for speed (D5);
+- change what any job checks; only where and when it runs;
+- touch the ruleset: that is the owner's step after merge.
+
+**After merge (owner), with the steps given at the review:** require `gate` in
+the ruleset, with branches up to date and no bypass actors; then open a
+throwaway pull request with a deliberately failing test, see that it cannot
+merge, and close it.
 
 ---
 
