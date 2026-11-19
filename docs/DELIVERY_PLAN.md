@@ -869,6 +869,83 @@ own commit after the review's.**
 repository to Software Heritage; turn on private vulnerability reporting; turn
 on secret scanning with push protection.
 
+### Review, 2026-11-19 — merged as `bb92e48` (PR #53)
+
+**Phase 42 is signed off.**
+
+**CI.** Read by id from GitHub's API:
+- 44534379764 on `dc6e835`, 44543993249 on `3aeeaf4` and 44546655296 on the
+  report, `06af385`: success on every job, `gate` included. The pull request's
+  CodeQL check failed on `dc6e835` (Q41, below) and passed on `3aeeaf4` and
+  `06af385`: no new alert in the code it changed.
+- The pull request was merged after the report's run, with `gate` required:
+  the ruleset now lists `gate`, strict, with no bypass, and a throwaway pull
+  request with a failing test (#54) read BLOCKED.
+- `main`'s push run 44563572561 on `bb92e48`: success on every job, `gate` and
+  `build / publish` included (`deploy` skipped: deploy is paused).
+- Step 0 attributed the red `e2e (stub)` of push run 44522173729: `apt-get`,
+  inside `playwright install --with-deps`, could not reach Ubuntu's archive
+  (connection timeouts to two mirrors); no test ran. Rerun green. Ambient, not
+  the code (D6).
+
+**Verified on disk,** on `bb92e48`, in the architecture session's workspace:
+- `49fa66c`, the headers: 668 files, 1,982 insertions and no deletion; every
+  inserted line is an SPDX tag or the blank after it; no JSON file and nothing
+  under any `testdata/` touched.
+- `reuse lint` (6.3.0, as pinned) compliant, and `check_licensing_map.py`: 942
+  files, seven rows of `LICENSING.md`, agree. `cffconvert` 2.0.0: valid. The
+  workflow, gate, map and README tests: 81 passed.
+- **Two mutations of its own, each shown red and then restored:** an unheaded
+  new file under `worker/` ("REUSE says nothing, LICENSING.md says
+  AGPL-3.0-only"); a file under `extractors/python/` headed AGPL ("REUSE says
+  AGPL-3.0-only, LICENSING.md says Apache-2.0").
+- C3: every `go test -timeout` in the workflow is at most half its job's (10,
+  5 and 17 minutes; the agent's 15 in its recipe).
+- The CLA's Option Five is the Harmony template's own: the contribution may be
+  licensed under any licence, including commercial or proprietary ones
+  (harmonyagreements.org, the combined template, section 2.3).
+
+**Q41, ruled during the run** (three code-scanning alerts, open on `main`
+since 2026-11-04, surfaced when the headers put a line into every file):
+- **#3** (`scripts/bootstrap_env.py`, the quickstart's admin password printed)
+  was fixed, not dismissed: the password was already in `infra/.env.prod`
+  (mode 0600), the quickstart already shows it at the end locally, and the
+  printed line was filtered out under CI. The script now says where it is; the
+  filter is gone; a test fails if anything generated is printed.
+- **#2** (`api/scripts/apply_model.py`, a new component's API key printed
+  once) is the owner's to dismiss as "won't fix": the key exists only as a
+  hash, and this is the one way to hand it over, as the HTTP API does.
+- **#4** (`api/app/ingest_gateway/auth.py`, SHA-256 of API keys) is the
+  owner's to dismiss as a false positive: the keys are 256 random bits
+  (`secrets.token_urlsafe(32)`), not passwords; operator passwords use argon2.
+- **The dismissals in GitHub went to #3 and #4,** not #2 and #4. #3 is fixed
+  in the code, so the owner reopens it and the next analysis on `main` closes
+  it as fixed; #2 is dismissed as "won't fix" if it is not already. Phase 43's
+  step 0 reads the alerts and reports their states.
+
+**The run's decisions: accepted.**
+- Headers on every file that holds a comment, including the justfile, ignore
+  files and the systemd unit; `REUSE.toml` by file type outside the test data
+  and by directory inside it; shebangs and doctypes kept first.
+- `check_licensing_map.py` reading `reuse lint --json` from a pipe without
+  `pipefail`: safe, since the script fails on a non-compliant report and on
+  empty or broken input.
+- LICENSING.md's table now names an identifier in every row, with `deploy/`
+  and the fixtures' manifests; no licence changed.
+- The CLA linked, not copied, with its media licences, governing law and
+  signing left open for the lawyer; outside code closed until then.
+- C3 extended to `kind-capture` (5 minutes, within its job's 10), by the same
+  rule.
+
+**Corrected in this review:** `AUTHORSHIP.md` said every change reaches `main`
+through a pull request. 26 commits were pushed to `main` directly, the last on
+2026-11-05; every change since has come through a pull request, and since
+2026-11-19 the ruleset requires it. The file now says so, with the command
+that counts them.
+
+**Not re-run:** the phase auditor after `0716dee`, and both auditors after
+Q41's fix; this review's checks cover them.
+
 ---
 
 ## Phase 43 — Authenticated
@@ -881,6 +958,77 @@ runs on, added to the account as a signing key.
 - an attestation verifies on `main`'s push run;
 - every commit on the branch is Verified;
 - no job gains a permission beyond the two attestation permissions.
+
+### Brief (2026-11-19)
+
+**What the workflows hold today** (`.github/workflows/` on `bb92e48`):
+- Three workflows: `ci-cd.yml`, `images.yml` (called by it) and
+  `cli-release.yml` (on a `v*` tag, or by hand).
+- **No `uses:` is pinned to a commit.** Sixteen actions by tag or branch:
+  `actions/checkout`, `setup-go`, `setup-node`, `upload-artifact`,
+  `download-artifact`, `astral-sh/setup-uv`, `helm/kind-action`, the three
+  `docker/*`, `aquasecurity/trivy-action`,
+  `github/codeql-action/upload-sarif`, `softprops/action-gh-release`,
+  `pypa/gh-action-pypi-publish@release/v1` (a branch) and the two `appleboy/*`
+  that `deploy` uses.
+- There is no `.github/dependabot.yml`.
+- **What is published:** `images.yml`'s `publish` job, on a push to `main`,
+  retags the five scanned images and pushes them to `ghcr.io` with `docker
+  push`, holding `packages: write`. No release has been cut, so
+  `cli-release.yml` has never published a binary.
+- Commits are not signed.
+
+**Decided now:**
+1. **The signing key is made in step 0, on the owner's machine, by Claude
+   Code.** An ed25519 key at `~/.ssh/culprit_signing`, refusing to overwrite
+   one that exists, with no passphrase, so that commits can be signed
+   unattended. It is for signing only, and is never added as an authentication
+   key. Git is configured for this repository alone (`git config --local`):
+   `gpg.format ssh`, `user.signingkey` the key, `commit.gpgsign` and
+   `tag.gpgsign` on, and an allowed-signers file so that `git log
+   --show-signature` verifies locally. Claude Code prints the public key and
+   waits while the owner adds it on GitHub as a **signing** key. LIMITS says
+   what a passphrase-less key on the laptop means.
+2. **Every commit on the branch is Verified,** the review's commit included:
+   GitHub's API (`commits/<sha>`, `verification.verified`) for each, in the
+   report.
+3. **Every external action is pinned to a full commit SHA,** with the version
+   as a comment (`@<40 hex> # v4.2.2`), resolved from the tag the workflow
+   uses today; no version changes in this phase. `pypa/gh-action-pypi-publish`
+   is pinned to the commit its `release/v1` names. A local reusable workflow
+   (`./`) is not an action. `test_ci_workflow.py` holds it over all three
+   workflows: a tag or a branch in any `uses:` turns it red.
+4. **Dependabot keeps the pins current:** `.github/dependabot.yml`, the
+   `github-actions` ecosystem, weekly, every update grouped into one pull
+   request, which must pass `gate` like any other. No other ecosystem's
+   version updates in this phase.
+5. **Attestations on what `main` publishes.** In `publish`, after each push,
+   `actions/attest-build-provenance` (pinned) attests the image by its pushed
+   digest, with `push-to-registry`, and `gh attestation verify` checks it in
+   the same job; a failed verify fails the job. An SBOM of each image, written
+   by the Trivy the job already has, is attested with `actions/attest-sbom`.
+   `cli-release.yml` attests the binaries it builds, and verifies them; a run
+   started by hand on the branch shows it works.
+6. **Permissions:** only the jobs that attest gain `id-token: write` and
+   `attestations: write`. `test_ci_workflow.py` holds every job's permissions
+   to a declared table, so any other widening turns it red.
+7. **LIMITS:** the attestations are in Sigstore's public log, since the
+   repository is public, so the private images' names and digests are public
+   there; a passphrase-less signing key; attestations exist only from this
+   phase on.
+
+**Do NOT:**
+- add the key as an authentication key, or give it a passphrase the run would
+  need typed;
+- change any action's version while pinning it;
+- publish, release or deploy anything: the attestation is proved on `main`'s
+  push run after merge, and on the branch only through `cli-release.yml`
+  started by hand;
+- touch the ruleset.
+
+**After merge (owner), with the steps given at the review:** require signed
+commits in the ruleset, and allow only merge commits; turn on Dependabot
+security updates. Then the delivery plan is complete.
 
 ---
 
