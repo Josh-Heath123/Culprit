@@ -479,8 +479,23 @@ def check_pins(text: str, name: str) -> list[str]:
     return problems
 
 
+def workflow_files() -> list[Path]:
+    return sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")])
+
+
 def workflow_texts() -> dict[str, str]:
-    return {p.name: p.read_text(encoding="utf-8") for p in sorted(WORKFLOWS.glob("*.yml"))}
+    return {p.name: p.read_text(encoding="utf-8") for p in workflow_files()}
+
+
+def parsed_uses(workflow: dict) -> list[str]:
+    """Every `uses:` value GitHub would run, from the parsed workflow: a
+    job's (a reusable workflow) and each step's, in whatever YAML style."""
+    found = []
+    for job in workflow.get("jobs", {}).values():
+        if "uses" in job:
+            found.append(str(job["uses"]))
+        found += [str(step["uses"]) for step in job.get("steps", []) if "uses" in step]
+    return found
 
 
 def test_every_action_is_pinned_to_a_commit():
@@ -489,7 +504,31 @@ def test_every_action_is_pinned_to_a_commit():
     read = sum(len(USES_LINE.findall(t)) for t in texts.values())
     assert read > 40, f"the check reads {read} uses: lines: too few"
     problems = [p for name, text in texts.items() for p in check_pins(text, name)]
+    for name, text in texts.items():
+        problems += check_parsed_pins(yaml.safe_load(text), text, name)
     assert problems == []
+
+
+def check_parsed_pins(workflow: dict, text: str, name: str) -> list[str]:
+    """What the line reading misses: a `uses:` in flow style
+    (`- {uses: x@v4}`) runs all the same."""
+    problems = []
+    values = parsed_uses(workflow)
+    for target in values:
+        if not target.startswith("./") and not PINNED_ACTION.fullmatch(target):
+            problems.append(f"{name}: `{target}` is not pinned to a full commit SHA")
+    lines = len(USES_LINE.findall(text))
+    if lines != len(values):
+        problems.append(f"{name}: {len(values)} uses: values but {lines} uses: lines (flow style?)")
+    return problems
+
+
+def test_a_flow_style_uses_is_named():
+    text = "jobs:\n  a:\n    steps:\n      - { uses: actions/checkout@v4 }\n"
+    assert check_parsed_pins(yaml.safe_load(text), text, "w.yml") == [
+        "w.yml: `actions/checkout@v4` is not pinned to a full commit SHA",
+        "w.yml: 1 uses: values but 0 uses: lines (flow style?)",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -591,6 +630,10 @@ def check_permissions(name: str, workflow: dict, declared: dict) -> list[str]:
     return problems
 
 
+def test_every_workflow_declares_its_permissions():
+    assert sorted(p.name for p in workflow_files()) == sorted(PERMISSIONS)
+
+
 @pytest.mark.parametrize("name", sorted(PERMISSIONS))
 def test_every_job_holds_its_declared_permissions(name):
     assert check_permissions(name, load(WORKFLOWS / name), PERMISSIONS[name]) == []
@@ -623,15 +666,25 @@ def test_a_widened_or_new_job_is_named(workflow):
 
 # Phase 43 (D7, decision 5): what is published is attested, then verified.
 
-#: Each attesting job, the attestation actions it runs, and how many
-#: `gh attestation verify` calls must follow them in a later step.
+#: Each attesting job, the attestation actions it runs, how many
+#: `gh attestation verify` calls must follow them in a later step, and the
+#: predicate types those calls must name (the SBOM's, by its own).
+SBOM_PREDICATE = "--predicate-type https://cyclonedx.org/bom"
 ATTESTING = {
-    ("images.yml", "publish"): (["actions/attest-build-provenance", "actions/attest-sbom"], 2),
-    ("cli-release.yml", "release"): (["actions/attest-build-provenance"], 1),
+    ("images.yml", "publish"): (
+        ["actions/attest-build-provenance", "actions/attest-sbom"], 2, [SBOM_PREDICATE]
+    ),
+    ("cli-release.yml", "release"): (["actions/attest-build-provenance"], 1, []),
 }
 
+#: What would let a failed verify pass: an alternative after it, or a step
+#: that continues on error.
+SOFTENED = re.compile(r"gh attestation verify[^\n]*(\|\||;\s*(true|:)\b)")
 
-def check_attests(job: dict, actions: list[str], verifies: int) -> list[str]:
+
+def check_attests(
+    job: dict, actions: list[str], verifies: int, predicates: list[str] = ()
+) -> list[str]:
     steps = job.get("steps", [])
     uses = [str(step.get("uses", "")).split("@")[0] for step in steps]
     problems = []
@@ -648,13 +701,66 @@ def check_attests(job: dict, actions: list[str], verifies: int) -> list[str]:
     )
     if verified < verifies:
         problems.append(f"{verified} gh attestation verify after the attestations, want {verifies}")
+    for step in steps:
+        run = str(step.get("run", ""))
+        if "gh attestation verify" not in run:
+            continue
+        if step.get("continue-on-error"):
+            problems.append("a verify step continues on error")
+        if SOFTENED.search(run):
+            problems.append("a verify can fail without failing the step")
+    runs = "\n".join(str(step.get("run", "")) for step in steps)
+    for predicate in predicates:
+        if "gh attestation verify" not in runs or predicate not in runs:
+            problems.append(f"no verify names `{predicate}`")
     return problems
 
 
 @pytest.mark.parametrize(("name", "job"), sorted(ATTESTING))
 def test_what_is_published_is_attested_and_verified(name, job):
-    actions, verifies = ATTESTING[(name, job)]
-    assert check_attests(load(WORKFLOWS / name)["jobs"][job], actions, verifies) == []
+    actions, verifies, predicates = ATTESTING[(name, job)]
+    assert check_attests(load(WORKFLOWS / name)["jobs"][job], actions, verifies, predicates) == []
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        'gh attestation verify "$image" --repo r || true',
+        'gh attestation verify "$image" --repo r || echo failed',
+        'gh attestation verify "$image" --repo r; true',
+    ],
+)
+def test_a_verify_that_cannot_fail_is_named(run):
+    job = {"steps": [{"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"}, {"run": run}]}
+    assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
+        "a verify can fail without failing the step"
+    ]
+
+
+def test_a_verify_step_that_continues_on_error_is_named():
+    job = {
+        "steps": [
+            {"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"},
+            {"run": "gh attestation verify x --repo r", "continue-on-error": True},
+        ]
+    }
+    assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
+        "a verify step continues on error"
+    ]
+
+
+def test_the_sbom_verify_is_named_by_its_predicate():
+    job = {
+        "steps": [
+            {"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"},
+            {"uses": f"actions/attest-sbom@{CHECKOUT_SHA}"},
+            {"run": "gh attestation verify a --repo r\ngh attestation verify a --repo r"},
+        ]
+    }
+    actions = ["actions/attest-build-provenance", "actions/attest-sbom"]
+    assert check_attests(job, actions, 2, [SBOM_PREDICATE]) == [
+        f"no verify names `{SBOM_PREDICATE}`"
+    ]
 
 
 def test_a_verify_before_the_attestation_is_named():
