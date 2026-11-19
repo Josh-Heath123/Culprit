@@ -3291,10 +3291,11 @@ added and left out of it. What that does not give you:
 - **Every job has a hard timeout,** twice its slowest run in the ten green
   runs before Phase 41, rounded up to five minutes, at least ten: `cli` 20,
   `e2e` 30, `fault-library` 35, `images.yml`'s build 15, every other job
-  10. In `cli` and `e2e`, the job's limit comes before an inner `go test
-  -timeout` (20 and 30 minutes): a hung test there ends as a killed job,
-  without the stack dump that names it. The fault library's 30-minute
-  `go test -timeout` stays inside its job's 35.
+  10. Every `go test` a job runs times out in at most half its job's limit
+  (Phase 42): `cli`'s 10, the agent's 15 in `e2e`, the fault library's 17,
+  `kind-capture`'s 5. A test that runs longer is stopped by Go, which
+  prints the stack that names it. Locally, `just fault-library` runs every
+  case at once and keeps 30.
 - **A newer push to a pull request cancels the run in progress.** The
   cancelled run's `gate` still runs, and fails; only the newest commit's
   checks decide the merge. A push to `main`, a tag or a hand-started run is

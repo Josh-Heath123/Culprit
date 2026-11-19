@@ -655,7 +655,9 @@ agent-e2e:
     # Phase 34 part 2: the investigation it verified, for `just e2e-verified`.
     export CULPRIT_E2E_VERIFIED_OUT="$(pwd)/cli/bin/agent-e2e-verified.txt"
     mkdir -p cli/bin && rm -f "$CULPRIT_E2E_VERIFIED_OUT"
-    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 30m
+    # Phase 42 (C3): 15 minutes, half e2e's job timeout, so Go's own timeout
+    # fires first and names a hung test; it takes about 2.5.
+    cd cli && CULPRIT_AGENT_E2E=1 go test -count=1 ./cmd/culprit -run TestTheAgentEndToEnd -v -timeout 15m
 
 # Phase 34 part 2: the investigation `just agent-e2e` verified through an
 # agent — a wrong fix, then the right one — on its page in the browser.

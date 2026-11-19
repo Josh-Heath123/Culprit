@@ -238,11 +238,15 @@ jobs:
       # end to end; the demo's own database set up as the quickstart sets it
       # up, and read by capture. Phase 37 part 2: statements and plans on a
       # real Postgres 16 with pg_stat_statements, and on the demo's database.
+      #
+      # Phase 42 (C3): every `go test` in this job times out at 10 minutes or
+      # less (Go's default where none is given), half the job's 20, so Go's
+      # own timeout fires first and prints the stack that names a hung test.
       - name: The database boundary and index facts (real Postgres)
         run: |
           cd cli
           CULPRIT_DOCKER_TESTS=1 go test ./internal/capture/dbsession -run 'TestASessionIsReadOnlyAtTheServer|TestStatementsAndPlansAgainstARealPostgres|TestTheGenericPlanAgainstARealPostgres|TestNoTextIsKeptBeforePostgres16|TestAWindowCutShortIsUnavailable|TestTheBracketAgainstARealPostgres' -v
-          CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run 'TestIndexesDeclaredAndLive|TestTheDemoDatabase|TestTheDemoSchemaIsOnOneDatabase|TestTheStatementProbesOnTheDemoDatabase|TestStatementsPerRequestAgainstARealPostgres' -v -timeout 20m
+          CULPRIT_DOCKER_TESTS=1 go test ./cmd/culprit -run 'TestIndexesDeclaredAndLive|TestTheDemoDatabase|TestTheDemoSchemaIsOnOneDatabase|TestTheStatementProbesOnTheDemoDatabase|TestStatementsPerRequestAgainstARealPostgres' -v -timeout 10m
 
       # Every released platform, built here rather than only at tag time,
       # so a change that breaks the darwin/arm64 build is caught on the
@@ -486,8 +490,9 @@ jobs:
         run: |
           kubectl apply -f cli/testdata/kind/fixture.yaml
           kubectl -n culprit-capture rollout status deployment/orders-api --timeout=180s
+      # Phase 42 (C3): 5 minutes, half the job's 10 (Go's default is 10).
       - name: Capture it
-        run: cd cli && CULPRIT_KIND_TESTS=1 CULPRIT_KIND_CONTEXT=kind-culprit-capture go test ./internal/capture -run TestKubernetesCaptureAgainstKind -v
+        run: cd cli && CULPRIT_KIND_TESTS=1 CULPRIT_KIND_CONTEXT=kind-culprit-capture go test ./internal/capture -run TestKubernetesCaptureAgainstKind -v -timeout 5m
 
   # Phase 32's fault library: every fault the demo services can be given
   # (demo-services/faults/), injected one at a time and walked by `culprit
@@ -506,7 +511,10 @@ jobs:
   # Phase 41: four shards, balanced from how long each case took in CI
   # (expected.json's seconds), and after lint, not cli: the job checks out,
   # sets up Go and builds what it runs itself, using nothing cli produces.
-  # The 30-minute `go test -timeout` stays inside the job's.
+  # Phase 42 (C3): its `go test -timeout` is 17 minutes, under half the
+  # job's 35, so Go's own timeout fires first and prints the stack that
+  # names a hung case. A shard takes 7 to 8; `just fault-library`, which
+  # runs every case in one go, keeps 30.
   fault-library:
     needs: lint
     runs-on: ubuntu-latest
@@ -527,7 +535,7 @@ jobs:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
       - name: Walk this shard's faults
-        run: cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_SHARD=${{ matrix.shard }} CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 30m
+        run: cd cli && CULPRIT_FAULT_LIBRARY=1 CULPRIT_FAULT_LIBRARY_SHARD=${{ matrix.shard }} CULPRIT_FAULT_LIBRARY_RESULTS="$(pwd)/testdata/faultlib/results.json" go test -count=1 ./cmd/culprit -run TestTheFaultLibrary -v -timeout 17m
       # Phase 34 part 2: the README's number is rendered from the committed
       # results (just accuracy-readme). This run must reproduce them exactly,
       # or the number describes a library that no longer behaves that way.

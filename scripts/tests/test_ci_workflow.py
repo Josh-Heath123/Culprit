@@ -18,8 +18,13 @@ D1), so what it needs is what a merge is held to. This parses
 - The fault library needs `lint` alone (decision 4).
 - Nothing lets a job's failure through, or skips one by the files a change
   touches (D5): no `continue-on-error`, no path filter.
+- Every `go test` a job runs, in a step or in a `just` recipe a step calls,
+  times out in at most half the job's `timeout-minutes` (Phase 42, C3), so
+  Go's own timeout fires first and prints the stack that names a hung test.
+  A `go test` without `-timeout` has Go's default, 10 minutes.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +50,18 @@ CANCEL = "${{ github.event_name == 'pull_request' }}"
 
 #: The least timeout-minutes a job may have (decision 6).
 FLOOR_MINUTES = 10
+
+JUSTFILE = ROOT / "justfile"
+
+#: `go test`'s own timeout when none is given.
+GO_DEFAULT_TIMEOUT_MINUTES = 10.0
+
+#: A `go test` command, to the end of its line or an unquoted &, ; or |
+#: (a -run pattern's | is inside quotes).
+GO_TEST = re.compile(r"""\bgo test\b(?:[^\n&;|'"]|'[^'\n]*'|"[^"\n]*")*""")
+GO_TIMEOUT = re.compile(r"-timeout[= ](\d+(?:\.\d+)?)(h|m|s)\b")
+JUST_CALL = re.compile(r"\bjust ([a-z_][a-z0-9_-]*)")
+RECIPE = re.compile(r"^@?([a-z_][a-z0-9_-]*)(?: [^:\n]*)?:(?!=)(.*)$")
 
 
 def load(path: Path) -> dict:
@@ -144,6 +161,78 @@ def check_no_way_around(path: Path) -> list[str]:
     return problems
 
 
+def recipes(justfile: str) -> dict[str, tuple[list[str], str]]:
+    """Each recipe in a justfile: the recipes it depends on, and its body."""
+    found: dict[str, tuple[list[str], str]] = {}
+    name, deps, body = None, [], []
+    # A line at column 0 that is not a recipe ends the one before it; the
+    # sentinel ends the last.
+    for line in [*justfile.splitlines(), "# end"]:
+        header = RECIPE.match(line)
+        if header and not line.startswith((" ", "\t")):
+            if name:
+                found[name] = (deps, "\n".join(body))
+            name, body = header.group(1), []
+            deps = [d.strip("@") for d in header.group(2).split("#")[0].split()]
+            deps = [d for d in deps if re.fullmatch(r"[a-z_][a-z0-9_-]*", d)]
+        elif name and (line.startswith((" ", "\t")) or not line.strip()):
+            body.append(line)
+        elif name:
+            found[name] = (deps, "\n".join(body))
+            name, deps, body = None, [], []
+    return found
+
+
+def go_tests(text: str, justfile: dict, seen: frozenset = frozenset()) -> list[str]:
+    """Every `go test` command in `text`, and in the recipes it calls."""
+    commands = [m.group(0).strip() for m in GO_TEST.finditer(text)]
+    for recipe in JUST_CALL.findall(text):
+        commands += recipe_go_tests(recipe, justfile, seen)
+    return commands
+
+
+def recipe_go_tests(recipe: str, justfile: dict, seen: frozenset) -> list[str]:
+    """Every `go test` a recipe runs: its dependencies first, then its body."""
+    if recipe in seen or recipe not in justfile:
+        return []
+    deps, body = justfile[recipe]
+    commands: list[str] = []
+    for dep in deps:
+        commands += recipe_go_tests(dep, justfile, seen | {recipe})
+    return commands + go_tests(body, justfile, seen | {recipe})
+
+
+def go_timeout_minutes(command: str) -> float:
+    match = GO_TIMEOUT.search(command)
+    if not match:
+        return GO_DEFAULT_TIMEOUT_MINUTES
+    value, unit = float(match.group(1)), match.group(2)
+    return value * {"h": 60, "m": 1, "s": 1 / 60}[unit]
+
+
+def check_go_timeouts(workflow: dict, justfile: dict) -> list[str]:
+    """Why a job's `go test` could outlast half the job, or []."""
+    problems = []
+    for name, job in workflow["jobs"].items():
+        minutes = job.get("timeout-minutes")
+        if not isinstance(minutes, int):
+            continue  # check_timeouts names it
+        text = "\n".join(str(step.get("run", "")) for step in job.get("steps", []))
+        for command in go_tests(text, justfile):
+            inner = go_timeout_minutes(command)
+            if inner > minutes / 2:
+                problems.append(
+                    f"{name}: `{command[:60]}` times out at {inner:g} minutes, "
+                    f"over half the job's {minutes}"
+                )
+    return problems
+
+
+@pytest.fixture(scope="module")
+def justfile() -> dict:
+    return recipes(JUSTFILE.read_text(encoding="utf-8"))
+
+
 @pytest.fixture(scope="module")
 def workflow() -> dict:
     return load(WORKFLOW)
@@ -159,6 +248,18 @@ def test_every_job_has_a_timeout(workflow):
 
 def test_only_a_pull_request_run_is_cancelled(workflow):
     assert check_concurrency(workflow) == []
+
+
+def test_every_go_test_times_out_before_its_job(workflow, justfile):
+    assert check_go_timeouts(workflow, justfile) == []
+    # The rule reads what it must: the jobs that run Go, and the recipe e2e
+    # calls for the agent's test.
+    seen = {
+        name
+        for name, job in workflow["jobs"].items()
+        if go_tests("\n".join(str(s.get("run", "")) for s in job.get("steps", [])), justfile)
+    }
+    assert {"cli", "kind-capture", "fault-library", "e2e"} <= seen, seen
 
 
 def test_the_fault_library_needs_lint_alone(workflow):
@@ -244,4 +345,32 @@ def test_a_way_around_is_named(tmp_path):
         "w.yml: pull_request has a path filter",
         "w.yml: a continues on error",
         "w.yml: a step of a continues on error",
+    ]
+
+
+def test_a_go_test_outlasting_half_its_job_is_named(workflow, justfile):
+    job = dict(workflow["jobs"]["fault-library"])
+    job["steps"] = [{"run": "cd cli && go test ./cmd/culprit -run X -timeout 30m"}]
+    assert check_go_timeouts({"jobs": {"fault-library": job}}, justfile) == [
+        "fault-library: `go test ./cmd/culprit -run X -timeout 30m` times out at 30 "
+        "minutes, over half the job's 35"
+    ]
+
+
+def test_a_go_test_with_no_timeout_has_gos_default(workflow, justfile):
+    job = {**workflow["jobs"]["kind-capture"], "steps": [{"run": "cd cli && go test ./..."}]}
+    assert check_go_timeouts({"jobs": {"kind-capture": job}}, justfile) == [
+        "kind-capture: `go test ./...` times out at 10 minutes, over half the job's 10"
+    ]
+
+
+def test_a_recipe_a_step_calls_is_read():
+    justfile = recipes(
+        "agent-e2e: build\n    cd cli && go test ./cmd/culprit -timeout 30m\n\n"
+        "build:\n    go test ./x -timeout 1h\n"
+    )
+    job = {"timeout-minutes": 30, "steps": [{"run": "just agent-e2e"}]}
+    assert check_go_timeouts({"jobs": {"e2e": job}}, justfile) == [
+        "e2e: `go test ./x -timeout 1h` times out at 60 minutes, over half the job's 30",
+        "e2e: `go test ./cmd/culprit -timeout 30m` times out at 30 minutes, over half the job's 30",
     ]
