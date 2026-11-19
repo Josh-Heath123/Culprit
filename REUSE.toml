@@ -5,13 +5,15 @@
 # that can hold a comment carries its own SPDX header. These annotations
 # cover the rest: data a test compares byte for byte, generated files,
 # images, lock files and Markdown, none of which is edited to hold a
-# header. LICENSING.md is the map in words; scripts/tests/test_reuse_map.py
-# holds it to what REUSE reports.
+# header. LICENSING.md is the map in words; scripts/check_licensing_map.py
+# (tested by scripts/tests/test_check_licensing_map.py) holds it to what
+# REUSE reports.
 #
-# They name file types, never a whole directory, so a new source file
-# without a header is not covered by anything here and `reuse lint` fails
-# on it. The one exception is the test data, where a header would change
-# the bytes a golden file or a line number compares.
+# Outside the test data they name file types, not directories, so a new
+# source file without a header is not covered by anything here and
+# `reuse lint` fails on it. The test data (cli/testdata/, api/tests/data/)
+# is annotated by directory, since a header there would change the bytes a
+# golden file or a line number compares.
 #
 # Where more than one annotation matches a file, the last one wins.
 

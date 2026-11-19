@@ -27,6 +27,7 @@ D1), so what it needs is what a merge is held to. This parses
   A `go test` without `-timeout` has Go's default, 10 minutes.
 """
 
+import math
 import re
 import sys
 from pathlib import Path
@@ -62,7 +63,12 @@ GO_DEFAULT_TIMEOUT_MINUTES = 10.0
 #: A `go test` command, to the end of its line or an unquoted &, ; or |
 #: (a -run pattern's | is inside quotes).
 GO_TEST = re.compile(r"""\bgo test\b(?:[^\n&;|'"]|'[^'\n]*'|"[^"\n]*")*""")
-GO_TIMEOUT = re.compile(r"-timeout[= ](\d+(?:\.\d+)?)(h|m|s)\b")
+#: `-timeout` (or `-test.timeout`) and its value, as Go reads it.
+GO_TIMEOUT = re.compile(r"-(?:test\.)?timeout[= ](\S+)")
+#: One part of a Go duration ("1h30m" is two).
+GO_DURATION_PART = re.compile(r"(\d+(?:\.\d+)?)(h|ms|us|µs|ns|m|s)")
+GO_DURATION_MINUTES = {"h": 60, "m": 1, "s": 1 / 60, "ms": 1 / 60_000,
+                       "us": 1 / 60_000_000, "µs": 1 / 60_000_000, "ns": 1 / 60_000_000_000}
 JUST_CALL = re.compile(r"\bjust ([a-z_][a-z0-9_-]*)")
 RECIPE = re.compile(r"^@?([a-z_][a-z0-9_-]*)(?: [^:\n]*)?:(?!=)(.*)$")
 
@@ -206,11 +212,19 @@ def recipe_go_tests(recipe: str, justfile: dict, seen: frozenset) -> list[str]:
 
 
 def go_timeout_minutes(command: str) -> float:
+    """The minutes after which Go stops `command`: its `-timeout`, read as a
+    whole Go duration ("1h30m", "30m0s"), or Go's default. `-timeout 0`
+    turns Go's timeout off, so it, and a value that is not a duration, are
+    read as never: over any job's half."""
     match = GO_TIMEOUT.search(command)
     if not match:
         return GO_DEFAULT_TIMEOUT_MINUTES
-    value, unit = float(match.group(1)), match.group(2)
-    return value * {"h": 60, "m": 1, "s": 1 / 60}[unit]
+    value = match.group(1).strip("'\"")
+    parts = GO_DURATION_PART.findall(value)
+    if not parts or "".join(n + u for n, u in parts) != value:
+        return math.inf
+    minutes = sum(float(n) * GO_DURATION_MINUTES[u] for n, u in parts)
+    return minutes if minutes > 0 else math.inf
 
 
 def check_go_timeouts(workflow: dict, justfile: dict) -> list[str]:
@@ -407,3 +421,31 @@ def test_the_lint_tools_are_pinned_alike_locally_and_in_ci(workflow, justfile):
         versions = set(ci[tool]) | set(local[tool])
         assert len(versions) == 1, f"{tool} is pinned to {sorted(versions)}"
         assert all(part.isdigit() for part in versions.pop().split(".")), tool
+
+
+@pytest.mark.parametrize(
+    ("flag", "minutes"),
+    [
+        ("-timeout 17m", 17),
+        ("-timeout=17m", 17),
+        ("-timeout 30m0s", 30),
+        ("-timeout 1h30m", 90),
+        ("-timeout 1m30s", 1.5),
+        ("-timeout 90s", 1.5),
+        ("-test.timeout 20m", 20),
+        ("", 10),
+        ("-timeout 0", math.inf),
+        ("-timeout 0s", math.inf),
+        ("-timeout forever", math.inf),
+    ],
+)
+def test_a_go_timeout_is_read_as_go_reads_it(flag, minutes):
+    assert go_timeout_minutes(f"go test ./cmd/culprit -run X {flag}".strip()) == minutes
+
+
+@pytest.mark.parametrize("flag", ["-timeout 0", "-timeout 30m0s", "-timeout 1h30m"])
+def test_a_timeout_go_reads_as_longer_is_named(workflow, justfile, flag):
+    job = dict(workflow["jobs"]["fault-library"])
+    job["steps"] = [{"run": f"cd cli && go test ./cmd/culprit -run X {flag}"}]
+    problems = check_go_timeouts({"jobs": {"fault-library": job}}, justfile)
+    assert len(problems) == 1 and "over half the job's 35" in problems[0], problems

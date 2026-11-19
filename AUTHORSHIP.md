@@ -20,10 +20,10 @@ them are shown, so they can be checked and brought up to date.
   that the owner merges after review ([`docs/HANDOFF.md`](docs/HANDOFF.md),
   the protocol at its top: the coding agent commits and opens the pull
   request; only the human merges). All 51 merged pull requests were merged by
-  `Josh-Heath123`: `gh pr list --state merged --json mergedBy`.
+  `Josh-Heath123`: `gh pr list --state merged -L 200 --json mergedBy`.
 - **Commits.** `main`'s 308 commits since the first, on 2026-08-02, are
   authored as `Josh-Heath123` (233) or Joshua Heath (75), both the owner:
-  `git log --format=%an main | sort | uniq -c`.
+  `git log --format=%an 3928f0a | sort | uniq -c`.
 
 ## How it is made
 
@@ -39,14 +39,14 @@ model made by Anthropic, working under the owner's direction in two places:
 The pointers:
 
 - **Commit trailers.** 109 of `main`'s 308 commits carry a `Co-Authored-By:
-  Claude` trailer: `git log --format='%(trailers:key=Co-Authored-By)' main`.
+  Claude` trailer: `git log --format='%(trailers:key=Co-Authored-By)' 3928f0a`.
   A commit without the trailer may still contain text Claude wrote; the
   trailer records that a commit was made with Claude, not the share of it.
 - **The briefs and reports.** Each phase's brief, written in the architecture
   session, and Claude Code's run report against it, are in the plans and in
   the history of `docs/HANDOFF.md` §5 (`git log -p docs/HANDOFF.md`).
 - **The pull requests** the owner merged, each with its run report:
-  `gh pr list --state merged`.
+  `gh pr list --state merged -L 200`.
 
 ## What the model's provider says about outputs
 
