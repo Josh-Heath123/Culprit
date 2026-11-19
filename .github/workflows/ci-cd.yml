@@ -14,6 +14,12 @@ name: CI/CD
 # the job rather than failing it against a VM that is not there.
 # Each job only starts if the one before it succeeded (`needs:`) — a
 # broken lint stops everything downstream, including any deploy.
+#
+# Phase 41 (docs/DELIVERY_PLAN.md, D1-D6): `gate`, at the end, is the one
+# check the ruleset requires. Every job has a timeout, twice its slowest
+# run in the last ten green runs, rounded up to 5 minutes, and at least 10.
+# scripts/tests/test_ci_workflow.py holds the gate's needs, the timeouts
+# and the concurrency below.
 on:
   push:
     branches: [main]
@@ -30,9 +36,18 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels that pull request's run in
+# progress: only its newest commit can merge. Every other event (a push to
+# main, a tag, a hand-started run) is its own group, so none is ever
+# cancelled or left pending behind another.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || format('ci-run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -61,6 +76,7 @@ jobs:
   typecheck:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,6 +173,7 @@ jobs:
   cli:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       CGO_ENABLED: "0"
       # Phase 35 part 2 (D8): narration off; the binary never reads it.
@@ -261,6 +278,7 @@ jobs:
   self-check:
     needs: cli
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       # Uploading a SARIF file needs this. It is what turns a finding
@@ -454,6 +472,7 @@ jobs:
   kind-capture:
     needs: cli
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -478,18 +497,24 @@ jobs:
   # field 15 of the phase says it runs on every push. Same as `just
   # fault-library` locally.
   #
-  # Phase 37 part 3: two shards, because the database fault (a statement
+  # Phase 37 part 3: shards, because the database fault (a statement
   # window per reading) took the job past fifteen minutes. Every case runs
   # in exactly one shard (cli/cmd/culprit/faultlib_shards_test.go proves it,
   # and that this matrix is 1..faultLibraryShards); each shard writes its
   # own cases' results and keeps the committed ones for the rest.
+  #
+  # Phase 41: four shards, balanced from how long each case took in CI
+  # (expected.json's seconds), and after lint, not cli: the job checks out,
+  # sets up Go and builds what it runs itself, using nothing cli produces.
+  # The 30-minute `go test -timeout` stays inside the job's.
   fault-library:
-    needs: cli
+    needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     # Phase 35 part 2 (D8): with narration off. The binary reads no provider
     # setting and links no model client (check_no_llm_imports covers cli/),
     # so this is complete output with LLM_PROVIDER=none by construction.
@@ -512,6 +537,7 @@ jobs:
   test:
     needs: typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # ubuntu-latest runners have Docker pre-installed and running, which
     # is all testcontainers-python needs to spin up real Postgres/Redis
     # for any integration test that uses it — no extra setup. (As of
@@ -577,6 +603,7 @@ jobs:
   migration-round-trip:
     needs: typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -609,7 +636,7 @@ jobs:
   e2e:
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -742,7 +769,7 @@ jobs:
   narration-parity:
     needs: e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -756,7 +783,8 @@ jobs:
     needs: [test, migration-round-trip, cli]
     # Build and Trivy-scan every image; publish only on a push to main or a
     # vX.Y.Z tag. The same workflow runs weekly on main and by hand,
-    # publishing nothing (images.yml).
+    # publishing nothing (images.yml). A job that calls a workflow cannot
+    # set timeout-minutes; images.yml's jobs carry theirs.
     uses: ./.github/workflows/images.yml
     permissions:
       contents: read
@@ -773,6 +801,9 @@ jobs:
     # By hand only, from main: never on a push (see the header).
     if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # No green run among the last ten (deploy is paused); it took 1.3
+    # minutes when it last ran, in August: the floor.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -805,3 +836,34 @@ jobs:
             cd ~/culprit
             chmod +x deploy.sh
             ./deploy.sh
+
+  # Phase 41 (D1): the one check the ruleset requires. It needs every job
+  # but deploy, which runs only on a hand-started run of main, after build
+  # and e2e, and is skipped on every pull request. It runs always: GitHub
+  # counts a skipped required check as passed, so a gate skipped because
+  # lint failed would let the pull request merge. Run always, it fails on
+  # the skip instead. The decision is scripts/ci_gate.py's, tested in
+  # scripts/tests/test_ci_gate.py; scripts/tests/test_ci_workflow.py fails
+  # if a job is added and left out of these needs.
+  gate:
+    if: always()
+    needs:
+      - lint
+      - typecheck
+      - cli
+      - self-check
+      - kind-capture
+      - fault-library
+      - test
+      - migration-round-trip
+      - e2e
+      - narration-parity
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every job this gate needs succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci_gate.py

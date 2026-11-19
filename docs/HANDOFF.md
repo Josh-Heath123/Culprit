@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **40, part 2 — the new identity: the repository** — `complete`, awaiting review. PR #50; CI green on `18bf5a2` (run 44386033657, every job and every PR check; no open alert). Report in §5; its first item is the README as GitHub renders it on the branch, for the owner to look at in the light and dark themes before merging. |
-| Previous phase | **40, part 1 — the new identity: the dashboard — merged as `624c6e3` (PR #49) and signed off 2026-11-18.** Runs 44340916627 on `1f3080a` and 44346373804 on the report, `b234e12`, green on every job, read from GitHub. C1 met over two runs. Three mutations shown red by the architecture session; the run's five decisions accepted, the third amended by C2. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
+| Current phase | **41 — the gate** — `complete`, awaiting review. PR #51; CI green on `143839f` (run 44503311197) and `b785cab` (run 44516832208): every job, `gate` included, every PR check; no open alert. Wall time 22.0–24.3 → 12.5–13.3 minutes; the 12-minute target missed, bound by `e2e (stub)`. Caching not tried (decision 7), for the architecture session. Report in §5. |
+| Previous phase | **40, part 2 — the new identity: the repository — merged as `cdc5032` (PR #50) and signed off 2026-11-19. Phase 40 is complete.** Runs 44386033657 on `18bf5a2` and 44390448565 on the report, `721edfe`, green on every job, read from GitHub. Four mutations shown red by the architecture session; the README criterion amended. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 2". |
 | Deploy | **Paused, 2026-11-05 — Malcolm's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-40-repository`, from `origin/main` = `624c6e3`; its first commit the review (`fbce521`), then C2 (`9a25806`). PR #50, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally; the reference image not committed. |
+| Branch | `phase-41-gate`, from `origin/main` = `cdc5032`; its first commit the review (`eb115a4`), then the work (`143839f`) and LIMITS (`b785cab`). PR #51, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally; the ruleset untouched. |
 | Blocking questions | None. |
 
 ---
@@ -124,7 +124,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 39, part 1 | The measurement | **complete** (PR #47, `6b0de5d`) | **Signed off 2026-11-18** (architecture session): the report's commit green on every job (run 44189651276), read from GitHub; the real-Postgres tests rerun, and two mutations shown red; the run's three decisions accepted. Recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. |
 | 39, part 2 | The walk and the fault | **complete** (PR #48, `33df658`) | **Signed off 2026-11-18** (architecture session): runs 44321940704, 44326796071 (the report) and 44327031951 (`main`'s push) green on every job, read from GitHub; Q38–Q40 ruled and carried out; the walk's and `verify`'s tests rerun and two mutations of the join shown red; the run's seven decisions accepted, the first amended by C1. Phase 39 is complete, and with it `PERFORMANCE_PLAN.md`. Recorded at the end of Phase 39 there. |
 | 40, part 1 | The new identity: the dashboard | **complete** (PR #49, `624c6e3`) | **Signed off 2026-11-18** (architecture session): runs 44340916627 and 44346373804 (the report) green on every job, read from GitHub; C1 met over two runs; three mutations shown red; the run's five decisions accepted, the third amended by C2 (the focus ring). Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
-| 40, part 2 | The new identity: the repository | **complete, awaiting review** (PR #50; CI green on `18bf5a2`, run 44386033657) | **Run 2026-11-18:** C2 built (ring `#8F63FF`, tested by token name and held violet); the hero, captures, walk diagram, README (298 lines), `docs/GUIDE.md` and `check_readme.py` under the eight decisions; both audits' findings fixed. Report in §5. **Brief (2026-11-18):** `docs/DELIVERY_PLAN.md` §3 (S1–S4) and Phase 40, "Part 2 — the repository", with "Part 2 — brief" beneath the review of part 1: C2, the focus ring, first, as its own commit (with the review copies of the screenshots removed); then the hero, the captures, the diagram, the README, `docs/GUIDE.md` and `scripts/check_readme.py`, under its eight decisions; its criteria and what not to do. Step 0: `main`'s push run 44375710199 on `624c6e3`. Branch `phase-40-repository` from `origin/main` = `624c6e3`; its first commit is the review (`../phase-40-1-review.patch`, message `../phase-40-1-review.txt`). Open a draft pull request and mark it ready when the run report is committed; the report links the README as GitHub renders it on the branch. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 40, part 2 | The new identity: the repository | **complete** (PR #50, `cdc5032`) | **Signed off 2026-11-19** (architecture session): runs 44386033657 and 44390448565 (the report) green on every job, read from GitHub; four mutations shown red; nothing lost in the move to `docs/GUIDE.md`; the README criterion amended; a stale LIMITS entry rewritten. Phase 40 is complete. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 2". |
+| 41 | The gate | **complete, awaiting review** (PR #51; CI green on `143839f` and `b785cab`) | **Run 2026-11-19:** `gate` (always, `scripts/ci_gate.py`) needing every job but `deploy`; `test_ci_workflow.py` holding its needs, every timeout and pull-request-only cancellation; the fault library after `lint` in four shards balanced from declared CI seconds; timeouts by the rule; fifteen mutations red. 22.0–24.3 → 12.5–13.3 minutes, bound by `e2e (stub)`; caching not tried. Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D1–D6) and Phase 41, with "Brief (2026-11-19)" at its end: the gate's decision as tested code, run always; its needs, every job's timeout and the pull-request concurrency held by a test over the workflow; the fault library after `lint`; shards balanced from CI's per-case times; caching only if measured; the table of runs before and after. Step 0: `main`'s push run 44498857049 on `cdc5032`. Branch `phase-41-gate` from `origin/main` = `cdc5032`; its first commit is the review (`../phase-40-2-review.patch`, message `../phase-40-2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -156,199 +157,161 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        40, part 2 — the new identity: the repository (with C2,
-              the focus ring, carried from part 1)
-Branch:       phase-40-repository, from origin/main = 624c6e3. fbce521 the
-              review; 9a25806 C2; 8b0d65b the hero; 870dad5 the captures;
-              b6d0328 the README, docs/GUIDE.md, the diagram,
-              check_readme.py; eb8f53a the audits' findings; 18bf5a2 the
-              README's screenshots retaken by e2e; then this report. PR #50.
-Run:          2026-11-18, /next. Step 0: main's push run 44375710199 on
-              624c6e3 read by id — success on every job, deploy skipped.
-              Local gates one at a time, in the foreground. The fault
-              library never run locally.
-Status:       COMPLETE pending review, and the owner's look at the README in
-              both themes. CI green on 18bf5a2 (run 44386033657, every job;
-              all 25 PR checks pass or skipping; no open code-scanning
-              alert). main has not moved (624c6e3), so that is the merge
-              result. Nothing blocking; no Q41.
+Phase:        41 — the gate
+Branch:       phase-41-gate, from origin/main = cdc5032. eb115a4 the review
+              (../phase-40-2-review.patch); 143839f the work; b785cab LIMITS
+              and the build timeout's source; then this report. PR #51.
+Run:          2026-11-19, /next. Step 0: main's push run 44498857049 on
+              cdc5032 read by id — success on every job, deploy skipped.
+              Local gates one at a time, in the foreground; just lint before
+              every push. The fault library never run locally.
+Status:       COMPLETE pending review. CI green on 143839f (44503311197) and
+              b785cab (44516832208): every job, gate included; 26 PR checks
+              pass and 2 skipping; no open code-scanning alert. main has not
+              moved (cdc5032), so that is the merge result. The 12-minute
+              target is MISSED by 0.5 and 1.3 minutes, bound by e2e (stub)
+              (decision 9, below). Nothing blocking; no Q41.
 
-FIRST FOR THE REVIEW — THE README AS GITHUB RENDERS IT
-  https://github.com/Josh-Heath123/Culprit/blob/phase-40-repository/README.md
-  Look at it in GitHub's light and dark themes (Settings, Appearance):
-  the hero swaps through <picture>; the walk diagram is plum in both
-  (LIMITS, "The README's checks hold what they can name"). The guide:
-  https://github.com/Josh-Heath123/Culprit/blob/phase-40-repository/docs/GUIDE.md
+BEFORE AND AFTER (wall = run created to last job done; minutes)
+  run           sha      wall  critical path                        lint  cli  fl shards            e2e none/stub  test
+  44383181239   b6d0328  22.0  lint > cli > fault-library (2)       0.2   6.1  12.1 15.5            10.1 11.1      3.0
+  44386033657   18bf5a2  23.4  lint > cli > fault-library (2)       0.4   6.5  12.2 16.4            10.3 10.7      2.9
+  44390448565   721edfe  24.3  lint > cli > fault-library (2)       0.2   8.2  11.7 15.8             9.0 10.0      3.1
+  ------------------------------------------------------------------------------------------------------------------
+  44503311197   143839f  12.5  lint > e2e (stub) > parity > gate    0.2   6.2  7.6 8.0 7.3 7.7       9.1 11.9      3.4
+  44516832208   b785cab  13.3  lint > e2e (stub) > parity > gate    0.2   8.1  8.3 8.1 7.5 7.7       9.5 12.7      3.0
+  Other jobs, after (both runs): typecheck 0.6, migration-round-trip
+  0.9-1.0, self-check 0.8-1.1, kind-capture 1.2-1.3, build 0.7-2.6 (frontend
+  slowest), narration-parity 0.1, gate 0.1. Before: the same within 0.3,
+  but self-check, kind-capture and build started after cli, at 6.5-8.5.
+  The wall time fell 9.5 to 11.8 minutes. The fault library now ends at
+  7.5-8.6 minutes, starting with cli at 0.2-0.3.
 
-C2 — THE FOCUS RING (9a25806, and eb8f53a)
-  --ring #8F63FF; the fill stays #7540F5. test_design_tokens.py measures
-  the ring against every surface, every token named *-tint (found by
-  name) and glass; RING_SURFACES gone; the anchors test pins the fill.
-  New, from the invariant audit: the ring must stay violet's hue (within
-  5 degrees), not a grey, and lighter than the fill. LIMITS: "The focus
-  ring is 3:1 only where controls sit" removed. check_frontend_tokens.py
-  counts a misplaced culprit or glass token in its own sentence
-  (summary(), tested). docs/screenshots/phase-40-review/ removed.
-  Mutations red: the ring back to #7540f5 (12 pairs: surface-2,
-  surface-3, every tint); a new --probe-tint #5a3a80 (1 pair); the ring
-  set to lime #d6fa4a (it passes every 3:1 pair; the hue test fails).
-  My slip: C2 was pushed without running lint; its run 44380261151 failed
-  lint on one 101-character line, fixed in b6d0328.
+DECISION 9 — WHAT BOUNDS IT
+  e2e (stub): Chromium for Playwright up to 1.9, the quickstart building
+  every image from the commit 4.1-4.3, the journeys 2.6, the agent end to
+  end 2.5, kind 0.7-0.8, the recipes 0.5. Then narration-parity and gate
+  (0.2 together). Nothing in e2e is removed for time. The remaining means
+  is the image build (decision 7, below).
 
-THE EIGHT DECISIONS, AS BUILT
-  1 The review copies removed in C2's commit.
-  2 accuracy_readme.py's figure() gives the README block's headline and
-    the hero's figure; render_hero.mjs records what it drew in
-    docs/brand/hero.json; test_accuracy_readme.py fails when it is not
-    figure() of results.json. Red: hero.json verified 9 -> 8; a verified
-    fault in results.json flipped to not_resolved (the README test and
-    the hero test both).
-  3 just readme-hero: docs/brand/hero.html rendered by frontend's
-    Playwright 1.64.1 with the fontsource Inter 700 and JetBrains Mono
-    500: hero-dark.png, hero-light.png (3200x800), social-preview.png
-    (1280x640). Every colour is an index.css token read at render time;
-    hero.html names none. Light: cream, plum text, violet accents, lime
-    only as a filled block with plum. The fonts are checked loaded
-    before each screenshot. No dependency.
-  4 check_readme.py (standard library) in `just lint` and CI's lint job:
-    relative links and images in README.md and docs/*.md resolve
-    (fenced and inline code skipped); every probe count in README.md and
-    docs/GUIDE.md is the catalogue's; the README is under 300 lines; every
-    Mermaid colour is an index.css token. The self-check job writes
-    `culprit check --unverifiable`'s output to self-check.txt and runs
-    `check_readme.py --self-check` on it: facts, subjects, gaps and the
-    unverifiable surface, wherever README.md or the guide quotes them,
-    across line breaks. Output holding none of them exits 2. Red on the
-    tree: a broken image link; "17 read-only probes"; #ccff00 in the
-    diagram; a 300-line README; self-check output of 1754 facts and 536
-    unverifiable; the README's "8 gaps" against 9.
-    Before it existed it found three stale statements in the old README:
-    "Thirteen read-only probes" and "all seventeen probes" (the
-    catalogue holds 18), and "the 368 subjects only one source
-    describes" (the self-check gives 535). All three corrected.
-  5 The walk as Mermaid, themed by an init block from I2's tokens, the
-    root lime with plum text by a classDef: errors; latency; N+1 where
-    isolated and the entry over budget; the database pass. A statement
-    over its budget roots it (a missing index when the four planes
-    agree); with none, an entry over its own budget roots at its own
-    time; otherwise partial. Checked against isolate.go's Diagnose and
-    database.go (the phase audit corrected my first labels). The guide's
-    two older diagrams take the same init block.
-  6 The README: 298 lines, S3's order — the hero and a line of links;
-    the problem; see it work (captures and screenshots, captions as they
-    were); what it does, eight rows, budgets among them; how it works
-    (planes, the walk, why no model decides); engineering highlights,
-    each naming its file or test; the accuracy block; quickstart; status
-    from the plans; the documentation map; technology; author and
-    licence. docs/GUIDE.md holds what the README no longer does, moved
-    as it was: key features, how it works, the control plane,
-    narration, the technology table, the decisions, installation, the
-    tutorial, culprit mcp, testing, layout, limits. Changed in the move,
-    and only these: relative links rebased to docs/; three
-    cross-references now link to the README; the three corrected
-    statements above, with the probe row's list of what the probes read
-    completed to match the 18. A script compared every line of the old
-    README with the new README and the guide: nothing else lacks a home.
-    References into the moved text (LIMITS, PERMISSIONS, PROBES,
-    UPGRADING, faultlib_test.go's comments) point at the guide.
-  7 The captures: render_captures.py's one constant block reads each
-    colour from index.css by role (a well; fg, fg-subtle, brand; fail,
-    degrades, inconclusive, refused, pass; inconclusive and refused were
-    one yellow before), JetBrains Mono first; a test holds each to a
-    token. Regenerated by `just readme-captures`: apart from colour and
-    font, only the probe capture's ephemeral port changed. The optional
-    `culprit diagnose` capture is not added: no command renders a
-    recorded walk as text, so it could not come from a real record (S1).
-    The dashboard screenshots: the README's four copied as they are from
-    run 44383181239's e2e-screenshots-none (b6d0328, after C2); three
-    differ (the run's times and ids), one is byte-identical.
-  8 This report links the README on the branch (above).
+THE TEN DECISIONS, AS BUILT
+  1 scripts/ci_gate.py (standard library) reads NEEDS (toJSON(needs)),
+    prints each job and its result, and exits 0 only when every result is
+    success; failure, skipped, cancelled, any other string fail (1); a
+    context naming no job, a job with no result, or bad JSON cannot pass
+    (2). scripts/tests/test_ci_gate.py: 14 cases. In CI the gate printed
+    all eleven jobs "success" and "gate: every job succeeded". build's
+    result is success on a pull request with publish skipped inside it.
+  2 gate: if: always(), timeout 10, checkout then the script.
+  3 scripts/tests/test_ci_workflow.py (PyYAML, as test_self_check_env):
+    gate needs every job but gate and deploy (NOT_GATED names deploy's
+    reason, and the test requires deploy's if to keep workflow_dispatch);
+    gate's always() and its step; every job's timeout-minutes, at least 10
+    — build calls images.yml and cannot set one, so images.yml's jobs are
+    read; the workflow's concurrency: one group per pull request,
+    cancel-in-progress only on pull_request, and one group per run
+    (github.run_id) for every other event, so a push to main is never
+    cancelled nor left pending behind another; no job sets its own; the
+    fault library needs lint alone; no path filter or continue-on-error in
+    either workflow. 17 cases.
+  4 fault-library needs lint. Its shards and cli start together (0.2-0.3).
+  5 Four shards. expected.json declares each case's seconds (the slowest
+    --- PASS time across the six shard logs of the three runs before,
+    rounded up; the phase audit re-derived all 19); the two MCP loops
+    declare theirs beside them in Go. shardOf fills shards longest first,
+    each case to the shard holding fewest seconds (lowest on a tie;
+    stable). Declared: 383, 385, 389, 388; ran 7.3-8.3 minutes. The shard
+    test now also requires every case to declare seconds > 0 and no shard
+    over 480 (faultLibraryShardSeconds: the 12-minute target, less about
+    two minutes of lint, checkout and the stack's start, less a fifth).
+    It still requires the matrix to be exactly 1..faultLibraryShards, and
+    each shard keeps the results diff.
+  6 Timeouts, twice the slowest of the ten green runs before this phase
+    (44321940704..44390448565), rounded up to 5, at least 10: cli 20
+    (8.2), fault-library 35 (16.5; its go test -timeout 30m stays), e2e 30
+    (13.2; was 75), narration-parity 10 (was 5), images.yml build 15
+    (frontend 5.3 in 44321940704), publish 10, lint, typecheck, test,
+    migration-round-trip, self-check, kind-capture 10; deploy 10 (no green
+    run in the ten; 1.3 in August); gate 10. The phase audit measured from
+    the ten runs after step 0's run joined them and found build's 5.3
+    gone (frontend 2.8, so 10): the run is now named in the comment
+    (b785cab). The rule was applied to the window before the phase.
+  7 Docker layer caching: NOT TRIED. The images the critical path builds
+    are the quickstart's (4.1-4.3 minutes in e2e), built by `docker compose
+    up --build` inside `just quickstart`. Caching them in CI means a
+    cache_from/cache_to layer for those compose files that only CI reads,
+    and a new action to hand compose the Actions cache token. That changes
+    how the quickstart builds, which is more than "where and when a job
+    runs", and what it would buy is at most the build's share of 4 minutes.
+    For the architecture session: rule whether to try it, and where. No
+    action was added.
+  8 The database boundary stays in cli (not on the critical path).
+  9 The table above; e2e (stub) bounds it, as said.
+  10 Red jobs: none. Both runs green on attempt 1; no rerun. (Locally, the
+    shard test was red against the old two-shard matrix before the
+    workflow was changed: the check working, not CI.)
 
-EVERY NUMBER IN THE README (S4: held, or audited by hand)
-  Held by a check: the accuracy block (accuracy_readme --check); the
-  hero's figure (test_accuracy_readme); "18 read-only probes"
-  (check_readme); "1,753 facts across 631 subjects", "9 gaps listed"
-  (--self-check, in CI); the diagram's colours and the length.
-  Audited by hand, true: the demo's five components, three services and
-  two databases, and "five divergences" in check.svg's alt text
-  (cli/testdata/demo, the SVG); four confidence checks; Go 1.27, Node
-  22, Python 3.12, PostgreSQL 16, React 18; the phase numbers from the
-  plans; D1-D8. Corrected after the phase audit: "only two packages may
-  link net/http" (the allowlist names three: probe, guardedhttp,
-  transport). Not verified by count: "two lint-imports contracts" around
-  narration (the determinism rule's wording; worker has six in all).
-  Removed rather than left unheld: "six read-only tools", "fourteen
-  roles" (both still in the guide, as they were).
-
-CRITERIA
-  README under 300 lines, S3's order, every number read
-    from its source on the merge result               PASS (298, gated);
-                                                      numbers as above
-  check_readme.py passes, and its mutations are red   PASS
-  The hero's figure equals the accuracy block's       PASS (test)
-  Every capture regenerated, none edited by hand      PASS
-  The owner has looked at the rendered README in
-    light and dark                                    NOT RUN: the
-                                                      owner's, before
-                                                      merge (link above)
-  Do NOT: no badge, no emoji, no dependency, nothing drawn or typed by
-    hand, no tutorial text without a home, the reference image not
-    committed                                         PASS
+MUTATIONS SHOWN RED (each applied to the real file, the test run, the file
+  restored; fifteen)
+  ci_gate: accepts skipped; accepts cancelled (result != "failure"); passes
+  an empty needs. Workflow: gate without e2e; gate on success(); lint's
+  timeout removed; images.yml publish's timeout removed; cancel-in-progress
+  true; one group per ref; fault-library needs cli; a paths-ignore filter;
+  continue-on-error on e2e. Shards: matrix [1, 2] ("runs shards [1,2],
+  want [1,2,3,4]"); latency without seconds ("declares 0 seconds"); three
+  shards with matrix [1,2,3] ("shard 1 holds 511 declared seconds, over
+  480"). The phase audit repeated these and more (ok = True, a new job
+  ungated, build dropped, matrix [1,2,4,3] and [1..5], missing-index at
+  900 seconds): all red.
 
 AUDITS
-  invariant-auditor (fbce521..b6d0328): CLEAN. No gate weaker: the ring
-    test wider, the restrictions unchanged, two accuracy tests added; the
-    self-check job's new step fails where it used to pass silently.
-    Risk 1 (nothing kept the unpinned ring violet) taken in eb8f53a.
-    Risk 2: the ring test composites brand-tint and culprit-tint over
-    the page while the text pairs use them raw; both are opaque, so the
-    numbers are the same. Left.
-  phase-auditor (fbce521..b6d0328): NOT COMPLETE on four points, all
-    fixed in eb8f53a: the README's wrapped "9 gaps / listed." was not
-    read (the checks now read across line breaks; red shown); the
-    diagram's database edges; the net/http sentence; two references
-    (PROBES, UPGRADING) into moved text; and the old "Limits" paragraph
-    now has a home. Its readability note on the hero ("9 of 9" above
-    "11 planted") taken: the subline says "100% of those decided". Not
-    re-run after the fixes. Its proposed rewording of the criterion is
-    for the architecture session: "every number the README states is
-    held by a named check whose mutation is red, or listed in the report
-    as audited by hand, with its source." Noted, older than this change:
-    the LIMITS heading "The README's number is five planted faults" is
-    stale.
+  invariant-auditor (cdc5032..143839f): CLEAN. Risks, not violations: (1)
+    cli's job timeout (20) equals its Docker step's go test -timeout 20m,
+    and e2e's (30) its agent-e2e go test -timeout 30m: a hang there is a
+    killed job without the stack dump. The gate still fails. Left, since
+    decision 6 sets the job's and leaves the inner ones; in LIMITS. (2)
+    gate runs ci_gate.py from the pull request's own tree, as every job
+    runs that tree's workflow; no new exposure. (3) The tree changed during
+    its audit: the phase auditor's mutations, run alongside.
+  phase-auditor (cdc5032..143839f): decisions 1-5 and 8 MET by execution;
+    6 NOT MET for one job (build's 15, above: the measurement window, now
+    named); 7, 9, 10 NOT RUN then (they needed these runs). Observations:
+    the Go test cache does not see ci-cd.yml (a cached local pass survives
+    a matrix edit; CI runs it under -count=1 in every shard): in LIMITS. A
+    superseded run's gate fails: noise in its own checks only. Not re-run
+    after b785cab (a comment and LIMITS).
 
-LOCAL GATES (Windows, one at a time, in the foreground, on b6d0328;
-  `just lint` again on 18bf5a2)
-  just lint (with check_readme), typecheck, lint-imports,
-  check-schema-drift, check-no-llm-imports, check-invariants,
-  check-scan-coverage, check-frontend-tokens, check_coupled_files:
-  clean. just test: api 1,877 (6 skipped), worker 93, mcp_server 21, 39,
-  node conformance. Frontend: vite build, node tests 19, oxlint (the
-  three only-export-components warnings, as on main). After eb8f53a:
-  the touched tests (183) and ruff. Not run locally: the fault library
+LOCAL GATES (Windows, one at a time, in the foreground, on 143839f's tree;
+  just lint again before b785cab)
+  just lint, typecheck, lint-imports (6 kept), check-schema-drift,
+  check-no-llm-imports, check-invariants, check-scan-coverage (328 files),
+  check-frontend-tokens, cli-lint, cli-test: clean. just test: api 1,913
+  passed (6 skipped; 31 of them new; 1,877 in Phase 40 part 2), worker 93,
+  mcp_server 21, 39, node conformance. Not run locally: the fault library
   (instructed), e2e.
 
-CI (PR #50)
-  44380261151 on 9a25806 (C2): lint red, one line over 100 characters
-    (my slip, above); every other job green.
-  44383181239 on b6d0328: success on every job (publish, deploy
-    skipped), both fault-library shards included. Its e2e artifact gave
-    the README's screenshots.
-  44386033657 on 18bf5a2: success on every job (publish, deploy
-    skipped); 25 PR checks pass or skipping, CodeQL included; the three
-    code-scanning queries (pr=50, refs/pull/50/merge, refs/pull/50/head)
-    empty. check_readme ran in lint ("links, length, probe counts,
-    diagram colours: true") and in self-check ("... self-check
-    figures: true", beside "No divergences. 1753 fact(s) compared across
-    631 subject(s)."). main not moved: the merge result.
-  This report's own commit runs on the pull request after it.
+CI (PR #51)
+  44503311197 on 143839f: success on every job (publish, deploy skipped),
+    gate included; 26 checks pass, 2 skipping (deploy, build / publish);
+    CodeQL included; the three code-scanning queries (pr=51,
+    refs/pull/51/merge, refs/pull/51/head) empty.
+  44516832208 on b785cab: the same.
+  main not moved: the merge result. This report's own commit runs after it.
+
+LIMITS
+  "The gate holds every job, and the shards hold what they declare":
+  declared seconds, not this run's; the hard timeouts and the two inner
+  go test timeouts they precede; a pull request's superseded run
+  cancelled; e2e the critical path; the Go test cache and ci-cd.yml; the
+  ruleset the owner's.
 
 NOT BUILT
-  No badge, emoji or dependency; no light theme for the diagrams (one
-  Mermaid theme per diagram); no diagnose capture (no real record to
-  render); the reference image not committed. Human steps: before
-  merge, look at the README in both themes; after merge, upload
-  social-preview.png and set the description and topics.
+  No path filter, retry, continue-on-error or merge queue; no test removed,
+  skipped or loosened; nothing a job checks changed; no caching (7); no new
+  action. The ruleset is untouched (last updated 2026-11-12).
+  Human steps, after merge: require gate in the ruleset, branches up to
+  date, no bypass actors; then a throwaway pull request with a failing
+  test, seen unable to merge, and closed.
 ```
 
 ## §6. Escalate to the architecture session when

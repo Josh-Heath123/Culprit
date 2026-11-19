@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,51 +16,84 @@ import (
 // with the database fault it passed fifteen minutes in one. Each case is
 // in exactly one shard, by a rule over the library, and
 // TestTheFaultLibraryShardsCoverEveryCaseOnce proves it without Docker.
+//
+// Phase 41: the shards are balanced from how long each case took in CI,
+// declared beside it (expected.json's seconds; mcpLoops' below), not from
+// a list of names.
 
 // faultLibraryShards is how many shards the CI job's matrix runs.
-const faultLibraryShards = 2
+const faultLibraryShards = 4
+
+// faultLibraryShardSeconds is the most declared time one shard may hold.
+// Phase 41's target is a critical path of 12 minutes: less lint, the
+// checkout and the stack's start (about two minutes together), that leaves
+// ten, and a fifth of it is kept for the difference between runners. A
+// case that takes a shard past it needs another shard.
+const faultLibraryShardSeconds = 480
 
 // mcpLoops are the audience fault's loop through `culprit mcp` (Phase 35
-// part 1).
-var mcpLoops = []struct{ name, apply, verdict, reason string }{
-	{name: "auth-audience", verdict: "verified"},
-	{name: "wrong-fix", apply: "remint-wrong-audience", verdict: "not_resolved", reason: "probe.auth.token_shape"},
+// part 1). seconds is how long each took in CI, as expected.json's are.
+var mcpLoops = []struct {
+	name, apply, verdict, reason string
+	seconds                      int
+}{
+	{name: "auth-audience", verdict: "verified", seconds: 12},
+	{name: "wrong-fix", apply: "remint-wrong-audience", verdict: "not_resolved", reason: "probe.auth.token_shape", seconds: 12},
 }
 
-// libraryCases are every case the library runs, by its subtest name: each
-// fault, each scenario (verify/<name>) and each MCP loop (mcp/<name>).
-func libraryCases(library faultLibrary) []string {
-	var cases []string
+// libraryCase is one case the library runs, by its subtest name, and the
+// seconds it declares.
+type libraryCase struct {
+	name    string
+	seconds int
+}
+
+// libraryCases are every case the library runs, in the library's order:
+// each fault, each scenario (verify/<name>) and each MCP loop
+// (mcp/<name>).
+func libraryCases(library faultLibrary) []libraryCase {
+	var cases []libraryCase
 	for _, fault := range library.Faults {
-		cases = append(cases, fault.Name)
+		cases = append(cases, libraryCase{fault.Name, fault.Seconds})
 	}
 	for _, scenario := range library.Scenarios {
-		cases = append(cases, "verify/"+scenario.Name)
+		cases = append(cases, libraryCase{"verify/" + scenario.Name, scenario.Seconds})
 	}
 	for _, loop := range mcpLoops {
-		cases = append(cases, "mcp/"+loop.name)
+		cases = append(cases, libraryCase{"mcp/" + loop.name, loop.seconds})
 	}
 	return cases
 }
 
-// shardOf is the shard a case runs in. The database's cases — walked from
-// inventory-service, each with a statement window per reading, in
-// faults-inventory or, since Phase 39 part 2, faults-inventory-isolated —
-// take shard 2; every other case, shard 1. Each shard then stays well
-// under the job's 30-minute test timeout.
+// shardLoads assigns every case to a shard, longest first, each to the
+// shard holding the fewest seconds so far (the lowest-numbered on a tie);
+// cases of equal length keep the library's order. It returns each case's
+// shard (1 to faultLibraryShards) and each shard's declared seconds.
+// Every shard starts the one stack (startFaultStack), so no case depends
+// on which others share its shard.
+func shardLoads(library faultLibrary) (map[string]int, []int) {
+	cases := libraryCases(library)
+	sort.SliceStable(cases, func(i, j int) bool { return cases[i].seconds > cases[j].seconds })
+	shards := map[string]int{}
+	loads := make([]int, faultLibraryShards)
+	for _, each := range cases {
+		lightest := 0
+		for shard := range loads {
+			if loads[shard] < loads[lightest] {
+				lightest = shard
+			}
+		}
+		loads[lightest] += each.seconds
+		shards[each.name] = lightest + 1
+	}
+	return shards, loads
+}
+
+// shardOf is the shard a case runs in, or 0 for a name the library does
+// not have.
 func shardOf(library faultLibrary, name string) int {
-	fault := strings.TrimPrefix(name, "verify/")
-	for _, scenario := range library.Scenarios {
-		if "verify/"+scenario.Name == name {
-			fault = scenario.Fault
-		}
-	}
-	for _, each := range library.Faults {
-		if each.Name == fault && strings.HasPrefix(each.Environment, "faults-inventory") {
-			return 2
-		}
-	}
-	return 1
+	shards, _ := shardLoads(library)
+	return shards[name]
 }
 
 // shardFromEnvironment reads CULPRIT_FAULT_LIBRARY_SHARD: "" is every
@@ -131,12 +165,19 @@ func TestTheFaultLibraryShardsCoverEveryCaseOnce(t *testing.T) {
 	if len(cases) == 0 {
 		t.Fatal("the library has no cases")
 	}
+	// Every case declares how long it takes: the shards are balanced from
+	// it, so a case without it would be placed as if it took no time.
+	for _, each := range cases {
+		if each.seconds <= 0 {
+			t.Errorf("case %s declares %d seconds: every case declares how long it took in CI", each.name, each.seconds)
+		}
+	}
 	count := map[string]int{}
 	for shard := 1; shard <= faultLibraryShards; shard++ {
 		inShard := 0
-		for _, name := range cases {
-			if shardOf(library, name) == shard {
-				count[name]++
+		for _, each := range cases {
+			if shardOf(library, each.name) == shard {
+				count[each.name]++
 				inShard++
 			}
 		}
@@ -144,9 +185,17 @@ func TestTheFaultLibraryShardsCoverEveryCaseOnce(t *testing.T) {
 			t.Errorf("shard %d runs no case", shard)
 		}
 	}
-	for _, name := range cases {
-		if count[name] != 1 {
-			t.Errorf("case %s runs in %d shards, want exactly 1", name, count[name])
+	for _, each := range cases {
+		if count[each.name] != 1 {
+			t.Errorf("case %s runs in %d shards, want exactly 1", each.name, count[each.name])
+		}
+	}
+	// No shard holds more than its share of the 12-minute target.
+	_, loads := shardLoads(library)
+	for index, load := range loads {
+		t.Logf("shard %d: %d declared seconds", index+1, load)
+		if load > faultLibraryShardSeconds {
+			t.Errorf("shard %d holds %d declared seconds, over %d: add a shard", index+1, load, faultLibraryShardSeconds)
 		}
 	}
 	// Every scenario names a fault the library has, so its shard is the

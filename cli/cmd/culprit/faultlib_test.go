@@ -35,7 +35,10 @@ import (
 // binary does (Phase 32, "The fault library's faults are test harness").
 
 type faultExpectation struct {
-	Name        string          `json:"name"`
+	Name string `json:"name"`
+	// Seconds is how long the case took in CI; the shards are balanced
+	// from it (Phase 41, faultlib_shards_test.go).
+	Seconds     int             `json:"seconds"`
 	Inject      string          `json:"inject"`
 	Vantage     string          `json:"vantage"`
 	Environment string          `json:"environment"`
@@ -107,7 +110,9 @@ type faultFix struct {
 // faultScenario is a fault, a change that is not simply its fix, and the
 // verdict verification must give for it.
 type faultScenario struct {
-	Name    string   `json:"name"`
+	Name string `json:"name"`
+	// Seconds is how long the scenario took in CI, as a fault's.
+	Seconds int      `json:"seconds"`
 	Fault   string   `json:"fault"`
 	Apply   string   `json:"apply"`
 	How     string   `json:"how"`
