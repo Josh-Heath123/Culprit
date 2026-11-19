@@ -11,10 +11,9 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 41 (the gate) — on branch `phase-41-gate`, PR #51;
-  complete and awaiting review (CI green on `b785cab`). Phase 40 is
-  signed off, and
-  `docs/PERFORMANCE_PLAN.md` is complete.
+- **Current phase:** 42 (ownership on the record) — on branch
+  `phase-42-ownership`, from `3928f0a`; not started. Phase 41 is signed
+  off, and `docs/PERFORMANCE_PLAN.md` is complete.
 - **Plan of record:** `docs/DELIVERY_PLAN.md` (Phases 40–43), after
   `docs/DIAGNOSTIC_PLAN.md` (26–35) and `docs/PERFORMANCE_PLAN.md`
   (36–39). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8) and §2 (the core model),

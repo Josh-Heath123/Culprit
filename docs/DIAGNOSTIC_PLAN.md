@@ -1487,7 +1487,7 @@ left open:
 a developer, an interviewer, a recruiter — using only what works today, and
 remove anything in the interface that pretends otherwise.
 
-**2. Why this phase exists.** `docs/PRODUCTISATION.md` (Malcolm, 2026-11-03)
+**2. Why this phase exists.** `docs/PRODUCTISATION.md` (Joshua, 2026-11-03)
 asks for a product someone can open and understand at once, with nothing shown
 that does not work. It is folded into this plan rather than run as one
 overhaul, because the web UI today is the incident copilot that Phase 32
@@ -2013,11 +2013,11 @@ library is refined onto it; pages stop styling themselves.
 - Demonstration video materials following `docs/PRODUCTISATION.md` §7's five
   parts: a script, a scene-by-scene storyboard and a recording checklist, with
   the CLI segments recorded as real terminal sessions and the UI segments taken
-  from the running stack. Malcolm records the narration. The README links the
+  from the running stack. Joshua records the narration. The README links the
   video once it exists, not before.
 - Culprit annotates its own pull requests. The repository is public, so
   GitHub code scanning is free: restore the SARIF upload that `63cea12`
-  replaced with an artifact (Malcolm enables code scanning in the repository
+  replaced with an artifact (Joshua enables code scanning in the repository
   settings), and the self-check's findings appear on the pull request — the
   thing `--format sarif` is for, shown on Culprit itself.
 - A final review by an agent that has not seen the work, reading the repository
@@ -2088,7 +2088,7 @@ the thing behind it is not.
   (field 14). The view and the list follow in part 1.
 
 **How Phase 32.1 is run — decided 2026-11-04.** Two parts, two `/next` runs,
-and Malcolm between them. The look is his call, so it is settled on the
+and Joshua between them. The look is his call, so it is settled on the
 screen the product is centred on before it is applied everywhere.
 
 - **Part 1 — the system, on the Investigation screens.** The carried-in items;
@@ -2099,13 +2099,13 @@ screen the product is centred on before it is applied everywhere.
   only (the gate, mutation-tested, scoped to them for now); the partial
   diagnosis criterion; `LLM_PROVIDER=none` complete; and screenshots of the
   list, a complete investigation and a partial one at 375, 768, 1280 and
-  1920 px, in the run report, for Malcolm to review.
-- **Malcolm reviews part 1's screenshots** and says what to change. His notes
+  1920 px, in the run report, for Joshua to review.
+- **Joshua reviews part 1's screenshots** and says what to change. His notes
   go into part 2's brief before it runs.
 - **Part 2 — everywhere else.** Every other surviving route on the system;
   the token gate widened to every page; responsive and keyboard across all of
   them; the end-to-end journeys in CI, which take the README's screenshots;
-  the SARIF upload (Malcolm enables code scanning first); the video
+  the SARIF upload (Joshua enables code scanning first); the video
   materials; the fresh-eyes review last. Part 2's criteria are field 14's,
   as refined above.
 
@@ -2116,7 +2116,7 @@ the phase audit's blocking finding — a partial tree still labelled its last
 edge "caused by" — was fixed in the CLI and the view, with tests over the
 whole output. Decisions on what the run report left open:
 
-- **Orange stays on a complete diagnosis's root.** Malcolm's call, on the
+- **Orange stays on a complete diagnosis's root.** Joshua's call, on the
   screenshots: the root is the most important thing on the page, and it
   always carries the word and an icon. Red stays reserved for `fail`.
 - **The stored `root_subject` of a partial diagnosis** stays, and only its
@@ -2126,7 +2126,7 @@ whole output. Decisions on what the run report left open:
   this branch. Part 2 touches every frontend file, so it clears them inside
   the lockfile, with no new dependency.
 
-**Malcolm's review of the screenshots, 2026-11-04: the look is approved as
+**Joshua's review of the screenshots, 2026-11-04: the look is approved as
 it is** — restrained, dark, orange for the root. Four changes, applied on every
 screen:
 
@@ -2161,11 +2161,11 @@ screen:
 7. **The SARIF upload restored**, so the self-check's findings annotate
    Culprit's own pull requests. If GitHub refuses the upload because code
    scanning is not enabled on the repository, stop at that step and ask
-   Malcolm to enable it; do not leave a failing step in CI.
+   Joshua to enable it; do not leave a failing step in CI.
 8. The README: the interface is now shown, from the suite's screenshots, not
    just described; nothing shown that does not work (Phase 31.2's standard).
 9. The video materials, following `docs/PRODUCTISATION.md` §7: script,
-   scene-by-scene storyboard and recording checklist. Malcolm records.
+   scene-by-scene storyboard and recording checklist. Joshua records.
 10. The fresh-eyes review last: an agent that has not seen the work reads the
     repository as a recruiter and as a senior engineer would.
 
@@ -2201,7 +2201,7 @@ records it first. Decisions on what the run report left open:
   failure hides every route after it. Phase 32.2 splits it per route.
 - **Go 1.25+ is claimed; CI builds only 1.27.** The stated floor follows what
   CI builds (Phase 32.2).
-- **Review screenshots are not committed from now on.** They served Malcolm's
+- **Review screenshots are not committed from now on.** They served Joshua's
   review; the README's own screenshots stay. `docs/review/` leaves the tree
   in Phase 32.2 (history keeps it), and later review sets go to CI artifacts.
 - **The `e2e` job rebuilds every image.** Accepted as its cost for now.
@@ -2215,7 +2215,7 @@ records it first. Decisions on what the run report left open:
 **Why.** Phase 32.1 left a short list of things that are wrong or untidy
 rather than missing, and the standing tasks have waited since September.
 Phase 33 is the most security-sensitive phase in the plan; it should start on
-a clean tree. Malcolm also decided, on 2026-11-05, to take the hosted server
+a clean tree. Joshua also decided, on 2026-11-05, to take the hosted server
 offline (Phase 33, "Added 2026-11-05"), and the pipeline has to say so.
 
 **Work order.** Two commits. The first touches hundreds of files and must be
@@ -2281,9 +2281,9 @@ from September is closed. Decisions:
   direct push past the "Protect Main" ruleset, so `main` changed before any
   check ran on it. The push run afterwards was green, so nothing was lost this
   time. Recorded in the handoff's protocol. The ruleset should refuse a direct
-  push from anyone: Malcolm removes himself from its bypass list, or limits
+  push from anyone: Joshua removes himself from its bypass list, or limits
   his bypass to pull requests (his setting).
-- **The local quickstart cannot migrate with Malcolm's `infra/.env.prod`**,
+- **The local quickstart cannot migrate with Joshua's `infra/.env.prod`**,
   which predates four writer roles. Phase 33 part 2 builds against a local
   control plane, so before it runs, the local file is regenerated
   (`scripts/bootstrap_env.py --local --force`) and the local quickstart's
@@ -2389,7 +2389,7 @@ then, it gets its own scoped credential, not the project token.
   grant that lets a value be stored. Granting one never implies the other.
 
 **Added 2026-11-05 — no hosted deployment before or during this phase.**
-Malcolm decided to take `culprit-vm` offline rather than repair it: it had
+Joshua decided to take `culprit-vm` offline rather than repair it: it had
 served an unpatched, pre-Phase-14 API publicly since August. This phase builds
 and proves the agent against a local control plane, with the agent in a
 separate Compose network that can reach the control plane only outbound — the
@@ -2514,7 +2514,7 @@ generated catalogue mirror and the shared model's grant list. No deployment
 recipe beyond the image. No write capability.
 
 **Architecture review of part 1, 2026-11-06 — signed off.** Merged via PR #27
-(`57541e3`), CI green on the merge result (reported by Malcolm; the run id is
+(`57541e3`), CI green on the merge result (reported by Joshua; the run id is
 recorded by part 2's first step). Checked on disk: the D8 allowlist still names
 only `probe` and `capture`, and `internal/agent` takes its probe runner through
 an interface rather than importing `probe`. Every criterion was executed by the
@@ -2634,7 +2634,7 @@ positive: it is an accepted, documented storage decision. Two consequences:
   `os.replace`, so it never exists with wider permissions, and an existing
   file's mode is never relied on. A test checks the temporary file's mode
   before it is moved into place.
-- **The alert is dismissed as "Won't fix", by Malcolm, after the fix is on
+- **The alert is dismissed as "Won't fix", by Joshua, after the fix is on
   the branch** — never before, because the comment states the fix as fact. If
   the fix's analysis closes or replaces the alert, the new one gets the same
   treatment. LIMITS says the same thing in plain words.
@@ -2669,7 +2669,7 @@ Decisions:
   anyone is authenticated. **Part 3, first:** the signature is checked over
   the raw body before the body is parsed.
 - **The local `infra/.env.prod` and quickstart volume were not regenerated**:
-  the permission system refused both to Claude Code. They are Malcolm's to
+  the permission system refused both to Claude Code. They are Joshua's to
   run before part 3, which needs a working local stack.
 - **The schema investigation's database** lives in the agent's own copy of the
   model, not in `demo-services/culprit.yaml`. Accepted: adding it there would
@@ -2677,7 +2677,7 @@ Decisions:
 - **`api-reader`'s SELECT on the four new tables** is argued in the migration,
   as `c4e8a1f2b3d5`'s was. Accepted under standing invariant 3.
 
-**Licence — decided by Malcolm, 2026-11-06.** Culprit is AGPL-3.0-only.
+**Licence — decided by Joshua, 2026-11-06.** Culprit is AGPL-3.0-only.
 `extractors/python`, `extractors/node` and `shared/` are Apache-2.0: they run
 inside other people's projects or define the protocol, and the Python
 extractor depends on `culprit-shared`, so `shared/` cannot be copyleft without
@@ -2689,12 +2689,12 @@ as its own pull request, before part 3 — not inside a phase.
 
 **Work order.**
 0. **Preconditions, not part of the run:** the licence pull request has merged,
-   and Malcolm has regenerated the local `infra/.env.prod` and recreated the
+   and Joshua has regenerated the local `infra/.env.prod` and recreated the
    quickstart volume.
 1. **Carried in, first:** the signature checked before the body is parsed;
    plain `http` refused as above; and the quickstart's admin step, which
    prompts for a password when a person runs it from a terminal (found by
-   Malcolm, 2026-11-10). `docker compose run` gives the bootstrap container a
+   Joshua, 2026-11-10). `docker compose run` gives the bootstrap container a
    terminal whenever the caller has one, and `create_user`'s `getpass` then
    reads that terminal instead of the piped password. Every automated run had
    no terminal, so none saw it. Reproduce it first under a pseudo-terminal
@@ -2745,7 +2745,7 @@ as its own pull request, before part 3 — not inside a phase.
   check fails if a named test does not exist.
 - The new screens style themselves through tokens only (the gate covers
   them), work at the four widths with keyboard alone, and their screenshots
-  are in the run report for Malcolm.
+  are in the run report for Joshua.
 - `LLM_PROVIDER=none` changes nothing.
 
 **Do NOT implement in part 3.** No write capability, no new probe, no hosted
@@ -2777,7 +2777,7 @@ diagnostics rather than weakened. Decisions:
   them, and reaches the API only through its published address; part 2's
   separate-network scenario still runs. Accepted.
 - **The new screens' screenshots** are in run 42805541738's `e2e-screenshots`
-  artifact, not committed. Malcolm's notes on them, if any, go into Phase 34
+  artifact, not committed. Joshua's notes on them, if any, go into Phase 34
   part 2.
 
 ---
@@ -2972,7 +2972,7 @@ case for each. Decisions:
   without failing one, so the walk finds no failing reading and nothing can be
   seen fixed; `inconclusive`, saying why, is the honest verdict. Making latency
   detectable needs a declared budget the walk can fail against — that is Phase
-  36's ground (performance conformance), which Malcolm held until Phase 34 is
+  36's ground (performance conformance), which Joshua held until Phase 34 is
   done. It is carried to Phase 36's write-up, not built here.
 - **Q20 — a fourth change kind, `action`.** A fix that is neither an image, a
   config key nor a commit — a firewall rule removed, a flag cleared, a service
@@ -3017,7 +3017,7 @@ case for each. Decisions:
    to verify, naming the change.
 6. **The README's number**, regenerated by a committed command from the fault
    library's results, with its method and its count.
-7. LIMITS, PROBES, PERMISSIONS, UPGRADING; and Malcolm's notes on Phase 33
+7. LIMITS, PROBES, PERMISSIONS, UPGRADING; and Joshua's notes on Phase 33
    part 3's screens, if he has any.
 
 **Outcomes and accuracy.** An outcome is a verification of a complete
@@ -3080,7 +3080,7 @@ unchanged. Decisions:
   own results file, not from what the API was told.
 - **The push bypassed a ruleset on the phase branch.** The ruleset reaches
   beyond `main`, and the bypass lets the account Claude Code pushes with
-  update protected refs. That is Malcolm's setting to correct: the ruleset on
+  update protected refs. That is Joshua's setting to correct: the ruleset on
   `main` only, with no bypass for direct pushes.
 
 ---
@@ -3398,7 +3398,7 @@ sign-off. Decisions:
   refused anyway, if they carry a URL.
 
 **Definition of done.** Above, plus a recorded end-to-end demonstration, made
-by Malcolm after the merge, not by `/next`. Claude Code is pointed at
+by Joshua after the merge, not by `/next`. Claude Code is pointed at
 `culprit mcp` against the quickstart's audience fault: it diagnoses, applies
 the fix and verifies, and then the investigation's page shows its narration.
 With `ollama`, the recording needs no key.
@@ -3519,12 +3519,12 @@ Decisions:
 
   This sign-off makes that change in `.claude/settings.json`, the `next` skill,
   `CLAUDE.md` and the handoff's header. Adding required status checks to the
-  ruleset is Malcolm's setting.
+  ruleset is Joshua's setting.
 
 Phase 35 is complete when the close-out's merge is green on `main`. Phase 36
 part 1's step 0 confirms it, and this plan ends with it. Its successor is
 `docs/PERFORMANCE_PLAN.md`. The definition of done's recorded demonstration is
-Malcolm's, after the close-out.
+Joshua's, after the close-out.
 
 **Close-out — brief and criteria, 2026-11-11.**
 
@@ -3634,7 +3634,7 @@ after it, one. The three look-alike underscores and the Cyrillic letter passed
 - **F5 accepted:** the retry interval compares the worker's clock with
   Postgres's `now()`, which is harmless on one host.
 
-The definition of done's recorded demonstration is Malcolm's and still
+The definition of done's recorded demonstration is Joshua's and still
 outstanding. The plan of record is now `docs/PERFORMANCE_PLAN.md`.
 
 ---

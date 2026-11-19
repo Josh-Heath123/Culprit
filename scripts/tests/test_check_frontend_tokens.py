@@ -225,7 +225,7 @@ def test_the_scope_is_all_of_frontend_src() -> None:
 
 
 def test_dates_are_formatted_in_one_place(tmp_path: Path) -> None:
-    """Malcolm's review of part 1: one date format, from lib/datetime.ts.
+    """Joshua's review of part 1: one date format, from lib/datetime.ts.
     A page that calls toLocaleString() itself is refused; the formatter
     is the one file allowed to."""
     page = _page(tmp_path, "<span>{new Date(when).toLocaleString()}</span>")

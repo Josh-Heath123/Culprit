@@ -681,6 +681,69 @@ the ruleset, with branches up to date and no bypass actors; then open a
 throwaway pull request with a deliberately failing test, see that it cannot
 merge, and close it.
 
+### Review, 2026-11-19 — merged as `3928f0a` (PR #51)
+
+**Phase 41 is signed off.**
+
+**CI.** Read by id from GitHub's API:
+- 44503311197 on `143839f`, 44516832208 on `b785cab` and 44519127072 on the
+  report, `2cffe14`: success on every job on the first attempt, with `gate`
+  among them; only `build / publish` and `deploy` skipped, as on every pull
+  request. Nothing red to attribute.
+- The wall times were 12.4, 13.2 and 12.8 minutes, against 22.0 to 24.2
+  before. Each of the four shards took 7.1 to 8.3 minutes; `e2e (stub)`, at
+  11.9 to 12.7, now sets the time.
+- The pull request was merged after the report's run finished. `main` had not
+  moved from `cdc5032`, so the tree merged is `2cffe14`'s.
+- `main`'s push run 44522173729 on `3928f0a`: red on one job and the gate.
+  `e2e (stub)` failed in "Install Chromium for Playwright", before any test
+  ran, after the step before it spent two and a half minutes in `apt-get`;
+  `e2e (none)` passed the same step on the same commit, and every other job
+  was green. `gate` failed on it, as it should. Phase 42's step 0 reads that
+  job's log (job 135553437405), records the cause, and reruns the failed jobs
+  (D6).
+- The check GitHub reports is named `gate`, from the GitHub Actions app: the
+  name the ruleset is to require.
+
+**Verified on disk,** on `3928f0a`, in the architecture session's workspace:
+- `test_ci_gate.py` and `test_ci_workflow.py`: 31 passed.
+- **Three mutations of its own, each shown red and then restored:**
+  - `kind-capture` taken out of the gate's `needs`: "the gate needs every job
+    but deploy" fails;
+  - a new job with no timeout and no place in the gate: the needs test and the
+    timeout test both fail;
+  - `ci_gate.py` made to accept `skipped`: the tests on a skipped shard and on
+    a gate after a failed `lint` fail.
+- The shards come from declared seconds in `expected.json`, assigned longest
+  first to the lightest shard, and the Go shard test holds the workflow's
+  matrix to 1 to `faultLibraryShards`.
+
+**Rulings on what the run left open:**
+1. **The 12-minute target: missed by 0.4 to 1.2 minutes, and accepted.** What
+   bounds it is `e2e (stub)` building every image for the quickstart, about 4
+   minutes, as a user's quickstart does. The cut from 23 minutes to 13 came
+   from moving work, not from removing any of it. D4's target is amended to
+   the measured 12.4 to 13.3 minutes.
+2. **Docker layer caching: not now.** The images on the critical path are
+   built inside `just quickstart`, and e2e exists to run the quickstart as a
+   user does. Caching them means a build path that only CI takes, and a new
+   action, for at most part of 4 minutes. It stays a named option, to take up
+   if the critical path grows.
+3. **Test timeouts inside job timeouts: carried into Phase 42 as C3.** A job
+   timeout equal to its test's `go test -timeout` (`cli`'s database step, and
+   the agent test in `e2e`) kills the job before Go can print the stack that
+   names the hung test. The gate still fails, so nothing merges; but the hang
+   goes unattributed, against D6.
+
+**Decision 6 as built:** the timeouts are twice each job's slowest of the last
+ten green runs, rounded up to 5 minutes, and at least 10; `build`'s 15 comes
+from run 44321940704's 5.3 minutes, which the comment names. Accepted.
+
+**The owner decided on 2026-11-19** that the name of record is Joshua Heath,
+and that Culprit's documents call the owner Joshua throughout. This review
+makes the change in every tracked file (47 mentions of another first name, in
+five files); git history is not rewritten.
+
 ---
 
 ## Phase 42 — Ownership on the record
@@ -698,6 +761,113 @@ just a different name in a file.
 
 **After merge (owner):** the Software Heritage archive; private
 vulnerability reporting; secret scanning with push protection.
+
+### Brief (2026-11-19)
+
+**The name of record is Joshua Heath,** confirmed by the owner on 2026-11-19,
+as `LICENSING.md` and the README already say. The work began on 2026-08-02
+(the first commit), so every copyright line reads 2026.
+
+**Carried from Phase 41 — C3, test timeouts inside job timeouts. First, as its
+own commit after the review's.**
+- Every `go test -timeout` a job runs, in the workflow or in a `just` recipe
+  it calls, is at most half that job's `timeout-minutes`, so Go's own timeout
+  fires first and prints the stack.
+- **Concretely:** `cli`'s database step 10 minutes (job 20), the agent end to
+  end 15 (`e2e`, job 30; it takes about 2.5), and the fault library 17 (job
+  35; a shard takes 7 to 8). The local `just fault-library` keeps 30, since it
+  runs every case in one go.
+- `test_ci_workflow.py` holds the rule over the workflow and the recipes it
+  calls, with a mutation shown red. The LIMITS entry about the two timeouts
+  that could not fire goes.
+
+**What the repository holds today** (`git ls-files` on `3928f0a`):
+- 941 tracked files: 352 Python, 185 Go, 100 JSON, 52 Markdown, 86 TypeScript
+  and TSX, 47 YAML, and the rest shell, TOML, SQL, CSS, HTML, SVG, PNG and
+  lock files.
+- `LICENSING.md` maps the licences: `AGPL-3.0-only` by default; `Apache-2.0`
+  for `extractors/python/`, `extractors/node/` and `shared/`, each with its
+  own `LICENSE`; and the two third-party fixtures under
+  `cli/testdata/fixtures/third-party/`, which keep their own (BSD-3-Clause and
+  MIT).
+- Many JSON files, goldens and recorded outputs are compared byte for byte by
+  tests, and some files are generated (the catalogue, `results.json`,
+  `hero.json`, the captures, lock files).
+
+**Decided now:**
+1. **REUSE, with headers where a file can hold a comment and `REUSE.toml`
+   everywhere else.** Source files (Go, Python, TypeScript, CSS, shell, SQL,
+   YAML, TOML, HTML, Dockerfiles) carry `SPDX-FileCopyrightText: 2026 Joshua
+   Heath` and their `SPDX-License-Identifier`. JSON, goldens, recorded
+   outputs, generated files, images and lock files are annotated in
+   `REUSE.toml`, so no byte a test compares changes. `LICENSES/` holds each
+   licence's text; every existing `LICENSE` file stays, since GitHub detects
+   the licence from them.
+2. **The third-party fixtures keep their own licences and holders,** annotated
+   in `REUSE.toml` from their own `LICENSE` files. Nothing of Culprit's is
+   claimed over them.
+3. **One map, read twice, agreeing.** A test holds `LICENSING.md`'s table to
+   what REUSE reports for files under each path: every path in the table
+   resolves to its SPDX identifier.
+4. **`reuse lint` runs in `lint`,** the tool pinned to one version and run
+   with `uvx`, not added to any project's dependencies. A new file without a
+   header or an annotation turns it red: the mutation. `CLAUDE.md` gains one
+   line saying so.
+5. **NOTICE:** the copyright holder, the licence split (pointing at
+   `LICENSING.md`), and the third-party material the repository holds or its
+   builds ship: the two fixtures, and the Inter and JetBrains Mono fonts (SIL
+   Open Font License 1.1) that the dashboard bundles and the hero renders. The
+   container images' bundled dependencies are not listed; LIMITS says so, and
+   Phase 43's attestations are where a software bill of materials belongs.
+6. **`AUTHORSHIP.md` states facts, each with a pointer to its evidence, and no
+   legal conclusion.** It says:
+    - who directs the work, decides it, reviews it and merges it: Joshua
+      Heath;
+    - how it is made: much of the code and many of the documents were written
+      by Claude (Anthropic's model), in Claude Code and an architecture
+      session, under his direction. The pointers are the commits'
+      `Co-Authored-By` trailers, the plans' recorded decisions and rulings,
+      and the pull requests he merged;
+    - that Anthropic's consumer terms assign to the user whatever rights
+      Anthropic has in outputs, with a link to the terms, paraphrased and
+      dated;
+    - that copyright in AI-assisted work depends on the law where it is
+      claimed, with links to the US Copyright Office's January 2025 report on
+      copyrightability and South Africa's Copyright Act (which names as author
+      of a computer program the person who controlled its making). It says
+      plainly that the file is not legal advice.
+7. **`CONTRIBUTING.md` and the CLA.** The CLA is the Project Harmony
+   individual contributor agreement, the licence form (not an assignment),
+   named with its version, with Joshua Heath as recipient. The report records
+   the outbound option chosen and why: the default is the one that lets the
+   owner offer Culprit under other licences, so a hosted service stays
+   possible. Until a lawyer has read it, CONTRIBUTING says outside code
+   contributions are not yet accepted; issues and reports are welcome.
+8. **`TRADEMARKS.md`:** "Culprit" and the mark (`docs/brand/mark.svg`) are
+   unregistered marks of Joshua Heath; describing or linking to the project is
+   fine; a fork or a hosted service of a modified version uses another name
+   and mark. No claim of registration.
+9. **`CITATION.cff`,** validated in `lint` by a pinned `cffconvert --validate`
+   run with `uvx`, red on a mutation (a missing required field).
+10. **`SECURITY.md`:** report privately through GitHub's private vulnerability
+    reporting, which the owner turns on after merge; what is in scope (the
+    CLI's read-only guarantees, the control plane, the MCP server, the
+    extractors); only `main` and the latest release supported; an honest
+    response time for a project with one maintainer, and no bounty.
+11. **The README's author line** points at `AUTHORSHIP.md` and `NOTICE`,
+    inside the 300-line limit; `check_readme.py` still passes.
+
+**Do NOT:**
+- rewrite history, or change any licence;
+- put a header on any file a test compares byte for byte, or on a generated
+  file;
+- claim a registered mark, or give legal advice;
+- put any email address, student number or local path in any of these files;
+- accept, or invite, an outside code contribution before the CLA is reviewed.
+
+**After merge (owner), with the steps given at the review:** save the
+repository to Software Heritage; turn on private vulnerability reporting; turn
+on secret scanning with push protection.
 
 ---
 

@@ -653,7 +653,7 @@ The library's latency fault now ends where the plan wanted it to. It roots at
 `not_resolved`. Without budgets it stays `inconclusive`, saying none was
 judged. Q21, open since Phase 34, is closed.
 
-The README's step 4 was run for real on Malcolm's machine:
+The README's step 4 was run for real on Joshua's machine:
 - `diagnose` rooted at `api` with a reproduced p95 of at least 402 ms;
 - `verify` said `verified` once the sleep came out.
 
@@ -1529,9 +1529,9 @@ was safe for the same reason as the others: the work is additive.
 to `1b2496b`, and the database pass runs only when nothing was found below the
 entry.
 
-**What was verified, and how.** The link to Malcolm's computer was down, and
+**What was verified, and how.** The link to Joshua's computer was down, and
 GitHub's API is not reachable from the architecture session's workspace, so
-this review did not read the pull request's check runs. Malcolm reports PR #42
+this review did not read the pull request's check runs. Joshua reports PR #42
 green. The run report records run 43439643068 green on `ffd7bf1`. On the merge
 commit `1d20322`, in the workspace, this review ran:
 
@@ -2128,7 +2128,7 @@ Part 1 is signed off. Q37 ruled.**
   Part 2's step 0 confirms it.
 
 **Accepted:**
-- **The finding's shape** (decided with Malcolm mid-run): a `BundleFinding`
+- **The finding's shape** (decided with Joshua mid-run): a `BundleFinding`
   of its own type, with the `Divergence` model left untouched. A budget and a
   measured size are not two sides of one predicate, and
   `POST /divergences/captures` validates that they are. Counting it in
@@ -2162,7 +2162,7 @@ Part 1 is signed off. Q37 ruled.**
 The database case's precondition requires the walk's statement mean to be at
 least 1.5 times the 20 ms budget. On one runner it measured 29.1 and 28.2 ms.
 Elsewhere it has measured 41–43 ms in CI, 51 and 63 ms on reruns, and 46–133
-ms on Malcolm's machine. The route's p95 on that runner was 68.4 ms, against a
+ms on Joshua's machine. The route's p95 on that runner was 68.4 ms, against a
 precondition of at least 60.
 
 The spread comes from hardware speed, not from slow runners. The fault's cost
@@ -2182,7 +2182,7 @@ Ruling: move the budgets, not the preconditions.
   under 2 ms.
 - **The `GET /products` p95 budget** goes from 30 ms to 25 ms. The fault's
   smallest p95, 68.4 ms, then clears the 50 ms precondition by 37%. The
-  slowest healthy p95, 7.9 ms on Malcolm's machine, clears the 12.5 ms
+  slowest healthy p95, 7.9 ms on Joshua's machine, clears the 12.5 ms
   precondition by the same margin.
 - **The multipliers stay** (at least 1.5 times and at least 2 times at the
   fault, and under 2 ms and at most half at health). Lowering them would be
@@ -2302,7 +2302,7 @@ The brief follows from that.
 **Architecture review of part 2, 2026-11-17 — merged as `02bae0d` (PR #46).
 Part 2 is signed off, and Phase 38 is complete.**
 
-**How it landed.** The run stopped before its end. Malcolm's machine ran short
+**How it landed.** The run stopped before its end. Joshua's machine ran short
 of memory while the local gates ran in the background: `just lint` passed,
 `just typecheck` was killed, and the rest of the local set, `just test` and
 the auditors never ran. No run report was written. The branch, with all seven
@@ -2546,7 +2546,7 @@ Phase 39 is two parts, each its own `/next` run with a review after it:
    - Never a parameter, a row, an item, a key or a value.
 8. **Capabilities:** `db.stats.read` and `net.http.outbound`, both existing.
    No new capability, role or template.
-9. **Runs on Malcolm's machine.** Run the local gates one at a time, in the
+9. **Runs on Joshua's machine.** Run the local gates one at a time, in the
    foreground. If the machine cannot hold a gate, report it as not run and
    leave it to CI. The auditors always run. Commit the report before marking
    the pull request ready. Never run the fault library locally.
