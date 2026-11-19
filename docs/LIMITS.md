@@ -3339,6 +3339,13 @@ do:
   the owner) are as of `3928f0a`, with the commands that give them; nothing
   keeps them current. A trailer records that a commit was made with Claude,
   not how much of it.
+- **A document that quotes a tag is tagged.** REUSE reads
+  `SPDX-License-Identifier:` and `SPDX-FileCopyrightText:` followed by a
+  value on any line of any file, Markdown included, ahead of `REUSE.toml`.
+  Quoting one in prose (a report, a plan) gives that file whatever follows
+  it; the map check then fails, which is how this run found it. Write the
+  tag inside backticks with its value on the same line only when the value
+  is the file's own, or describe it instead.
 - **The tools are pinned and fetched.** `just lint` and CI run `reuse` 6.3.0
   and `cffconvert` 2.0.0 through `uvx`, which downloads them on first use; a
   machine with no network access cannot run those two checks.

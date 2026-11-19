@@ -12,7 +12,8 @@ the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
 - **Current phase:** 42 (ownership on the record) — on branch
-  `phase-42-ownership`, from `3928f0a`; not started. Phase 41 is signed
+  `phase-42-ownership`, PR #53 (a draft); awaiting decision on Q41, the
+  CodeQL alerts the headers brought into the diff. Phase 41 is signed
   off, and `docs/PERFORMANCE_PLAN.md` is complete.
 - **Plan of record:** `docs/DELIVERY_PLAN.md` (Phases 40–43), after
   `docs/DIAGNOSTIC_PLAN.md` (26–35) and `docs/PERFORMANCE_PLAN.md`

@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **42 — ownership on the record** — `not started`. Brief: `docs/DELIVERY_PLAN.md` §3 (D8) and Phase 42, with "Brief (2026-11-19)" at its end: C3 (test timeouts) first. The name of record is Joshua Heath (owner, 2026-11-19). Step 0: `main`'s push run 44522173729 on `3928f0a`. |
+| Current phase | **42 — ownership on the record** — `awaiting decision` (Q41, blocking). PR #53, a draft. Every job of run 44534379764 on `dc6e835` is green, `gate` included; the PR's CodeQL check fails on alerts #2–#4, open on `main` since 2026-11-04 and now in the diff because the headers touch every file. C3 and the eleven decisions built; both audits' findings fixed (`0716dee`). Step 0: the rerun is green; the ruleset requires no check (owner). Report in §5. |
 | Previous phase | **41 — the gate — merged as `3928f0a` (PR #51) and signed off 2026-11-19.** Runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2. Three mutations shown red by the architecture session. The 12-minute target missed by about a minute and accepted; caching not now; test timeouts carried as C3. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-42-ownership`, to be cut from `origin/main` = `3928f0a`. Its first commit is the review: `git apply ../phase-41-review.patch`, then `git commit -F ../phase-41-review.txt` (`docs/DELIVERY_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`, and the owner's name in `docs/DIAGNOSTIC_PLAN.md`, `docs/PERFORMANCE_PLAN.md`, `docs/PRODUCTISATION.md` and `scripts/tests/test_check_frontend_tokens.py`). Then C3, as its own commit. Open a draft pull request and mark it ready when the run report is committed. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
-| Blocking questions | None. |
+| Branch | `phase-42-ownership`, from `origin/main` = `3928f0a`; its first commit the review (`7edfc39`), then C3 (`9f5a98a`), the headers (`49fa66c`), the rest (`dc6e835`) and the audits' findings (`0716dee`). PR #53, left a draft for Q41. `shared/uv.lock` not staged; the fault library not run locally; the ruleset untouched. |
+| Blocking questions | **Q41** (§3): the three code-scanning alerts the PR's CodeQL check fails on. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q38, Q39 and Q40 are recorded at the end of Phase 39 in `PERFORMANCE_PLAN.md`. | | |
+| Q41 | **Three open code-scanning alerts fail PR #53's CodeQL check.** #2 `py/clear-text-logging-sensitive-data`, `api/scripts/apply_model.py` (a component's new API key is printed once, at creation, the one moment it exists outside its hash); #3 the same, `scripts/bootstrap_env.py` (the quickstart's generated local admin password is printed, as the code's comment says Known Trap 4 allows, only with `--local`); #4 `py/weak-sensitive-data-hashing`, `api/app/ingest_gateway/auth.py` (SHA-256 of high-entropy generated ingest tokens, not user passwords; real passwords use argon2, as the comment says). All three open on `main` since 2026-11-04 and never in a pull request's diff until the SPDX headers put a line into every file. The argument: each is a deliberate, documented design, not a defect, and "fixing" #2 or #3 would remove what the commands exist to do. Leaving the headers off those three files would hide the check, not answer it. **Decide:** dismiss each (as "won't fix" or "false positive", with the reason), or rule a change. Claude Code does not dismiss (the `/ci` rule). | 2026-11-19 (Phase 42 run) | **Blocking:** PR #53 stays a draft until it is answered. |
 
 ---
 
@@ -126,7 +126,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 40, part 1 | The new identity: the dashboard | **complete** (PR #49, `624c6e3`) | **Signed off 2026-11-18** (architecture session): runs 44340916627 and 44346373804 (the report) green on every job, read from GitHub; C1 met over two runs; three mutations shown red; the run's five decisions accepted, the third amended by C2 (the focus ring). Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
 | 40, part 2 | The new identity: the repository | **complete** (PR #50, `cdc5032`) | **Signed off 2026-11-19** (architecture session): runs 44386033657 and 44390448565 (the report) green on every job, read from GitHub; four mutations shown red; nothing lost in the move to `docs/GUIDE.md`; the README criterion amended; a stale LIMITS entry rewritten. Phase 40 is complete. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 2". |
 | 41 | The gate | **complete** (PR #51, `3928f0a`) | **Signed off 2026-11-19** (architecture session): runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2; three mutations shown red; the target missed by about a minute and accepted, `e2e (stub)`'s quickstart build bounding it; caching not now; C3 carried. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
-| 42 | Ownership on the record | not started | **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D8) and Phase 42, with "Brief (2026-11-19)" at its end: C3, test timeouts inside job timeouts, first, as its own commit; then REUSE (headers where a file holds a comment, `REUSE.toml` elsewhere, no byte a test compares changed), the map held to `LICENSING.md`, `reuse lint` and `CITATION.cff` validated in `lint`, NOTICE, `AUTHORSHIP.md` (facts with pointers, no legal conclusion), CONTRIBUTING with the Harmony CLA, TRADEMARKS and SECURITY. The name of record is Joshua Heath (owner, 2026-11-19). Step 0: `main`'s push run 44522173729 on `3928f0a`. Branch `phase-42-ownership` from `origin/main` = `3928f0a`; its first commit is the review (`../phase-41-review.patch`, message `../phase-41-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 42 | Ownership on the record | **awaiting decision** (Q41; PR #53, a draft; every job green on `dc6e835`) | **Run 2026-11-19:** C3 (every `go test` at most half its job's limit, held over the workflow and its recipes); SPDX headers on 668 files (insertions only) and `REUSE.toml`; `check_licensing_map.py`; `reuse lint` and `cffconvert` pinned by uvx in lint; NOTICE, AUTHORSHIP, CONTRIBUTING (HA-CLA-I 1.0, Option Five), TRADEMARKS, SECURITY, CITATION; the audits' findings fixed. Blocked on Q41. Step 0: rerun green; the ruleset requires no check. Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D8) and Phase 42, with "Brief (2026-11-19)" at its end: C3, test timeouts inside job timeouts, first, as its own commit; then REUSE (headers where a file holds a comment, `REUSE.toml` elsewhere, no byte a test compares changed), the map held to `LICENSING.md`, `reuse lint` and `CITATION.cff` validated in `lint`, NOTICE, `AUTHORSHIP.md` (facts with pointers, no legal conclusion), CONTRIBUTING with the Harmony CLA, TRADEMARKS and SECURITY. The name of record is Joshua Heath (owner, 2026-11-19). Step 0: `main`'s push run 44522173729 on `3928f0a`. Branch `phase-42-ownership` from `origin/main` = `3928f0a`; its first commit is the review (`../phase-41-review.patch`, message `../phase-41-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -158,161 +158,212 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        41 — the gate
-Branch:       phase-41-gate, from origin/main = cdc5032. eb115a4 the review
-              (../phase-40-2-review.patch); 143839f the work; b785cab LIMITS
-              and the build timeout's source; then this report. PR #51.
-Run:          2026-11-19, /next. Step 0: main's push run 44498857049 on
-              cdc5032 read by id — success on every job, deploy skipped.
-              Local gates one at a time, in the foreground; just lint before
-              every push. The fault library never run locally.
-Status:       COMPLETE pending review. CI green on 143839f (44503311197) and
-              b785cab (44516832208): every job, gate included; 26 PR checks
-              pass and 2 skipping; no open code-scanning alert. main has not
-              moved (cdc5032), so that is the merge result. The 12-minute
-              target is MISSED by 0.5 and 1.3 minutes, bound by e2e (stub)
-              (decision 9, below). Nothing blocking; no Q41.
+Phase:        42 — ownership on the record (with C3, carried from Phase 41)
+Branch:       phase-42-ownership, from origin/main = 3928f0a. 7edfc39 the
+              review (../phase-41-review.patch); 9f5a98a C3; 49fa66c the
+              SPDX headers (insertions only); dc6e835 REUSE.toml, the map
+              and the documents; 0716dee the audits' findings; then this
+              report. PR #53, a draft.
+Run:          2026-11-19, /next. Local gates one at a time, in the
+              foreground; just lint before every push. The fault library
+              never run locally.
+Status:       AWAITING DECISION — Q41 (blocking, §3). Every job of CI run
+              44534379764 on dc6e835 is green, gate included, but the pull
+              request's "CodeQL" check fails on three code-scanning alerts
+              (#2, #3, #4) that have been open on main since 2026-11-04. They
+              were never in a pull request's diff before; the headers put a
+              line into every file, so they are now. Each is a deliberate,
+              commented design, not a defect this phase made. Dismissing is
+              the architecture session's (the /ci rule), so the pull request
+              stays a draft. Step 0's rerun is green. Step 0's ruleset check
+              FAILED: the ruleset requires no check (below).
 
-BEFORE AND AFTER (wall = run created to last job done; minutes)
-  run           sha      wall  critical path                        lint  cli  fl shards            e2e none/stub  test
-  44383181239   b6d0328  22.0  lint > cli > fault-library (2)       0.2   6.1  12.1 15.5            10.1 11.1      3.0
-  44386033657   18bf5a2  23.4  lint > cli > fault-library (2)       0.4   6.5  12.2 16.4            10.3 10.7      2.9
-  44390448565   721edfe  24.3  lint > cli > fault-library (2)       0.2   8.2  11.7 15.8             9.0 10.0      3.1
-  ------------------------------------------------------------------------------------------------------------------
-  44503311197   143839f  12.5  lint > e2e (stub) > parity > gate    0.2   6.2  7.6 8.0 7.3 7.7       9.1 11.9      3.4
-  44516832208   b785cab  13.3  lint > e2e (stub) > parity > gate    0.2   8.1  8.3 8.1 7.5 7.7       9.5 12.7      3.0
-  Other jobs, after (both runs): typecheck 0.6, migration-round-trip
-  0.9-1.0, self-check 0.8-1.1, kind-capture 1.2-1.3, build 0.7-2.6 (frontend
-  slowest), narration-parity 0.1, gate 0.1. Before: the same within 0.3,
-  but self-check, kind-capture and build started after cli, at 6.5-8.5.
-  The wall time fell 9.5 to 11.8 minutes. The fault library now ends at
-  7.5-8.6 minutes, starting with cli at 0.2-0.3.
+STEP 0
+  1 main's push run 44522173729 on 3928f0a, e2e (stub), job 135553437405,
+    "Install Chromium for Playwright": playwright install --with-deps
+    ran apt-get, which could not reach the Ubuntu mirrors —
+    azure.archive.ubuntu.com:80 "connection timed out" and
+    security.ubuntu.com:443 "Could not wait for server fd - select (11:
+    Resource temporarily unavailable)" — fetched 8.9 MB in 3 min 19 s,
+    failed six font packages (fonts-ipafont-gothic, fonts-wqy-zenhei,
+    xfonts-*), and exited 100 ("Failed to install browsers"). No test
+    ran. Attributed: the runner's network to Ubuntu's archive, not the
+    code (D6). gh run rerun --failed: attempt 2 green on every job, gate
+    included (deploy skipped).
+  2 The ruleset. Throwaway branch gate-check from origin/main, one test
+    asserting 1 == 2 (scripts/tests/test_gate_check.py), PR #52 opened
+    ready (not draft). Its run 44525066795: test failed, gate failed.
+    gh pr view 52 --json mergeStateStatus: UNSTABLE while pending and
+    UNSTABLE after the gate failed, with mergeable MERGEABLE — NOT
+    BLOCKED. Ruleset 26460341 ("Protect Main branch", active, updated
+    2026-11-19 14:32 +02:00) has strict_required_status_checks_policy
+    true and no bypass actors, but required_status_checks is []: no
+    check is required. No branch protection and no other ruleset applies
+    (gh api rules/branches/main). PR #52 closed without merging, with a
+    comment saying why; gate-check deleted on the remote and locally.
+    The ruleset was not touched: the owner's step. To do: add the
+    status check "gate" (from GitHub Actions) to the rule, then repeat.
 
-DECISION 9 — WHAT BOUNDS IT
-  e2e (stub): Chromium for Playwright up to 1.9, the quickstart building
-  every image from the commit 4.1-4.3, the journeys 2.6, the agent end to
-  end 2.5, kind 0.7-0.8, the recipes 0.5. Then narration-parity and gate
-  (0.2 together). Nothing in e2e is removed for time. The remaining means
-  is the image build (decision 7, below).
+C3 — TEST TIMEOUTS INSIDE JOB TIMEOUTS (9f5a98a, 0716dee)
+  Every go test a job runs, in a step or in a just recipe it calls
+  (dependencies included), now times out in at most half the job's
+  timeout-minutes: cli's database step 20m -> 10m (job 20; its other go
+  tests have Go's default 10m); just agent-e2e 30m -> 15m (e2e, job 30);
+  the fault library in CI 30m -> 17m (job 35; just fault-library keeps
+  30); kind-capture Go's default -> 5m (job 10: not named in the brief,
+  the same rule, since a go test with no -timeout has Go's 10).
+  test_ci_workflow.py reads them all (seven commands across four jobs).
+  A -run pattern's | is inside quotes and does not end the command. Both
+  audits found that the first version read only a single-unit -timeout,
+  so -timeout 0 (no timeout), 30m0s and 1h30m passed as Go's default:
+  fixed in 0716dee (whole Go durations; 0 or a non-duration read as
+  never). Red: each of the four timeouts put back; e2e's job lowered to
+  20; the fault library's set to 0, 1h30m and 30m0s. LIMITS' bullet on the
+  two timeouts that could not fire is rewritten to the rule.
 
-THE TEN DECISIONS, AS BUILT
-  1 scripts/ci_gate.py (standard library) reads NEEDS (toJSON(needs)),
-    prints each job and its result, and exits 0 only when every result is
-    success; failure, skipped, cancelled, any other string fail (1); a
-    context naming no job, a job with no result, or bad JSON cannot pass
-    (2). scripts/tests/test_ci_gate.py: 14 cases. In CI the gate printed
-    all eleven jobs "success" and "gate: every job succeeded". build's
-    result is success on a pull request with publish skipped inside it.
-  2 gate: if: always(), timeout 10, checkout then the script.
-  3 scripts/tests/test_ci_workflow.py (PyYAML, as test_self_check_env):
-    gate needs every job but gate and deploy (NOT_GATED names deploy's
-    reason, and the test requires deploy's if to keep workflow_dispatch);
-    gate's always() and its step; every job's timeout-minutes, at least 10
-    — build calls images.yml and cannot set one, so images.yml's jobs are
-    read; the workflow's concurrency: one group per pull request,
-    cancel-in-progress only on pull_request, and one group per run
-    (github.run_id) for every other event, so a push to main is never
-    cancelled nor left pending behind another; no job sets its own; the
-    fault library needs lint alone; no path filter or continue-on-error in
-    either workflow. 17 cases.
-  4 fault-library needs lint. Its shards and cli start together (0.2-0.3).
-  5 Four shards. expected.json declares each case's seconds (the slowest
-    --- PASS time across the six shard logs of the three runs before,
-    rounded up; the phase audit re-derived all 19); the two MCP loops
-    declare theirs beside them in Go. shardOf fills shards longest first,
-    each case to the shard holding fewest seconds (lowest on a tie;
-    stable). Declared: 383, 385, 389, 388; ran 7.3-8.3 minutes. The shard
-    test now also requires every case to declare seconds > 0 and no shard
-    over 480 (faultLibraryShardSeconds: the 12-minute target, less about
-    two minutes of lint, checkout and the stack's start, less a fifth).
-    It still requires the matrix to be exactly 1..faultLibraryShards, and
-    each shard keeps the results diff.
-  6 Timeouts, twice the slowest of the ten green runs before this phase
-    (44321940704..44390448565), rounded up to 5, at least 10: cli 20
-    (8.2), fault-library 35 (16.5; its go test -timeout 30m stays), e2e 30
-    (13.2; was 75), narration-parity 10 (was 5), images.yml build 15
-    (frontend 5.3 in 44321940704), publish 10, lint, typecheck, test,
-    migration-round-trip, self-check, kind-capture 10; deploy 10 (no green
-    run in the ten; 1.3 in August); gate 10. The phase audit measured from
-    the ten runs after step 0's run joined them and found build's 5.3
-    gone (frontend 2.8, so 10): the run is now named in the comment
-    (b785cab). The rule was applied to the window before the phase.
-  7 Docker layer caching: NOT TRIED. The images the critical path builds
-    are the quickstart's (4.1-4.3 minutes in e2e), built by `docker compose
-    up --build` inside `just quickstart`. Caching them in CI means a
-    cache_from/cache_to layer for those compose files that only CI reads,
-    and a new action to hand compose the Actions cache token. That changes
-    how the quickstart builds, which is more than "where and when a job
-    runs", and what it would buy is at most the build's share of 4 minutes.
-    For the architecture session: rule whether to try it, and where. No
-    action was added.
-  8 The database boundary stays in cli (not on the critical path).
-  9 The table above; e2e (stub) bounds it, as said.
-  10 Red jobs: none. Both runs green on attempt 1; no rerun. (Locally, the
-    shard test was red against the old two-shard matrix before the
-    workflow was changed: the check working, not CI.)
+THE ELEVEN DECISIONS, AS BUILT
+  1 49fa66c: 668 files gain two SPDX lines and a blank one, nothing else
+    (1,982 insertions, no deletion; the phase audit compared every
+    file): the copyright line (2026 Joshua Heath) and the licence line,
+    AGPL-3.0-only (611) or Apache-2.0 under shared/, extractors/python/
+    and extractors/node/ (57). (Not quoted as tags here: REUSE reads a
+    tag in any file, Markdown included; it did, and the map check went
+    red on this report until it was reworded.) Python, Go, TS,
+    TSX, JS, CSS, shell, SQL, YAML, TOML, HTML, INI, Dockerfiles, the
+    justfile, Caddyfile, go.mod, the systemd unit, .env examples, ignore
+    and attributes files. Shebangs and the two doctypes stay first (25
+    files). REUSE.toml for the rest, by file type outside the test data:
+    JSON, Markdown, PNG, SVG, lock files, go.sum, VERSION, NOTICE,
+    .gitkeep, and the Alembic template (its comments would be copied into
+    every migration); cli/testdata/ and api/tests/data/ by directory. No
+    byte a test compares changed: go test ./..., just test, the
+    extractors', frontend's and hook tests all green with only the
+    headers, and the self-check's figures still equal the README's.
+    LICENSES/: AGPL-3.0-only and Apache-2.0 are this repository's own
+    LICENSE texts; MIT and BSD-3-Clause are SPDX's. Every LICENSE stays.
+  2 The fixtures: BSD-3-Clause, "2010 Pallets"; MIT, "2009-2014 TJ
+    Holowaychuk", "2013-2014 Roman Shtylman", "2014-2015 Douglas
+    Christopher Wilson" (from their LICENSE files, addresses left out);
+    precedence override. Each fixture's culprit.yaml (added in Phase 28)
+    is Culprit's.
+  3 scripts/check_licensing_map.py (standard library) reads reuse lint
+    --json and LICENSING.md's table: REUSE compliant; every file under a
+    row with exactly its SPDX identifier (the most specific row wins);
+    every path the table names holds a file. On its first run it found
+    LICENSING.md's "everything else" without deploy/, and lock files
+    under shared/ annotated AGPL. The table now names an identifier in
+    every row (the fixtures separately, their manifests, deploy/); no
+    licence changed. 943 files agree: 827 AGPL-3.0-only, 84 Apache-2.0,
+    20 BSD-3-Clause, 12 MIT (942 in CI, without the untracked
+    shared/uv.lock). test_check_licensing_map.py: 11 cases.
+  4 reuse lint runs in just lint and CI's lint job, as
+    `uvx --from 'reuse[charset-normalizer]==6.3.0' reuse lint --json |
+    check_licensing_map.py -` (6.3.0, released 2026-10-30; the extra
+    because libmagic is not on Windows). The pipe has no pipefail, and is
+    safe: the script fails on a non-compliant report and on empty or
+    broken input (both audits checked). test_ci_workflow.py holds the
+    pins equal in both places. CLAUDE.md's "Licences" line.
+  5 NOTICE: the holder; the licence split, pointing at LICENSING.md; the
+    two fixtures (tags 3.1.0, 4.21.2); Inter and JetBrains Mono
+    (@fontsource 5.3, OFL-1.1, copyright lines from their packages). The
+    bundle's, binary's and images' dependencies named as not listed; in
+    LIMITS.
+  6 AUTHORSHIP.md: who directs, decides, reviews and merges, with
+    pointers (the plans; HANDOFF's protocol; 51 of 51 merged pull
+    requests merged by Josh-Heath123; 308 commits, 233 as Josh-Heath123
+    and 75 as Joshua Heath, from 2026-08-02); how it is made (Claude in
+    Claude Code and the architecture session; 109 commits with a
+    Co-Authored-By: Claude trailer, and that a trailer is not a share);
+    Anthropic's Consumer Terms, effective 2025-10-08, section 4 (the
+    assignment of whatever rights Anthropic has in Outputs), paraphrased
+    and dated 2026-11-19, read from the page; the US Copyright Office's
+    Part 2 report (2025-01-29), from copyright.gov; South Africa's
+    Copyright Act 98 of 1978, s 1(1) "author" (i), quoted from WIPO Lex
+    (gov.za's pages gave 404 and SAFLII 403). No legal conclusion; says
+    twice it is not legal advice. Its commands are pinned to 3928f0a and
+    -L 200 (0716dee), so they reproduce its figures.
+  7 CONTRIBUTING.md: issues and private security reports welcome; outside
+    code not accepted, and pull requests closed, until a lawyer reads
+    the agreement. The agreement: Harmony Individual Contributor License
+    Agreement (HA-CLA-I) 1.0, 2011-07-04, the licence form (not an
+    assignment); Joshua Heath as "We"; project Culprit. OUTBOUND: Option
+    Five (any licence, including proprietary, in addition to the
+    material's own), chosen because it keeps the owner able to offer
+    Culprit under other licences as well as the AGPL, so a hosted or
+    commercially licensed Culprit stays possible. Media licences,
+    governing law and how to sign left open for the lawyer. Linked, not
+    copied: the template is CC BY 3.0, and a copy would need its own
+    licence row and could drift from the original.
+  8 TRADEMARKS.md: "Culprit" and docs/brand/mark.svg (and wordmark.svg)
+    unregistered marks of Joshua Heath, not registered anywhere; what is
+    fine; a fork or a hosted modified version takes another name and
+    mark, and may say "based on Culprit".
+  9 CITATION.cff: no version or date (nothing released); validated by
+    `uvx --python 3.12 cffconvert@2.0.0 --validate` in just lint and CI.
+ 10 SECURITY.md (root; docs/SECURITY.md stays the threat model and is
+    linked): private vulnerability reporting, with a fallback until it is
+    turned on; scope as the brief lists, the demo services out; main only
+    (no release yet); seven days; no bounty.
+ 11 The README's author line links AUTHORSHIP.md and NOTICE: 299 lines;
+    check_readme passes.
+  No email address, student number or local path in any of these files
+  (grepped, and the phase audit grepped again).
 
-MUTATIONS SHOWN RED (each applied to the real file, the test run, the file
-  restored; fifteen)
-  ci_gate: accepts skipped; accepts cancelled (result != "failure"); passes
-  an empty needs. Workflow: gate without e2e; gate on success(); lint's
-  timeout removed; images.yml publish's timeout removed; cancel-in-progress
-  true; one group per ref; fault-library needs cli; a paths-ignore filter;
-  continue-on-error on e2e. Shards: matrix [1, 2] ("runs shards [1,2],
-  want [1,2,3,4]"); latency without seconds ("declares 0 seconds"); three
-  shards with matrix [1,2,3] ("shard 1 holds 511 declared seconds, over
-  480"). The phase audit repeated these and more (ok = True, a new job
-  ungated, build dropped, matrix [1,2,4,3] and [1..5], missing-index at
-  900 seconds): all red.
+MUTATIONS SHOWN RED (applied to the real file, run, restored)
+  REUSE and the map: a new .py with no header; a Go file's header
+  removed; a shared/ file headed AGPL; LICENSING.md's shared/ row set to
+  AGPL; deploy/ dropped from the table; the Flask annotation removed
+  (reuse alone stays compliant, the files falling to cli/testdata/'s
+  AGPL; the map catches it). CITATION.cff without title, and without
+  authors. CI pinning reuse 6.2.0. C3: as above. The phase audit
+  repeated these with its own (cffconvert 2.0.1 pinned; cff-version and
+  message removed; a different Go file; api/zz_noheader.py): all red.
 
 AUDITS
-  invariant-auditor (cdc5032..143839f): CLEAN. Risks, not violations: (1)
-    cli's job timeout (20) equals its Docker step's go test -timeout 20m,
-    and e2e's (30) its agent-e2e go test -timeout 30m: a hang there is a
-    killed job without the stack dump. The gate still fails. Left, since
-    decision 6 sets the job's and leaves the inner ones; in LIMITS. (2)
-    gate runs ci_gate.py from the pull request's own tree, as every job
-    runs that tree's workflow; no new exposure. (3) The tree changed during
-    its audit: the phase auditor's mutations, run alongside.
-  phase-auditor (cdc5032..143839f): decisions 1-5 and 8 MET by execution;
-    6 NOT MET for one job (build's 15, above: the measurement window, now
-    named); 7, 9, 10 NOT RUN then (they needed these runs). Observations:
-    the Go test cache does not see ci-cd.yml (a cached local pass survives
-    a matrix edit; CI runs it under -count=1 in every shard): in LIMITS. A
-    superseded run's gate fails: noise in its own checks only. Not re-run
-    after b785cab (a comment and LIMITS).
+  invariant-auditor (7edfc39..dc6e835): CLEAN, no violation. One defect
+    in the new gate (the duration parse), fixed in 0716dee. Risks: the
+    kind test's 5 minutes has no measured CI time of its own (the whole
+    job took 1.1-1.9 in the last ten green runs); cli-release.yml's go
+    test sits in a job with no timeout, older than this phase and outside
+    the rule's file; the
+    tools' own dependencies float under uvx (a change fails closed).
+  phase-auditor (7edfc39..dc6e835): every criterion MET by execution;
+    three defects, all fixed in 0716dee: the duration parse; REUSE.toml's
+    comment naming a test that does not exist; AUTHORSHIP's commands not
+    reproducing its figures. It could not check the web sources (no web
+    access); this run read them (above). Not re-run after 0716dee.
 
-LOCAL GATES (Windows, one at a time, in the foreground, on 143839f's tree;
-  just lint again before b785cab)
-  just lint, typecheck, lint-imports (6 kept), check-schema-drift,
-  check-no-llm-imports, check-invariants, check-scan-coverage (328 files),
-  check-frontend-tokens, cli-lint, cli-test: clean. just test: api 1,913
-  passed (6 skipped; 31 of them new; 1,877 in Phase 40 part 2), worker 93,
-  mcp_server 21, 39, node conformance. Not run locally: the fault library
-  (instructed), e2e.
+LOCAL GATES (Windows, one at a time, in the foreground, on dc6e835; just
+  lint and the touched tests again on 0716dee)
+  just lint (with reuse, the map and CITATION), typecheck, lint-imports
+  (6 kept), check-schema-drift, check-no-llm-imports, check-invariants
+  (migration symmetry over the 32 headed migrations), check-scan-coverage
+  (330 files), check-frontend-tokens, cli-lint, cli-test: clean. just
+  test: api 1,931 passed (6 skipped), worker 93, mcp_server 21, 39, node.
+  Not run locally: the fault library (instructed), e2e.
 
-CI (PR #51)
-  44503311197 on 143839f: success on every job (publish, deploy skipped),
-    gate included; 26 checks pass, 2 skipping (deploy, build / publish);
-    CodeQL included; the three code-scanning queries (pr=51,
-    refs/pull/51/merge, refs/pull/51/head) empty.
-  44516832208 on b785cab: the same.
-  main not moved: the merge result. This report's own commit runs after it.
-
-LIMITS
-  "The gate holds every job, and the shards hold what they declare":
-  declared seconds, not this run's; the hard timeouts and the two inner
-  go test timeouts they precede; a pull request's superseded run
-  cancelled; e2e the critical path; the Go test cache and ci-cd.yml; the
-  ruleset the owner's.
+CI (PR #53)
+  44534379764 on dc6e835: success on every job (publish, deploy
+    skipped), gate included, wall 11.5 min. The lint log: the map check
+    "942 files ... agree", and "Citation metadata are valid". PR
+    checks: 25 pass, 2
+    skipping, 1 fail — CodeQL, on three open alerts: #2
+    py/clear-text-logging-sensitive-data, api/scripts/apply_model.py:77;
+    #3 the same, scripts/bootstrap_env.py:414; #4
+    py/weak-sensitive-data-hashing, api/app/ingest_gateway/auth.py:69.
+    All three open on main at the same code three lines up (74, 411, 66)
+    since 2026-11-04, never dismissed. Code-scanning queries: pr=53 and
+    refs/pull/53/head 3 each; refs/pull/53/merge 0. NOT GREEN (Q41).
+  main has not moved (3928f0a). This report's commit runs after it.
 
 NOT BUILT
-  No path filter, retry, continue-on-error or merge queue; no test removed,
-  skipped or loosened; nothing a job checks changed; no caching (7); no new
-  action. The ruleset is untouched (last updated 2026-11-12).
-  Human steps, after merge: require gate in the ruleset, branches up to
-  date, no bypass actors; then a throwaway pull request with a failing
-  test, seen unable to merge, and closed.
+  No history rewritten; no licence changed; no header on test data or a
+  generated file; no registered mark; no legal advice; no outside code
+  accepted or invited; the CLA's text not copied; no SBOM (Phase 43). No
+  alert dismissed or suppressed; the ruleset not touched.
+  Owner, now: add "gate" to the ruleset's required checks, then repeat
+  step 0's throwaway check. After merge: Software Heritage; private
+  vulnerability reporting; secret scanning with push protection.
 ```
 
 ## §6. Escalate to the architecture session when
