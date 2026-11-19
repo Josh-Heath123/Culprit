@@ -16,10 +16,13 @@ them are shown, so they can be checked and brought up to date.
   they link to. Decisions the owner made directly are recorded with their
   date, for example the name of record (`docs/DELIVERY_PLAN.md`, Phase 41,
   "Review") and pausing deploy (`docs/HANDOFF.md` §1, 2026-11-05).
-- **Review and merge.** Every change reaches `main` through a pull request
-  that the owner merges after review ([`docs/HANDOFF.md`](docs/HANDOFF.md),
-  the protocol at its top: the coding agent commits and opens the pull
-  request; only the human merges). All 51 merged pull requests were merged by
+- **Review and merge.** Since 2026-11-06 every change has reached `main`
+  through a pull request that the owner merges after review
+  ([`docs/HANDOFF.md`](docs/HANDOFF.md), the protocol at its top: the coding
+  agent commits and opens the pull request; only the human merges), and since
+  2026-11-19 the repository's ruleset requires it. Before that, 26 commits
+  were pushed to `main` directly: `git rev-list --first-parent --no-merges
+  --count 3928f0a`. All 51 merged pull requests were merged by
   `Josh-Heath123`: `gh pr list --state merged -L 200 --json mergedBy`.
 - **Commits.** `main`'s 308 commits since the first, on 2026-08-02, are
   authored as `Josh-Heath123` (233) or Joshua Heath (75), both the owner:

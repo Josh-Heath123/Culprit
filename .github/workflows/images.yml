@@ -85,7 +85,7 @@ jobs:
             context: cli
             dockerfile: cli/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # frontend/src/lib/api-types.generated.ts is gitignored — it's
       # regenerated from api's live OpenAPI schema, same as local dev's
@@ -98,7 +98,7 @@ jobs:
       # of this; api and worker skip these three steps entirely.
       - name: Set up uv (frontend type generation only)
         if: matrix.image == 'frontend'
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
       - name: Dump api's OpenAPI schema
@@ -139,10 +139,10 @@ jobs:
         if: matrix.image == 'frontend'
         run: cd frontend && npm ci && npm run generate-types
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build (local, for scanning)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -153,7 +153,7 @@ jobs:
             ${{ matrix.image == 'frontend' && 'VITE_API_URL=/api' || '' }}
 
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: local/${{ matrix.image }}:ci
           severity: CRITICAL,HIGH
@@ -167,23 +167,46 @@ jobs:
         if: matrix.image == 'cli'
         run: bash scripts/check_agent_image.sh local/cli:ci
 
+      # Phase 43 (D7, decision 5): the scanned image's software bill of
+      # materials, written by the same Trivy, after the scan and apart from
+      # it (the action keeps each call's settings to that call), for the
+      # publish job to attest. CycloneDX. Written on every run, so a pull
+      # request shows it can be; kept only when publishing.
+      - name: SBOM of the scanned image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/${{ matrix.image }}:ci
+          format: cyclonedx
+          output: sbom-${{ matrix.image }}.cdx.json
+
       # Hand the exact image that was scanned to the publish job, so what
       # is pushed is what Trivy passed, never a rebuild of it.
       - name: Save the scanned image for publishing
         if: inputs.publish
         run: docker save local/${{ matrix.image }}:ci | gzip > image-${{ matrix.image }}.tar.gz
-      - name: Keep it for the publish job
+      - name: Keep it, and its SBOM, for the publish job
         if: inputs.publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: image-${{ matrix.image }}
-          path: image-${{ matrix.image }}.tar.gz
+          path: |
+            image-${{ matrix.image }}.tar.gz
+            sbom-${{ matrix.image }}.cdx.json
+          if-no-files-found: error
           retention-days: 1
 
   # Only on a push to main or a vX.Y.Z tag (and a hand-started deploy of
   # main) — the caller sets `publish`. The one job holding packages: write,
   # and it runs no build or scan action. GITHUB_TOKEN (built-in, scoped to
   # this repo) is all ghcr.io needs; no separate registry credential.
+  #
+  # Phase 43 (D7, decision 5): it attests each image it pushed, by the
+  # pushed digest: build provenance and the SBOM the build job wrote, both
+  # signed with this run's OIDC identity through Sigstore and stored beside
+  # the image in ghcr.io; then `gh attestation verify` checks both in the
+  # same job, so an attestation that does not verify fails the publish. The
+  # two attestation permissions are this job's alone
+  # (scripts/tests/test_ci_workflow.py holds every job's).
   publish:
     needs: build
     if: inputs.publish
@@ -193,19 +216,21 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
         image: [api, worker, frontend, mcp_server, cli]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: image-${{ matrix.image }}
       - name: Load the scanned image
         run: gunzip -c image-${{ matrix.image }}.tar.gz | docker load
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -231,3 +256,42 @@ jobs:
         run: |
           docker tag local/${{ matrix.image }}:ci ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
           docker push ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}:${{ github.ref_name }}
+
+      # The digest the registry gave the image just pushed: what is attested
+      # and verified, never a tag that can move. Fails if no push ran.
+      - name: The pushed digest
+        id: pushed
+        run: |
+          digest=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "local/${{ matrix.image }}:ci" \
+            | grep -m1 "^ghcr.io/${REPO_LC}/${{ matrix.image }}@sha256:" | cut -d@ -f2)
+          if [ -z "$digest" ]; then
+            echo "no digest in ghcr.io for ${{ matrix.image }}: nothing was pushed" >&2
+            exit 1
+          fi
+          echo "pushed ghcr.io/${REPO_LC}/${{ matrix.image }}@${digest}"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest the image's build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}
+          subject-digest: ${{ steps.pushed.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest the image's SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ghcr.io/${{ env.REPO_LC }}/${{ matrix.image }}
+          subject-digest: ${{ steps.pushed.outputs.digest }}
+          sbom-path: sbom-${{ matrix.image }}.cdx.json
+          push-to-registry: true
+
+      # Both attestations, checked where they were made: signed by a workflow
+      # in this repository, for this digest. A failure fails the job.
+      - name: Verify both attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image="oci://ghcr.io/${REPO_LC}/${{ matrix.image }}@${{ steps.pushed.outputs.digest }}"
+          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY" --predicate-type https://cyclonedx.org/bom

@@ -3349,3 +3349,33 @@ do:
 - **The tools are pinned and fetched.** `just lint` and CI run `reuse` 6.3.0
   and `cffconvert` 2.0.0 through `uvx`, which downloads them on first use; a
   machine with no network access cannot run those two checks.
+
+## What the signatures and attestations prove, and what they make public
+
+Phase 43 signs every commit, pins every action to a commit, and attests
+what `main` publishes. What follows from it:
+
+- **The signing key has no passphrase.** Commits are signed unattended by an
+  ed25519 key in the owner's home directory (`~/.ssh/culprit_signing`),
+  configured for this repository only. Anyone who can read that file can
+  sign a commit GitHub shows as Verified, as the owner. It is a signing key
+  only, never an authentication key, so it cannot push; revoking it on
+  GitHub turns the commits it signs from then on Unverified. A commit made
+  in another clone, without that configuration, is not signed.
+- **Attestations are public, and so is what they name.** The repository is
+  public, so `actions/attest-build-provenance` and `actions/attest-sbom` sign
+  through Sigstore's public-good instance, and each attestation is recorded
+  in its public transparency log: the image's name in `ghcr.io`, its digest,
+  this repository, the workflow and the commit. The images themselves stay
+  private; their names and digests do not. Each image's SBOM (CycloneDX,
+  written by Trivy) is attested and stored beside the image, readable by
+  whoever can pull it.
+- **A hand-started CLI release run attests what it built.** `cli-release.yml`
+  run by hand publishes nothing, but its binaries' provenance is recorded
+  like a release's, for binaries nobody can download.
+- **Attestations exist only from Phase 43 on.** Images pushed before it have
+  none; `gh attestation verify` on one of them fails.
+- **A pin is only as current as Dependabot keeps it.** Every action is pinned
+  to a commit, so a moved tag upstream changes nothing here until Dependabot's
+  weekly pull request moves the pin, and it must pass `gate` first. A pinned
+  commit can still be a bad one; the pin makes it the same one every run.

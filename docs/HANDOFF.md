@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **42 — ownership on the record** — built; Q41 ruled and carried out. PR #53, still a draft: every job and every PR check green on `3aeeaf4` (run 44543993249), but alert #2 is still open (#3 was dismissed in its place); the owner's dismissal of #2 is the one step left. The ruleset now requires `gate` (the throwaway PR read BLOCKED). Report in §5. |
-| Previous phase | **41 — the gate — merged as `3928f0a` (PR #51) and signed off 2026-11-19.** Runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2. Three mutations shown red by the architecture session. The 12-minute target missed by about a minute and accepted; caching not now; test timeouts carried as C3. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
+| Current phase | **43 — authenticated** — `complete`, awaiting review. PR #55; CI green on `6d2bffc` (run 44573995497) and `f56b4e4` (run 44579250490): every job, `gate` included, every PR check; no open code-scanning alert. Every commit signed and Verified. The CLI's attestation shown by run 44574017581 started by hand on the branch; the images' is the first thing to read on `main`'s push run after merge. Report in §5. |
+| Previous phase | **42 — ownership on the record — merged as `bb92e48` (PR #53) and signed off 2026-11-19.** Runs 44534379764, 44543993249 and 44546655296 (the report) green on every job, read from GitHub; `gate` required and shown to block (#54). Q41 ruled: #3 fixed, #2 and #4 the owner's to dismiss. Two mutations shown red by the architecture session; `AUTHORSHIP.md`'s merge fact corrected. Recorded in `DELIVERY_PLAN.md`, Phase 42, "Review". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-42-ownership`, from `origin/main` = `3928f0a`; the review (`7edfc39`), C3 (`9f5a98a`), the headers (`49fa66c`), the rest (`dc6e835`), the audits' findings (`0716dee`), Q41's fix (`3aeeaf4`). PR #53, a draft until alert #2 is dismissed. `shared/uv.lock` not staged; the fault library not run locally. |
+| Branch | `phase-43-signed`, from `origin/main` = `bb92e48`; the review (`c3969b3`), the pins (`a787f96`), the attestations (`6d2bffc`), the audits' findings (`f56b4e4`), all signed. PR #55, marked ready when this report was committed. `shared/uv.lock` not staged; the fault library not run locally; nothing published; the ruleset untouched. |
 | Blocking questions | None. Q41 is ruled (§5). |
 
 ---
@@ -126,7 +126,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 40, part 1 | The new identity: the dashboard | **complete** (PR #49, `624c6e3`) | **Signed off 2026-11-18** (architecture session): runs 44340916627 and 44346373804 (the report) green on every job, read from GitHub; C1 met over two runs; three mutations shown red; the run's five decisions accepted, the third amended by C2 (the focus ring). Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
 | 40, part 2 | The new identity: the repository | **complete** (PR #50, `cdc5032`) | **Signed off 2026-11-19** (architecture session): runs 44386033657 and 44390448565 (the report) green on every job, read from GitHub; four mutations shown red; nothing lost in the move to `docs/GUIDE.md`; the README criterion amended; a stale LIMITS entry rewritten. Phase 40 is complete. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 2". |
 | 41 | The gate | **complete** (PR #51, `3928f0a`) | **Signed off 2026-11-19** (architecture session): runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2; three mutations shown red; the target missed by about a minute and accepted, `e2e (stub)`'s quickstart build bounding it; caching not now; C3 carried. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
-| 42 | Ownership on the record | **built; one owner step left** (PR #53, a draft: every job and PR check green on `3aeeaf4`; alert #2 still open) | **Run 2026-11-19:** C3; SPDX headers on 668 files and `REUSE.toml`; `check_licensing_map.py`; `reuse lint` and `cffconvert` pinned in lint; NOTICE, AUTHORSHIP, CONTRIBUTING (HA-CLA-I 1.0, Option Five), TRADEMARKS, SECURITY, CITATION; the audits' findings fixed; Q41 ruled: #3 fixed in the code (`3aeeaf4`), #2 and #4 the owner's dismissals. The ruleset requires `gate` (BLOCKED shown). Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D8) and Phase 42, with "Brief (2026-11-19)" at its end: C3, test timeouts inside job timeouts, first, as its own commit; then REUSE (headers where a file holds a comment, `REUSE.toml` elsewhere, no byte a test compares changed), the map held to `LICENSING.md`, `reuse lint` and `CITATION.cff` validated in `lint`, NOTICE, `AUTHORSHIP.md` (facts with pointers, no legal conclusion), CONTRIBUTING with the Harmony CLA, TRADEMARKS and SECURITY. The name of record is Joshua Heath (owner, 2026-11-19). Step 0: `main`'s push run 44522173729 on `3928f0a`. Branch `phase-42-ownership` from `origin/main` = `3928f0a`; its first commit is the review (`../phase-41-review.patch`, message `../phase-41-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 42 | Ownership on the record | **complete** (PR #53, `bb92e48`) | **Signed off 2026-11-19** (architecture session): runs 44534379764, 44543993249 and 44546655296 (the report) green on every job, read from GitHub; `reuse lint` and the map rerun, two mutations shown red; the header commit insertions only; Q41 ruled (#3 fixed; #2 and #4 dismissed by the owner); `AUTHORSHIP.md`'s merge fact corrected. Recorded in `DELIVERY_PLAN.md`, Phase 42, "Review". |
+| 43 | Authenticated | **complete, awaiting review** (PR #55; CI green on `6d2bffc` and `f56b4e4`) | **Run 2026-11-19:** the signing key made and configured locally, added by the owner as a signing key; every commit Verified; every action pinned to its tag's commit with the version as a comment, no version changed; Dependabot for github-actions; provenance and SBOM attested and verified in `images.yml`'s publish, binaries in `cli-release.yml` (run 44574017581, by hand, nothing published); every job's permissions held to a table; the audits' findings fixed. Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D7) and Phase 43, with "Brief (2026-11-19)" at its end: the signing key made by Claude Code and added by the owner as a signing key, git configured for this repository alone; every commit Verified; every external action pinned to a SHA, held by a test; Dependabot for the actions; provenance and SBOM attestations on what `main` publishes, verified in the job; permissions held to a declared table. Step 0: `main`'s push run 44563572561 on `bb92e48`, and the code-scanning alerts' states. Branch `phase-43-signed` from `origin/main` = `bb92e48`; its first commit is the review (`../phase-42-review.patch`, message `../phase-42-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -158,248 +159,187 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        42 — ownership on the record (with C3, carried from Phase 41)
-Branch:       phase-42-ownership, from origin/main = 3928f0a. 7edfc39 the
-              review (../phase-41-review.patch); 9f5a98a C3; 49fa66c the
-              SPDX headers (insertions only); dc6e835 REUSE.toml, the map
-              and the documents; 0716dee the audits' findings; then this
-              report. PR #53, a draft.
-Run:          2026-11-19, /next. Local gates one at a time, in the
-              foreground; just lint before every push. The fault library
+Phase:        43 — authenticated
+Branch:       phase-43-signed, from origin/main = bb92e48. c3969b3 the
+              review (../phase-42-review.patch); a787f96 the pins and
+              Dependabot; 6d2bffc the attestations, the permissions table
+              and LIMITS; f56b4e4 the audits' findings; then this report.
+              PR #55. Every commit signed and Verified (below).
+Run:          2026-11-19, /next. Step 0 first; local gates one at a time, in
+              the foreground; just lint before every push. The fault library
               never run locally.
-Status:       Q41 RULED and carried out (below); ONE STEP LEFT, the
-              owner's. CI run 44543993249 on 3aeeaf4: every job green, gate
-              included; every PR check passes (26 pass, 2 skipping, CodeQL
-              included). The ruleset now requires gate: the throwaway pull
-              request read BLOCKED. But alert #2 is still OPEN, and #3 is
-              dismissed as "won't fix" with #4's comment: the ruling's two
-              dismissals look to have been applied to #3 and #4 instead of
-              #2 and #4. Claude Code dismisses nothing, so the pull request
-              stays a draft until #2 is dismissed (and #3, now fixed in the
-              code, is left to close by itself or reopened, as the owner
-              prefers).
-
-Q41 — RULED 2026-11-19 (architecture session), CARRIED OUT
-  The question: three code-scanning alerts, open on main since
-  2026-11-04, failed PR #53's CodeQL check once the headers put a line
-  into every file. The ruling:
-  #3 py/clear-text-logging-sensitive-data, scripts/bootstrap_env.py: FIXED,
-    not dismissed (3aeeaf4). bootstrap_env.py --local no longer prints the
-    generated admin password; it prints where it is ("the admin's password
-    is QUICKSTART_ADMIN_PASSWORD in infra/.env.prod"). just quickstart's
-    final local message, read from that file, is unchanged. The justfile's
-    CI-only filter of the printed line is removed (nothing left to hide);
-    comments and docs/INSTALL.md updated. test_bootstrap_env.py: main()
-    prints no value it generated, local and VM alike; red with the old
-    print put back. No test expected the line.
-  #2 py/clear-text-logging-sensitive-data, api/scripts/apply_model.py: to be
-    dismissed by the owner as won't fix (printing a component's new key
-    once is the one way to deliver a key that exists only as a hash).
-  #4 py/weak-sensitive-data-hashing, api/app/ingest_gateway/auth.py:
-    dismissed by the owner as a false positive (256-bit random keys, not
-    passwords).
-  As GitHub holds them now: #2 open; #3 dismissed "won't fix"; #4
-  dismissed "false positive"; #3's and #4's comments both the API-key
-  text. Open alerts, repo-wide and on refs/pull/53/head: #2 only.
-  The ruleset (step 4): gh api repos/Josh-Heath123/Culprit/rules/
-  branches/main lists required_status_checks [{"context": "gate",
-  "integration_id": 15368}], strict. Throwaway gate-check from
-  origin/main (3928f0a), one failing test, PR #54 opened ready: its run
-  44543951760 failed test and gate, and mergeStateStatus read BLOCKED
-  (mergeable MERGEABLE) while pending and after the gate failed. PR #54
-  closed unmerged; gate-check deleted on the remote and locally.
+Status:       COMPLETE pending review. CI green on 6d2bffc (44573995497) and
+              f56b4e4 (44579250490): every job, gate included; every PR
+              check passes; no open code-scanning alert. main has not moved
+              (bb92e48): the merge result. The one criterion that cannot be
+              shown before merge — an attestation verifying on main's push
+              run — is the first thing to read after it (below).
 
 STEP 0
-  1 main's push run 44522173729 on 3928f0a, e2e (stub), job 135553437405,
-    "Install Chromium for Playwright": playwright install --with-deps
-    ran apt-get, which could not reach the Ubuntu mirrors —
-    azure.archive.ubuntu.com:80 "connection timed out" and
-    security.ubuntu.com:443 "Could not wait for server fd - select (11:
-    Resource temporarily unavailable)" — fetched 8.9 MB in 3 min 19 s,
-    failed six font packages (fonts-ipafont-gothic, fonts-wqy-zenhei,
-    xfonts-*), and exited 100 ("Failed to install browsers"). No test
-    ran. Attributed: the runner's network to Ubuntu's archive, not the
-    code (D6). gh run rerun --failed: attempt 2 green on every job, gate
-    included (deploy skipped).
-  2 The ruleset. Throwaway branch gate-check from origin/main, one test
-    asserting 1 == 2 (scripts/tests/test_gate_check.py), PR #52 opened
-    ready (not draft). Its run 44525066795: test failed, gate failed.
-    gh pr view 52 --json mergeStateStatus: UNSTABLE while pending and
-    UNSTABLE after the gate failed, with mergeable MERGEABLE — NOT
-    BLOCKED. Ruleset 26460341 ("Protect Main branch", active, updated
-    2026-11-19 14:32 +02:00) has strict_required_status_checks_policy
-    true and no bypass actors, but required_status_checks is []: no
-    check is required. No branch protection and no other ruleset applies
-    (gh api rules/branches/main). PR #52 closed without merging, with a
-    comment saying why; gate-check deleted on the remote and locally.
-    The ruleset was not touched: the owner's step. To do: add the
-    status check "gate" (from GitHub Actions) to the rule, then repeat.
+  1 main's push run 44563572561 on bb92e48, read by id: success on every
+    job, deploy skipped.
+  2 The code-scanning alerts, as read then (nothing dismissed or reopened
+    by this run): #2 open, never dismissed; #3 dismissed "won't fix" by
+    Josh-Heath123 (14:21:54Z), also marked fixed at 16:14:13Z, with #4's
+    API-key comment; #4 dismissed "false positive" by Josh-Heath123. One
+    open alert, #2. The owner then dismissed #2 ("won't fix"); read again
+    before this report: #2 and #3 dismissed "won't fix", #4 "false
+    positive"; none open.
+  3 The signing key (decision 1): ed25519 at ~/.ssh/culprit_signing, made
+    by ssh-keygen after checking that nothing existed there; no
+    passphrase; comment "culprit commit signing", no address. Git, for
+    this repository alone (git config --local): gpg.format ssh,
+    user.signingkey the key, commit.gpgsign and tag.gpgsign true, and
+    gpg.ssh.allowedSignersFile ~/.ssh/culprit_allowed_signers (the
+    committer's address and the key, so git log --show-signature
+    verifies locally). The public key was printed and the run stopped;
+    the owner added it on GitHub as a signing key ("Culprit Signing
+    Key"). Not added as an authentication key: the phase audit found it
+    in user/ssh_signing_keys, and the account's public authentication
+    keys (users/Josh-Heath123/keys) empty; user/keys itself needs a scope
+    the token lacks. A dry-run sign-and-verify before the first commit
+    was refused by the harness and not retried; the first commit was the
+    test.
 
-C3 — TEST TIMEOUTS INSIDE JOB TIMEOUTS (9f5a98a, 0716dee)
-  Every go test a job runs, in a step or in a just recipe it calls
-  (dependencies included), now times out in at most half the job's
-  timeout-minutes: cli's database step 20m -> 10m (job 20; its other go
-  tests have Go's default 10m); just agent-e2e 30m -> 15m (e2e, job 30);
-  the fault library in CI 30m -> 17m (job 35; just fault-library keeps
-  30); kind-capture Go's default -> 5m (job 10: not named in the brief,
-  the same rule, since a go test with no -timeout has Go's 10).
-  test_ci_workflow.py reads them all (seven commands across four jobs).
-  A -run pattern's | is inside quotes and does not end the command. Both
-  audits found that the first version read only a single-unit -timeout,
-  so -timeout 0 (no timeout), 30m0s and 1h30m passed as Go's default:
-  fixed in 0716dee (whole Go durations; 0 or a non-duration read as
-  never). Red: each of the four timeouts put back; e2e's job lowered to
-  20; the fault library's set to 0, 1h30m and 30m0s. LIMITS' bullet on the
-  two timeouts that could not fire is rewritten to the rule.
+EVERY COMMIT VERIFIED (decision 2; GitHub's API, commits/<sha>,
+  verification; and %G? = G locally for each)
+  c3969b3 the review      verified=true reason=valid
+  a787f96 pins            verified=true reason=valid
+  6d2bffc attestations    verified=true reason=valid
+  f56b4e4 audit findings  verified=true reason=valid
+  (this report's commit is signed the same way; its verification is read
+  after the push, below.)
 
-THE ELEVEN DECISIONS, AS BUILT
-  1 49fa66c: 668 files gain two SPDX lines and a blank one, nothing else
-    (1,982 insertions, no deletion; the phase audit compared every
-    file): the copyright line (2026 Joshua Heath) and the licence line,
-    AGPL-3.0-only (611) or Apache-2.0 under shared/, extractors/python/
-    and extractors/node/ (57). (Not quoted as tags here: REUSE reads a
-    tag in any file, Markdown included; it did, and the map check went
-    red on this report until it was reworded.) Python, Go, TS,
-    TSX, JS, CSS, shell, SQL, YAML, TOML, HTML, INI, Dockerfiles, the
-    justfile, Caddyfile, go.mod, the systemd unit, .env examples, ignore
-    and attributes files. Shebangs and the two doctypes stay first (25
-    files). REUSE.toml for the rest, by file type outside the test data:
-    JSON, Markdown, PNG, SVG, lock files, go.sum, VERSION, NOTICE,
-    .gitkeep, and the Alembic template (its comments would be copied into
-    every migration); cli/testdata/ and api/tests/data/ by directory. No
-    byte a test compares changed: go test ./..., just test, the
-    extractors', frontend's and hook tests all green with only the
-    headers, and the self-check's figures still equal the README's.
-    LICENSES/: AGPL-3.0-only and Apache-2.0 are this repository's own
-    LICENSE texts; MIT and BSD-3-Clause are SPDX's. Every LICENSE stays.
-  2 The fixtures: BSD-3-Clause, "2010 Pallets"; MIT, "2009-2014 TJ
-    Holowaychuk", "2013-2014 Roman Shtylman", "2014-2015 Douglas
-    Christopher Wilson" (from their LICENSE files, addresses left out);
-    precedence override. Each fixture's culprit.yaml (added in Phase 28)
-    is Culprit's.
-  3 scripts/check_licensing_map.py (standard library) reads reuse lint
-    --json and LICENSING.md's table: REUSE compliant; every file under a
-    row with exactly its SPDX identifier (the most specific row wins);
-    every path the table names holds a file. On its first run it found
-    LICENSING.md's "everything else" without deploy/, and lock files
-    under shared/ annotated AGPL. The table now names an identifier in
-    every row (the fixtures separately, their manifests, deploy/); no
-    licence changed. 943 files agree: 827 AGPL-3.0-only, 84 Apache-2.0,
-    20 BSD-3-Clause, 12 MIT (942 in CI, without the untracked
-    shared/uv.lock). test_check_licensing_map.py: 11 cases.
-  4 reuse lint runs in just lint and CI's lint job, as
-    `uvx --from 'reuse[charset-normalizer]==6.3.0' reuse lint --json |
-    check_licensing_map.py -` (6.3.0, released 2026-10-30; the extra
-    because libmagic is not on Windows). The pipe has no pipefail, and is
-    safe: the script fails on a non-compliant report and on empty or
-    broken input (both audits checked). test_ci_workflow.py holds the
-    pins equal in both places. CLAUDE.md's "Licences" line.
-  5 NOTICE: the holder; the licence split, pointing at LICENSING.md; the
-    two fixtures (tags 3.1.0, 4.21.2); Inter and JetBrains Mono
-    (@fontsource 5.3, OFL-1.1, copyright lines from their packages). The
-    bundle's, binary's and images' dependencies named as not listed; in
-    LIMITS.
-  6 AUTHORSHIP.md: who directs, decides, reviews and merges, with
-    pointers (the plans; HANDOFF's protocol; 51 of 51 merged pull
-    requests merged by Josh-Heath123; 308 commits, 233 as Josh-Heath123
-    and 75 as Joshua Heath, from 2026-08-02); how it is made (Claude in
-    Claude Code and the architecture session; 109 commits with a
-    Co-Authored-By: Claude trailer, and that a trailer is not a share);
-    Anthropic's Consumer Terms, effective 2025-10-08, section 4 (the
-    assignment of whatever rights Anthropic has in Outputs), paraphrased
-    and dated 2026-11-19, read from the page; the US Copyright Office's
-    Part 2 report (2025-01-29), from copyright.gov; South Africa's
-    Copyright Act 98 of 1978, s 1(1) "author" (i), quoted from WIPO Lex
-    (gov.za's pages gave 404 and SAFLII 403). No legal conclusion; says
-    twice it is not legal advice. Its commands are pinned to 3928f0a and
-    -L 200 (0716dee), so they reproduce its figures.
-  7 CONTRIBUTING.md: issues and private security reports welcome; outside
-    code not accepted, and pull requests closed, until a lawyer reads
-    the agreement. The agreement: Harmony Individual Contributor License
-    Agreement (HA-CLA-I) 1.0, 2011-07-04, the licence form (not an
-    assignment); Joshua Heath as "We"; project Culprit. OUTBOUND: Option
-    Five (any licence, including proprietary, in addition to the
-    material's own), chosen because it keeps the owner able to offer
-    Culprit under other licences as well as the AGPL, so a hosted or
-    commercially licensed Culprit stays possible. Media licences,
-    governing law and how to sign left open for the lawyer. Linked, not
-    copied: the template is CC BY 3.0, and a copy would need its own
-    licence row and could drift from the original.
-  8 TRADEMARKS.md: "Culprit" and docs/brand/mark.svg (and wordmark.svg)
-    unregistered marks of Joshua Heath, not registered anywhere; what is
-    fine; a fork or a hosted modified version takes another name and
-    mark, and may say "based on Culprit".
-  9 CITATION.cff: no version or date (nothing released); validated by
-    `uvx --python 3.12 cffconvert@2.0.0 --validate` in just lint and CI.
- 10 SECURITY.md (root; docs/SECURITY.md stays the threat model and is
-    linked): private vulnerability reporting, with a fallback until it is
-    turned on; scope as the brief lists, the demo services out; main only
-    (no release yet); seven days; no bounty.
- 11 The README's author line links AUTHORSHIP.md and NOTICE: 299 lines;
-    check_readme passes.
-  No email address, student number or local path in any of these files
-  (grepped, and the phase audit grepped again).
+THE SEVEN DECISIONS, AS BUILT
+  1 Above (step 0).
+  2 Above.
+  3 Every external action pinned (a787f96): 52 uses: lines, sixteen
+    actions, each to the commit its tag or branch named on bb92e48, with
+    the most specific version tag at that commit as a comment. No version
+    changed: checkout v4 -> v4.4.0, download-artifact v4.3.0, setup-go
+    v5.6.0, setup-node v4.4.0, upload-artifact v4.6.2, setup-uv v5.4.2,
+    build-push-action v6.19.2, login-action v3.7.0, setup-buildx-action
+    v3.12.0, codeql-action v4.39.3, ssh-action v1.2.5, action-gh-release
+    v2.6.2; trivy-action v0.36.0, kind-action v1.12.0, scp-action v0.1.7
+    exact already; pypa/gh-action-pypi-publish's branch release/v1 ->
+    v1.14.3. The two new actions, pinned the same way:
+    attest-build-provenance v4.2.2 (2026-08-06), attest-sbom v4.1.0
+    (2026-03-18), each the latest release at least two weeks old. Both
+    audits resolved all 18 again through the API: every pin is its tag's
+    commit. test_ci_workflow.py reads every uses: line of every workflow
+    (.yml and .yaml) and the parsed uses: values, and fails on a tag, a
+    branch, a short SHA, docker://, a missing `# vX.Y.Z`, or a flow-style
+    step (f56b4e4). The local reusable workflow (./) is not an action.
+  4 .github/dependabot.yml: github-actions only, directory /, weekly, one
+    group of "*", so one pull request that must pass gate. Held by a test.
+  5 Attestations (6d2bffc). images.yml: the build job writes each scanned
+    image's SBOM (CycloneDX) with a second call of the same Trivy, after
+    the blocking scan and apart from it (v0.36.0 writes each call's
+    settings to a file it deletes before and after; the scan's inputs are
+    unchanged; CI's log shows the SBOM step on all five images, "--format
+    cyclonedx disables security scanning"), and hands it to publish with
+    the image. publish, after pushing, reads the registry's digest from
+    docker inspect (failing if there is none), attests build provenance
+    and the SBOM by that digest with push-to-registry, and runs gh
+    attestation verify twice, the second with --predicate-type
+    https://cyclonedx.org/bom; under bash -e a failed verify fails the
+    job. cli-release.yml: release attests its five binaries' provenance
+    and verifies each (and that there are five), before the tag-only
+    Publish.
+    THE HAND-STARTED RUN: 44574017581, cli-release.yml, workflow_dispatch
+    on phase-43-signed at 6d2bffc: success. release's steps all green;
+    Publish skipped; publish-pypi and publish-npm skipped. "Attestation
+    created for 5 subjects", Rekor logIndex 4001720906,
+    github.com/Josh-Heath123/Culprit/attestations/69758459. The verify
+    step exited 0 with the count check passed but printed nothing: gh
+    attestation verify is silent on success without a terminal. So the
+    evidence is the exit status, and GitHub's attestations API, which
+    returns an in-toto SLSA provenance bundle for each of the five binary
+    digests the job printed (two read by this run, all five by the phase
+    audit). The step was left as it ran rather than changed after the
+    proof. gh release list empty; no tag on the remote.
+  6 Permissions (6d2bffc): test_ci_workflow.py holds every job's
+    effective permissions in all three workflows to a declared table, and
+    the table must name every workflow (f56b4e4). Only three jobs
+    changed, each by exactly id-token: write and attestations: write:
+    images.yml's publish, cli-release.yml's release (which keeps contents:
+    write, now declared on the job), and ci-cd.yml's build, which calls
+    images.yml: a called workflow's jobs hold no more than the caller
+    grants, and the new table caught that it was missing. images.yml's
+    build keeps contents: read; publish runs only on main and tags, so no
+    pull request run gains a permission. The phase audit compared every
+    job at bb92e48 and at HEAD and found the same.
+  7 LIMITS: "What the signatures and attestations prove, and what they
+    make public": the passphrase-less key; attestations in Sigstore's
+    public log naming the private images and their digests; a
+    hand-started CLI run's attestations; none before this phase; pins
+    only as current as Dependabot.
 
-MUTATIONS SHOWN RED (applied to the real file, run, restored)
-  REUSE and the map: a new .py with no header; a Go file's header
-  removed; a shared/ file headed AGPL; LICENSING.md's shared/ row set to
-  AGPL; deploy/ dropped from the table; the Flask annotation removed
-  (reuse alone stays compliant, the files falling to cli/testdata/'s
-  AGPL; the map catches it). CITATION.cff without title, and without
-  authors. CI pinning reuse 6.2.0. C3: as above. The phase audit
-  repeated these with its own (cffconvert 2.0.1 pinned; cff-version and
-  message removed; a different Go file; api/zz_noheader.py): all red.
+MUTATIONS SHOWN RED (on the real files, restored)
+  Pins: the pypi action back to its branch; trivy back to its tag; a short
+  SHA; a pin's comment removed; the whole suite against the unpinned
+  workflows; the new attest action by tag; a flow-style unpinned step; a
+  new .yaml workflow. Dependabot: daily; a second ecosystem. Permissions:
+  lint given packages: write; images.yml's build given id-token; publish
+  without attestations: write; cli-release's workflow widened.
+  Attestations: the SBOM attestation removed; publish's second verify
+  removed; cli-release's verify removed; publish's verify given || true;
+  the SBOM verify without its predicate. The phase audit repeated a
+  number of these with its own.
 
 AUDITS
-  invariant-auditor (7edfc39..dc6e835): CLEAN, no violation. One defect
-    in the new gate (the duration parse), fixed in 0716dee. Risks: the
-    kind test's 5 minutes has no measured CI time of its own (the whole
-    job took 1.1-1.9 in the last ten green runs); cli-release.yml's go
-    test sits in a job with no timeout, older than this phase and outside
-    the rule's file; the
-    tools' own dependencies float under uvx (a change fails closed).
-  phase-auditor (7edfc39..dc6e835): every criterion MET by execution;
-    three defects, all fixed in 0716dee: the duration parse; REUSE.toml's
-    comment naming a test that does not exist; AUTHORSHIP's commands not
-    reproducing its figures. It could not check the web sources (no web
-    access); this run read them (above). Not re-run after 0716dee.
+  invariant-auditor (bb92e48..6d2bffc): CLEAN. The Trivy scan cannot now
+    pass where it failed; every pin matches its tag; no permission
+    reachable on a pull request; no injection path in the new run:
+    expressions; neither verify can pass vacuously. Risks: R1, the publish
+    path (digest lookup, verify against private ghcr.io images, push-to-
+    registry) first runs on main after merge; R2, the verifies check the
+    signing repository only (--repo), so a hand-started branch build
+    passes the same check (in LIMITS); R3, test gaps — .yaml files and
+    new workflows (fixed in f56b4e4), and the text-count verify check
+    (fixed in f56b4e4).
+  phase-auditor (bb92e48..6d2bffc): criteria 1, 3, 4 and decisions 1-7
+    MET by execution (the passphrase not checked: ssh-keygen -y was
+    refused to it); criterion 2 NOT RUN before merge, by the plan's own
+    design. Defects, both fixed in f56b4e4: a verify softened with || true
+    still counted; flow-style uses: escaped the pin check. Risk: the
+    digest step under Docker's containerd image store (fails loudly if
+    so). Not re-run after f56b4e4.
 
-LOCAL GATES (Windows, one at a time, in the foreground, on dc6e835; just
-  lint and the touched tests again on 0716dee)
+LOCAL GATES (Windows, one at a time, in the foreground, on 6d2bffc; lint
+  and test_ci_workflow.py again on f56b4e4)
   just lint (with reuse, the map and CITATION), typecheck, lint-imports
-  (6 kept), check-schema-drift, check-no-llm-imports, check-invariants
-  (migration symmetry over the 32 headed migrations), check-scan-coverage
-  (330 files), check-frontend-tokens, cli-lint, cli-test: clean. just
-  test: api 1,931 passed (6 skipped), worker 93, mcp_server 21, 39, node.
-  Not run locally: the fault library (instructed), e2e.
+  (6 kept), check-schema-drift, check-no-llm-imports, check-invariants,
+  check-scan-coverage (330), check-frontend-tokens, cli-lint, go test
+  -count=1 ./...: clean. just test: api 1,964 passed (6 skipped), worker
+  93, mcp_server 21, 39. test_ci_workflow.py: 60 on f56b4e4. Not run
+  locally: the fault library (instructed), e2e.
 
-CI (PR #53)
-  44534379764 on dc6e835: success on every job (publish, deploy
-    skipped), gate included, wall 11.5 min. The lint log: the map check
-    "942 files ... agree", and "Citation metadata are valid". PR
-    checks: 25 pass, 2
-    skipping, 1 fail — CodeQL, on three open alerts: #2
-    py/clear-text-logging-sensitive-data, api/scripts/apply_model.py:77;
-    #3 the same, scripts/bootstrap_env.py:414; #4
-    py/weak-sensitive-data-hashing, api/app/ingest_gateway/auth.py:69.
-    All three open on main at the same code three lines up (74, 411, 66)
-    since 2026-11-04, never dismissed. Code-scanning queries: pr=53 and
-    refs/pull/53/head 3 each; refs/pull/53/merge 0. NOT GREEN (Q41).
-  44543993249 on 3aeeaf4 (after Q41's fix): success on every job (publish,
-    deploy skipped), gate included; 26 PR checks pass, 2 skipping, CodeQL
-    passing. Open alerts: #2 (pr=53, refs/pull/53/head and repo-wide);
-    refs/pull/53/merge none.
-  main has not moved (3928f0a), so that is the merge result. This
-  report's commit runs after it.
+CI (PR #55)
+  44573995497 on 6d2bffc: success on every job (publish, deploy skipped),
+    gate included; 27 PR checks pass, 2 skipping; no open alert on pr=55,
+    refs/pull/55/merge or refs/pull/55/head.
+  44579250490 on f56b4e4: the same; 26 PR checks pass, 2 skipping (the
+    27th on 6d2bffc was the hand-started run's release job, which GitHub
+    attached to that commit); no open alert on pr=55, either ref, or
+    repo-wide.
+  44574017581: cli-release.yml by hand on the branch (above).
+  main has not moved (bb92e48): the merge result.
+
+FIRST AFTER MERGE (the criterion only main can show)
+  main's push run: images.yml's publish, for all five images, must show
+  both attestations created and both gh attestation verify calls exiting
+  0. If the digest step finds nothing (R1, containerd), it fails loudly
+  and the gate goes red; that is the case to look at first.
 
 NOT BUILT
-  No history rewritten; no licence changed; no header on test data or a
-  generated file; no registered mark; no legal advice; no outside code
-  accepted or invited; the CLA's text not copied; no SBOM (Phase 43). No
-  alert dismissed or suppressed; the ruleset not touched.
-  Owner, now: add "gate" to the ruleset's required checks, then repeat
-  step 0's throwaway check. After merge: Software Heritage; private
-  vulnerability reporting; secret scanning with push protection.
+  No version changed; nothing published, released or deployed (the
+  hand-started run attested only); no key added for authentication; the
+  ruleset untouched (updated_at 2026-11-19T16:23:19+02:00, before this
+  branch); no --signer-workflow on the verifies (R2, for the review).
+  Owner, after merge: require signed commits in the ruleset and allow only
+  merge commits; turn on Dependabot security updates. Then the delivery
+  plan is complete.
 ```
 
 ## §6. Escalate to the architecture session when

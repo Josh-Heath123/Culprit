@@ -449,3 +449,327 @@ def test_a_timeout_go_reads_as_longer_is_named(workflow, justfile, flag):
     job["steps"] = [{"run": f"cd cli && go test ./cmd/culprit -run X {flag}"}]
     problems = check_go_timeouts({"jobs": {"fault-library": job}}, justfile)
     assert len(problems) == 1 and "over half the job's 35" in problems[0], problems
+
+
+# Phase 43 (D7, decision 3): every external action pinned to a commit.
+
+#: A `uses:` line, as written (YAML drops the comment that names the version).
+USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s+(\S+)(.*)$", re.M)
+#: An action pinned to a full commit: owner/repo[/path]@<40 hex>.
+PINNED_ACTION = re.compile(r"[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}")
+#: The version the pin was resolved from, as a comment: `# v4.4.0`.
+VERSION_COMMENT = re.compile(r"\s+# v\d+\.\d+\.\d+")
+
+DEPENDABOT = ROOT / ".github" / "dependabot.yml"
+
+#: A full commit SHA, for the cases below.
+CHECKOUT_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+
+
+def check_pins(text: str, name: str) -> list[str]:
+    """Why an action in a workflow's text is not pinned to a commit, or []."""
+    problems = []
+    for target, rest in USES_LINE.findall(text):
+        if target.startswith("./"):
+            continue  # a reusable workflow in this repository, not an action
+        if not PINNED_ACTION.fullmatch(target):
+            problems.append(f"{name}: `{target}` is not pinned to a full commit SHA")
+        elif not VERSION_COMMENT.fullmatch(rest.rstrip()):
+            problems.append(f"{name}: `{target}` names no version in a `# vX.Y.Z` comment")
+    return problems
+
+
+def workflow_files() -> list[Path]:
+    return sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")])
+
+
+def workflow_texts() -> dict[str, str]:
+    return {p.name: p.read_text(encoding="utf-8") for p in workflow_files()}
+
+
+def parsed_uses(workflow: dict) -> list[str]:
+    """Every `uses:` value GitHub would run, from the parsed workflow: a
+    job's (a reusable workflow) and each step's, in whatever YAML style."""
+    found = []
+    for job in workflow.get("jobs", {}).values():
+        if "uses" in job:
+            found.append(str(job["uses"]))
+        found += [str(step["uses"]) for step in job.get("steps", []) if "uses" in step]
+    return found
+
+
+def test_every_action_is_pinned_to_a_commit():
+    texts = workflow_texts()
+    assert set(texts) >= {"ci-cd.yml", "images.yml", "cli-release.yml"}, sorted(texts)
+    read = sum(len(USES_LINE.findall(t)) for t in texts.values())
+    assert read > 40, f"the check reads {read} uses: lines: too few"
+    problems = [p for name, text in texts.items() for p in check_pins(text, name)]
+    for name, text in texts.items():
+        problems += check_parsed_pins(yaml.safe_load(text), text, name)
+    assert problems == []
+
+
+def check_parsed_pins(workflow: dict, text: str, name: str) -> list[str]:
+    """What the line reading misses: a `uses:` in flow style
+    (`- {uses: x@v4}`) runs all the same."""
+    problems = []
+    values = parsed_uses(workflow)
+    for target in values:
+        if not target.startswith("./") and not PINNED_ACTION.fullmatch(target):
+            problems.append(f"{name}: `{target}` is not pinned to a full commit SHA")
+    lines = len(USES_LINE.findall(text))
+    if lines != len(values):
+        problems.append(f"{name}: {len(values)} uses: values but {lines} uses: lines (flow style?)")
+    return problems
+
+
+def test_a_flow_style_uses_is_named():
+    text = "jobs:\n  a:\n    steps:\n      - { uses: actions/checkout@v4 }\n"
+    assert check_parsed_pins(yaml.safe_load(text), text, "w.yml") == [
+        "w.yml: `actions/checkout@v4` is not pinned to a full commit SHA",
+        "w.yml: 1 uses: values but 0 uses: lines (flow style?)",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("line", "problem"),
+    [
+        ("      - uses: actions/checkout@v4", "not pinned to a full commit SHA"),
+        ("        uses: pypa/gh-action-pypi-publish@release/v1", "not pinned to a full commit SHA"),
+        ("      - uses: actions/checkout@11d5960", "not pinned to a full commit SHA"),
+        ("      - uses: docker://alpine:3.20", "not pinned to a full commit SHA"),
+        (f"      - uses: actions/checkout@{CHECKOUT_SHA}", "names no version"),
+        (f"      - uses: actions/checkout@{CHECKOUT_SHA} # v4", "names no version"),
+    ],
+)
+def test_an_unpinned_action_is_named(line, problem):
+    problems = check_pins(f"jobs:\n  a:\n    steps:\n{line}\n", "w.yml")
+    assert len(problems) == 1 and problem in problems[0], problems
+
+
+def test_a_pinned_action_and_a_local_workflow_pass():
+    text = (
+        f"      - uses: actions/checkout@{CHECKOUT_SHA} # v4.4.0\n"
+        "    uses: ./.github/workflows/images.yml\n"
+        f"      - uses: github/codeql-action/upload-sarif@{CHECKOUT_SHA} # v4.39.3\n"
+    )
+    assert check_pins(text, "w.yml") == []
+
+
+def test_dependabot_keeps_the_action_pins_current():
+    config = yaml.safe_load(DEPENDABOT.read_text(encoding="utf-8"))
+    assert config["version"] == 2
+    (update,) = config["updates"]  # one ecosystem: no other version updates
+    assert update["package-ecosystem"] == "github-actions"
+    assert update["directory"] == "/"
+    assert update["schedule"]["interval"] == "weekly"
+    (group,) = update["groups"].values()  # every update in one pull request
+    assert group["patterns"] == ["*"]
+
+
+# Phase 43 (D7, decision 6): every job's permissions, declared.
+
+READ = {"contents": "read"}
+ATTEST = {"id-token": "write", "attestations": "write"}
+
+#: What each workflow grants by default, and what each job ends up with:
+#: its own `permissions:` where it sets them, the workflow's otherwise. Only
+#: the two jobs that attest hold the attestation permissions.
+PERMISSIONS = {
+    "ci-cd.yml": {
+        "workflow": READ,
+        "jobs": {
+            "lint": READ,
+            "typecheck": READ,
+            "cli": READ,
+            "self-check": {**READ, "security-events": "write"},
+            "kind-capture": READ,
+            "fault-library": READ,
+            "test": READ,
+            "migration-round-trip": READ,
+            "e2e": READ,
+            "narration-parity": READ,
+            # It calls images.yml, whose jobs cannot hold more than this.
+            "build": {**READ, "packages": "write", **ATTEST},
+            "deploy": READ,
+            "gate": READ,
+        },
+    },
+    "images.yml": {
+        "workflow": READ,
+        "jobs": {
+            "build": READ,
+            "publish": {**READ, "packages": "write", **ATTEST},
+        },
+    },
+    "cli-release.yml": {
+        "workflow": {"contents": "write"},
+        "jobs": {
+            "release": {"contents": "write", **ATTEST},
+            "publish-pypi": {"id-token": "write"},
+            "publish-npm": {"id-token": "write"},
+        },
+    },
+}
+
+
+def check_permissions(name: str, workflow: dict, declared: dict) -> list[str]:
+    problems = []
+    if workflow.get("permissions") != declared["workflow"]:
+        granted = workflow.get("permissions")
+        problems.append(f"{name}: the workflow grants {granted}, declared {declared['workflow']}")
+    jobs = workflow["jobs"]
+    for job in sorted(set(jobs) - set(declared["jobs"])):
+        problems.append(f"{name}: job {job} has no declared permissions")
+    for job in sorted(set(declared["jobs"]) - set(jobs)):
+        problems.append(f"{name}: declared job {job} does not exist")
+    for job in sorted(set(jobs) & set(declared["jobs"])):
+        effective = jobs[job].get("permissions", workflow.get("permissions"))
+        if effective != declared["jobs"][job]:
+            problems.append(f"{name}: {job} holds {effective}, declared {declared['jobs'][job]}")
+    return problems
+
+
+def test_every_workflow_declares_its_permissions():
+    assert sorted(p.name for p in workflow_files()) == sorted(PERMISSIONS)
+
+
+@pytest.mark.parametrize("name", sorted(PERMISSIONS))
+def test_every_job_holds_its_declared_permissions(name):
+    assert check_permissions(name, load(WORKFLOWS / name), PERMISSIONS[name]) == []
+
+
+def test_only_the_attesting_jobs_hold_the_attestation_permissions():
+    holders = sorted(
+        f"{name}/{job}"
+        for name, declared in PERMISSIONS.items()
+        for job, granted in declared["jobs"].items()
+        # publish-pypi and publish-npm held id-token: write before Phase 43,
+        # for trusted publishing; they attest nothing.
+        if granted.get("attestations") or (granted.get("id-token") and "publish-" not in job)
+    )
+    # ci-cd.yml's build only passes them on to images.yml's publish.
+    assert holders == ["ci-cd.yml/build", "cli-release.yml/release", "images.yml/publish"]
+
+
+def test_a_widened_or_new_job_is_named(workflow):
+    jobs = dict(workflow["jobs"])
+    jobs["lint"] = {**jobs["lint"], "permissions": {**READ, "packages": "write"}}
+    jobs["new-job"] = {"runs-on": "ubuntu-latest"}
+    problems = check_permissions("ci-cd.yml", {**workflow, "jobs": jobs}, PERMISSIONS["ci-cd.yml"])
+    assert problems == [
+        "ci-cd.yml: job new-job has no declared permissions",
+        "ci-cd.yml: lint holds {'contents': 'read', 'packages': 'write'}, "
+        "declared {'contents': 'read'}",
+    ]
+
+
+# Phase 43 (D7, decision 5): what is published is attested, then verified.
+
+#: Each attesting job, the attestation actions it runs, how many
+#: `gh attestation verify` calls must follow them in a later step, and the
+#: predicate types those calls must name (the SBOM's, by its own).
+SBOM_PREDICATE = "--predicate-type https://cyclonedx.org/bom"
+ATTESTING = {
+    ("images.yml", "publish"): (
+        ["actions/attest-build-provenance", "actions/attest-sbom"], 2, [SBOM_PREDICATE]
+    ),
+    ("cli-release.yml", "release"): (["actions/attest-build-provenance"], 1, []),
+}
+
+#: What would let a failed verify pass: an alternative after it, or a step
+#: that continues on error.
+SOFTENED = re.compile(r"gh attestation verify[^\n]*(\|\||;\s*(true|:)\b)")
+
+
+def check_attests(
+    job: dict, actions: list[str], verifies: int, predicates: list[str] = ()
+) -> list[str]:
+    steps = job.get("steps", [])
+    uses = [str(step.get("uses", "")).split("@")[0] for step in steps]
+    problems = []
+    last_attest = -1
+    for action in actions:
+        if action not in uses:
+            problems.append(f"no {action} step")
+        else:
+            last_attest = max(last_attest, uses.index(action))
+    verified = sum(
+        str(step.get("run", "")).count("gh attestation verify")
+        for index, step in enumerate(steps)
+        if index > last_attest >= 0
+    )
+    if verified < verifies:
+        problems.append(f"{verified} gh attestation verify after the attestations, want {verifies}")
+    for step in steps:
+        run = str(step.get("run", ""))
+        if "gh attestation verify" not in run:
+            continue
+        if step.get("continue-on-error"):
+            problems.append("a verify step continues on error")
+        if SOFTENED.search(run):
+            problems.append("a verify can fail without failing the step")
+    runs = "\n".join(str(step.get("run", "")) for step in steps)
+    for predicate in predicates:
+        if "gh attestation verify" not in runs or predicate not in runs:
+            problems.append(f"no verify names `{predicate}`")
+    return problems
+
+
+@pytest.mark.parametrize(("name", "job"), sorted(ATTESTING))
+def test_what_is_published_is_attested_and_verified(name, job):
+    actions, verifies, predicates = ATTESTING[(name, job)]
+    assert check_attests(load(WORKFLOWS / name)["jobs"][job], actions, verifies, predicates) == []
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        'gh attestation verify "$image" --repo r || true',
+        'gh attestation verify "$image" --repo r || echo failed',
+        'gh attestation verify "$image" --repo r; true',
+    ],
+)
+def test_a_verify_that_cannot_fail_is_named(run):
+    job = {"steps": [{"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"}, {"run": run}]}
+    assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
+        "a verify can fail without failing the step"
+    ]
+
+
+def test_a_verify_step_that_continues_on_error_is_named():
+    job = {
+        "steps": [
+            {"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"},
+            {"run": "gh attestation verify x --repo r", "continue-on-error": True},
+        ]
+    }
+    assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
+        "a verify step continues on error"
+    ]
+
+
+def test_the_sbom_verify_is_named_by_its_predicate():
+    job = {
+        "steps": [
+            {"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"},
+            {"uses": f"actions/attest-sbom@{CHECKOUT_SHA}"},
+            {"run": "gh attestation verify a --repo r\ngh attestation verify a --repo r"},
+        ]
+    }
+    actions = ["actions/attest-build-provenance", "actions/attest-sbom"]
+    assert check_attests(job, actions, 2, [SBOM_PREDICATE]) == [
+        f"no verify names `{SBOM_PREDICATE}`"
+    ]
+
+
+def test_a_verify_before_the_attestation_is_named():
+    job = {
+        "steps": [
+            {"run": "gh attestation verify x --repo r"},
+            {"uses": f"actions/attest-build-provenance@{CHECKOUT_SHA}"},
+        ]
+    }
+    assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
+        "0 gh attestation verify after the attestations, want 1"
+    ]

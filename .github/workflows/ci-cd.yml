@@ -52,8 +52,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
       # `../shared` and `../scripts` too: neither has a venv of its own and
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Phase 22's two invariant checks below diff against
           # origin/main...HEAD -- the default shallow (depth-1) checkout
@@ -98,7 +98,7 @@ jobs:
           # against nothing. Full history costs more checkout time but
           # is what a correct diff needs.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
       # `../shared` too — see the ruff step's comment.
@@ -190,15 +190,15 @@ jobs:
       # Phase 35 part 2 (D8): narration off; the binary never reads it.
       LLM_PROVIDER: none
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
 
@@ -307,15 +307,15 @@ jobs:
     env:
       LLM_PROVIDER: none
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
 
@@ -458,7 +458,7 @@ jobs:
 
       - name: Upload SARIF as a build artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: culprit-sarif
           path: culprit.sarif
@@ -471,7 +471,7 @@ jobs:
       # requests. `category` keeps them apart from CodeQL's.
       - name: Upload SARIF to code scanning
         if: always() && hashFiles('culprit.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: culprit.sarif
           category: culprit
@@ -489,12 +489,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
-      - uses: helm/kind-action@v1.12.0
+      - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
         with:
           cluster_name: culprit-capture
       - name: Apply the capture fixture
@@ -540,8 +540,8 @@ jobs:
     env:
       LLM_PROVIDER: none
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
@@ -565,8 +565,8 @@ jobs:
     # unit test. This job runs real pytest either way, and will pick up
     # testcontainers-backed tests automatically the day one is added.)
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
       - name: pytest (api)
@@ -624,8 +624,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
       # No secrets and no real connection strings: the script generates
@@ -673,8 +673,8 @@ jobs:
       CULPRIT_E2E_NARRATION: ${{ matrix.narration }}
       CULPRIT_E2E_NARRATOR_STUB_URL: http://127.0.0.1:11435
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -712,7 +712,7 @@ jobs:
       # Phase 33 part 2: the agent against this same control plane, from
       # the fault library's demo stack — its own Compose network, reaching
       # the API only through the published port (just agent-e2e).
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.27"
           cache-dependency-path: cli/go.sum
@@ -737,7 +737,7 @@ jobs:
         run: |
           read_env() { grep -E "^$1=" infra/.env.prod | cut -d= -f2- | sed 's/\$\$/$/g'; }
           CULPRIT_E2E_USERNAME=$(read_env QUICKSTART_ADMIN_USERNAME)           CULPRIT_E2E_PASSWORD=$(read_env QUICKSTART_ADMIN_PASSWORD)             python3 scripts/narration_parity.py dump http://localhost:8088             "$(cat cli/bin/agent-e2e-verified.txt)" loop-records-${{ matrix.narration }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: loop-records-${{ matrix.narration }}
           path: loop-records-${{ matrix.narration }}.json
@@ -755,7 +755,7 @@ jobs:
       # read-only root filesystem; its systemd unit through
       # `systemd-analyze verify`. (The Compose recipe ran in the journeys
       # above, paired from the browser.)
-      - uses: helm/kind-action@v1.12.0
+      - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
         with:
           cluster_name: culprit-agent
       - name: The agent's Kubernetes and systemd recipes
@@ -765,7 +765,7 @@ jobs:
         run: just agent-recipes
       - name: Keep the screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-screenshots-${{ matrix.narration }}
           path: e2e-screenshots
@@ -776,7 +776,7 @@ jobs:
       # values, password fields included. The error itself is in the log.
       - name: Keep failure screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-failures-${{ matrix.narration }}
           path: frontend/test-results/**/*.png
@@ -790,8 +790,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: loop-records-*
           merge-multiple: true
@@ -805,9 +805,15 @@ jobs:
     # publishing nothing (images.yml). A job that calls a workflow cannot
     # set timeout-minutes; images.yml's jobs carry theirs.
     uses: ./.github/workflows/images.yml
+    # A called workflow's jobs hold no more than this. images.yml's build
+    # holds contents: read alone; only its publish, which runs on main and
+    # tags, takes packages: write and the two attestation permissions
+    # (Phase 43). test_ci_workflow.py holds both workflows' tables.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     with:
       # A push to main or a version tag publishes. So does a hand-started
       # deploy of main: it publishes this commit as :sha and :latest first,
@@ -824,14 +830,14 @@ jobs:
     # minutes when it last ran, in August: the floor.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # Keeps the VM's copy of the compose file + deploy script current
       # with this commit. Does NOT touch infra/.env.prod — that's
       # created once, by hand, on the VM, and never overwritten by CI
       # (see infra/.env.prod.example's header comment).
       - name: Copy deploy files to the VM
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -845,7 +851,7 @@ jobs:
       # remote DB: pull images -> alembic upgrade head -> restart ->
       # health check. See deploy.sh for why that order is load-bearing.
       - name: Deploy
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -881,7 +887,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Every job this gate needs succeeded
         env:
           NEEDS: ${{ toJSON(needs) }}
