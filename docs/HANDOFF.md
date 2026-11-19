@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), from 2026-11-18. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **42 — ownership on the record** — `awaiting decision` (Q41, blocking). PR #53, a draft. Every job of run 44534379764 on `dc6e835` is green, `gate` included; the PR's CodeQL check fails on alerts #2–#4, open on `main` since 2026-11-04 and now in the diff because the headers touch every file. C3 and the eleven decisions built; both audits' findings fixed (`0716dee`). Step 0: the rerun is green; the ruleset requires no check (owner). Report in §5. |
+| Current phase | **42 — ownership on the record** — built; Q41 ruled and carried out. PR #53, still a draft: every job and every PR check green on `3aeeaf4` (run 44543993249), but alert #2 is still open (#3 was dismissed in its place); the owner's dismissal of #2 is the one step left. The ruleset now requires `gate` (the throwaway PR read BLOCKED). Report in §5. |
 | Previous phase | **41 — the gate — merged as `3928f0a` (PR #51) and signed off 2026-11-19.** Runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2. Three mutations shown red by the architecture session. The 12-minute target missed by about a minute and accepted; caching not now; test timeouts carried as C3. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-42-ownership`, from `origin/main` = `3928f0a`; its first commit the review (`7edfc39`), then C3 (`9f5a98a`), the headers (`49fa66c`), the rest (`dc6e835`) and the audits' findings (`0716dee`). PR #53, left a draft for Q41. `shared/uv.lock` not staged; the fault library not run locally; the ruleset untouched. |
-| Blocking questions | **Q41** (§3): the three code-scanning alerts the PR's CodeQL check fails on. |
+| Branch | `phase-42-ownership`, from `origin/main` = `3928f0a`; the review (`7edfc39`), C3 (`9f5a98a`), the headers (`49fa66c`), the rest (`dc6e835`), the audits' findings (`0716dee`), Q41's fix (`3aeeaf4`). PR #53, a draft until alert #2 is dismissed. `shared/uv.lock` not staged; the fault library not run locally. |
+| Blocking questions | None. Q41 is ruled (§5). |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q41 | **Three open code-scanning alerts fail PR #53's CodeQL check.** #2 `py/clear-text-logging-sensitive-data`, `api/scripts/apply_model.py` (a component's new API key is printed once, at creation, the one moment it exists outside its hash); #3 the same, `scripts/bootstrap_env.py` (the quickstart's generated local admin password is printed, as the code's comment says Known Trap 4 allows, only with `--local`); #4 `py/weak-sensitive-data-hashing`, `api/app/ingest_gateway/auth.py` (SHA-256 of high-entropy generated ingest tokens, not user passwords; real passwords use argon2, as the comment says). All three open on `main` since 2026-11-04 and never in a pull request's diff until the SPDX headers put a line into every file. The argument: each is a deliberate, documented design, not a defect, and "fixing" #2 or #3 would remove what the commands exist to do. Leaving the headers off those three files would hide the check, not answer it. **Decide:** dismiss each (as "won't fix" or "false positive", with the reason), or rule a change. Claude Code does not dismiss (the `/ci` rule). | 2026-11-19 (Phase 42 run) | **Blocking:** PR #53 stays a draft until it is answered. |
+| — | None open. Q41 is ruled and recorded in §5 (2026-11-19). | | |
 
 ---
 
@@ -126,7 +126,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 40, part 1 | The new identity: the dashboard | **complete** (PR #49, `624c6e3`) | **Signed off 2026-11-18** (architecture session): runs 44340916627 and 44346373804 (the report) green on every job, read from GitHub; C1 met over two runs; three mutations shown red; the run's five decisions accepted, the third amended by C2 (the focus ring). Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 1". |
 | 40, part 2 | The new identity: the repository | **complete** (PR #50, `cdc5032`) | **Signed off 2026-11-19** (architecture session): runs 44386033657 and 44390448565 (the report) green on every job, read from GitHub; four mutations shown red; nothing lost in the move to `docs/GUIDE.md`; the README criterion amended; a stale LIMITS entry rewritten. Phase 40 is complete. Recorded in `DELIVERY_PLAN.md`, Phase 40, "Review of part 2". |
 | 41 | The gate | **complete** (PR #51, `3928f0a`) | **Signed off 2026-11-19** (architecture session): runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2; three mutations shown red; the target missed by about a minute and accepted, `e2e (stub)`'s quickstart build bounding it; caching not now; C3 carried. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
-| 42 | Ownership on the record | **awaiting decision** (Q41; PR #53, a draft; every job green on `dc6e835`) | **Run 2026-11-19:** C3 (every `go test` at most half its job's limit, held over the workflow and its recipes); SPDX headers on 668 files (insertions only) and `REUSE.toml`; `check_licensing_map.py`; `reuse lint` and `cffconvert` pinned by uvx in lint; NOTICE, AUTHORSHIP, CONTRIBUTING (HA-CLA-I 1.0, Option Five), TRADEMARKS, SECURITY, CITATION; the audits' findings fixed. Blocked on Q41. Step 0: rerun green; the ruleset requires no check. Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D8) and Phase 42, with "Brief (2026-11-19)" at its end: C3, test timeouts inside job timeouts, first, as its own commit; then REUSE (headers where a file holds a comment, `REUSE.toml` elsewhere, no byte a test compares changed), the map held to `LICENSING.md`, `reuse lint` and `CITATION.cff` validated in `lint`, NOTICE, `AUTHORSHIP.md` (facts with pointers, no legal conclusion), CONTRIBUTING with the Harmony CLA, TRADEMARKS and SECURITY. The name of record is Joshua Heath (owner, 2026-11-19). Step 0: `main`'s push run 44522173729 on `3928f0a`. Branch `phase-42-ownership` from `origin/main` = `3928f0a`; its first commit is the review (`../phase-41-review.patch`, message `../phase-41-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 42 | Ownership on the record | **built; one owner step left** (PR #53, a draft: every job and PR check green on `3aeeaf4`; alert #2 still open) | **Run 2026-11-19:** C3; SPDX headers on 668 files and `REUSE.toml`; `check_licensing_map.py`; `reuse lint` and `cffconvert` pinned in lint; NOTICE, AUTHORSHIP, CONTRIBUTING (HA-CLA-I 1.0, Option Five), TRADEMARKS, SECURITY, CITATION; the audits' findings fixed; Q41 ruled: #3 fixed in the code (`3aeeaf4`), #2 and #4 the owner's dismissals. The ruleset requires `gate` (BLOCKED shown). Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md` §3 (D8) and Phase 42, with "Brief (2026-11-19)" at its end: C3, test timeouts inside job timeouts, first, as its own commit; then REUSE (headers where a file holds a comment, `REUSE.toml` elsewhere, no byte a test compares changed), the map held to `LICENSING.md`, `reuse lint` and `CITATION.cff` validated in `lint`, NOTICE, `AUTHORSHIP.md` (facts with pointers, no legal conclusion), CONTRIBUTING with the Harmony CLA, TRADEMARKS and SECURITY. The name of record is Joshua Heath (owner, 2026-11-19). Step 0: `main`'s push run 44522173729 on `3928f0a`. Branch `phase-42-ownership` from `origin/main` = `3928f0a`; its first commit is the review (`../phase-41-review.patch`, message `../phase-41-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -167,16 +167,47 @@ Branch:       phase-42-ownership, from origin/main = 3928f0a. 7edfc39 the
 Run:          2026-11-19, /next. Local gates one at a time, in the
               foreground; just lint before every push. The fault library
               never run locally.
-Status:       AWAITING DECISION — Q41 (blocking, §3). Every job of CI run
-              44534379764 on dc6e835 is green, gate included, but the pull
-              request's "CodeQL" check fails on three code-scanning alerts
-              (#2, #3, #4) that have been open on main since 2026-11-04. They
-              were never in a pull request's diff before; the headers put a
-              line into every file, so they are now. Each is a deliberate,
-              commented design, not a defect this phase made. Dismissing is
-              the architecture session's (the /ci rule), so the pull request
-              stays a draft. Step 0's rerun is green. Step 0's ruleset check
-              FAILED: the ruleset requires no check (below).
+Status:       Q41 RULED and carried out (below); ONE STEP LEFT, the
+              owner's. CI run 44543993249 on 3aeeaf4: every job green, gate
+              included; every PR check passes (26 pass, 2 skipping, CodeQL
+              included). The ruleset now requires gate: the throwaway pull
+              request read BLOCKED. But alert #2 is still OPEN, and #3 is
+              dismissed as "won't fix" with #4's comment: the ruling's two
+              dismissals look to have been applied to #3 and #4 instead of
+              #2 and #4. Claude Code dismisses nothing, so the pull request
+              stays a draft until #2 is dismissed (and #3, now fixed in the
+              code, is left to close by itself or reopened, as the owner
+              prefers).
+
+Q41 — RULED 2026-11-19 (architecture session), CARRIED OUT
+  The question: three code-scanning alerts, open on main since
+  2026-11-04, failed PR #53's CodeQL check once the headers put a line
+  into every file. The ruling:
+  #3 py/clear-text-logging-sensitive-data, scripts/bootstrap_env.py: FIXED,
+    not dismissed (3aeeaf4). bootstrap_env.py --local no longer prints the
+    generated admin password; it prints where it is ("the admin's password
+    is QUICKSTART_ADMIN_PASSWORD in infra/.env.prod"). just quickstart's
+    final local message, read from that file, is unchanged. The justfile's
+    CI-only filter of the printed line is removed (nothing left to hide);
+    comments and docs/INSTALL.md updated. test_bootstrap_env.py: main()
+    prints no value it generated, local and VM alike; red with the old
+    print put back. No test expected the line.
+  #2 py/clear-text-logging-sensitive-data, api/scripts/apply_model.py: to be
+    dismissed by the owner as won't fix (printing a component's new key
+    once is the one way to deliver a key that exists only as a hash).
+  #4 py/weak-sensitive-data-hashing, api/app/ingest_gateway/auth.py:
+    dismissed by the owner as a false positive (256-bit random keys, not
+    passwords).
+  As GitHub holds them now: #2 open; #3 dismissed "won't fix"; #4
+  dismissed "false positive"; #3's and #4's comments both the API-key
+  text. Open alerts, repo-wide and on refs/pull/53/head: #2 only.
+  The ruleset (step 4): gh api repos/Josh-Heath123/Culprit/rules/
+  branches/main lists required_status_checks [{"context": "gate",
+  "integration_id": 15368}], strict. Throwaway gate-check from
+  origin/main (3928f0a), one failing test, PR #54 opened ready: its run
+  44543951760 failed test and gate, and mergeStateStatus read BLOCKED
+  (mergeable MERGEABLE) while pending and after the gate failed. PR #54
+  closed unmerged; gate-check deleted on the remote and locally.
 
 STEP 0
   1 main's push run 44522173729 on 3928f0a, e2e (stub), job 135553437405,
@@ -354,7 +385,12 @@ CI (PR #53)
     All three open on main at the same code three lines up (74, 411, 66)
     since 2026-11-04, never dismissed. Code-scanning queries: pr=53 and
     refs/pull/53/head 3 each; refs/pull/53/merge 0. NOT GREEN (Q41).
-  main has not moved (3928f0a). This report's commit runs after it.
+  44543993249 on 3aeeaf4 (after Q41's fix): success on every job (publish,
+    deploy skipped), gate included; 26 PR checks pass, 2 skipping, CodeQL
+    passing. Open alerts: #2 (pr=53, refs/pull/53/head and repo-wide);
+    refs/pull/53/merge none.
+  main has not moved (3928f0a), so that is the merge result. This
+  report's commit runs after it.
 
 NOT BUILT
   No history rewritten; no licence changed; no header on test data or a
