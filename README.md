@@ -287,12 +287,13 @@ From the plans of record:
 
 ## Author and licence
 
-Built by [Joshua Heath](https://github.com/Josh-Heath123). Culprit is licensed
-under the GNU AGPL 3.0 only — see [`LICENSE`](LICENSE). The extractors
-(`extractors/python`, `extractors/node`) and `shared/` are Apache-2.0, so they
-can run inside your project without the AGPL. [`LICENSING.md`](LICENSING.md)
-maps every directory to its licence. Releases before this change were MIT and
-remain available under MIT.
+Built by [Joshua Heath](https://github.com/Josh-Heath123), much of it written
+by Claude at the owner's direction ([`AUTHORSHIP.md`](AUTHORSHIP.md),
+[`NOTICE`](NOTICE)). Culprit is licensed under the GNU AGPL 3.0 only — see
+[`LICENSE`](LICENSE). The extractors (`extractors/python`, `extractors/node`)
+and `shared/` are Apache-2.0, so they can run inside your project without the
+AGPL. [`LICENSING.md`](LICENSING.md) maps every directory to its licence.
+Releases before this change were MIT and remain available under MIT.
 
 This repository was named `View`, Culprit's working title, until Phase 20;
 GitHub redirects the old URL.

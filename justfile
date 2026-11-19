@@ -54,6 +54,12 @@ lint:
     # its diagrams' colours. The self-check's figures are checked in CI's
     # self-check job, where they are produced.
     uv run --no-project python scripts/check_readme.py
+    # Phase 42 (D8): every file states its licence (REUSE 3.3: a header, or
+    # REUSE.toml), and LICENSING.md's table says the same, file by file; and
+    # CITATION.cff is valid. Both tools pinned, run by uvx, in no project's
+    # dependencies; the same pins as CI's lint job (test_ci_workflow.py).
+    uvx --from 'reuse[charset-normalizer]==6.3.0' reuse lint --json | uv run --no-project python scripts/check_licensing_map.py -
+    uvx --python 3.12 cffconvert@2.0.0 --validate -i CITATION.cff
 
 # Enforce module-isolation contracts (e.g. anomaly detection vs RAG/LLM)
 lint-imports:

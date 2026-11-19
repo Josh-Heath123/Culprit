@@ -1,0 +1,50 @@
+Culprit
+Copyright 2026 Joshua Heath
+
+LICENSING
+
+Culprit is licensed under the GNU Affero General Public License, version 3
+only (AGPL-3.0-only), except three directories under the Apache License,
+version 2.0 (Apache-2.0): extractors/python/, extractors/node/ and shared/.
+LICENSING.md maps every path to its licence; LICENSE, each directory's own
+LICENSE and LICENSES/ hold the texts. Every file states its licence in the
+form the REUSE specification (3.3) defines, in a header or in REUSE.toml.
+
+THIRD-PARTY MATERIAL IN THIS REPOSITORY
+
+Two example projects are vendored unmodified, as test input for the
+extractors (cli/testdata/fixtures/README.md). Each keeps its own licence and
+its own licence file. The culprit.yaml in each was added by Culprit and is
+Culprit's.
+
+  cli/testdata/fixtures/third-party/flask-tutorial/
+    Flask's tutorial example (pallets/flask, examples/tutorial, tag 3.1.0).
+    Copyright 2010 Pallets.
+    BSD 3-Clause License; see its LICENSE.txt.
+
+  cli/testdata/fixtures/third-party/express-route-separation/
+    Express's route-separation example (expressjs/express,
+    examples/route-separation, tag 4.21.2).
+    Copyright 2009-2014 TJ Holowaychuk; 2013-2014 Roman Shtylman;
+    2014-2015 Douglas Christopher Wilson.
+    MIT License; see its LICENSE.
+
+THIRD-PARTY MATERIAL CULPRIT'S BUILDS SHIP
+
+Two typefaces, through the @fontsource packages frontend/package.json names,
+are bundled into the dashboard's build, and render the hero images in
+docs/brand/:
+
+  Inter (@fontsource/inter 5.3)
+    Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter).
+    SIL Open Font License, version 1.1.
+
+  JetBrains Mono (@fontsource/jetbrains-mono 5.3)
+    Copyright 2020 The JetBrains Mono Project Authors
+    (https://github.com/JetBrains/JetBrainsMono).
+    SIL Open Font License, version 1.1.
+
+The dashboard's JavaScript bundle, the command-line binary and the container
+images also contain the open-source packages their lock files name
+(frontend/package-lock.json, the uv.lock files, cli/go.sum) and their base
+images. They are not listed here; each keeps its own licence.

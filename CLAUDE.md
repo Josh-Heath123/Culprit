@@ -59,6 +59,10 @@ in Phase 32, and the incident tables are read-only history.
 - **Database roles.** Add a role; never widen one. `.claude/rules/database.md`.
 - **Subjects.** Built only through `subjects.build()` and its Go/TS twins,
   held together by `shared/tests/*conformance.json`. `.claude/rules/model.md`.
+- **Licences.** A new file needs an SPDX header (`SPDX-FileCopyrightText: 2026
+  Joshua Heath`, and Apache-2.0 under `shared/` and `extractors/`, AGPL-3.0-only
+  elsewhere), or an entry in `REUSE.toml` if it cannot hold a comment or a test
+  compares its bytes; `reuse lint` in `just lint` fails otherwise.
 - Never make a gate green by weakening it — widening a contract, an ignore, a
   skipped test or a wider role is an escalation (`docs/HANDOFF.md` §6).
 

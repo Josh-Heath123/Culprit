@@ -3310,3 +3310,35 @@ added and left out of it. What that does not give you:
   fault-library shard.
 - **`main`'s ruleset is the owner's.** Until it requires `gate`, strict and
   with no bypass, a red pull request can still be merged by hand.
+
+## The licence records say what each file is under, not more
+
+Phase 42 put ownership on the record: every file states its licence (REUSE
+3.3), `scripts/check_licensing_map.py` holds `LICENSING.md`'s table to what
+REUSE reports, and `NOTICE`, `AUTHORSHIP.md`, `CONTRIBUTING.md`,
+`TRADEMARKS.md`, `SECURITY.md` and `CITATION.cff` exist. What they do not
+do:
+
+- **Test data is annotated as a whole.** `REUSE.toml` covers everything
+  under `cli/testdata/` and `api/tests/data/` by directory, because a header
+  there would change bytes a golden file or a line number compares. A file
+  added there needs no header and is not caught by `reuse lint`; it is
+  Culprit's unless it sits in one of the two third-party fixtures. Everywhere
+  else, `REUSE.toml` names file types (JSON, Markdown, images, lock files),
+  never a directory, so a new source file without a header fails.
+- **NOTICE lists what this repository holds and the fonts its builds ship,
+  not every dependency.** The dashboard's bundle, the binary and the
+  container images contain the packages their lock files name, under their
+  own licences; there is no software bill of materials yet (Phase 43).
+- **The contributor agreement is named, not signed or copied.**
+  `CONTRIBUTING.md` names the Harmony individual CLA 1.0 with its choices
+  (Option Five) and links to its text; outside code contributions are not
+  accepted until a lawyer has read it, and the governing law is not chosen.
+- **`AUTHORSHIP.md` counts commits on one day.** Its figures (308 commits,
+  109 with a `Co-Authored-By: Claude` trailer, 51 pull requests merged by
+  the owner) are as of `3928f0a`, with the commands that give them; nothing
+  keeps them current. A trailer records that a commit was made with Claude,
+  not how much of it.
+- **The tools are pinned and fetched.** `just lint` and CI run `reuse` 6.3.0
+  and `cffconvert` 2.0.0 through `uvx`, which downloads them on first use; a
+  machine with no network access cannot run those two checks.

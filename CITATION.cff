@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Joshua Heath
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# How to cite Culprit (Citation File Format 1.2.0). Validated in `just lint`
+# and CI's lint job by a pinned cffconvert. No version or release date: none
+# has been released yet.
+cff-version: 1.2.0
+message: "If you use or refer to Culprit, please cite it as below."
+type: software
+title: Culprit
+abstract: >-
+  A diagnostic engine for small teams. It compares what a system is meant to
+  do (from its code and specifications), what an environment is configured to
+  do, and what read-only probes observe, and treats the divergence between
+  them as the finding. It walks the request path from a symptom with probes,
+  recording an investigation whose every edge cites a reading, and judges
+  whether a fix fixed it.
+authors:
+  - given-names: Joshua
+    family-names: Heath
+repository-code: "https://github.com/Josh-Heath123/Culprit"
+license:
+  - AGPL-3.0-only
+  - Apache-2.0
+keywords:
+  - diagnostics
+  - observability
+  - incident response
+  - configuration drift
+  - static analysis

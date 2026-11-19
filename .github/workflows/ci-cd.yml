@@ -75,6 +75,14 @@ jobs:
       # index.css's tokens. Standard library only; the self-check job below
       # checks the figures the self-check produces. Same as `just lint`.
       - run: python3 scripts/check_readme.py
+      # Phase 42 (D8): every file states its licence (REUSE 3.3: a header, or
+      # REUSE.toml), and LICENSING.md's table says the same, file by file;
+      # CITATION.cff is valid. The tools are pinned and run by uvx, as in
+      # `just lint` (scripts/tests/test_ci_workflow.py holds the pins equal).
+      - name: Licences (REUSE) and LICENSING.md's map
+        run: uvx --from 'reuse[charset-normalizer]==6.3.0' reuse lint --json | python3 scripts/check_licensing_map.py -
+      - name: CITATION.cff
+        run: uvx --python 3.12 cffconvert@2.0.0 --validate -i CITATION.cff
 
   typecheck:
     needs: lint

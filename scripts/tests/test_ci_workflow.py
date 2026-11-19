@@ -377,3 +377,33 @@ def test_a_recipe_a_step_calls_is_read():
         "e2e: `go test ./x -timeout 1h` times out at 60 minutes, over half the job's 30",
         "e2e: `go test ./cmd/culprit -timeout 30m` times out at 30 minutes, over half the job's 30",
     ]
+
+
+#: The tools `just lint` and CI's lint job run by uvx, pinned (Phase 42).
+PINNED_TOOLS = ["reuse[charset-normalizer]==", "cffconvert@"]
+
+
+def tool_pins(text: str) -> dict[str, list[str]]:
+    pins: dict[str, list[str]] = {}
+    for tool in PINNED_TOOLS:
+        at = 0
+        while (at := text.find(tool, at)) >= 0:
+            start = at + len(tool)
+            end = start
+            while end < len(text) and (text[end].isalnum() or text[end] == "."):
+                end += 1
+            pins.setdefault(tool, []).append(text[start:end])
+            at = end
+    return pins
+
+
+def test_the_lint_tools_are_pinned_alike_locally_and_in_ci(workflow, justfile):
+    lint_job = "\n".join(str(s.get("run", "")) for s in workflow["jobs"]["lint"]["steps"])
+    lint_recipe = justfile["lint"][1]
+    ci, local = tool_pins(lint_job), tool_pins(lint_recipe)
+    for tool in PINNED_TOOLS:
+        assert ci.get(tool), f"CI's lint job does not run {tool}"
+        assert local.get(tool), f"`just lint` does not run {tool}"
+        versions = set(ci[tool]) | set(local[tool])
+        assert len(versions) == 1, f"{tool} is pinned to {sorted(versions)}"
+        assert all(part.isdigit() for part in versions.pop().split(".")), tool
