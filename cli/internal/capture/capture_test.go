@@ -131,6 +131,11 @@ func runCapture(t *testing.T, manifest *extract.Manifest, environment string, op
 	if options.Environ == nil {
 		options.Environ = func() []string { return nil }
 	}
+	if options.Hostname == nil {
+		// No hostname: the identity rule (Q42) treats no key, so a test's
+		// result never depends on the machine running it.
+		options.Hostname = func() (string, error) { return "", nil }
+	}
 	if options.LookupEnv == nil {
 		options.LookupEnv = func(string) (string, bool) { return "", false }
 	}
@@ -912,6 +917,88 @@ func TestConfigInspectValuesNeverLetsCaptureStoreAValue(t *testing.T) {
 	for _, secret := range []string{plantedJWT, "planted-log-level-value"} {
 		if strings.Contains(string(payload), secret) {
 			t.Errorf("the capture carries %q, a value granted only for inspection", secret)
+		}
+	}
+}
+
+// TestTheRuntimesIdentityIsNotConfiguration is Q42's rule: a variable
+// whose value is the process's own hostname is reported present, its
+// value not shaped. Keyed on the OS fact, not on a name, so a second,
+// differently named variable holding the same value is treated the same,
+// and a variable holding anything else is still shaped.
+func TestTheRuntimesIdentityIsNotConfiguration(t *testing.T) {
+	const own = "3f9a2b7c1d0e"
+	adapter := processAdapter{
+		environ: func() []string {
+			return []string{"HOSTNAME=" + own, "SERVICE_INSTANCE=" + own, "INVENTORY_TOKEN=" + own + "x"}
+		},
+		hostname: func() (string, error) { return own, nil },
+	}
+	workload, err := adapter.Workload(context.Background(), "order-service", extract.EnvironmentComponent{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"HOSTNAME", "SERVICE_INSTANCE"} {
+		entry, ok := workload.Env[key]
+		if !ok {
+			t.Errorf("%s is missing: the rule hides a value, never a key", key)
+		} else if entry.Known || entry.Value != "" {
+			t.Errorf("%s holds the hostname but was taken as configuration: %+v", key, entry)
+		}
+	}
+	if entry := workload.Env["INVENTORY_TOKEN"]; !entry.Known {
+		t.Error("a value that is not the hostname lost its shape")
+	}
+	if workload.Identity != 2 {
+		t.Errorf("Identity = %d, want 2", workload.Identity)
+	}
+
+	for name, hostname := range map[string]func() (string, error){
+		"empty":      func() (string, error) { return "", nil },
+		"unreadable": func() (string, error) { return own, errors.New("no hostname") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			adapter.hostname = hostname
+			workload, err := adapter.Workload(context.Background(), "order-service", extract.EnvironmentComponent{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !workload.Env["HOSTNAME"].Known || workload.Identity != 0 {
+				t.Errorf("with no hostname to compare with, a key was still treated: %+v", workload)
+			}
+		})
+	}
+}
+
+func TestTheIdentityRuleReachesTheCapture(t *testing.T) {
+	manifest := loadManifest(t, `
+version: 1
+components:
+  - name: order-service
+environments:
+  local:
+    adapter: process
+    grants: {config.read.names: true}
+    components:
+      order-service: {}
+`)
+	bundle := runCapture(t, manifest, "local", Options{
+		Environ:  func() []string { return []string{"HOSTNAME=123456789012", "PORT=8001"} },
+		Hostname: func() (string, error) { return "123456789012", nil },
+	})
+	if _, ok := find(bundle, "config:order-service/HOSTNAME", model.PredicateExists); !ok {
+		t.Error("HOSTNAME's existence was not recorded")
+	}
+	shape, ok := find(bundle, "config:order-service/HOSTNAME", model.PredicateValueShape)
+	if !ok || shape.ValueShape == nil || shape.ValueShape.Type != model.TypeUnknown {
+		t.Errorf("HOSTNAME's shape = %+v, want unknown", shape.ValueShape)
+	}
+	if bundle.Meta["identity.order-service"] == "" {
+		t.Errorf("the capture does not say a key was taken as identity: %v", bundle.Meta)
+	}
+	for _, text := range bundle.Meta {
+		if strings.Contains(text, "123456789012") {
+			t.Errorf("the meta records the hostname's value: %q", text)
 		}
 	}
 }

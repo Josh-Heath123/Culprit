@@ -2116,6 +2116,30 @@ readings can notice it. Compose and Kubernetes captures read every
 component the environment lists. Endpoints declared under `endpoints:` are
 not captured at all — only an endpoint declared on a component is.
 
+### A process capture does not shape the process's own hostname (Q42)
+
+A live process's environment holds what it was configured with and what
+its runtime gave it, and one of the latter changes whenever the workload is
+recreated: its hostname — under Docker a random container id, under
+Kubernetes the pod's name. So with `adapter: process`, any variable whose
+value equals the hostname the operating system reports is recorded as
+present with its value not shaped, and two captures compare it on presence
+alone. The rule follows the value, not a name: `HOSTNAME`, and anything set
+from it, are treated alike. The capture's meta says how many keys it
+treated this way, never their values. What that leaves:
+
+- A variable you configured whose value happens to equal the hostname
+  (`hostname: orders` and `SERVICE=orders`, say) loses its shape the same
+  way: a change of its kind is not seen, though its presence still is.
+- If the hostname cannot be read, or is empty, nothing is treated this way.
+- Only the process adapter does this. Compose and Kubernetes captures read
+  the configuration, which has no runtime hostname in it. The `exec`
+  adapter cannot know the hostname of the process its command reads, so an
+  `exec` capture of a container (`docker exec … env -0`) still shapes that
+  container's random id — and a `verify` across a recreation can count it
+  as a change underneath. Use the process adapter inside the workload, or
+  compose, for a workload your fix recreates.
+
 ### What a named change explains
 
 `--change` takes four kinds. `config:<component>/<key>` explains a
