@@ -1107,6 +1107,128 @@ commits, merge commits only, and Dependabot security updates.
 - change any action's version;
 - touch the ruleset.
 
+### Review of the close-out, part 1 — Q42 and Q43, merged as `527d965` (PR #64), 2026-11-20
+
+**Q42 and Q43 are signed off. C4 was not started:** the run stopped at Q44, as
+instructed. The owner merged the draft once Q42 and Q43 were green on the
+merge result, so C4 runs on a new branch, briefed again below as amended by
+Q44.
+
+**CI.** Read by id from GitHub's API:
+- 44748685372 on `cc21141` (the merge result with `03c309d`) and 44750683640
+  on the report, `ed13ef2`: success on every job, `narration-parity` and
+  `gate` included; `publish` and `deploy` skipped, as on every pull request.
+- `main`'s push run 44755314601 on `527d965`: success on every job (25;
+  `deploy` skipped), `narration-parity` and `gate` included; all five
+  `publish` jobs attested and verified their images, with today's
+  repository-only check, which C4 tightens.
+- **Step 0.** 44707603837's red `build (mcp_server)` was its "Trivy scan" step
+  (the jobs API; the advisory, in mcp 1.29.0, read from the log by Claude
+  Code), fixed by #58's bump. Attributed, not a flake (D6).
+- **Every commit is Verified** by GitHub's API: `e8442fe`, `aec7317`,
+  `eda2da3`, `baea86d`, `cc21141` and `ed13ef2`, signed with the repository's
+  SSH signing key, and the merge commit `527d965`, signed by GitHub.
+
+**Verified on disk,** on `527d965`, in the architecture session's workspace
+(Go 1.27.0):
+- `go test ./internal/model/ ./internal/capture/ ./internal/verify/`: ok.
+  `shared/tests/test_shape.py`: 80 passed.
+  `api/tests/test_value_shape_vocabulary.py`: 4 passed, with no database.
+- **Five mutations of its own, each restored afterwards:**
+  - the IPv6 branch made to need one colon, in Go and in Python: the `formats`
+    fixture red in both, on `ab:cd`;
+  - a literal only in the migration's `_SCHEMES`: the vocabulary test red,
+    naming it as only in the migration;
+  - a throwaway head migration naming the *intent* constraint, with
+    `_LENGTH_CLASSES` one short: the test followed the chain to it and went
+    red;
+  - the identity rule widened from equality to containment: the capture test
+    red ("Identity = 3, want 2");
+  - **one survived:** the empty-hostname guard removed (`own != ""`), every
+    test still green. The "empty" subtest's environment holds no empty value,
+    so it cannot tell. Carried as C5.
+
+**The run's decisions:**
+- **Q43's test is built as ruled,** and also refuses an orphan or a cycle on
+  the chain. Accepted.
+- **Part (b) needs no UPGRADING note.** Accepted: `Equivalent` compares on
+  presence alone when either side is unknown, so an older binary's shaped
+  value against a newer binary's unshaped one is no difference.
+- **Q44 was raised correctly,** with the certificate read from a real run: the
+  signer is the called workflow, `images.yml@refs/heads/main`. Ruled below.
+
+**Rulings:**
+- **Q42, the verification record not repeatable.** (a) IPv6 needs two colons,
+  in Go and Python, with format classification in `shape_conformance.json`,
+  read by both. (b) In the process adapter only, a variable whose value equals
+  `os.Hostname()` is the runtime's identity: recorded present, its value
+  unshaped, keyed on that OS fact and never on a name. (c) Rejected: `verify`
+  keeps counting every unexplained difference. Also rejected: `HOSTNAME` by
+  name, any list of names, loosening `narration-parity`, a retry. The full
+  text is `q42-ruling.md` in the owner's outer folder.
+- **Q43, the coupled-file pair.** The `shape.py` and `e4c1b7a9d2f0` pair is
+  removed. The vocabulary's agreement is held by content: a database-free test
+  finds the vocabulary's migration on the Alembic chain by AST and compares
+  its four tuples with the four enums. The pair passed on any edit to the
+  migration and never proved the vocabularies agree, and a check that can be
+  passed only by gaming it is a defect. The applied migration was not touched.
+  The full text is `q43-ruling.md`.
+- **Q44, the ref `publish` verifies.** `publish` runs on `main` and on `v*`
+  tags, so its verify names `--source-ref "$GITHUB_REF"`, not
+  `refs/heads/main`, after a first step that refuses any ref `ci-cd.yml` does
+  not push on. Decision 1 of C4, below.
+
+**Carried:**
+- **C5.** The identity rule's empty-hostname guard is held by no test that can
+  fail. Give the capture test an empty-valued variable, assert it stays shaped
+  when the hostname is empty, and show the guard's removal red.
+
+### Close-out — C4, the signer workflow, as amended by Q44 (brief, 2026-11-20)
+
+The 2026-11-19 brief stands, with decision 1 replaced, decision 2 sharpened,
+and C5 first.
+
+**Decided:**
+1. **Every `gh attestation verify` names the workflow it runs in and the ref
+   the run is on:** `--signer-workflow
+   "$GITHUB_REPOSITORY/.github/workflows/<that file>"` and `--source-ref
+   "$GITHUB_REF"`. The certificate names the called workflow (`images.yml`,
+   confirmed on 44711807845), so in both workflows it is the file the verify
+   sits in.
+   - **In `publish`, a first step,** before logging in or pushing, fails
+     unless `GITHUB_REF` is `refs/heads/main` or a `refs/tags/v*` tag, and
+     names the ref it got. `--source-ref "$GITHUB_REF"` then means `main` or
+     the tag being released, and nothing else.
+   - **`cli-release.yml` is as decided:** its ref is the tag, or the run's own
+     ref when started by hand.
+2. **`test_ci_workflow.py` holds it, structurally:**
+   - every verify in every workflow carries both flags, `--signer-workflow`
+     naming the file the verify is in and `--source-ref` taking `$GITHUB_REF`;
+   - `publish`'s guard comes before its first push, and the refs it accepts
+     are read from `ci-cd.yml`'s `on.push` (branches and tags), so widening
+     one without the other is red before merge;
+   - mutations shown red: `--source-ref` dropped from one verify;
+     `cli-release.yml`'s verify naming `images.yml`; a branch added to
+     `ci-cd.yml`'s `on.push` with the guard unchanged.
+3. **Users get the command,** as decided: for an image from `main`
+   (`refs/heads/main`), for a release's image (`refs/tags/vX.Y.Z`) and for a
+   released binary, each with both flags, the SBOM form included. Say what a
+   pass proves (these bytes, built by that workflow in this repository from
+   that ref) and what it does not (that the code is right, or that whoever
+   pushed to `main` or cut the tag meant well). Say plainly that the packages
+   are private and no release exists yet, so the commands become usable when
+   the owner publishes.
+4. **Proof,** as decided: a hand-started `cli-release.yml` run on the branch
+   passes the tightened verify, and `publish`'s passes on `main`'s push run
+   after merge. **The tag path cannot run until the owner cuts the first `v*`
+   tag;** until then the workflow test holds it, and LIMITS says so.
+5. **C5 first,** in its own commit.
+
+**Do NOT:**
+- publish, release or deploy anything, or cut a tag;
+- change any action's version;
+- touch the ruleset.
+
 ---
 
 ## §4. Out of scope
