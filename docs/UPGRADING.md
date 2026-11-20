@@ -263,6 +263,26 @@ without the password, and the api will not start without the URL.
 - **`GET /investigations/{id}/tree` gains `submitted_by`**, and **`TaskResult`
   gains `verification_id` and `verdict`**; nothing was removed.
 
+## A capture from before an upgrade may shape a hex value differently (Q42)
+
+Phase 43's close-out corrected the value-format classifier, in the CLI and
+the control plane together: a string of hex digits with no colon, such as
+`deadbeef` or a container id, is no longer taken for an IPv6 address
+(`ip_address`); it is `opaque`. Nothing in the database changes, and no
+migration runs. But a capture records shapes, not values, so a capture
+taken by an older binary still says `ip_address` for such a value, and the
+newer binary says `opaque` for the same one:
+
+- `culprit verify` across the upgrade — an investigation diagnosed by the
+  old binary, verified by the new one — can count that key as changed and
+  answer `changed_underneath` for a fix that did not touch it.
+- `culprit env diff` between a capture from each side of the upgrade can
+  report the same key as a shape difference.
+
+Capture again after upgrading, and diagnose again before verifying a fix
+for an investigation walked by the older binary. Captures taken by the
+same version always agree.
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

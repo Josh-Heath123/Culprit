@@ -276,8 +276,10 @@ var formatPatterns = []struct {
 	{FormatPort, regexp.MustCompile(`^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2})$`)},
 	{FormatDuration, regexp.MustCompile(`(?i)^\d+(?:\.\d+)?\s*(?:ms|s|m|h|d)$`)},
 	{FormatNumeric, regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)},
+	// IPv6 needs at least two colons (Q42): a single-label hex string, such
+	// as a container id, is not an address.
 	{FormatIPAddress, regexp.MustCompile(
-		`(?i)^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?$|^\[?[0-9a-f:]{3,}\]?(?::\d+)?$`)},
+		`(?i)^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?$|^\[?[0-9a-f]*:[0-9a-f]*:[0-9a-f:]*\]?(?::\d+)?$`)},
 	{FormatPath, regexp.MustCompile(`^(?:/|\./|\.\./|[A-Za-z]:[\\/])`)},
 	{FormatJSON, regexp.MustCompile(`^\s*[\[{]`)},
 	{FormatHostname, regexp.MustCompile(

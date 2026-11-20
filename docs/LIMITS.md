@@ -2139,6 +2139,11 @@ treated this way, never their values. What that leaves:
   container's random id — and a `verify` across a recreation can count it
   as a change underneath. Use the process adapter inside the workload, or
   compose, for a workload your fix recreates.
+- Across an upgrade to a version with Q42's classifier fix, a capture from
+  the older binary may call a hex value `ip_address` where the newer calls
+  it `opaque`, so one `verify` or `env diff` spanning the upgrade can show
+  a change no one made (`docs/UPGRADING.md`). Capture again after
+  upgrading.
 
 ### What a named change explains
 

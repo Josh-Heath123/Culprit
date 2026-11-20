@@ -112,31 +112,8 @@ def test_absent_and_unknown_are_different_claims() -> None:
     assert ValueShape.absent() != ValueShape.unknown()
 
 
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        ("postgresql://u:p@db/orders", ValueFormat.DSN),
-        ("https://api.example.com/v1", ValueFormat.URL),
-        ("-----BEGIN RSA PRIVATE KEY-----\nMII", ValueFormat.SECRET),
-        ("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig", ValueFormat.SECRET),
-        ("AKIAIOSFODNN7EXAMPLE", ValueFormat.SECRET),
-        ("ghp_abcdefghijklmnopqrstuvwxyz0123", ValueFormat.SECRET),
-        ("ops@example.com", ValueFormat.EMAIL),
-        ("8bd0e2e1-2b0a-4a1e-9c0f-0d1a2b3c4d5e", ValueFormat.UUID),
-        ("true", ValueFormat.BOOLEANISH),
-        ("5432", ValueFormat.PORT),
-        ("30s", ValueFormat.DURATION),
-        ("-12.5", ValueFormat.NUMERIC),
-        ("10.0.0.7", ValueFormat.IP_ADDRESS),
-        ("/var/run/app.sock", ValueFormat.PATH),
-        ('{"a": 1}', ValueFormat.JSON),
-        ("db.internal.example.com", ValueFormat.HOSTNAME),
-        ("some-opaque-token-value-here", ValueFormat.OPAQUE),
-        ("", ValueFormat.NOT_APPLICABLE),
-    ],
-)
-def test_classify_format(value: str, expected: ValueFormat) -> None:
-    assert classify_format(value) is expected
+# test_classify_format: the cases are the `formats` section of
+# shape_conformance.json, read below by both languages (Q42).
 
 
 def test_classify_format_never_echoes_its_input() -> None:
@@ -315,6 +292,15 @@ _SHAPE_FIXTURE = json.loads(
 )
 def test_scheme_matches_the_shared_fixture(case: dict) -> None:
     assert classify_scheme(case["input"]) == ValueScheme(case["scheme"])
+
+
+@pytest.mark.parametrize(
+    "case",
+    _SHAPE_FIXTURE["formats"],
+    ids=[c["input"] or "<empty>" for c in _SHAPE_FIXTURE["formats"]],
+)
+def test_format_matches_the_shared_fixture(case: dict) -> None:
+    assert classify_format(case["input"]) is ValueFormat(case["format"])
 
 
 @pytest.mark.parametrize(
