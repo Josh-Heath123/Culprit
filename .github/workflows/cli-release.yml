@@ -121,7 +121,9 @@ jobs:
         run: |
           count=0
           for binary in cli/dist/culprit_*; do
-            gh attestation verify "$binary" --repo "$GITHUB_REPOSITORY"
+            # C4: signed by this workflow, from this run's ref - the tag
+            # being released, or the branch a hand-started run is on.
+            gh attestation verify "$binary" --repo "$GITHUB_REPOSITORY"               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/cli-release.yml"               --source-ref "$GITHUB_REF"
             count=$((count + 1))
           done
           if [ "$count" -ne 5 ]; then

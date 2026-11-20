@@ -328,6 +328,61 @@ Compose, Kubernetes and systemd are in [`deploy/agent/`](../deploy/agent);
 each kind of investigation, and [`docs/SECURITY.md`](SECURITY.md) what
 a compromised agent or control plane can and cannot do.
 
+### Verifying what Culprit publishes
+
+**Not usable yet.** The images in `ghcr.io` are private and no release has
+been cut, so nothing below can be fetched by anyone but the owner today. The
+commands are here so they are right on the day the packages are made public
+and the first `v*` tag is pushed.
+
+Every image and binary Culprit builds is attested where it is built: build
+provenance, and for images a CycloneDX SBOM, signed through Sigstore with
+the workflow run's own identity. [GitHub's CLI](https://cli.github.com/)
+checks one. Name the workflow that must have signed it and the ref it must
+have been built from, or a build from any workflow or branch in this
+repository would pass too.
+
+An image from `main` (`:latest`, or `:<commit>`), built by `images.yml`:
+
+```bash
+gh attestation verify oci://ghcr.io/josh-heath123/culprit/api:latest \
+  --repo Josh-Heath123/Culprit \
+  --signer-workflow Josh-Heath123/Culprit/.github/workflows/images.yml \
+  --source-ref refs/heads/main
+# Its SBOM: the same command, with --predicate-type https://cyclonedx.org/bom
+```
+
+A release's image (`:vX.Y.Z`), built by the same workflow from the tag:
+
+```bash
+gh attestation verify oci://ghcr.io/josh-heath123/culprit/api:vX.Y.Z \
+  --repo Josh-Heath123/Culprit \
+  --signer-workflow Josh-Heath123/Culprit/.github/workflows/images.yml \
+  --source-ref refs/tags/vX.Y.Z
+```
+
+A released binary, built by `cli-release.yml` from the tag:
+
+```bash
+gh attestation verify culprit_X.Y.Z_linux_amd64 \
+  --repo Josh-Heath123/Culprit \
+  --signer-workflow Josh-Heath123/Culprit/.github/workflows/cli-release.yml \
+  --source-ref refs/tags/vX.Y.Z
+```
+
+The images are `api`, `worker`, `frontend`, `mcp_server` and `cli`. A tag
+such as `:latest` moves; to verify exactly what you run, verify it by digest
+(`oci://ghcr.io/josh-heath123/culprit/api@sha256:…`).
+
+**A pass proves** that these bytes were built by that workflow, in this
+repository, from that ref, and that the record of it is in Sigstore's public
+log. **It does not prove** that the code is right, that the build is
+reproducible, or that whoever pushed to `main` or cut the tag meant well:
+an attestation says where something came from, not that it is good. Culprit
+checks the same thing itself before it publishes: each `publish` and
+release run verifies what it just attested, with both flags, and fails if it
+does not hold.
+
 ## Usage: one project, end to end
 
 This is the project [the README's](../README.md#see-it-work) `diff` and `probe` captures were made from. It takes five minutes,

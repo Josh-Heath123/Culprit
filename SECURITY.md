@@ -32,6 +32,11 @@ and what you think it lets someone do.
 compromised control plane, agent, pairing code, key or token cannot do, each
 with the test that holds it. A way around any of those is in scope.
 
+To check that an image or a binary was built by this repository's own
+workflow, from `main` or a release tag, see
+[Verifying what Culprit publishes](docs/GUIDE.md#verifying-what-culprit-publishes).
+A build that passes that check but was not made that way is in scope.
+
 Out of scope: the demo services (`demo-services/`), which are deliberately
 faulty test targets; denial of service by volume; and findings in a
 dependency that Culprit does not reach (report those upstream).
