@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-19**, with one close-out item, C4. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes after C4 is the owner's to decide. |
-| Current phase | **43, close-out — C4, the signer workflow** — `awaiting decision` (Q42, blocking). Step 0 run; C4 not started. Brief: `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4". Report in §5. |
+| Current phase | **43, close-out — C4, the signer workflow** — `awaiting decision` (Q43, blocking). Q42 ruled 2026-11-20 (`../q42-ruling.md`); its part (b) built (`aec7317`); its part (a), the classifier, blocked by Q43. C4 not started. Brief: `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4". Report in §5. |
 | Previous phase | **43 — authenticated — merged as `090cc4b` (PR #55) and signed off 2026-11-19. The delivery plan is complete.** Runs 44573995497, 44579250490 and 44581822123 (the report) green on every job, read from GitHub; every commit Verified; two mutations shown red by the architecture session. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-43-signer`, cut from `origin/main` = `090cc4b`; its first commit is the review, `bac6879`, signed; then this report. Not pushed: stopped at Q42. Open a draft pull request and mark it ready when the run report is committed. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
-| Blocking questions | **Q42** (§3): the verification record is not repeatable when a fix recreates a container, because Docker's random `HOSTNAME` can change shape class. |
+| Branch | `phase-43-signer`, cut from `origin/main` = `090cc4b`: `bac6879` the review, `587959b` the step-0 report, `e8442fe` origin/main (`03c309d`) merged in, `aec7317` Q42 (b), then this report; all signed, pushed. No pull request yet. Open a draft pull request and mark it ready when the run report is committed. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
+| Blocking questions | **Q43** (§3): Q42 (a) changes `shared/culprit_model/shape.py`'s classifier pattern, and the coupled-file gate requires its declared pair, the applied migration `e4c1b7a9d2f0`, to change in the same diff. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q42 | **`main`'s push run 44597852296 failed `narration-parity` for a reason in the code, not the runner.** The narration-off record's wrong-fix verification (`verifications[1]`) carried `config:order-service/HOSTNAME value_shape` as an unexplained difference (`changes_explained: false`); the narration-on record did not. The fix recreates order-service; its `HOSTNAME` is Docker's random 12-hex container id (nothing sets a hostname), captured through `os.Environ()`; `verify.Differences` compares the two captures' shapes; and `ClassifyFormat` (`cli/internal/model/shape.go`, mirrored in `shape.py`) sorts such an id as `ip_address` when it holds a letter, `numeric` when all digits, `duration` when eleven digits and a `d` — about 0.4% of ids each time, so a recreation flips the shape about 0.8% of the time. Narration played no part: the loop's own record is not repeatable. The rerun (attempt 2) was green on every job. **Which fix, if any:** the classifier (a single-label hex string is not an IP address, and the id's class should not depend on its digits), the capture (runtime-supplied keys such as `HOSTNAME` not taken as CONFIGURED), or verify (a key INTENT never mentions not counted as an unexplained change) — each touches the determinism boundary or D6, so it is the architecture session's to rule. Nothing was changed. | 2026-11-19, C4 step 0 | C4 (instructed: stop) |
+| Q43 | **Q42 (a) cannot pass the coupled-file gate without editing an applied migration, adding an empty one, or changing the gate.** `scripts/coupled_files.yaml` pairs `shared/culprit_model/shape.py` with `api/migrations/versions/e4c1b7a9d2f0_environment_capture.py`, because the migration writes the ValueShape vocabulary out as literals for its CHECK constraint; CI runs `check_coupled_files.py --base origin/main`. Q42 (a) changes only the `ip_address` pattern in `shape.py`, no vocabulary, and the pair has never met that case: every earlier change to `shape.py` (Phases 28, 30, 42) also changed the migration. The YAML forbids editing the applied migration to satisfy the check; an empty migration would game it; changing the pair is a gate change (§6). The vocabulary itself is already held by content in `api/tests/test_value_shape_constraint.py::test_every_shape_culprit_model_can_produce_is_accepted`, but only against a live database. **Proposed (not decided):** replace the `shape.py` pair with a test that reads the migration's four vocabulary tuples by AST and asserts they equal the four enums' members, its mutation (a member added to `ValueFormat`) shown red; keep the `worker/app/db.py` pair. The draft of (a) is `../q42-wip.patch` (applies cleanly on `aec7317`; both languages red on 5 cases before it, green after). | 2026-11-20, C4 (Q42 a) | Q42 (a), and so C4 (instructed: stop) |
 
 ---
 
@@ -128,7 +128,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 41 | The gate | **complete** (PR #51, `3928f0a`) | **Signed off 2026-11-19** (architecture session): runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2; three mutations shown red; the target missed by about a minute and accepted, `e2e (stub)`'s quickstart build bounding it; caching not now; C3 carried. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
 | 42 | Ownership on the record | **complete** (PR #53, `bb92e48`) | **Signed off 2026-11-19** (architecture session): runs 44534379764, 44543993249 and 44546655296 (the report) green on every job, read from GitHub; `reuse lint` and the map rerun, two mutations shown red; the header commit insertions only; Q41 ruled (#3 fixed; #2 and #4 dismissed by the owner); `AUTHORSHIP.md`'s merge fact corrected. Recorded in `DELIVERY_PLAN.md`, Phase 42, "Review". |
 | 43 | Authenticated | **complete** (PR #55, `090cc4b`) | **Signed off 2026-11-19** (architecture session): runs 44573995497, 44579250490 and 44581822123 (the report) green on every job, read from GitHub; every commit Verified; 56 action references pinned and two mutations shown red; the verifies to be tightened as C4. The delivery plan is complete. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review". |
-| 43, close-out | C4, the signer workflow | **awaiting decision** (Q42) | **Run 2026-11-19 (step 0 only):** `main`'s push run 44597852296 attributed (Q42) and rerun green on every job (attempt 2); no open code-scanning alert; `phase-43-signer` cut from `090cc4b` with the review as `bac6879`, signed; C4 not started; nothing pushed. Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4": every `gh attestation verify` names its signer workflow and ref, held by `test_ci_workflow.py`; users given the commands in `docs/GUIDE.md`, linked from `SECURITY.md`; shown on a hand-started `cli-release.yml` run on the branch, and on `main`'s push run after merge. Step 0: `main`'s push run 44597852296 on `090cc4b`. Branch `phase-43-signer` from `origin/main` = `090cc4b`; its first commit is the review (`../phase-43-review.patch`, message `../phase-43-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 43, close-out | C4, the signer workflow | **awaiting decision** (Q43) | **Run 2026-11-20:** step 0 met (`main`'s push run 44711807845 on `03c309d` green on every job, `publish` attesting and verifying all five images; 44707603837's red attributed to CVE-2026-115563 in mcp 1.29.0, fixed by #58); `origin/main` merged in (`e8442fe`); Q42 ruled and its part (b) built (`aec7317`), its part (a) blocked by Q43; C4 not started. Report in §5. **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4": every `gh attestation verify` names its signer workflow and ref, held by `test_ci_workflow.py`; users given the commands in `docs/GUIDE.md`, linked from `SECURITY.md`; shown on a hand-started `cli-release.yml` run on the branch, and on `main`'s push run after merge. Q42's ruling first (`../q42-ruling.md`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -161,63 +161,118 @@ reports are in `git log -p docs/HANDOFF.md`.
 
 ```
 Phase:        43, close-out — C4, the signer workflow
-Branch:       phase-43-signer, from origin/main = 090cc4b. bac6879 the
-              review (../phase-43-review.patch, ../phase-43-review.txt),
-              signed (%G? = G). Nothing else; not pushed; no pull request.
-Run:          2026-11-19, /next. Step 0 only.
-Status:       AWAITING DECISION — Q42, blocking. Step 0 found main's
-              narration-parity failure caused by the code, not the runner,
-              and the brief says to stop there and change nothing. C4 not
-              started.
+Branch:       phase-43-signer. bac6879 the review, 587959b the step-0
+              report (both 2026-11-19), e8442fe origin/main (03c309d)
+              merged in, aec7317 Q42 (b), then this report. Every commit
+              signed (%G? = G). Pushed. No pull request yet.
+Run:          2026-11-20, /next, with the Q42 ruling (../q42-ruling.md).
+Status:       AWAITING DECISION — Q43, blocking. Q42 (b) built and
+              tested; Q42 (a) cannot land without a gate decision; C4 not
+              started, as instructed (stop on an architectural question).
 
 STEP 0
-  1 main's push run 44597852296 on 090cc4b, attempt 1: failure.
-    Every job green but narration-parity (job 135829202240) and so gate;
-    deploy skipped; all five publish jobs success.
-    The compare step, verbatim:
-      loop-records-none.json and loop-records-stub.json differ beyond ids
-      and times:
-        $.verifications[1].changes_explained: false != true
-        $.verifications[1].differences: [{"explained_by": null,
-          "predicate": "value_shape",
-          "subject": "config:order-service/HOSTNAME"}] != []
-    The records (both artifacts downloaded): verifications[1] is the wrong
-    fix (remint-wrong-audience) in both; every other field equal. The
-    narration-off leg (none) counted a HOSTNAME shape change between its
-    before and after captures; the narration-on leg (stub) did not.
-    Why: the fix recreates order-service, in which the agent runs. Nothing
-    sets a hostname (no hostname: in any compose file), so HOSTNAME is the
-    container's random 12-hex id, read by capture through os.Environ().
-    verify.Differences (cli/internal/verify/verify.go:274) compares the
-    two captures' shapes with diverge.CompareAll; ClassifyFormat
-    (cli/internal/model/shape.go; shape.py the same) takes a letter-
-    bearing hex id as ip_address (the pattern ^\[?[0-9a-f:]{3,}\]?...),
-    an all-digit one as numeric, eleven digits and a d as duration. Shown
-    with shape.py: 3f9a2b7c1d0e ip_address, 123456789012 numeric,
-    12345678901d duration. P(an id not ip_address) ~ 0.4%, so a
-    recreation changes the shape ~0.8% of the time. Not shown: the ids
-    themselves, which no log prints; the mechanism is inferred from the
-    record, the code and the classifier's output.
-    Attribution: the code. The trigger is chance, but the record differs
-    because the loop records a runtime-supplied key and its shape class
-    depends on random digits; narration played no part. Raised as Q42
-    (§3). Nothing changed to make it pass.
-    Rerun (gh run rerun 44597852296, the whole run, so the e2e jobs made
-    fresh records): attempt 2 success on every job — narration-parity
-    (135850053047) and gate (135850132182) included; the five publish
-    jobs success again (the rerun re-pushed and re-attested main's
-    images, as the whole-run rerun does); deploy skipped.
-  2 Code-scanning alerts: none open. #2 and #3 dismissed "won't fix", #4
-    dismissed "false positive", #1 fixed.
+  1 main's push run 44711807845 on 03c309d (the merge of #58), attempt 1:
+    success on every job; deploy skipped. publish: for all five images,
+    "Attest the image's build provenance", "Attest the image's SBOM" and
+    "Verify both attestations" success - the first run of #56's new
+    action versions through the publish path.
+  2 main's push run 44707603837 on 7f5feac (the merge of #56): failure.
+    gh run view --log-failed: only build (mcp_server, ...) failed, at its
+    Trivy scan: "Total: 1 (HIGH: 1, CRITICAL: 0)", mcp 1.29.0,
+    CVE-2026-115563, fixed in 1.30.0 / 2.2.0. gate failed because that
+    job did; publish skipped. Attribution: an advisory published against
+    a pinned dependency, not #56. #58 (mcp 1.29.0 -> 1.30.0 in
+    mcp_server/uv.lock) fixed it; the scan passed in 44711807845.
 
-NOT DONE (stopped at Q42, as instructed)
-  C4's four decisions; the gates; the auditors; a push, a pull request, a
-  hand-started cli-release.yml run. The ruleset and every action version
-  untouched. shared/uv.lock not staged.
+MERGE
+  e8442fe: git merge -S origin/main, no conflicts (images.yml, ci-cd.yml,
+  cli-release.yml and mcp_server/uv.lock from #56 and #58). just lint
+  green before the push.
+
+Q42 — RULED (architecture session, 2026-11-20; ../q42-ruling.md)
+  Reproduced by the architecture session on 587959b: 200,000 random 12-hex
+  ids gave 0.774% of pairs not equivalent (theory 0.775%); abc, cafe and
+  deadbeef classified ip_address; format classification held by no shared
+  fixture. Worse than raised: auth-audience's correct fix also recreates
+  order-service, the vantage, so ~0.8% of runs could judge a correct fix
+  changed_underneath. Ruling: (a) the classifier - IPv6 needs two colons,
+  in Go and Python, with a formats section in shape_conformance.json read
+  by both; (b) the process adapter does not shape a variable whose value
+  equals os.Hostname(), keyed on the OS fact, process adapter only;
+  (c) rejected - verify keeps counting every unexplained difference;
+  also rejected: ignoring HOSTNAME by name, any name list, loosening
+  narration-parity, a retry. To be recorded in DELIVERY_PLAN.md at review.
+
+  (b) BUILT - aec7317
+    processAdapter takes hostname func() (string, error), injected like
+    environ (capture.Options.Hostname, probe.Sources.Hostname; nil is
+    os.Hostname). A Known value equal to a non-empty hostname becomes
+    EnvValue{Known: false}: exists stays true, value_shape is unknown,
+    compared on presence alone, never value-allowlisted. Workload.Identity
+    counts them; capture meta "identity.<component>" says how many, never
+    a value. The capture tests' helper injects an empty hostname so no
+    test depends on the machine.
+    Tests (new):
+      capture: TestTheRuntimesIdentityIsNotConfiguration (HOSTNAME and
+        SERVICE_INSTANCE holding the hostname both Known false; an
+        unrelated key still shaped; empty or unreadable hostname - no
+        key treated); TestTheIdentityRuleReachesTheCapture (exists fact
+        kept, shape unknown, meta present and free of the value).
+      verify: identity_test.go, over real capture.Run process captures -
+        HOSTNAME 3f9a2b7c1d0e -> 123456789012 and -> 12345678901d: no
+        difference; BUILD_ID 3f9a2b7c1d0e -> 123456789012 (not the
+        hostname): exactly one value_shape difference.
+    Mutations, each shown red and reverted:
+      M2 the rule removed (condition made false): verify
+        TestARecreatedContainersHostnameIsNoDifference FAIL; capture
+        TestTheRuntimesIdentityIsNotConfiguration and
+        TestTheIdentityRuleReachesTheCapture FAIL.
+      M3 the rule keyed on key == "HOSTNAME": capture
+        TestTheRuntimesIdentityIsNotConfiguration FAIL ("SERVICE_INSTANCE
+        holds the hostname but was taken as configuration"; "Identity = 1,
+        want 2"). verify stays green under M3, as expected: its captures
+        hold the hostname only in HOSTNAME.
+    LIMITS: "A process capture does not shape the process's own hostname
+    (Q42)" - a configured value equal to the hostname loses its shape;
+    an unreadable hostname disables the rule; the exec adapter is not
+    covered. No UPGRADING entry for (b): a before-capture shaped by an
+    older binary against an after-capture's unknown compares on presence
+    alone, so it is no difference.
+
+  (a) BLOCKED — Q43 (section 3)
+    The coupled-file gate (scripts/coupled_files.yaml; CI runs
+    check_coupled_files.py --base origin/main) pairs
+    shared/culprit_model/shape.py with the applied migration
+    e4c1b7a9d2f0, and (a) changes only shape.py's pattern. Neither
+    editing the applied migration, nor adding an empty one, nor changing
+    the gate is mine to choose. The draft is ../q42-wip.patch: the
+    formats section (the ruling's 14 cases plus Python's 18), Go's new
+    TestFormatsMatchTheSharedFixture, Python's list replaced by the
+    fixture, and the pattern in both languages. Shown before the gate
+    stopped it: both languages red on the same 5 cases before the
+    pattern change (3f9a2b7c1d0e, deadbeef, cafe, abc, ab:cd), and green
+    after (Python test_shape.py 80 passed; Go internal/model ok). It
+    applies cleanly on aec7317. Not yet run: M1 (the old pattern back,
+    red in both), the UPGRADING entry the ruling lists for (a).
+
+GATES (local, Windows, one at a time, in the foreground)
+  just lint: green (before the push of e8442fe; again before this push).
+  just cli-lint: green.  just cli-test: green, 18 packages ok.
+  go test ./internal/probe/...: ok. check_coupled_files.py: no
+  violations. Not run: just test, typecheck and the rest of /verify, the
+  auditors, /ci - the run stopped at Q43 before any pull request.
+  The fault library was not run locally. results.json and expected.json
+  are untouched.
+
+NOT DONE (stopped at Q43)
+  Q42 (a) and its M1 and UPGRADING entry; C4's four decisions; the
+  hand-started cli-release.yml run; both auditors; the pull request and
+  /ci. The ruleset and every action version untouched; nothing
+  published, released or deployed. shared/uv.lock not staged.
 
 TO RESUME
-  Rule Q42. Then C4 continues on phase-43-signer from bac6879 and this
-  report's commit.
+  Rule Q43. Then apply ../q42-wip.patch with whatever Q43 decides for
+  the gate, show M1 red, add the UPGRADING entry, then C4.
 ```
 
 ## §6. Escalate to the architecture session when
