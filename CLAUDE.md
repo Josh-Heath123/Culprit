@@ -12,8 +12,8 @@ the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
 - **Current phase:** 43's close-out (C4, the signer workflow, as amended by
-  Q44) — on branch `phase-43-c4`, from `527d965`; not started. Q42 and Q43
-  are merged (PR #64) and signed off; the delivery plan is complete.
+  Q44) — on branch `phase-43-c4` (PR #65); complete pending review and
+  merge. Q42 and Q43 are signed off; the delivery plan is complete.
 - **Plan of record:** `docs/DELIVERY_PLAN.md` (Phases 40–43), after
   `docs/DIAGNOSTIC_PLAN.md` (26–35) and `docs/PERFORMANCE_PLAN.md`
   (36–39). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8) and §2 (the core model),
