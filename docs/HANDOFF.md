@@ -63,12 +63,12 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-19**, with one close-out item, C4. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes after C4 is the owner's to decide. |
-| Current phase | **43, close-out — C4, the signer workflow** — `awaiting decision` (Q44, blocking). Q42 and Q43 ruled and done (`aec7317`, `baea86d`, `cc21141`), green on the merge result (run 44748685372). C4 not started. Brief: `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4". Report in §5. |
-| Previous phase | **43 — authenticated — merged as `090cc4b` (PR #55) and signed off 2026-11-19. The delivery plan is complete.** Runs 44573995497, 44579250490 and 44581822123 (the report) green on every job, read from GitHub; every commit Verified; two mutations shown red by the architecture session. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review". |
+| Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-19**, with one close-out item, C4; Q42 and Q43, found on the way, are done. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes after C4 is the owner's to decide. |
+| Current phase | **43, close-out — C4, the signer workflow, as amended by Q44** — `complete` pending review and merge: CI green on the merge result (run 44766464671 on `0128be5`); `publish`'s tightened verify is proved on `main`'s push run after merge. C5 done first. Report in §5. |
+| Previous phase | **43, close-out part 1 — Q42 and Q43 — merged as `527d965` (PR #64) and signed off 2026-11-20.** Runs 44748685372 and 44750683640 (the report) green on every job, read from GitHub; every commit Verified; five mutations by the architecture session, four red and one surviving (C5). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 1". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-43-signer`, cut from `origin/main` = `090cc4b`, with `origin/main` = `03c309d` merged in (`e8442fe`); every commit signed and pushed. Draft pull request #64; mark it ready only when C4's run report is committed and `narration-parity` is green. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
-| Blocking questions | **Q44** (§3): C4's decision 1 fixes `images.yml`'s verify to `refs/heads/main`, but `publish` also runs on `v*` tags. |
+| Branch | `phase-43-c4`, cut from `origin/main` = `527d965`: `504bf4d` the review, `0095364` C5, `a1d5757` C4, `0128be5` the audits' findings, then this report; all signed, pushed. Pull request #65, marked ready once this report is committed. Do not stage `shared/uv.lock`. |
+| Blocking questions | None. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| Q44 | **C4's decision 1 fixes `images.yml`'s verify to `--source-ref refs/heads/main`, but `publish` also runs on release tags.** `ci-cd.yml` runs on `push` to `main` and to `v*` tags, and passes `publish: github.event_name == 'push' or a hand-started deploy of main` to `images.yml`; its own comment says publish "runs on main and tags", and `images.yml` pushes `:<tag>` when the ref is `refs/tags/v*`. On a tag push the attestation's Source Repository Ref is the tag, so a verify fixed to `refs/heads/main` would fail the first release's publish. Confirmed on `main`'s run 44711807845: the certificate on `frontend@sha256:2b29c57e…` (provenance and SBOM) names Build Signer URI `.github/workflows/images.yml@refs/heads/main` and Source Repository Ref `refs/heads/main` — the called workflow, as decision 1 asked to confirm. **Proposed (not decided):** in `publish`, `--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml" --source-ref "$GITHUB_REF"`, after a step that fails unless `GITHUB_REF` is `refs/heads/main` or `refs/tags/v*` (the only refs publish may run on), with `test_ci_workflow.py` holding both flags and that guard; `docs/GUIDE.md` gives users `refs/heads/main` for `:latest` and `:<sha>` images and `refs/tags/vX.Y.Z` for a release's. `cli-release.yml` is unaffected: its `--source-ref "$GITHUB_REF"` is the tag, or the run's own ref when started by hand, exactly as decided. | 2026-11-20, C4 (decision 1) | C4 (instructed: stop) |
+| — | None open. Q42, Q43 and Q44 are recorded at the end of Phase 43 in `DELIVERY_PLAN.md`. | | |
 
 ---
 
@@ -128,7 +128,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 41 | The gate | **complete** (PR #51, `3928f0a`) | **Signed off 2026-11-19** (architecture session): runs 44503311197, 44516832208 and 44519127072 (the report) green on every job, read from GitHub; wall time 12.4 to 13.3 minutes, from 22.0 to 24.2; three mutations shown red; the target missed by about a minute and accepted, `e2e (stub)`'s quickstart build bounding it; caching not now; C3 carried. Recorded in `DELIVERY_PLAN.md`, Phase 41, "Review". |
 | 42 | Ownership on the record | **complete** (PR #53, `bb92e48`) | **Signed off 2026-11-19** (architecture session): runs 44534379764, 44543993249 and 44546655296 (the report) green on every job, read from GitHub; `reuse lint` and the map rerun, two mutations shown red; the header commit insertions only; Q41 ruled (#3 fixed; #2 and #4 dismissed by the owner); `AUTHORSHIP.md`'s merge fact corrected. Recorded in `DELIVERY_PLAN.md`, Phase 42, "Review". |
 | 43 | Authenticated | **complete** (PR #55, `090cc4b`) | **Signed off 2026-11-19** (architecture session): runs 44573995497, 44579250490 and 44581822123 (the report) green on every job, read from GitHub; every commit Verified; 56 action references pinned and two mutations shown red; the verifies to be tightened as C4. The delivery plan is complete. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review". |
-| 43, close-out | C4, the signer workflow | **awaiting decision** (Q44) | **Run 2026-11-20 (second):** Q43 built (`baea86d`), Q42 (a) built (`cc21141`), with every mutation shown red; draft pull request #64, run 44748685372 green on every job on the merge result; C4 not started: decision 1's ref conflicts with `publish` running on tags (Q44). Report in §5. **Run 2026-11-20 (first):** step 0 met; `origin/main` merged in; Q42 (b) built (`aec7317`). **Brief (2026-11-19):** `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4": every `gh attestation verify` names its signer workflow and ref, held by `test_ci_workflow.py`; users given the commands in `docs/GUIDE.md`, linked from `SECURITY.md`; shown on a hand-started `cli-release.yml` run on the branch, and on `main`'s push run after merge. Rulings: `../q42-ruling.md`, `../q43-ruling.md`. Mark the pull request ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 43, close-out part 1 | Q42 and Q43 | **complete** (PR #64, `527d965`) | **Signed off 2026-11-20** (architecture session): runs 44748685372 and 44750683640 (the report) green on every job, read from GitHub, `narration-parity` included; every commit Verified; the run's mutations confirmed, and five of the architecture session's own, one surviving (C5). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 1". |
+| 43, close-out | C4, the signer workflow | **complete** pending review and merge (PR #65) | **Run 2026-11-20:** step 0 met (44755314601 on `527d965`, all five `publish` jobs attested and verified); C5 (`0095364`) and C4 (`a1d5757`, `0128be5`) built, every mutation shown red; `cli-release.yml` started by hand on the branch, verify green with both flags (44758619408, 44766453375); both auditors run, their findings fixed; run 44766464671 green on every job on the merge result. Report in §5. **Brief (2026-11-20, as amended by Q44):** `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4, the signer workflow, as amended by Q44": C5 first; then every `gh attestation verify` names the workflow it runs in and `$GITHUB_REF`, with `publish` guarded to `main` and `v*` tags, held by `test_ci_workflow.py` against `ci-cd.yml`'s triggers; users given the commands; shown on a hand-started `cli-release.yml` run and on `main`'s push run after merge. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -160,162 +161,149 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        43, close-out — C4, the signer workflow
-Branch:       phase-43-signer. bac6879 the review, 587959b the step-0
-              report, e8442fe origin/main (03c309d) merged in, aec7317
-              Q42 (b), eda2da3 the Q43 report, baea86d Q43, cc21141
-              Q42 (a), then this report. Every commit signed (%G? = G).
-              Pushed. Draft pull request #64.
-Run:          2026-11-20, /next, with the Q42 and Q43 rulings
-              (../q42-ruling.md, ../q43-ruling.md).
-Status:       AWAITING DECISION — Q44, blocking. Q42 and Q43 done; C4
-              not started: its decision 1 names refs/heads/main for
-              images.yml's verify, and publish also runs on v* tags.
+Phase:        43, close-out — C4, the signer workflow, as amended by Q44
+Branch:       phase-43-c4, cut from origin/main = 527d965. 504bf4d the
+              review (../phase-43-c4-review.patch, .txt), 0095364 C5,
+              a1d5757 C4, 0128be5 the audits' findings, then this report.
+              Every commit signed (%G? = G). Pushed. Pull request #65.
+Run:          2026-11-20, /next.
+Status:       COMPLETE pending review and merge — CI green on the merge
+              result; publish's tightened verify is proved on main's push
+              run after merge (decision 4), not before.
 
-STEP 0 (unchanged from this morning's run)
-  main's push run 44711807845 on 03c309d green on every job, publish
-  attesting and verifying all five images on #56's action versions.
-  44707603837 on 7f5feac red only at build (mcp_server)'s Trivy scan:
-  mcp 1.29.0, CVE-2026-115563 (HIGH), fixed in 1.30.0 by #58.
+STEP 0
+  main's push run 44755314601 on 527d965 (the merge of PR #64), attempt 1:
+  success on every job (deploy skipped), narration-parity and gate
+  included. All five publish jobs (api, worker, frontend, mcp_server,
+  cli): "Attest the image's build provenance", "Attest the image's SBOM"
+  and "Verify both attestations" success - the repository-only verify,
+  which this run tightens.
 
-Q43 — RULED (architecture session, 2026-11-20; ../q43-ruling.md)
-  The shape.py / e4c1b7a9d2f0 pair in scripts/coupled_files.yaml is
-  removed and its comment kept as history: it tested whether a file
-  moved, not whether the vocabularies agree, and a check that can be
-  passed only by gaming it is a defect. The worker/app/db.py pair, the
-  check, its CI step, hooks and tests unchanged. The agreement is held by
-  content: a database-free test that walks the Alembic chain by AST and
-  compares the latest migration naming a *_value_shape_is_closed
-  constraint with the four enums. e4c1b7a9d2f0 untouched; no empty
-  migration; no bypass. To be recorded in DELIVERY_PLAN.md at review.
+504bf4d — the review
+  git apply --check, then applied: DELIVERY_PLAN.md, HANDOFF.md, CLAUDE.md.
 
-  baea86d — built
-    api/tests/test_value_shape_vocabulary.py: reads every migration by
-    AST (never imports), one head, the chain walked head to base with no
-    orphan or cycle; the vocabulary's migration found structurally
-    (e4c1b7a9d2f0 today; no revision id in the test); _VALUE_TYPES,
-    _LENGTH_CLASSES, _FORMATS, _SCHEMES each without duplicates and equal
-    as sets to ValueType, LengthClass, ValueFormat, ValueScheme. Anything
-    missing fails it; it never skips (-rs: none). All four agree today:
-    no drift to raise. test_value_shape_constraint.py's docstring that
-    named the pair now names this test.
-    Mutations, each red, each reverted:
-      1 MUTANT added to ValueFormat: "_FORMATS and ValueFormat disagree -
-        only in the model: ['mutant']".
-      2 "uuid" removed from e4c1b7a9d2f0's _FORMATS: "only in the model:
-        ['uuid']" (the migration restored with git checkout; untouched in
-        every commit).
-      3 a throwaway head migration (zz_throwaway_m3.py, down_revision
-        a6c2e9d4f8b1, the current head) naming
-        ck_configured_facts_value_shape_is_closed with _FORMATS one short:
-        the test followed the chain to it - "zz_throwaway_m3.py:
-        `_FORMATS` and ValueFormat disagree - only in the model: ['uuid']"
-        (1 failed, 3 passed). Deleted; never committed.
-    Elsewhere: git grep found no other claim of the coupling outside
-    api/migrations (the hooks, CI step and auditor name the check, not
-    the pair; ARCHITECTURE.md describes Phase 28's history).
+0095364 — C5
+  TestTheRuntimesIdentityIsNotConfiguration's environment gains EMPTY=;
+  with the hostname empty, and with it unreadable, EMPTY must stay shaped
+  and Identity 0. Mutation, red and reverted: the guard `own != ""`
+  removed - the "empty" subtest FAIL ("an empty value was taken for an
+  empty hostname: {Value: Known:false}"; Identity 1). internal/capture ok.
 
-Q42 — RULED (architecture session, 2026-11-20; ../q42-ruling.md)
-  Reproduced on 587959b: 200,000 random 12-hex ids gave 0.774% of pairs
-  not equivalent (theory 0.775%); abc, cafe, deadbeef were ip_address;
-  format classification held by no shared fixture. Worse than raised:
-  auth-audience's correct fix recreates order-service, the vantage, so
-  about 0.8% of runs could judge a correct fix changed_underneath.
-  Ruling: (a) IPv6 needs two colons, in Go and Python, with a formats
-  section in shape_conformance.json read by both; (b) the process
-  adapter does not shape a variable whose value equals os.Hostname(),
-  keyed on the OS fact, process adapter only; (c) rejected - verify
-  keeps counting every unexplained difference; also rejected: HOSTNAME
-  by name, any name list, loosening narration-parity, a retry. To be
-  recorded in DELIVERY_PLAN.md at review.
+a1d5757 — C4, decisions 1 to 3
+  1 images.yml publish: both verifies name --signer-workflow
+    "$GITHUB_REPOSITORY/.github/workflows/images.yml" and --source-ref
+    "$GITHUB_REF". Its first step, before downloading, logging in or
+    pushing, is a guard: case "$GITHUB_REF" in refs/heads/main or
+    refs/tags/v* goes on; *) names the ref it got and exits 1.
+    cli-release.yml's verify names cli-release.yml and "$GITHUB_REF" (the
+    tag, or a hand-started run's branch). No action version changed; no
+    permission changed.
+  2 test_ci_workflow.py: every verify in every workflow names the file it
+    sits in as signer and "$GITHUB_REF" as ref (3 found); publish has one
+    guard, before its first login or push; the refs it accepts equal
+    ci-cd.yml's on.push (branches and tags).
+  3 docs/GUIDE.md "Verifying what Culprit publishes": an image from main
+    (refs/heads/main), a release's image and a released binary
+    (refs/tags/vX.Y.Z), each with both flags, the SBOM form; what a pass
+    proves (these bytes, that workflow, this repository, that ref) and
+    does not (that the code is right, or that whoever pushed meant well);
+    "Not usable yet" - private packages, no release. SECURITY.md links it.
+    LIMITS: a verify names the workflow and ref, not the commit; the
+    release path has not run.
 
-  aec7317 — (b) built
-    processAdapter takes hostname func() (string, error), injected like
-    environ (capture.Options.Hostname, probe.Sources.Hostname; nil is
-    os.Hostname). A Known value equal to a non-empty hostname becomes
-    EnvValue{Known: false}: exists kept, value_shape unknown, compared on
-    presence alone, never value-allowlisted. Workload.Identity counts
-    them; capture meta "identity.<component>" says how many, never a
-    value. The capture tests' helper injects an empty hostname.
-    Tests: capture TestTheRuntimesIdentityIsNotConfiguration (HOSTNAME
-    and SERVICE_INSTANCE both unshaped; an unrelated key still shaped; an
-    empty or unreadable hostname treats no key) and
-    TestTheIdentityRuleReachesTheCapture (exists kept, shape unknown,
-    meta present and free of the value); verify identity_test.go over
-    real capture.Run process captures - HOSTNAME 3f9a2b7c1d0e ->
-    123456789012 and -> 12345678901d: no difference; BUILD_ID (not the
-    hostname) 3f9a2b7c1d0e -> 123456789012: exactly one value_shape
-    difference.
-    Mutations, each red, each reverted:
-      M2 the rule removed: verify TestARecreatedContainersHostnameIs-
-        NoDifference FAIL; both capture tests FAIL.
-      M3 the rule keyed on key == "HOSTNAME": capture
-        TestTheRuntimesIdentityIsNotConfiguration FAIL ("SERVICE_INSTANCE
-        holds the hostname but was taken as configuration"; "Identity = 1,
-        want 2").
-    LIMITS: "A process capture does not shape the process's own hostname
-    (Q42)". No UPGRADING note for (b) (accepted by Q43's ruling:
-    Equivalent compares on presence when either side is unknown).
+0128be5 — the audits' findings (no criterion failed; all three fixed)
+  1 The verifies had lost their backslash continuations (one long line
+    each), and the test's join, run.replace("\\n", " "), matched the two
+    characters backslash-n, not a line-end backslash: its docstring was
+    false, and a correctly continued verify would have failed it. The
+    verifies are continued again; the join is CONTINUATION
+    ([ \t]*\\\n\s*); test_a_continued_command_is_read_as_one. With the old
+    join and the continued workflows: 2 failed - shown before the fix.
+  2 The guard test read only the first case arm, so a second accepting
+    arm passed (the phase-auditor's probe). guard_accepts unions every arm
+    but *), and the *) arm must exist and exit non-zero;
+    test_a_second_accepting_arm_is_named,
+    test_a_fallback_that_lets_a_ref_through_is_named.
+  3 LIMITS said the guard "has run on main"; it first runs on main's push
+    run after merge. Reworded.
+  test_ci_workflow.py: 68 passed.
 
-  cc21141 — (a) built
-    The IPv6 branch is ^\[?[0-9a-f]*:[0-9a-f]*:[0-9a-f:]*\]?(?::\d+)?$ in
-    shape.go and shape.py. shape_conformance.json gains `formats`, 32
-    cases, read by Go's new TestFormatsMatchTheSharedFixture and Python's
-    test_format_matches_the_shared_fixture (Python's own list removed).
-    Checked by script against the ruling: all 14 of its cases present and
-    right, and all 18 of Python's earlier cases.
-    Mutation M1, red and reverted: the old branch ^\[?[0-9a-f:]{3,}\]?
-    back in both languages - Go and Python each red on the same five
-    cases (3f9a2b7c1d0e, deadbeef, cafe, abc, ab:cd).
-    UPGRADING: "A capture from before an upgrade may shape a hex value
-    differently (Q42)"; LIMITS points to it. No vocabulary change (held
-    by baea86d's test).
+MUTATIONS OF THE REAL FILES (0128be5), each red, each reverted
+  MA --source-ref dropped from images.yml's SBOM verify: "a verify names
+     no --source-ref" (2 failed).
+  MB cli-release.yml's verify naming images.yml: "a verify names
+     images.yml as its signer, not the workflow it is in" (2 failed).
+  MC `release` added to ci-cd.yml's on.push, the guard unchanged:
+     "publish's guard accepts ['refs/heads/main', 'refs/tags/v*'], but
+     ci-cd.yml pushes on [..., 'refs/heads/release', ...]" (2 failed).
+  MD a second accepting arm, refs/heads/release, in images.yml's guard:
+     "publish's guard accepts [main, release, v*], but ci-cd.yml pushes on
+     [main, v*]" (2 failed).
+  ME the test's continuation join removed: the continued verifies read
+     as "names no --signer-workflow", and the join's own test red
+     (3 failed).
+  MA to MC are the brief's three. The same three were also shown red on
+  a1d5757, before the continuations were restored.
+
+DECISION 4 — PROOF
+  Hand-started cli-release.yml on phase-43-c4 (no tag cut):
+    44758619408 on a1d5757: success; "Attest the binaries' build
+      provenance" and "Verify every binary's attestation" success;
+      Publish skipped.
+    44766453375 on 0128be5 (the continued verify): the same - success,
+      Publish skipped.
+  The verify step runs under bash -e and requires a count of 5, so its
+  success means all five binaries verified with both flags (gh prints
+  nothing on success off a terminal). Not shown: the certificate of these
+  binaries' attestation - the log names no digest, and the attestation
+  could not be fetched by digest (404); not counted as evidence.
+  publish's guard and verify: NOT RUN until main's push run after merge.
+  The tag path: NOT RUN until the owner cuts the first v* tag; held by
+  test_ci_workflow.py, and LIMITS says so.
+
+AUDITS
+  invariant-auditor (on a1d5757): CLEAN. No permission, action, trigger
+    or gate changed; the guard first in publish; nothing in api, worker,
+    shared, migrations or subjects. Its risks 1 and 2 are 0128be5's 1;
+    risk 3 (the shell's v* also matches a slash) cannot be reached: no
+    trigger delivers such a ref to publish. Not run by it: lint-imports,
+    schema drift, actionlint.
+  phase-auditor (on a1d5757): every decision and C5 MET, each executed -
+    the three mutations reproduced red, C5's mutation red, the run read,
+    the GUIDE anchor resolved, no tag or release (tags: 0); decision 4's
+    publish half NOT TESTABLE until merge; the handoff status not yet
+    written (this report). Its weak spots 1 to 3 are fixed in 0128be5.
+    It left its backups and probe scripts in /tmp/c4audit, outside the
+    repository (its delete was refused).
 
 GATES (local, Windows, one at a time, in the foreground)
   just lint: green before every push. just typecheck: green.
-  just test: green (api, scripts and shared 1990 passed, 6 skipped -
-  none of them new; worker, mcp_server and extractors passed).
-  just cli-lint: green. just cli-test: green, 18 packages; the check
-  eval suites (cli/testdata) unchanged. check_coupled_files.py: no
-  violations across 1 declared pair. The README's self-check figures:
-  just self-check-coverage, then check_readme.py --self-check: true.
-  The fault library was not run locally; results.json and expected.json
-  are untouched.
+  just test: green (api, scripts, shared 1995 passed, 6 skipped as
+  before; worker, mcp_server, extractors passed). just cli-lint: green.
+  just cli-test: green, 18 packages. test_ci_workflow.py after 0128be5:
+  68 passed. The fault library was not run locally.
 
 CI
-  Draft pull request #64. Run 44748685372 (pull_request) on cc21141, the
-  merge result (origin/main 03c309d already in the branch since e8442fe):
+  Pull request #65, draft. Run 44766464671 (pull_request) on 0128be5, the
+  merge result (origin/main 527d965 is in the branch: it was cut from it):
   conclusion success. Every job success - lint, cli, test, typecheck,
   migration-round-trip, kind-capture, self-check, the five builds (Trivy
-  included), fault-library 1-4 (each writes results.json from the run and
-  fails on git diff --exit-code: unchanged), e2e (none), e2e (stub),
-  narration-parity, gate; build/publish and deploy skipped, as on every
-  pull request. gh pr checks 64: every check pass or skipping, CodeQL
-  and its four analyses included. Open code-scanning alerts: none
-  (queries pr=64, ref=refs/pull/64/merge, ref=refs/pull/64/head all
-  empty). Verdict: green on the merge result, for Q42 and Q43. One run
-  cannot prove a 0.8% fix; the unit tests and mutations are the proof.
-  The pull request stays a draft: C4 is not built.
+  included), fault-library 1-4 (results.json unchanged), e2e (none),
+  e2e (stub), narration-parity, gate; build/publish and deploy skipped,
+  as on every pull request. gh pr checks 65: 26 pass, 2 skipping
+  (publish, deploy), CodeQL and its analyses included. Open code-scanning
+  alerts: none (pr=65, refs/pull/65/merge, refs/pull/65/head all empty).
+  Earlier, run 44760584788 on a1d5757: success on every job.
+  Verdict: green on the merge result.
 
-C4 — NOT STARTED (Q44)
-  Decision 1 confirmed on the run: the certificate on main's images
-  (run 44711807845, frontend@sha256:2b29c57e…, both the SLSA provenance
-  and the CycloneDX SBOM) names Build Signer URI and SAN
-  .github/workflows/images.yml@refs/heads/main, Source Repository Ref
-  refs/heads/main, trigger push - the called workflow, not ci-cd.yml.
-  But ci-cd.yml runs on push to main and to tags v*, and images.yml's
-  publish runs on both ("publish, which runs on main and tags";
-  images.yml line 255 pushes :<tag> when the ref is refs/tags/v*). A
-  verify fixed to --source-ref refs/heads/main would fail the first
-  release's publish. Raised as Q44; nothing of C4 built.
+NOT DONE, BY DESIGN
+  No tag cut; nothing published, released or deployed; no action version
+  changed; the ruleset untouched; shared/uv.lock not staged.
 
-NOT DONE (stopped at Q44)
-  C4's four decisions, the hand-started cli-release.yml run, the
-  auditors. The ruleset and every action version untouched; nothing
-  published, released or deployed. shared/uv.lock not staged.
-
-TO RESUME
-  Rule Q44. Then C4 on this branch.
+FOR THE REVIEW
+  After merge, main's push run must show publish's "Refuse a ref ci-cd.yml
+  does not push on" step and the tightened "Verify both attestations"
+  green on all five images.
 ```
 
 ## §6. Escalate to the architecture session when

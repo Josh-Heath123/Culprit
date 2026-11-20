@@ -3404,6 +3404,20 @@ what `main` publishes. What follows from it:
   like a release's, for binaries nobody can download.
 - **Attestations exist only from Phase 43 on.** Images pushed before it have
   none; `gh attestation verify` on one of them fails.
+- **A verify names the workflow and the ref, not the commit** (C4). Every
+  `gh attestation verify`, in CI and in
+  [the guide](GUIDE.md#verifying-what-culprit-publishes), requires the
+  workflow that signed (`images.yml` or `cli-release.yml`) and the ref it ran
+  on (`refs/heads/main` or the tag). Anything pushed to `main`, or any tag
+  pushed, passes it; it says where a build came from, not that it was meant.
+- **The release path has not run.** `publish` verifies against the ref its
+  run is on, after a step that refuses any ref but `main` and a `v*` tag.
+  That step and the tightened verify first run on `main`'s push run after
+  the change that added them merges. No tag has been cut, so the tag path — an
+  image published from `refs/tags/vX.Y.Z`, a binary from `cli-release.yml`
+  on a tag — is held only by `scripts/tests/test_ci_workflow.py` until the
+  owner cuts the first one. A hand-started `cli-release.yml` run on a branch
+  verifies against that branch's ref.
 - **A pin is only as current as Dependabot keeps it.** Every action is pinned
   to a commit, so a moved tag upstream changes nothing here until Dependabot's
   weekly pull request moves the pin, and it must pass `gate` first. A pinned

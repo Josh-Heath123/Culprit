@@ -773,3 +773,195 @@ def test_a_verify_before_the_attestation_is_named():
     assert check_attests(job, ["actions/attest-build-provenance"], 1) == [
         "0 gh attestation verify after the attestations, want 1"
     ]
+
+
+# --- C4 (Phase 43 close-out, as amended by Q44): what a verify checks ------
+#
+# Every `gh attestation verify` names the workflow it sits in, with
+# --signer-workflow, and the ref its run is on, with --source-ref
+# "$GITHUB_REF": the certificate names the called workflow (images.yml, not
+# ci-cd.yml - read from run 44711807845), so in every workflow the signer is
+# the file the verify is in. publish runs on main and on v* tags, so before
+# anything is pushed a guard holds GITHUB_REF to exactly the refs ci-cd.yml
+# pushes on - read from ci-cd.yml's on.push, so widening one without the
+# other is red here.
+
+VERIFY = re.compile(r"\bgh attestation verify\b")
+SIGNER = re.compile(r'--signer-workflow[= ]"\$GITHUB_REPOSITORY/\.github/workflows/([\w.-]+)"')
+SOURCE_REF = re.compile(r'--source-ref[= ]"\$GITHUB_REF"')
+#: The guard: a `case "$GITHUB_REF" in ... esac` block, and each of its arms.
+GUARD = re.compile(r'case "\$GITHUB_REF" in\n(.*?)\n\s*esac', re.S)
+ARM = re.compile(r"^\s*([^\s)]+)\)(.*?);;", re.M | re.S)
+FAILS = re.compile(r"\bexit\s+[1-9]")
+#: A backslash at the end of a line: the shell joins the next line to it.
+CONTINUATION = re.compile(r"[ \t]*\\\n\s*")
+
+
+def shell_commands(run: str) -> list[str]:
+    """A run script's commands, with backslash continuations joined."""
+    return [line.strip() for line in CONTINUATION.sub(" ", run).splitlines()]
+
+
+def verifies(workflow: dict) -> list[tuple[str, str]]:
+    """Every `gh attestation verify` command, with the job it runs in."""
+    found = []
+    for name, job in workflow.get("jobs", {}).items():
+        for step in job.get("steps", []):
+            commands = shell_commands(str(step.get("run", "")))
+            found += [(name, c) for c in commands if VERIFY.search(c)]
+    return found
+
+
+def check_verifies(path: Path, workflow: dict) -> list[str]:
+    problems = []
+    for job, command in verifies(workflow):
+        signer = SIGNER.search(command)
+        if signer is None:
+            problems.append(f"{path.name} {job}: a verify names no --signer-workflow: {command}")
+        elif signer.group(1) != path.name:
+            problems.append(f"{path.name} {job}: a verify names {signer.group(1)} as its signer, "
+                            f"not the workflow it is in")
+        if SOURCE_REF.search(command) is None:
+            problems.append(
+                f'{path.name} {job}: a verify names no --source-ref "$GITHUB_REF": {command}'
+            )
+    return problems
+
+
+def pushed_refs(ci_cd: dict) -> set[str]:
+    """The refs ci-cd.yml runs on for a push, as GITHUB_REF spells them."""
+    push = (ci_cd.get("on") or ci_cd.get(True) or {}).get("push") or {}
+    return ({f"refs/heads/{branch}" for branch in push.get("branches", [])}
+            | {f"refs/tags/{tag}" for tag in push.get("tags", [])})
+
+
+def guard_accepts(run: str) -> tuple[set[str], str | None]:
+    """The refs every arm of the guard but the fallback accepts, and what is
+    wrong with the fallback: it must exist and exit non-zero, or a ref no
+    arm names would pass."""
+    block = GUARD.search(run)
+    assert block is not None, run
+    accepted: set[str] = set()
+    fallback = None
+    for patterns, body in ARM.findall(block.group(1)):
+        if patterns == "*":
+            fallback = body
+        else:
+            accepted |= set(patterns.split("|"))
+    if fallback is None:
+        return accepted, "publish's guard has no `*)` arm, so a ref no arm names passes"
+    if FAILS.search(fallback) is None:
+        return accepted, "publish's guard's `*)` arm does not exit non-zero"
+    return accepted, None
+
+
+def check_publish_guard(images: dict, ci_cd: dict) -> list[str]:
+    steps = images["jobs"]["publish"]["steps"]
+    guards = [i for i, step in enumerate(steps) if GUARD.search(str(step.get("run", "")))]
+    if len(guards) != 1:
+        return [
+            f"publish has {len(guards)} steps holding GITHUB_REF to the refs it may "
+            "publish from, want 1"
+        ]
+    first_push = next(
+        (
+            i
+            for i, step in enumerate(steps)
+            if "login-action" in str(step.get("uses", ""))
+            or "docker push" in str(step.get("run", ""))
+        ),
+        None,
+    )
+    problems = []
+    if first_push is None:
+        problems.append("publish logs in to no registry and pushes nothing")
+    elif guards[0] > first_push:
+        problems.append("publish's ref guard comes after it logs in or pushes")
+    accepted, problem = guard_accepts(str(steps[guards[0]]["run"]))
+    if problem:
+        problems.append(problem)
+    wanted = pushed_refs(ci_cd)
+    if accepted != wanted:
+        problems.append(
+            f"publish's guard accepts {sorted(accepted)}, but ci-cd.yml pushes on {sorted(wanted)}"
+        )
+    return problems
+
+
+def test_every_verify_names_its_workflow_and_its_ref():
+    found = 0
+    for path in workflow_files():
+        workflow = load(path)
+        found += len(verifies(workflow))
+        assert check_verifies(path, workflow) == []
+    # images.yml's publish verifies two attestations, cli-release.yml one per
+    # binary: a count of zero would mean the parse found nothing to hold.
+    assert found >= 3, found
+
+
+def test_publish_refuses_a_ref_ci_cd_does_not_push_on():
+    assert check_publish_guard(load(WORKFLOWS / "images.yml"), load(WORKFLOW)) == []
+
+
+def test_a_verify_without_its_ref_is_named():
+    path = WORKFLOWS / "images.yml"
+    # The SBOM verify, its --source-ref dropped; the provenance one kept.
+    text = path.read_text(encoding="utf-8").replace(
+        '--source-ref "$GITHUB_REF" --predicate-type', "--predicate-type", 1)
+    assert text != path.read_text(encoding="utf-8")
+    assert any("no --source-ref" in p for p in check_verifies(path, yaml.safe_load(text)))
+
+
+def test_a_verify_naming_another_workflow_as_signer_is_named():
+    path = WORKFLOWS / "cli-release.yml"
+    text = path.read_text(encoding="utf-8").replace(
+        "/.github/workflows/cli-release.yml", "/.github/workflows/images.yml")
+    assert text != path.read_text(encoding="utf-8")
+    problems = check_verifies(path, yaml.safe_load(text))
+    assert any("names images.yml as its signer" in p for p in problems), problems
+
+
+def test_a_continued_command_is_read_as_one():
+    run = (
+        'gh attestation verify "$x" \\\n  --signer-workflow "a" \\\n'
+        '  --source-ref "b"\necho done\n'
+    )
+    assert shell_commands(run) == [
+        'gh attestation verify "$x" --signer-workflow "a" --source-ref "b"',
+        "echo done",
+    ]
+
+
+def guarded(arms: str) -> dict:
+    """images.yml with its guard's arms replaced."""
+    images = load(WORKFLOWS / "images.yml")
+    for step in images["jobs"]["publish"]["steps"]:
+        run = str(step.get("run", ""))
+        block = GUARD.search(run)
+        if block:
+            step["run"] = run.replace(block.group(1), arms)
+    return images
+
+
+def test_a_second_accepting_arm_is_named():
+    images = guarded(
+        "  refs/heads/main|refs/tags/v*) echo ok ;;\n"
+        "  refs/heads/release) echo ok ;;\n"
+        "  *) echo no >&2; exit 1 ;;"
+    )
+    problems = check_publish_guard(images, load(WORKFLOW))
+    assert any("refs/heads/release" in p for p in problems), problems
+
+
+def test_a_fallback_that_lets_a_ref_through_is_named():
+    images = guarded("  refs/heads/main|refs/tags/v*) echo ok ;;\n  *) echo carrying on ;;")
+    problems = check_publish_guard(images, load(WORKFLOW))
+    assert any("does not exit non-zero" in p for p in problems), problems
+
+
+def test_a_ref_pushed_on_but_not_guarded_is_named():
+    ci_cd = load(WORKFLOW)
+    on = ci_cd.get("on") or ci_cd[True]
+    on["push"]["branches"] = [*on["push"]["branches"], "release"]
+    problems = check_publish_guard(load(WORKFLOWS / "images.yml"), ci_cd)
+    assert any("refs/heads/release" in p for p in problems), problems

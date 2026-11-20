@@ -930,7 +930,9 @@ func TestTheRuntimesIdentityIsNotConfiguration(t *testing.T) {
 	const own = "3f9a2b7c1d0e"
 	adapter := processAdapter{
 		environ: func() []string {
-			return []string{"HOSTNAME=" + own, "SERVICE_INSTANCE=" + own, "INVENTORY_TOKEN=" + own + "x"}
+			// EMPTY is set and empty (C5): with no hostname to compare
+			// with, an empty value must not be taken for one.
+			return []string{"HOSTNAME=" + own, "SERVICE_INSTANCE=" + own, "INVENTORY_TOKEN=" + own + "x", "EMPTY="}
 		},
 		hostname: func() (string, error) { return own, nil },
 	}
@@ -965,6 +967,9 @@ func TestTheRuntimesIdentityIsNotConfiguration(t *testing.T) {
 			}
 			if !workload.Env["HOSTNAME"].Known || workload.Identity != 0 {
 				t.Errorf("with no hostname to compare with, a key was still treated: %+v", workload)
+			}
+			if entry, ok := workload.Env["EMPTY"]; !ok || !entry.Known {
+				t.Errorf("an empty value was taken for an empty hostname: %+v", entry)
 			}
 		})
 	}

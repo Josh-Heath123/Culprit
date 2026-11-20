@@ -223,6 +223,17 @@ jobs:
       matrix:
         image: [api, worker, frontend, mcp_server, cli]
     steps:
+      # C4 (Q44): the verify below names the ref this run is on, so that ref
+      # must be one ci-cd.yml pushes on - main or a v* tag - before anything
+      # is logged in to or pushed. test_ci_workflow.py reads the refs here
+      # against ci-cd.yml's on.push, so widening one alone is red.
+      - name: Refuse a ref ci-cd.yml does not push on
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/main|refs/tags/v*) echo "publishing from $GITHUB_REF" ;;
+            *) echo "publish runs only on refs/heads/main or a refs/tags/v* tag; this run is on $GITHUB_REF" >&2; exit 1 ;;
+          esac
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: image-${{ matrix.image }}
@@ -286,12 +297,19 @@ jobs:
           sbom-path: sbom-${{ matrix.image }}.cdx.json
           push-to-registry: true
 
-      # Both attestations, checked where they were made: signed by a workflow
-      # in this repository, for this digest. A failure fails the job.
+      # Both attestations, checked where they were made: for this digest,
+      # signed by this workflow (images.yml: the certificate names the called
+      # workflow, not ci-cd.yml - confirmed on run 44711807845) in this
+      # repository, from the ref this run is on, which the first step holds
+      # to main or a v* tag (C4, Q44). A failure fails the job.
       - name: Verify both attestations
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           image="oci://ghcr.io/${REPO_LC}/${{ matrix.image }}@${{ steps.pushed.outputs.digest }}"
-          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY"
-          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY" --predicate-type https://cyclonedx.org/bom
+          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml" \
+            --source-ref "$GITHUB_REF"
+          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml" \
+            --source-ref "$GITHUB_REF" --predicate-type https://cyclonedx.org/bom
