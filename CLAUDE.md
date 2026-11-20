@@ -12,8 +12,8 @@ the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
 - **Current phase:** none; housekeeping (the Dependabot backlog) on branch
-  `deps-2026-11-20`, from `91f62fb`; not started. Phase 43 and the
-  delivery plan are complete and signed off.
+  `deps-2026-11-20` (PR #66), complete pending review and merge; Q45 open,
+  not blocking. Phase 43 and the delivery plan are complete and signed off.
 - **Plan of record:** `docs/DELIVERY_PLAN.md` (Phases 40–43), after
   `docs/DIAGNOSTIC_PLAN.md` (26–35) and `docs/PERFORMANCE_PLAN.md`
   (36–39). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8) and §2 (the core model),
