@@ -789,13 +789,17 @@ def test_a_verify_before_the_attestation_is_named():
 VERIFY = re.compile(r"\bgh attestation verify\b")
 SIGNER = re.compile(r'--signer-workflow[= ]"\$GITHUB_REPOSITORY/\.github/workflows/([\w.-]+)"')
 SOURCE_REF = re.compile(r'--source-ref[= ]"\$GITHUB_REF"')
-#: The guard's accepting pattern: the first arm of `case "$GITHUB_REF" in`.
-GUARD = re.compile(r'case "\$GITHUB_REF" in\s*\n\s*([^\s)]+)\)')
+#: The guard: a `case "$GITHUB_REF" in ... esac` block, and each of its arms.
+GUARD = re.compile(r'case "\$GITHUB_REF" in\n(.*?)\n\s*esac', re.S)
+ARM = re.compile(r"^\s*([^\s)]+)\)(.*?);;", re.M | re.S)
+FAILS = re.compile(r"\bexit\s+[1-9]")
+#: A backslash at the end of a line: the shell joins the next line to it.
+CONTINUATION = re.compile(r"[ \t]*\\\n\s*")
 
 
 def shell_commands(run: str) -> list[str]:
     """A run script's commands, with backslash continuations joined."""
-    return [line.strip() for line in run.replace("\\n", " ").splitlines()]
+    return [line.strip() for line in CONTINUATION.sub(" ", run).splitlines()]
 
 
 def verifies(workflow: dict) -> list[tuple[str, str]]:
@@ -831,6 +835,26 @@ def pushed_refs(ci_cd: dict) -> set[str]:
             | {f"refs/tags/{tag}" for tag in push.get("tags", [])})
 
 
+def guard_accepts(run: str) -> tuple[set[str], str | None]:
+    """The refs every arm of the guard but the fallback accepts, and what is
+    wrong with the fallback: it must exist and exit non-zero, or a ref no
+    arm names would pass."""
+    block = GUARD.search(run)
+    assert block is not None, run
+    accepted: set[str] = set()
+    fallback = None
+    for patterns, body in ARM.findall(block.group(1)):
+        if patterns == "*":
+            fallback = body
+        else:
+            accepted |= set(patterns.split("|"))
+    if fallback is None:
+        return accepted, "publish's guard has no `*)` arm, so a ref no arm names passes"
+    if FAILS.search(fallback) is None:
+        return accepted, "publish's guard's `*)` arm does not exit non-zero"
+    return accepted, None
+
+
 def check_publish_guard(images: dict, ci_cd: dict) -> list[str]:
     steps = images["jobs"]["publish"]["steps"]
     guards = [i for i, step in enumerate(steps) if GUARD.search(str(step.get("run", "")))]
@@ -853,7 +877,9 @@ def check_publish_guard(images: dict, ci_cd: dict) -> list[str]:
         problems.append("publish logs in to no registry and pushes nothing")
     elif guards[0] > first_push:
         problems.append("publish's ref guard comes after it logs in or pushes")
-    accepted = set(GUARD.search(str(steps[guards[0]]["run"])).group(1).split("|"))
+    accepted, problem = guard_accepts(str(steps[guards[0]]["run"]))
+    if problem:
+        problems.append(problem)
     wanted = pushed_refs(ci_cd)
     if accepted != wanted:
         problems.append(
@@ -893,6 +919,44 @@ def test_a_verify_naming_another_workflow_as_signer_is_named():
     assert text != path.read_text(encoding="utf-8")
     problems = check_verifies(path, yaml.safe_load(text))
     assert any("names images.yml as its signer" in p for p in problems), problems
+
+
+def test_a_continued_command_is_read_as_one():
+    run = (
+        'gh attestation verify "$x" \\\n  --signer-workflow "a" \\\n'
+        '  --source-ref "b"\necho done\n'
+    )
+    assert shell_commands(run) == [
+        'gh attestation verify "$x" --signer-workflow "a" --source-ref "b"',
+        "echo done",
+    ]
+
+
+def guarded(arms: str) -> dict:
+    """images.yml with its guard's arms replaced."""
+    images = load(WORKFLOWS / "images.yml")
+    for step in images["jobs"]["publish"]["steps"]:
+        run = str(step.get("run", ""))
+        block = GUARD.search(run)
+        if block:
+            step["run"] = run.replace(block.group(1), arms)
+    return images
+
+
+def test_a_second_accepting_arm_is_named():
+    images = guarded(
+        "  refs/heads/main|refs/tags/v*) echo ok ;;\n"
+        "  refs/heads/release) echo ok ;;\n"
+        "  *) echo no >&2; exit 1 ;;"
+    )
+    problems = check_publish_guard(images, load(WORKFLOW))
+    assert any("refs/heads/release" in p for p in problems), problems
+
+
+def test_a_fallback_that_lets_a_ref_through_is_named():
+    images = guarded("  refs/heads/main|refs/tags/v*) echo ok ;;\n  *) echo carrying on ;;")
+    problems = check_publish_guard(images, load(WORKFLOW))
+    assert any("does not exit non-zero" in p for p in problems), problems
 
 
 def test_a_ref_pushed_on_but_not_guarded_is_named():

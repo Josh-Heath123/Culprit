@@ -307,5 +307,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           image="oci://ghcr.io/${REPO_LC}/${{ matrix.image }}@${{ steps.pushed.outputs.digest }}"
-          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY"             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml"             --source-ref "$GITHUB_REF"
-          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY"             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml"             --source-ref "$GITHUB_REF" --predicate-type https://cyclonedx.org/bom
+          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml" \
+            --source-ref "$GITHUB_REF"
+          gh attestation verify "$image" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/images.yml" \
+            --source-ref "$GITHUB_REF" --predicate-type https://cyclonedx.org/bom
