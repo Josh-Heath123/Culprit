@@ -15,6 +15,10 @@ import (
 // "the same kind of value" means without a test going red.
 
 type shapeFixture struct {
+	Formats []struct {
+		Input  string      `json:"input"`
+		Format ValueFormat `json:"format"`
+	} `json:"formats"`
 	Schemes []struct {
 		Input  string      `json:"input"`
 		Scheme ValueScheme `json:"scheme"`
@@ -25,6 +29,20 @@ type shapeFixture struct {
 		Right      ValueShape `json:"right"`
 		Equivalent bool       `json:"equivalent"`
 	} `json:"equivalence"`
+}
+
+// TestFormatsMatchTheSharedFixture: Q42. Before it, only Python listed
+// format cases, so the two classifiers could drift unseen.
+func TestFormatsMatchTheSharedFixture(t *testing.T) {
+	fixture := readFixture[shapeFixture](t, "shape_conformance.json")
+	if len(fixture.Formats) == 0 {
+		t.Fatal("no format cases, so this test proves nothing")
+	}
+	for _, testCase := range fixture.Formats {
+		if got := ClassifyFormat(testCase.Input); got != testCase.Format {
+			t.Errorf("ClassifyFormat(%q) = %q, fixture says %q", testCase.Input, got, testCase.Format)
+		}
+	}
 }
 
 func TestSchemesMatchTheSharedFixture(t *testing.T) {

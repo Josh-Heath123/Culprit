@@ -11,31 +11,25 @@
 pairs:
   - [worker/app/db.py, api/app/db/models.py]
 
-  # Phase 28. The closed `ValueShape` type and the CHECK constraint that
-  # mirrors it. The migration writes the enum members out as literals
-  # because a migration must not import mutable application code
-  # (.claude/rules/database.md), so adding a member to the type without
-  # touching the migration produces a value the type can construct and
-  # the database will refuse.
+  # History, not a pair. Phase 28 added a second one here: the closed
+  # `ValueShape` type (shared/culprit_model/shape.py) against the migration
+  # that writes its vocabulary out as literals for the
+  # `*_value_shape_is_closed` CHECK constraints (d1f4a9c73b60, retargeted in
+  # Phase 30 to e4c1b7a9d2f0). Replaced in Phase 43's close-out (Q43,
+  # 2026-11-20): it tested whether a file moved, not whether the two
+  # vocabularies agree, so any edit to the migration passed it, and the
+  # first change to shape.py that touched no vocabulary (Q42's classifier
+  # fix) could pass it only by editing an applied migration, adding an empty
+  # one, or loosening the gate. A check that can be passed only by gaming it
+  # is a defect. The agreement is now held by content, in both directions,
+  # with no database: api/tests/test_value_shape_vocabulary.py walks the
+  # Alembic chain by AST and compares the latest migration naming the
+  # constraint with the four enums; it follows a later rebuild without being
+  # edited. api/tests/test_value_shape_constraint.py still proves the
+  # database accepts every shape the model can produce.
   #
-  # Genuinely bidirectional, which is what makes it a fair pair for a
-  # symmetric check: neither side may move alone.
-  #
-  # Deliberately NOT declared here: the three subject-construction
-  # implementations against shared/tests/*conformance.json. The coupling
-  # is real but it is one-directional — changing an implementation should
-  # require touching the fixture, while *adding a case* to the fixture is
-  # the normal way to extend the suite and must not require editing three
-  # implementations that already handle it. A symmetric check would
-  # forbid the second, and the first is already gated harder: each
-  # implementation's own test suite reads the fixture, so a change that
-  # breaks conformance fails that language's tests immediately.
-  #
-  # Retargeted in Phase 30 from d1f4a9c73b60 to e4c1b7a9d2f0, when `scheme`
-  # joined the type and the constraint was rebuilt. The pair names the
-  # migration that *currently defines* the vocabulary, because that is the
-  # file that has to move with the type; a historical migration already
-  # applied in production is a snapshot and is never edited to satisfy
-  # this check. The next migration to rebuild the constraint retargets it
-  # again, in the same commit.
-  - [shared/culprit_model/shape.py, api/migrations/versions/e4c1b7a9d2f0_environment_capture.py]
+  # Still deliberately NOT declared here: the three subject-construction
+  # implementations against shared/tests/*conformance.json. The coupling is
+  # real but one-directional; each implementation's own test suite reads
+  # the fixture, so a change that breaks conformance fails that language's
+  # tests immediately.

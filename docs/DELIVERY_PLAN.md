@@ -1030,6 +1030,83 @@ runs on, added to the account as a signing key.
 commits in the ruleset, and allow only merge commits; turn on Dependabot
 security updates. Then the delivery plan is complete.
 
+### Review, 2026-11-19 — merged as `090cc4b` (PR #55)
+
+**Phase 43 is signed off, and with it the delivery plan.**
+
+**CI.** Read by id from GitHub's API:
+- 44573995497 on `6d2bffc`, 44579250490 on `f56b4e4` and 44581822123 on the
+  report, `072f075`: success on every job, `gate` included.
+- `cli-release.yml` started by hand on the branch, 44574017581: the five
+  binaries built, attested and verified; nothing published.
+- `main`'s push run 44597852296 on `090cc4b`: `publish` attested and verified
+  the provenance and the SBOM of all five images, as decided. But
+  `narration-parity` failed in its one step, the comparison of the loop's
+  records with narration on and off, so `gate` is red on `main`. The same tree
+  passed it on the pull request (44581822123), and neither e2e job failed, so
+  the merge did not change the code it compares. C4's step 0 reads that job's
+  log (job 135829202240), attributes it, and reruns the whole run for fresh
+  records; if the records differ for a reason in the code, it stops with Q42
+  (D6).
+- **Every commit is Verified** by GitHub's API: the five on the branch, signed
+  with the repository's SSH signing key, and the merge commit, signed by
+  GitHub.
+
+**Verified on disk,** on `090cc4b`, in the architecture session's workspace:
+- All 56 `uses:` lines across the three workflows that name an action are
+  pinned to a full commit, with the version as a comment;
+  `test_ci_workflow.py`: 60 passed.
+- **Two mutations of its own, each shown red and then restored:** one
+  `actions/checkout` pin put back to `@v4` ("every action is pinned to a
+  commit" fails); `id-token: write` added to `images.yml`'s `build` ("every
+  job holds its declared permissions" fails).
+- `.github/dependabot.yml`: the `github-actions` ecosystem, weekly, one group.
+  Its first update check ran within a minute of the merge.
+
+**The run's notes:**
+- **The verifies check only which repository signed,** so a build started by
+  hand on a branch passes the same check. **Ruled: tighten it,** as C4
+  (below).
+- **The branch run's binary attestations are permanently in Sigstore's public
+  log.** Accepted; LIMITS records it.
+- **The auditors found four ways around the new checks** (a verify softened to
+  always pass, a flow-style `uses:`, `.yaml` workflows, and a new workflow
+  missing from the permissions table); all closed in `f56b4e4` and shown red.
+- **The key's missing passphrase could not be confirmed** by a command, since
+  the shell refused it; the key was made by the run without one, and LIMITS
+  says what that means.
+
+**The delivery plan is complete.** The dashboard and the repository wear the
+new identity (Phase 40); every merge passes one required check, in about 13
+minutes (41); every file states its licence and the project its ownership
+(42); and every commit is signed, every action pinned, and what `main`
+publishes attested (43). The owner's last steps are the ruleset's signed
+commits, merge commits only, and Dependabot security updates.
+
+### Close-out — C4, the signer workflow (brief, 2026-11-19)
+
+**Decided:**
+1. **Every `gh attestation verify` names the workflow that must have signed,**
+   with `--signer-workflow`, and the ref, with `--source-ref`: `images.yml` on
+   `refs/heads/main` in `publish`, and `cli-release.yml` on the tag being
+   released (or the run's own ref when started by hand). A build from any
+   other workflow or ref then fails it. Confirm on the run which workflow the
+   certificate names when `images.yml` is called by `ci-cd.yml`, and use that.
+2. **`test_ci_workflow.py` requires both flags on every verify** in every
+   workflow; a verify without them turns it red: the mutation.
+3. **Users get the command.** A short section, "Verifying what Culprit
+   publishes", in `docs/GUIDE.md`, linked from `SECURITY.md`: the exact `gh
+   attestation verify` for an image from `main` and for a released binary,
+   each with both flags, and what a pass proves and does not.
+4. **Proof:** the pull request's own run cannot publish, so the run starts
+   `cli-release.yml` by hand on its branch and shows the tightened verify pass
+   there; `publish`'s verify is confirmed on `main`'s push run after merge.
+
+**Do NOT:**
+- publish, release or deploy anything;
+- change any action's version;
+- touch the ruleset.
+
 ---
 
 ## §4. Out of scope

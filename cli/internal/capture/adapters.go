@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -48,6 +49,10 @@ type Workload struct {
 	// Replicas counts how many instances were found; only the first, in a
 	// stable order, is read. Said in the report when it is more than one.
 	Replicas int
+	// Identity counts the keys whose value is the process's own hostname:
+	// the runtime's identity, not its configuration (Q42). Their values
+	// are not shaped (Known is false); only the process adapter sets it.
+	Identity int
 }
 
 // EnvValue is one environment variable as the adapter saw it.
@@ -88,6 +93,7 @@ var ErrNoImage = fmt.Errorf("this adapter has no notion of an image")
 // NewAdapter builds the adapter an environment names.
 func NewAdapter(
 	spec extract.EnvironmentSpec, manifestDir string, runner Runner, environ func() []string,
+	hostname func() (string, error),
 ) (Adapter, error) {
 	switch spec.Adapter {
 	case extract.AdapterCompose:
@@ -95,7 +101,10 @@ func NewAdapter(
 	case extract.AdapterKubernetes:
 		return kubernetesAdapter{spec: spec.Kubernetes, runner: runner}, nil
 	case extract.AdapterProcess:
-		return processAdapter{environ: environ}, nil
+		if hostname == nil {
+			hostname = os.Hostname
+		}
+		return processAdapter{environ: environ, hostname: hostname}, nil
 	case extract.AdapterExec:
 		return execAdapter{commands: spec.Exec, runner: runner}, nil
 	}
@@ -433,8 +442,28 @@ func (a kubernetesAdapter) Image(
 // variables loaded, a `docker run --env-file`, a sidecar. It is the
 // simplest adapter and the one with the least ambiguity, because there
 // is exactly one environment and it is this one.
+//
+// # The runtime's identity is not configuration (Q42)
+//
+// A live process's environment holds what it was configured with and
+// what its runtime gave it. One of the latter changes every time the
+// workload is recreated: its identity, the hostname — a container's
+// random id under Docker, the pod's name under Kubernetes. Shaping that
+// value made a recreated container's capture differ by chance (a 12-hex
+// id is opaque, numeric or a duration depending on its digits), and so
+// made `culprit verify`'s record, and sometimes its verdict, a coin flip.
+//
+// So a variable whose value equals the hostname the OS reports is
+// reported present with its value not visible (Known false, so
+// UnknownShape, which compares on presence alone). The rule is keyed on
+// that OS fact, never on a name: it covers HOSTNAME and anything set from
+// it, and lists nothing. If the hostname cannot be read, or is empty, no
+// key is treated this way. Only this adapter does it: compose and
+// kubernetes read configuration, not a live process, and the exec
+// adapter cannot know a remote process's hostname (docs/LIMITS.md).
 type processAdapter struct {
-	environ func() []string
+	environ  func() []string
+	hostname func() (string, error)
 }
 
 func (a processAdapter) Name() string { return extract.AdapterProcess }
@@ -442,11 +471,24 @@ func (a processAdapter) Name() string { return extract.AdapterProcess }
 func (a processAdapter) Workload(
 	_ context.Context, _ string, _ extract.EnvironmentComponent,
 ) (Workload, error) {
+	env := parseEnvList(a.environ())
+	identity := 0
+	if a.hostname != nil {
+		if own, err := a.hostname(); err == nil && own != "" {
+			for key, entry := range env {
+				if entry.Known && entry.Value == own {
+					env[key] = EnvValue{Known: false}
+					identity++
+				}
+			}
+		}
+	}
 	return Workload{
-		Env:      parseEnvList(a.environ()),
+		Env:      env,
 		Complete: true,
 		Artefact: "process",
 		Replicas: 1,
+		Identity: identity,
 	}, nil
 }
 

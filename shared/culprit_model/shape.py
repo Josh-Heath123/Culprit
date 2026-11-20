@@ -158,9 +158,14 @@ _FORMAT_PATTERNS: tuple[tuple[ValueFormat, re.Pattern[str]], ...] = (
     (ValueFormat.PORT, re.compile(r"^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2})$")),
     (ValueFormat.DURATION, re.compile(r"^\d+(?:\.\d+)?\s*(?:ms|s|m|h|d)$", re.IGNORECASE)),
     (ValueFormat.NUMERIC, re.compile(r"^-?\d+(?:\.\d+)?$")),
+    # IPv6 needs at least two colons (Q42): a single-label hex string, such
+    # as a container id, is not an address.
     (
         ValueFormat.IP_ADDRESS,
-        re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?$|^\[?[0-9a-f:]{3,}\]?(?::\d+)?$", re.I),
+        re.compile(
+            r"^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?$|^\[?[0-9a-f]*:[0-9a-f]*:[0-9a-f:]*\]?(?::\d+)?$",
+            re.I,
+        ),
     ),
     (ValueFormat.PATH, re.compile(r"^(?:/|\./|\.\./|[A-Za-z]:[\\/])")),
     (ValueFormat.JSON, re.compile(r"^\s*[\[{]")),

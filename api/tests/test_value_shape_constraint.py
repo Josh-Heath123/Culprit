@@ -220,8 +220,8 @@ async def test_every_scheme_culprit_model_can_produce_is_accepted(
 ) -> None:
     """Member for member, for the same reason as the test above — the
     migration writes the schemes out as literals, and this is what keeps
-    that copy honest. Also why scripts/coupled_files.yaml pairs shape.py
-    with e4c1b7a9d2f0 now."""
+    that copy honest. Its database-free twin, in the other direction too,
+    is test_value_shape_vocabulary.py (Q43)."""
     for scheme in ValueScheme:
         shape = ValueShape(
             type=ValueType.STRING,

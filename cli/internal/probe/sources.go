@@ -58,6 +58,9 @@ type Sources struct {
 	Stats     capture.StatsReader
 	LookupEnv func(string) (string, bool)
 	Environ   func() []string
+	// Hostname is the process adapter's runtime-identity rule (Q42); nil
+	// is os.Hostname.
+	Hostname func() (string, error)
 
 	once    sync.Once
 	adapter capture.Adapter
@@ -126,7 +129,7 @@ func (s *Sources) workloadOf(ctx context.Context, component string) (capture.Wor
 		}
 	}
 	s.once.Do(func() {
-		s.adapter, s.err = capture.NewAdapter(s.Spec, s.ManifestDir, s.Runner, s.Environ)
+		s.adapter, s.err = capture.NewAdapter(s.Spec, s.ManifestDir, s.Runner, s.Environ, s.Hostname)
 	})
 	if s.err != nil {
 		return capture.Workload{}, errors.New(capture.SafeReason(s.err))
