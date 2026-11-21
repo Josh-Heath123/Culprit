@@ -168,7 +168,7 @@ Phase:        44, part 1 — the audit (docs/FIELD_READINESS_PLAN.md §4)
 Branch:       phase-44-audit, cut from origin/main = ddb275e. 95e1e77 the
               review (../phase-44-brief.patch, .txt; git apply --check
               clean; signed, %G? = G), then the register and this report.
-              Pushed. Pull request: see CI below.
+              Pushed. Pull request #71.
 Run:          2026-11-21, by the owner's instruction (the brief).
 Status:       AWAITING DECISION — the register is written and the review
               rules on it. Not every area is covered: the dashboard was not
@@ -306,7 +306,19 @@ CLAUDE.md still says part 1 is "not started": this part commits only the
 plan's §5 and the handoff, and the handoff wins.
 
 CI
-  (filled in after /ci)
+  Pull request #71, draft. origin/main = ddb275e is in the branch (cut
+  from it; main had not moved), so the branch is the merge result. Local
+  gates: the baseline above ran on ddb275e plus this branch's docs; only
+  the two Markdown files changed after it, and just lint was rerun green.
+  Run 44887167519 (pull_request) on 3f171f1: conclusion success, 10 m 44 s.
+  Every job success - lint, typecheck, cli, test, migration-round-trip,
+  kind-capture, self-check, the five builds, fault-library 1-4, e2e (none),
+  e2e (stub), narration-parity, gate; build/publish and deploy skipped, as
+  on every pull request. gh pr checks 71: every check pass or skipping
+  (CodeQL and its four analyses included). Open code-scanning alerts: none
+  (pr=71, refs/pull/71/merge, refs/pull/71/head all empty). Verdict: green
+  on the merge result. This report's own commit runs CI again; the review
+  reads it.
 ```
 
 ## §6. Escalate to the architecture session when
