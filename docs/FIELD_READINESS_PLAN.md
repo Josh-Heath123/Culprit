@@ -496,6 +496,1052 @@ After the register, add:
 - the proposed batches, in order;
 - the questions for the owner.
 
+### The register (part 1, 2026-11-21)
+
+Written by the part 1 run on `phase-44-audit`. Labels follow §2: **VERIFIED**
+means reproduced or tested here, with the command and its output (the
+commands, scripts and outputs are in `../audit-44/`); **RISK** means
+reasoned from the code and not reproduced; **UNTESTED** gives the reason.
+A static fact shown by a grep or a read (a doc that names a flag the code
+does not have, a `needs:` list) is VERIFIED by that read. A claim about
+behaviour that was only read is RISK. Where a finding came from one of the
+read-only auditors, `Detail:` names its entry in `../audit-44/notes/`,
+which holds the full reasoning and the line-level evidence; the register
+keeps the summary. Machine for every measurement: Windows 11, 20 logical
+CPUs, Git Bash, Docker 29.6.2, Go and uv as in the repository; CI is
+`ubuntu-26.04` (runner image 20261116.202.1).
+
+**Re-run by `phase-auditor`:** 20 findings: every S1 and fourteen others
+(F44-001 to -006, -008 to -012, -016, -018, -020, -024, -031, -033,
+-075, -090, -091), each in a fresh copy under `../audit-44/rerun/`.
+Eighteen reproduced; F44-004 and F44-006 were raised from RISK to
+VERIFIED by reproducing them through the binary; F44-005 only in part
+(it stays RISK); F44-020 did not reproduce and is withdrawn (it was this
+run's misreading). F44-009 was confirmed from the recipe, the migration
+and the log, not by running the quickstart again. Results:
+`../audit-44/notes/auditor-results.md`.
+
+#### S1
+
+```
+F44-001  `culprit intent` prints an extractor's stderr unredacted
+  Area:      security
+  Severity:  S1
+  Evidence:  VERIFIED
+  Where:     cli/internal/render/render.go:88-98 and render.JSON (skip
+             reasons printed as written); cli/internal/extract (the reason
+             is the extractor's first stderr line). `culprit check`
+             redacts the same reason.
+  Shown by:  ../audit-44/edges/leak: an extractor writes "connect failed:
+             postgresql://app:LeakPw77@db.internal/app DB_PASSWORD=LeakPw88"
+             to stderr and exits 3. `culprit intent` (text and --format
+             json): both LeakPw77 and LeakPw88 present. `culprit check`:
+             "connect failed: [redacted]db.internal/app DB_PASSWORD=LeakPw88".
+             The same path carries the exception text from importing the
+             user's app (F44-003). Detail: 4.4-security.md S-05.
+  Proposed:  route every skip reason through RedactCredentials at the one
+             place a Capture is rendered (text and JSON), as check does. Test
+             first: an intent render test with a DSN in a skip reason.
+  Risk:      none to behaviour; a reason a user relied on reading becomes
+             partly [redacted]. The render package has no tests (F44-082).
+  Needs:     nothing.
+
+F44-002  The one credential pattern misses most common secret shapes, and
+         every free-text exit depends on it
+  Area:      security
+  Severity:  S1
+  Evidence:  VERIFIED (Python, by running it; the Go twin by the CLI's output)
+  Where:     shared/culprit_model/redaction.py; cli/internal/model/redact.go:25-49
+  Shown by:  redact_credentials over 15 shapes: unchanged for DB_PASSWORD=x,
+             POSTGRES_PASSWORD=x (the \b fails after "_"), redis://:x@h,
+             ?access_token=x, ?client_secret=x, "Authorization: Bearer x",
+             sk_live_…, AIza…, glpat-…, {"password": "x"}, "password: x", a
+             "/" in a URL password; "hun@ter2" leaves "ter2". Only
+             password=x and user:pw@ were caught. Through the binary:
+             F44-001's `culprit check --format sarif` (what code scanning
+             uploads) contains DB_PASSWORD=LeakPw88. Detail: 4.4-security.md
+             S-01, R-01.
+  Proposed:  widen the shared pattern under the shared fixture
+             (shared/tests), both languages at once; the fixture's new
+             rows fail first. Prefer redacting by structure where a value
+             is known (a skip reason from a subprocess) over pattern only.
+  Risk:      over-redaction of non-secrets in reasons; the fixture shows it.
+  Needs:     the architecture session: how wide the pattern is is a claim
+             about what Culprit promises (§1, criterion 3).
+
+F44-003  `culprit check` runs the target repository's Python and writes into
+         it
+  Area:      security, readiness
+  Severity:  S1 (a write to the diagnosed system; criterion 3)
+  Evidence:  VERIFIED
+  Where:     extractors/python/culprit_extract_python/discovery.py:66-89
+             (imports candidates such as config.wsgi); the GUIDE's tour
+             configures the extractor without --no-import; nothing sets
+             PYTHONDONTWRITEBYTECODE.
+  Shown by:  the GUIDE tour, followed exactly (../audit-44/scripts/
+             tour-setup.sh): `culprit check` output contains
+             "config.wsgi:application: KeyError: 'DATABASE_URL'" (it executed
+             api/config.py), and afterwards api/__pycache__/
+             config.cpython-314.pyc exists in the project. The same through
+             MCP culprit_check, whose description says it reads files only.
+             The auditor also reads that a Flask app may create instance/
+             with a SQLite file (.gitignore:49-53). Detail: 4.7-4.9 D-03,
+             4.4-security.md S-09.
+  Proposed:  set PYTHONDONTWRITEBYTECODE (and sys.dont_write_bytecode) in
+             the extractor's process; say plainly, in GUIDE, MCP's
+             description and EXTRACTOR_PROTOCOL, that import runs the
+             user's code; decide whether the field trial runs --no-import
+             only. Test first: run the extractor over a fixture with a
+             config module and assert no file appears.
+  Risk:      none for the bytecode; the import question changes what is
+             extracted.
+  Needs:     the owner: whether import (code execution) is acceptable on a
+             project the owner does not control (the runbook, F44-019).
+
+F44-004  Go's RedactReading does not walk []string, so service-chosen strings
+         may leave unredacted in probe, diagnose and verify JSON and MCP
+  Area:      security
+  Severity:  S1
+  Evidence:  VERIFIED (by phase-auditor; this run's first recipe stopped at
+             "no declared response fields", ../audit-44/edges/r02)
+  Where:     cli/internal/model/reading.go:368-399 (cases string,
+             map[string]any, []any; default copies); measured["fields"]
+             (probe/http_probes.go:309), measured["audiences"]
+             (auth_probes.go:118-122). The Python twin walks lists.
+  Shown by:  `culprit probe -p probe.auth.token_shape --input token=<a JWT
+             whose aud is postgresql://…:pw@…> --input expect_audience=other
+             --format json`, no network: measured.audiences carries the DSN
+             with its password; the reason line shows [redacted]
+             (../audit-44/rerun/f004/probe.json). 4.4-security.md S-02.
+  Proposed:  a []string case, and a shared fixture row for a list of
+             strings in a reading. Test first: RedactReading on a reading
+             whose fields hold a DSN.
+  Risk:      none.
+  Needs:     nothing.
+
+F44-005  Agent tasks keep probe inputs (a token included) and the symptom
+         verbatim, and serve them back
+  Area:      security
+  Severity:  S1 if confirmed
+  Evidence:  RISK (partly shown: TaskCreate's model_dump keeps
+             inputs.token and a DSN unchanged, api/app/agents/service.py:225,
+             schemas.py:117; storing and serving it back needs the API and
+             Postgres, not run)
+  Where:     api/app/agents/ (agent_tasks.spec; GET /agents/{id}/tasks/{task})
+  Shown by:  4.4-security.md S-03, R-03; ../audit-44/notes/auditor-results.md.
+             To raise it: one Postgres API test, POST a probe task with
+             inputs.token and GET it back.
+  Proposed:  refuse secret-bearing inputs on the task route, or keep them
+             out of the stored spec; test first: POST a task with
+             inputs.token, GET it back.
+  Risk:      a task that needs a token must get it another way (the agent's
+             own configuration).
+  Needs:     the architecture session (how an agent gets a token).
+
+F44-006  An agent's failure reason, and its append-only audit log, take raw
+         error text, the whole symptom included
+  Area:      security
+  Severity:  S1
+  Evidence:  VERIFIED on the agent's side (by phase-auditor); the control
+             plane's agent_tasks.reason leg RISK (needs the API)
+  Where:     cli/cmd/culprit/agent.go, cli/internal/agent (parseSymptom's
+             error quotes the symptom; reason written to the audit log,
+             stderr and agent_tasks.reason)
+  Shown by:  `culprit agent --tasks tasks --once` with a diagnose task whose
+             from is a DSN: audit.log and outbox/t2.json both hold 'from
+             "postgresql://app:AgentPw66@db.internal/app" is not a
+             component' (../audit-44/rerun/f006). 4.4-security.md S-04.
+  Proposed:  redact at the one place a reason leaves the agent. Test first:
+             a diagnose task whose symptom holds password=…
+  Risk:      the append-only log keeps whatever is already in it.
+  Needs:     nothing.
+```
+
+#### Step 0, then S2
+
+```
+F44-007  Step 0: main's red push run 44881325932 was a kind image import
+         that left nothing on the node
+  Area:      tests (CI reliability)
+  Severity:  S3 (a flaky required check, D6; no product effect)
+  Evidence:  VERIFIED (both logs read; rerun green); cause UNTESTED
+  Where:     scripts/check_agent_recipes.sh:73-79; e2e (stub), step "The
+             agent's Kubernetes and systemd recipes"
+  Shown by:  `gh run view 44881325932 --log-failed`: "FAIL: the agent image
+             is not on the kind node" 1.5 s after `kind load image-archive`
+             returned 0. PR run 44880245200 on the same tree, same runner
+             image (ubuntu-26.04 20261116.202.1), kind v0.33.0 and
+             kindest/node v1.37.0 printed the image
+             ("docker.io/library/culprit-agent ci 09c259fcdc3a7 5.84MB").
+             `gh run rerun 44881325932 --failed`: attempt 2 green on every
+             job, gate and narration-parity included. Earlier attempt-1
+             failures over 100 runs were other causes (44522173729: apt
+             mirror; 44597852296: the Q42 HOSTNAME record, since fixed). The
+             guard on line 79 did its job: without it the pod would have
+             sat in ImagePullBackOff (run 42804120023). Logs in
+             ../audit-44/logs/run-4488*.
+  Proposed:  not a retry (§2). On that failure, print what would attribute
+             it next time: `kind version`, `docker exec … ctr -n k8s.io
+             images ls`, the archive's index.json and the import's own
+             output. A mutation: delete the import, see the guard fire.
+  Risk:      none; diagnostics only.
+  Needs:     the architecture session: whether a first-occurrence infra
+             flake with a working guard is accepted as is.
+
+F44-008  On a push to main, images publish without waiting for the
+         end-to-end checks
+  Area:      backend (CI ordering)
+  Severity:  S2
+  Evidence:  VERIFIED (static needs: lists; run timings read)
+  Where:     .github/workflows/ci-cd.yml:801-827; images.yml:210-310
+  Shown by:  `build` needs test, migration-round-trip and cli only. On run
+             44881325932 every publish job pushed :sha and :latest while
+             e2e (stub) failed and gate went red. Detail: 4.3-backend.md B-03.
+  Proposed:  publish in a job that needs `gate`, with the built images
+             passed as artifacts on push and tag; a test_ci_workflow.py
+             assertion "publish needs gate" fails first. Cost: about 40 s on
+             main and tags only; pull requests unchanged. (Making build need
+             every check instead would add about 2.5 min to every run.)
+  Risk:      artifact size and retention; the release workflow's verify
+             step must still find what it attests.
+  Needs:     the architecture session (ruleset and release path).
+
+F44-009  `just quickstart` over an env file from before Phase 35 dies in a
+         migration with a Python traceback
+  Area:      reliability, readiness
+  Severity:  S2
+  Evidence:  VERIFIED (on this machine)
+  Where:     justfile:435-440 (backfills INVENTORY_DB_PASSWORD only);
+             api/migrations/versions/a6c2e9d4f8b1_narrations.py:71,145
+  Shown by:  `just quickstart` (../audit-44/logs/quickstart.log): "==>
+             infra/.env.prod already exists, reusing it" … "RuntimeError:
+             NARRATOR_DB_PASSWORD must be set in the environment to run this
+             migration", exit 1, a 30-line traceback. UPGRADING.md:215 names
+             the key for a real install; the quickstart path does not.
+  Proposed:  backfill every generated key bootstrap_env.py knows, as the
+             recipe already does for one; or fail before migrating, naming
+             the key and the fix. Test first: a script test running the
+             recipe's check over an env file without the key.
+  Risk:      none; generated passwords for roles that do not exist yet.
+  Needs:     nothing.
+
+F44-010  The migration-head reader reports an Alembic merge's parents as
+         extra heads
+  Area:      core
+  Severity:  S2 (a wrong INTENT fact)
+  Evidence:  VERIFIED
+  Where:     cli/internal/extract/config_keys.go:396-399 (down_revision must
+             start with a quote), :300-313
+  Shown by:  ../audit-44/edges/c09: a1 <- b2, a1 <- c3, d4 merges ("b2",
+             "c3"). `culprit intent --format json`: component:svc
+             migration_head ['b2', 'c3', 'd4']. The only head is d4; against
+             a database at d4 that is a false divergence. Detail: 4.2-core.md
+             C-09.
+  Proposed:  read a tuple down_revision; test first with this fixture.
+  Risk:      low; the Python extractor's reader is independent on purpose.
+  Needs:     nothing.
+
+F44-011  A value's format class flips on its digits: WORKERS=1 and
+         WORKERS=4 are "different kinds of value"
+  Area:      core
+  Severity:  S2 (a misleading divergence)
+  Evidence:  VERIFIED
+  Where:     cli/internal/model/shape.go:275-278 (1|0 booleanish; 2-65499
+             port; the port pattern stops at 65499)
+  Shown by:  two process captures with WORKERS=1 and WORKERS=4, `culprit
+             diff`: "[cosmetic] config:api/WORKERS … disagree about
+             value_shape: string/port/short vs string/booleanish/short".
+             Cosmetic here only because no source reads it; a key that is
+             read rises to degrades. SHLVL is classed booleanish. Detail:
+             4.2-core.md C-02.
+  Proposed:  a shape rule that does not split a counter by value, held by
+             the shared shape fixture. Test first: the fixture row.
+  Risk:      a shape change moves recorded captures' shapes; verify
+             compares like with like only within one version.
+  Needs:     the architecture session (what a shape claims).
+
+F44-012  The process adapter captures the invoking shell's own variables
+  Area:      core (determinism)
+  Severity:  S2
+  Evidence:  VERIFIED that they are captured; RISK that verify then says
+             changed_underneath
+  Where:     cli/internal/capture/adapters.go:471-493
+  Shown by:  `culprit env capture staging --format text` in the tour:
+             config:api/SHLVL, config:api/OLDPWD, config:api/_ (and every
+             other variable in the shell: 111 keys). diagnose and verify are
+             separate invocations, so a different shell or launcher changes
+             these between them. Same class as Q42. Detail: 4.2-core.md C-01.
+  Proposed:  Q42's ruling forbids a list of names; the architecture
+             session decides (a declared key set per component, or the
+             manifest's INTENT keys only).
+  Risk:      narrowing what is captured narrows what diff can see.
+  Needs:     the architecture session.
+
+F44-013  The Kubernetes capture reads the Deployment template only, yet
+         marks the environment complete
+  Area:      core (honest absence)
+  Severity:  S2
+  Evidence:  RISK
+  Where:     cli/internal/capture/adapters.go:315-378 (Complete: true at 324)
+  Shown by:  reading: a key set by the image's ENV, envFrom or a mutating
+             webhook is reported missing. Detail: 4.2-core.md C-10.
+  Proposed:  mark it incomplete unless every source was read; test first
+             with a fixture Deployment using envFrom.
+  Risk:      more "not checked" lines on Kubernetes environments.
+  Needs:     nothing.
+
+F44-014  An agent task that is claimed and never completed stays claimed
+         for ever
+  Area:      backend, reliability
+  Severity:  S2
+  Evidence:  RISK
+  Where:     api/app/agents/service.py:263-333
+  Shown by:  reading: nothing expires or reclaims a claim; the agent exits
+             on any error and skips claimed tasks after a restart. The
+             dashboard waits on "Walking the request path…". Detail:
+             4.3-backend.md B-01.
+  Proposed:  a claim deadline, after which the task is failed with a
+             reason; test first in api/tests with a claim and a clock.
+  Risk:      a slow walk past the deadline.
+  Needs:     the architecture session (the deadline).
+
+F44-015  The sign-in rate limit is one bucket for everyone behind Caddy
+  Area:      backend, security
+  Severity:  S2
+  Evidence:  RISK
+  Where:     api/app/incidents/limiter.py:20; infra/docker-compose.prod.yml:64;
+             docker-compose.quickstart.yml:69
+  Shown by:  reading: get_remote_address with no forwarded-allow-ips sees
+             Caddy's address; ten bad sign-ins a minute lock the team out.
+             LIMITS says "per address". Detail: 4.3-backend.md B-02.
+  Proposed:  trust the proxy's X-Forwarded-For for the one hop; test first.
+  Risk:      a spoofed header if the API is ever exposed without Caddy.
+  Needs:     nothing.
+
+F44-016  The documented path does not work from PowerShell, and on Windows
+         the built binary has no .exe
+  Area:      readiness
+  Severity:  S2
+  Evidence:  VERIFIED (the binary); RISK (a PowerShell user's path)
+  Where:     justfile:4 (set shell := bash), :129 (-o bin/culprit);
+             README.md:219-229; docs/GUIDE.md:269-271, :885-893
+  Shown by:  `just cli-build` here wrote cli/bin/culprit, "PE32+ executable
+             for MS Windows", with no extension, beside a stale culprit.exe
+             from 12 November. PowerShell and an MCP client launching
+             "culprit" look for culprit.exe (PATHEXT) and find the stale one
+             or none. No document says Windows needs Git Bash. Detail:
+             4.7-4.9 D-02.
+  Proposed:  name the output with go env GOEXE; state Git Bash as a Windows
+             prerequisite. Test first: a check that the recipe's output
+             name has GOEXE.
+  Risk:      scripts that call cli/bin/culprit on Windows.
+  Needs:     nothing.
+
+F44-017  Restore has never been tested, and the documented restore may fail
+         or lose tables
+  Area:      readiness, reliability
+  Severity:  S2
+  Evidence:  VERIFIED (no test or run restores; the documented command uses
+             variables nothing sets); RISK (table loss)
+  Where:     scripts/backup.sh; docs/UPGRADING.md:327-353
+  Shown by:  4.7-4.9 D-09.
+  Proposed:  a restore round trip in CI over the migration-round-trip
+             database. Test first: that job, red on today's instructions.
+  Risk:      CI time.
+  Needs:     nothing.
+
+F44-018  Nothing fails a CI run because nothing was checked
+  Area:      core, readiness
+  Severity:  S2
+  Evidence:  VERIFIED
+  Where:     cli/cmd/culprit/check.go:121-136; probe.go:115-127
+  Shown by:  `culprit check` in ../audit-44/edges/empty: "No divergences. 0
+             fact(s) compared across 0 subject(s)", exit 0. A diff against an
+             environment the compose adapter could not see: "No
+             divergences", exit 0 (it lists the gap). Detail: 4.7-4.9 D-11.
+  Proposed:  a --fail-on-unchecked (or a non-zero exit when nothing was
+             compared); test first.
+  Risk:      a new flag; no default changes.
+  Needs:     the architecture session (exit code meaning, F44-035).
+
+F44-019  There is no field-trial runbook, and no way to record that a
+         finding on a real system was confirmed
+  Area:      readiness
+  Severity:  S2
+  Evidence:  VERIFIED (none exists)
+  Where:     docs/; api/app/verifications; README.md:198
+  Shown by:  the draft is in ../audit-44/notes/4.7-4.9-docs-cli-tests.md
+             ("Field-trial runbook — draft"). What it must contain: Culprit
+             in development and CI mode only, against a project the owner
+             does not control; check, intent, env capture of a local
+             process environment only, with --no-import (F44-003) and every
+             output and state directory outside the project; nothing
+             written to it (verify with git status in the clone after every
+             step); the clone pinned to a commit; how a finding is
+             confirmed (by reading the target's code and, where it can be,
+             by the project's own maintainers) and recorded (the subject,
+             both sources with their lines, the Culprit commit and the
+             target commit, confirmed or false positive, and why).
+  Proposed:  write the runbook in §7 as planned; add a way to record a
+             confirmed or false-positive check finding.
+  Risk:      none.
+  Needs:     the owner (where findings are recorded; disclosure to the
+             target project).
+
+F44-020  WITHDRAWN: an unreachable database is NOT reported as "not granted"
+  Area:      interface
+  Severity:  none (withdrawn)
+  Evidence:  NOT REPRODUCED by phase-auditor, and not by this run on a
+             second look
+  Where:     —
+  Shown by:  the first run's grep joined two sections: the "Refused (1)"
+             heading belonged to the config-values refusal, and the line
+             below it ("api's database was not read: the database could not
+             be reached") is listed under "Not checked — gaps", which is
+             right. Rerun: `culprit env capture prod -f dbenv.yaml --format
+             text` with the DSN at 127.0.0.1:1 and unparseable: both under
+             "Not checked". Kept so the number is not reused.
+  Proposed:  nothing.
+  Needs:     nothing.
+
+F44-021  `--change action:<words>` is redacted by the API but not by the CLI
+  Area:      security
+  Severity:  S2
+  Evidence:  RISK (not reproduced: the only local investigation had no
+             readings, F44-091)
+  Where:     cli/cmd/culprit/verify.go; api/app/verifications
+  Shown by:  4.4-security.md S-06, R-06.
+  Proposed:  redact in the shared change parser. Test first.
+  Risk:      none.
+  Needs:     nothing.
+
+F44-022  Some 422 bodies quote the refused value in msg
+  Area:      security, backend
+  Severity:  S2
+  Evidence:  RISK
+  Where:     api/app/investigations.py:39; subjects.py:151;
+             agents/schemas.py parse_change
+  Shown by:  4.4-security.md S-07, R-07 (needs the API: not run).
+  Proposed:  validators name the field, not the value; test first with a
+             DSN as a subject.
+  Risk:      LIMITS' 422 entry changes.
+  Needs:     nothing.
+
+F44-023  Text from the diagnosed system reaches the narrator and MCP agents
+         with no data framing
+  Area:      security
+  Severity:  S2
+  Evidence:  RISK
+  Where:     worker/app/narrate (prompt); cli/internal/mcp results
+  Shown by:  4.4-security.md S-08. The narrator's output is checked against
+             the investigation before it is stored, which bounds the harm;
+             an MCP agent's is not.
+  Proposed:  fence system-supplied strings as data in both, with a test that
+             an instruction inside a reason is rendered as data.
+  Risk:      narration wording.
+  Needs:     the architecture session.
+```
+
+#### S3
+
+```
+F44-024  Two isolation mutations survive every test
+  Area:      tests, core
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     cli/internal/isolate/isolate.go (Walk.fails, ruleOutBelow)
+  Shown by:  ../audit-44/scripts/mutate.py, each restored by git checkout
+             (tree clean after). Killed: V1-V5 (the verdict rules,
+             model/verification.go), SEV1-2 (severity), CAP1-2 (the
+             allowlist and its refusal). V2's first form only failed to
+             compile and was rerun valid (killed). Survived: ISO1 (a pass no
+             longer rules out the components below it) and ISO2
+             (ruleOutBelow stops at the component), against
+             ./internal/isolate/... and ./cmd/culprit/... .
+             ../audit-44/logs/mutations.log.
+  Proposed:  a walk test where a passing component has an open hypothesis
+             below it; it must be ruled out, citing the reading.
+  Risk:      none.
+  Needs:     nothing.
+
+F44-025  Legacy: incidents
+  Area:      legacy
+  Severity:  S3
+  Evidence:  VERIFIED (static); "always empty" RISK
+  Where:     api/app/incidents/router.py:40,52; frontend/src/routes/
+             AppRoutes.tsx:61-63; infra/deploy.sh (health check)
+  Shown by:  nothing writes the tables (insert grants revoked); still in the
+             navigation as history; deploy's health check calls
+             /api/incidents. Detail: 4.1-map.md M-01.
+  Proposed:  nothing removed; the owner decides. If kept, deploy's health
+             check moves to /health.
+  Risk:      —
+  Needs:     the owner.
+
+F44-026  Legacy: postmortems are live, writable and tied only to incidents
+  Area:      legacy
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     api/app/postmortems/router.py:65-124; AppRoutes.tsx:63,66-68
+  Shown by:  a postmortem can link only to an incident, never to an
+             investigation; it is in the navigation without a history mark.
+             Detail: 4.1-map.md M-02.
+  Proposed:  the owner decides: mark as history, or link to investigations.
+  Needs:     the owner.
+
+F44-027  Legacy: RAG memory is written only by this repository's own hooks
+         and read only by the Python MCP server
+  Area:      legacy
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     api/app/memory/router.py:84-234 (mounted without router-level
+             auth, main.py:305); worker/app/rag
+  Shown by:  worker retrieval used only by tests; mcp_server is in no
+             compose file. Detail: 4.1-map.md M-03.
+  Needs:     the owner (and the router's auth reviewed in the batch).
+
+F44-028  Legacy: anomaly detection writes two outputs nothing reads
+  Area:      legacy
+  Severity:  S3
+  Evidence:  VERIFIED (static); the load RISK
+  Where:     worker/app/anomaly/job.py:62-66,412,422; worker/app/main.py:150
+  Shown by:  anomalies reachable only through frozen incident joins;
+             impedance readings have no read path; the binary's impedance
+             probe has no metrics source. Detail: 4.1-map.md M-04.
+  Needs:     the owner.
+
+F44-029  Legacy: the ingest gateway and Redis Streams feed scoring nothing
+         reads; ingested logs are never read
+  Area:      legacy
+  Severity:  S4
+  Evidence:  VERIFIED (static)
+  Where:     api/app/ingest_gateway/main.py:157-196, streams.py:9-27
+  Shown by:  4.1-map.md M-05; a quickstart compose comment still promises
+             "an incident within ~5 minutes".
+  Needs:     the owner.
+
+F44-030  INSTALL.md onboards services onto the telemetry path and never
+         reaches the diagnostic journey
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     docs/INSTALL.md:135-146
+  Shown by:  no mention of the agent, the project token or diagnose.
+             Detail: 4.1-map.md M-06.
+  Proposed:  an "after install" section that ends in a diagnosis.
+
+F44-031  README "Status" is stale
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     README.md:244-261
+  Shown by:  Phase 40 "in progress", 41-43 "planned". Detail: M-07, D-01.
+
+F44-032  The root help is stale, and there is no version subcommand
+  Area:      interface
+  Severity:  S4
+  Evidence:  VERIFIED
+  Where:     cli/cmd/culprit/main.go:96-105
+  Shown by:  `culprit --help`: "This build implements the INTENT plane …
+             the OBSERVED plane (culprit probe). See docs/DIAGNOSTIC_PLAN.md";
+             diagnose, verify, agent and mcp absent from the prose. `culprit
+             version`: "unknown command"; `culprit --version` works.
+             Detail: M-09.
+
+F44-033  Two flags' help is garbled by pflag's backtick convention
+  Area:      interface
+  Severity:  S4
+  Evidence:  VERIFIED
+  Where:     cli/cmd/culprit/env.go (--sign-key), diagnose.go (--state-dir)
+  Shown by:  `culprit env capture --help`: "--sign-key openssl genpkey
+             -algorithm ed25519   sign the envelope with…"; `culprit diagnose
+             --help`: "--state-dir culprit verify   where to keep…". pflag
+             takes the first backticked text in a usage string as the
+             value's name.
+  Proposed:  no backticks in usage strings, or a lint over every flag.
+
+F44-034  `culprit probe -f` does not search upward for culprit.yaml
+  Area:      interface
+  Severity:  S4
+  Evidence:  VERIFIED (static)
+  Where:     cli/cmd/culprit/probe.go:132
+  Shown by:  default "culprit.yaml" vs every other command's upward search.
+             Detail: M-10, D-13.
+
+F44-035  Exit codes mean different things per command, and half the help
+         texts do not state them
+  Area:      interface
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     cli/cmd/culprit/*.go Long texts; docs/PROBES.md:557-565
+  Shown by:  check: 0 clean, 1 findings, 2 could not run; diagnose: 0
+             complete, 1 partial; env capture with nothing seen: 0. Table in
+             4.7-4.9 D-12; M-11.
+  Needs:     the architecture session (one convention).
+
+F44-036  Two MCP servers are both named "culprit"
+  Area:      interface
+  Severity:  S4
+  Evidence:  VERIFIED
+  Where:     .mcp.json; docs/GUIDE.md:885-893
+  Shown by:  M-08.
+
+F44-037  This plan's §4.1 names `init`, `capture` and `pair` as top-level
+         commands
+  Area:      readiness (the brief)
+  Severity:  S4
+  Evidence:  VERIFIED (`culprit --help` lists agent, check, diagnose, diff,
+             env, intent, mcp, probe, verify)
+  Where:     docs/FIELD_READINESS_PLAN.md:212-213
+  Shown by:  they are `agent init`, `env capture`, `agent pair`. M-12.
+  Needs:     the architecture session (the plan's text).
+
+F44-038  The worker says link_recent_changes "reads only"; it inserts
+  Area:      legacy
+  Severity:  S4
+  Evidence:  VERIFIED (static)
+  Where:     worker/app/main.py:151-154; worker/app/memory/link_job.py:30-31,95-162
+  Shown by:  M-13: every 5 s, into incident_change_links, over tables nothing
+             writes.
+  Needs:     the owner (with F44-025).
+
+F44-039  A telemetry entry Postgres refuses wedges its stream's drain
+  Area:      backend, reliability
+  Severity:  S3
+  Evidence:  RISK
+  Where:     worker/app/consumer.py:199-230, :91-97, :296-302
+  Shown by:  B-04 (e.g. a NUL byte); logs stall behind metrics.
+  Proposed:  dead-letter the entry; test first with a refused row.
+
+F44-040  The drain lock can be released by another holder and expires under
+         a slow write
+  Area:      backend, reliability
+  Severity:  S3
+  Evidence:  RISK
+  Where:     worker/app/consumer.py:287-313, :325-343
+  Shown by:  B-05: unconditional delete, 30 s expiry: overlapping drains
+             duplicate rows.
+  Proposed:  compare-and-delete with a token.
+
+F44-041  "Planted or real, never both" is a check-then-insert
+  Area:      backend
+  Severity:  S3
+  Evidence:  RISK
+  Where:     api/app/verifications/router.py:84-96; service.py:130-139,164-191
+  Shown by:  B-06: two concurrent verifications can store both labels.
+  Proposed:  a constraint, in a new migration; test first with two sessions.
+
+F44-042  Demote, disable or a password reset does not end a session at once,
+         and LIMITS does not say so
+  Area:      backend, security
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     api/app/auth/dependencies.py:29-62; router.py:96-122;
+             users_router.py:209-221
+  Shown by:  B-07: up to 30 s for demote/disable; existing tokens work for up
+             to 60 min after a password reset.
+  Proposed:  a LIMITS entry now; a token version later.
+
+F44-043  No body-size cap on /api/*; a signed route reads the whole body
+         before authenticating
+  Area:      backend, security
+  Severity:  S3
+  Evidence:  RISK
+  Where:     frontend/Caddyfile:23-25; api/app/agents/dependencies.py:85-123,171-184
+  Shown by:  B-08.
+  Proposed:  a request_body max_size in Caddy and a check in the dependency.
+
+F44-044  The API's error envelope has four shapes; the dashboard shows the
+         raw JSON
+  Area:      backend, interface
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     api/app/main.py:226; errors.py:70; agents/router.py:121;
+             frontend/src/lib/api.ts:77-95
+  Shown by:  B-09.
+
+F44-045  Three paths around the boundary checks
+  Area:      backend (boundaries)
+  Severity:  S3
+  Evidence:  VERIFIED (static); the bypasses RISK
+  Where:     cli/cmd/culprit/check_test.go:266-269; worker/pyproject.toml
+  Shown by:  B-10: the network allowlist lists only internal/..., so
+             cmd/culprit is unchecked; it skips rather than fails when go
+             list errors; the worker's provider contract omits urllib,
+             http.client, voyageai, google and app.main.
+  Proposed:  each made a failing case first (a mutation per gap).
+
+F44-046  LIMITS says the agent has no transport to the control plane
+  Area:      readiness (docs)
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     docs/LIMITS.md:1951-1957
+  Shown by:  B-11; Phase 33 built it.
+
+F44-051  SOURCE_DATE_EPOCH pins every clock, not only intent's
+  Area:      core (determinism)
+  Severity:  S3
+  Evidence:  RISK
+  Where:     cli/cmd/culprit/main.go:218-225; callers in check.go:84,111
+  Shown by:  C-03: suppression expiry, investigation times, the TLS
+             certificate class; before and after captures share an id.
+
+F44-055  DNS, port and TLS observations are CONFIGURED facts that verify
+         counts as change
+  Area:      core
+  Severity:  S3
+  Evidence:  RISK
+  Where:     cli/internal/capture/capture.go:556-600; network.go:40-62;
+             verify/verify.go:274
+  Shown by:  C-07: a transient blip during verify is an unexplained change.
+  Needs:     the architecture session (which plane they belong to).
+
+F44-057  Unreadable or too-deep parts of a repository are skipped with no
+         record
+  Area:      core (honest absence)
+  Severity:  S3
+  Evidence:  RISK
+  Where:     cli/internal/extract/artefacts.go:88-111; the Node and Python
+             extractors
+  Shown by:  C-11.
+  Proposed:  a skipped entry naming the path; test first with an unreadable
+             directory.
+
+F44-058  A migration file that does not parse is dropped, and the chain can
+         still look linear
+  Area:      core
+  Severity:  S3
+  Evidence:  RISK
+  Where:     extractors/python/culprit_extract_python/migrations.py:76-77,153-157
+  Shown by:  C-12: false "column not migrated" findings.
+
+F44-063  Severity treats an edge with no criticality as background, unlike
+         its own doc and graph.py
+  Area:      core, parity
+  Severity:  S3
+  Evidence:  RISK (the code difference is static)
+  Where:     cli/internal/severity/severity.go:116-128 (doc at :20-26)
+  Shown by:  C-17.
+  Needs:     the architecture session (which is right).
+
+F44-064  Three values are computed in Go and Python with no shared fixture
+  Area:      core (parity)
+  Severity:  S3
+  Evidence:  VERIFIED (static: no fixture names them; every other
+             shared/tests fixture is read by both suites)
+  Where:     (a) the snapshot diff: shared/culprit_model/capture_diff.py:120
+             vs cli/internal/verify/verify.go:274; (b) never-render-a-value:
+             render_value vs report.go:379 renderValue; (c) the request path:
+             graph.py upstream_connections vs severity.go BuildGraph (which
+             already disagree, F44-063)
+  Shown by:  C-18.
+  Proposed:  one fixture each under shared/tests.
+
+F44-065  Four gates have no test that shows them red
+  Area:      tests
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     scripts/check_schema_drift.py, check_migration_round_trip.py,
+             check_agent_image.sh, fast_gates.sh
+  Shown by:  C-19.
+  Proposed:  a mutation test each.
+
+F44-067  The GUIDE's tour keeps the state directory inside the project
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     docs/GUIDE.md:517,536,621,670 (--state-dir ./state); verify.go:53
+  Shown by:  D-04: the code says that must never happen.
+
+F44-068  Nothing says what Culprit leaves on a machine, or how to remove it
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     justfile:704-707; the state directory (default
+             %LOCALAPPDATA%\culprit, shown by `culprit diagnose --help`)
+  Shown by:  D-05: state dir, volumes, images, infra/.env.prod with the
+             admin password in clear.
+
+F44-069  Version reporting: every local build is 0.1.0, no commit, and the
+         control plane reports no version
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED (`culprit --version`: "culprit version 0.1.0")
+  Where:     VERSION; justfile:129
+  Shown by:  D-06.
+
+F44-070  What is safe to attach to a bug report is stated for a capture only
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     CONTRIBUTING.md:8-10; SECURITY.md; docs/PERMISSIONS.md:644
+  Shown by:  D-07; and `culprit intent` output is not safe (F44-001).
+
+F44-071  Control-plane logging is undocumented, and container logs are
+         unbounded
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     api/app/main.py:262-280; the compose files (no logging options)
+  Shown by:  D-08.
+
+F44-072  Backup documentation is stale, and INSTALL's upgrade skips the
+         backup
+  Area:      readiness
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     docs/UPGRADING.md:312-322; INSTALL.md:139-145; infra/deploy.sh
+  Shown by:  D-10: the table list is from the incident era.
+
+F44-074  Errors send users to repository paths and plan jargon; there is no
+         culprit.yaml reference
+  Area:      interface
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     cli/cmd/culprit/main.go:259-262; capability.go:168
+  Shown by:  with no manifest: "culprit: no culprit.yaml found here or in any
+             parent directory. Create one describing your components, or
+             pass -f. See docs/EXTRACTOR_PROTOCOL.md" (an extractor author's
+             document, not a manifest reference). D-15.
+
+F44-075  `culprit mcp` answers are unbounded and each is sent twice
+  Area:      interface
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     cli/internal/mcp/mcp.go:102-110
+  Shown by:  ../audit-44/scripts/mcp_session.py: culprit_system_model on a
+             two-component manifest returned 19,516 bytes, the document as
+             content text and again as structuredContent. D-16.
+  Proposed:  one copy, and a bound with a truncation notice.
+
+F44-077  The Python MCP server's culprit_coupled_files answers from
+         Culprit's own repository file
+  Area:      legacy
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     mcp_server/config.py:31; tools.py:399-432
+  Shown by:  D-18.
+  Needs:     the owner (with F44-027).
+
+F44-081  The documented paths have no end-to-end test; some e2e route tests
+         assert only that the page rendered
+  Area:      tests
+  Severity:  S3
+  Evidence:  VERIFIED (static)
+  Where:     .github/workflows; frontend/e2e/tour.spec.ts:58-61,137-142
+  Shown by:  D-22: no CI run of the GUIDE tour, install.sh, backup and
+             restore, a third-party repository, or Windows.
+
+F44-083  culprit.yaml can run any command, and the docs say otherwise
+  Area:      security
+  Severity:  S3
+  Evidence:  VERIFIED (static); with F44-003 shown
+  Where:     an extractor's command (any argv, run by default);
+             EXTRACTOR_PROTOCOL.md §7; MCP culprit_check's description
+  Shown by:  S-09: "Reads files only". docker and kubectl arguments have no
+             "--" before positional names.
+  Proposed:  say it: a culprit.yaml is code, as a Makefile is.
+
+F44-084  CLI errors echo raw input
+  Area:      security
+  Severity:  S3
+  Evidence:  RISK
+  Where:     e.g. "--input %q", "%q is not a URL" (cli/cmd/culprit/probe.go)
+  Shown by:  S-10.
+
+F44-085  `just up` publishes Postgres, Redis, Grafana and Tempo on every
+         interface, with known credentials
+  Area:      security
+  Severity:  S3
+  Evidence:  VERIFIED (static); RISK (reachability)
+  Where:     infra/docker-compose.yml
+  Shown by:  S-11.
+  Proposed:  bind to 127.0.0.1.
+
+F44-086  Nothing refuses a placeholder JWT_SECRET_KEY at start-up
+  Area:      security
+  Severity:  S3
+  Evidence:  RISK
+  Where:     api/app (settings)
+  Shown by:  S-12.
+
+F44-087  One secret-scanning alert is open, and /ci does not gate on secret
+         scanning
+  Area:      security
+  Severity:  S3
+  Evidence:  VERIFIED (read through gh api; nothing dismissed)
+  Where:     alert #1, stripe_api_key, a planted fixture at
+             cli/internal/capture/capture_test.go:31
+  Shown by:  S-13. Code-scanning and Dependabot: 0 open.
+  Needs:     the owner (dismissing an alert).
+
+F44-091  `verify` on an investigation with no readings fails with an
+         internal-sounding message
+  Area:      interface
+  Severity:  S3
+  Evidence:  VERIFIED
+  Where:     cli/cmd/culprit/verify.go
+  Shown by:  `culprit verify inv-49e9046ba15924f9 … --change action:…`:
+             "culprit: the verification does not validate: verification
+             ver-… re-runs nothing", exit 2. It should say there was nothing
+             to re-measure and why.
+```
+
+#### S4
+
+```
+F44-047  No write is idempotent by key; two concurrent create-user calls
+         answer 500, not 409
+  Area: backend · Severity: S4 · Evidence: RISK · Where: api/app/auth/users_router.py ·
+  Shown by: 4.3-backend.md B-12 · Proposed: catch the unique violation as 409.
+
+F44-048  The OpenAPI schema and Swagger UI are served without
+         authentication
+  Area: security · Severity: S4 · Evidence: VERIFIED (static) · Where: api/app/main.py ·
+  Shown by: B-13 · Needs: the owner (a public schema may be intended).
+
+F44-049  The audit-log route is unbounded, and the investigations list sorts
+         on unindexed columns
+  Area: performance · Severity: S4 · Evidence: VERIFIED (static) · Where: B-14 ·
+  Shown by: small at trial scale.
+
+F44-050  CORS origins are split on "," without trimming
+  Area: backend · Severity: S4 · Evidence: VERIFIED (static) · Where: api/app/main.py (B-15).
+
+F44-052  capture_id hashes the absolute manifest path
+  Area: core · Severity: S4 · Evidence: VERIFIED (static) ·
+  Where: cli/internal/extract/orchestrator.go:310-324; capture.go:691 ·
+  Shown by: C-04: the same tree in two clones (or Windows and Linux) has
+  different ids. intent and check run twice here were identical once ids and
+  times were removed (../audit-44/scripts/canon.py).
+
+F44-053  Manifest validation reports the first invalid entry in map order
+  Area: core · Severity: S4 · Evidence: RISK · Where: cli/internal/extract/environments.go:254,337,349 (C-05).
+
+F44-054  A latency reading's budget is found by ranging over a map
+  Area: core · Severity: S4 · Evidence: RISK · Where: verify/verify.go:260-267;
+  isolate/isolate.go:1108-1116 (C-06).
+
+F44-056  The Python extractor puts absolute paths in skip reasons
+  Area: core · Severity: S4 · Evidence: VERIFIED (the tour's output names
+  C:\Users\… paths) · Where: extractors/python/culprit_extract_python/cli.py:285,358-364 (C-08).
+
+F44-059  One non-UTF-8 .py file skips a whole want in the Python extractor
+  Area: core · Severity: S4 · Evidence: RISK · Where: static_scan.py:90-91,247-248 (C-13).
+
+F44-060  The adapters handle invalid variable names differently; LIMITS says
+         all drop them
+  Area: core · Severity: S4 · Evidence: VERIFIED (static) · Where: adapters.go:561-564,596-599 (C-14).
+
+F44-061  Image-digest errors are swallowed; packages without a version
+         vanish without a skip
+  Area: core · Severity: S4 · Evidence: RISK · Where: adapters.go:206-211,400-418 (C-15).
+
+F44-062  The --no-plugins skip names no component
+  Area: interface · Severity: S4 · Evidence: VERIFIED (static) · Where: orchestrator.go:175-183 (C-16).
+
+F44-066  Two doc comments name what the code does not do
+  Area: core · Severity: S4 · Evidence: VERIFIED (static) · Where: model/shape.go:184
+  (a fixture that does not exist); dbsession/session.go:41 (C-20).
+
+F44-073  No help examples outside probe; probe's target list omits http:
+         subjects
+  Area: interface · Severity: S4 · Evidence: VERIFIED (static) · Where: cli/cmd/culprit/*.go (D-14).
+
+F44-076  GUIDE says MCP answers "carry no prose"; they carry fixed sentences
+  Area: interface · Severity: S4 · Evidence: VERIFIED · Where: docs/GUIDE.md:915 (D-17) ·
+  Shown by: the MCP session's answers; facts and narration are still apart.
+
+F44-078  Tour traps: `culprit verify <id>` is a redirect in bash, and the
+         tour's manifest is not the captures'
+  Area: readiness · Severity: S4 · Evidence: VERIFIED (static) · Where: GUIDE.md:388,536,670 (D-19).
+
+F44-079  README captures are not re-rendered by CI
+  Area: readiness · Severity: S4 · Evidence: RISK · Where: scripts/render_captures.py (D-20).
+
+F44-080  `just --list` shows only the last comment line of each recipe
+  Area: interface · Severity: S4 · Evidence: RISK · Where: justfile:202-203,243-244 (D-21).
+
+F44-082  cli/internal/render has no test
+  Area: tests · Severity: S4 · Evidence: VERIFIED · Where: cli/internal/render ·
+  Shown by: `go test -cover ./...`: "render coverage: 0.0% of statements" (F44-001 lives there).
+
+F44-088  The frontend image runs Caddy as root
+  Area: security · Severity: S4 · Evidence: VERIFIED (static) · Where: frontend/Dockerfile:48-56 (S-14).
+
+F44-089  The security-doc checker holds only "cannot" claims, and checks only
+         that the named test exists
+  Area: tests · Severity: S4 · Evidence: VERIFIED (static) · Where: scripts/check_security_doc.py (S-15).
+
+F44-090  A .env.example key with invalid UTF-8 becomes a subject with U+FFFD
+  Area: core · Severity: S4 · Evidence: VERIFIED · Where: the .env.example reader and subjects.build ·
+  Shown by: ../audit-44/edges/weird: key bytes FF FE "BADKEY" gave
+  config:svc/\ufffd\ufffdBADKEY, a subject no environment can match. Large
+  (2 MB), empty, Latin-1 and CRLF values were handled (exists facts, shapes,
+  no crash).
+
+F44-092  The quickstart prints the admin password, and pulls an unpinned
+         curlimages/curl:latest
+  Area: security · Severity: S4 · Evidence: VERIFIED (static) · Where: justfile (quickstart) ·
+  Shown by: 4.7-4.9 notes ("also noted").
+```
+
+Every number from F44-001 to F44-092 is used once; numbers follow the
+order the findings were drafted, so a few S3 and S4 entries sit out of
+numeric order in their block.
+
+### Coverage record
+
+| Area | Inspected | Ran |
+|---|---|---|
+| Step 0 | run 44881325932's failed log and both e2e (stub) job logs; 100 runs' attempt history | `gh run rerun 44881325932 --failed`: attempt 2 green on every job |
+| Baseline | — | `just lint`, `typecheck`, `lint-imports`, `check-schema-drift`, `test` (1998 passed, 6 skipped; worker 93; mcp_server 21; extractors 39), `check_coupled_files.py`, `cli-test` (18 packages), `cli-build`, `culprit check --fail-on=breaks_request_path`, `LLM_PROVIDER=none culprit check`: all exit 0 |
+| 4.1 map | every subcommand, API package, worker job, MCP tool (both servers), route, extractor, recipe and workflow job (inventory tables in notes/4.1-map.md); the five legacy surfaces | `culprit --help` and each subcommand's help; MCP tools/list |
+| 4.2 core | determinism sources, the parity table, every adapter and extractor for honest absence, the gates (notes/4.2-core.md) | intent, check and check --format sarif twice each, canonicalised: identical. 13 mutations (11 kinds), restored. Honest absence: compose with no project and with no docker, diff against the unseen side. Not run: the journeys through the demo stack, the agent and MCP against the stack (CI's fault library and e2e run them: run 44881325932 attempt 2, fault-library 1-4 and e2e green) |
+| 4.3 backend | api, database roles (agent, verification, narrator against PERMISSIONS.md; not all 19), worker, agent and transport, boundaries, CI ordering (notes/4.3-backend.md) | nothing (read only) |
+| 4.4 security | redaction, every exit, injection, secrets in the tree, SECURITY.md against its tests, Dockerfiles, alerts through gh api (notes/4.4-security.md) | secrets through capture, text capture, diff, diagnose (text, json, state dir), probe, MCP: no leak. Four malformed and unreachable DSNs: no leak. The extractor-stderr leak (F44-001) and the pattern (F44-002) reproduced. Not run: a full git log -p sweep, Trivy, the API-side recipes |
+| 4.5 reliability | — | no manifest, empty repo, invalid kind, version 2, broken YAML, non-UTF-8 / 2 MB / empty / CRLF values, NO_COLOR and a pipe (no ANSI at all), docker absent, compose project absent, unreachable and unparseable DSNs, verify with no readings. Not run: kubectl denied, mid-capture exit, clock skew, interrupted verify, concurrent requests, a control-plane restart (need the stack) |
+| 4.6 performance | — | `culprit --version` n=20: min 50, median 56, max 95 ms. `culprit check` on this repository n=5: min 7.0, median 7.3, max 9.0 s. Binary 13,963,776 bytes (Windows, -s -w). Dashboard build: index JS 478.81 kB (147.52 kB gzip), CSS 64.23 kB (23.68 kB gzip): about 171 kB first load against the 200,000-byte budget, which `culprit check` passes. Not measured: capture and walk time against environment size, API latency, the statement and N+1 probes on Culprit's own API (need the stack) |
+| 4.7 interface | the CLI's help and errors, MCP answers (notes/4.7-4.9) | the MCP session; the CLI cases above. **The dashboard was not rendered: UNTESTED.** The quickstart failed here (F44-009), and the screenshot script, which signs in with the quickstart's admin account, was refused by this session's permission classifier (it reads infra/.env.prod). No screenshot was taken |
+| 4.8 tests | test inventory; e2e assertions (notes/4.7-4.9) | `go test -cover ./...`: cmd/culprit 73.3, agent 42.1, agentauth 82.8, capability 77.6, capture 74.0, dbsession 11.7, check 68.8, diverge 42.7, extract 80.3, isolate 86.7, mcp 81.8, model 77.9, probe 80.2, guardedhttp 8.8, report 52.2, severity 71.3, transport 29.3, verify 84.2, render 0.0, boundarytest 0.0 (each package's own tests only). Python coverage: not measured |
+| 4.9 readiness | INSTALL, README, GUIDE, backup, what is written where | the GUIDE tour steps 0-2 on Windows (Git Bash): check, two captures, diff, as documented; output as the GUIDE describes. Not run: install.sh, the Linux fresh clone, steps 3 onward |
+
+### Proposed batches, in order
+
+1. **S1 and security** (one area): F44-001, -002, -003, -004, -005, -006,
+   -021, -022, then -083, -084. The redaction fixture first; it holds
+   both languages.
+2. **Correctness of facts**: F44-010, -011, -012 (after the ruling),
+   -013, -057, -058, -063, -064, -090.
+3. **Reliability and the backend**: F44-009, -014, -015, -039, -040,
+   -041, -042, -043, -044, -047, -050, and F44-008 with the ruleset.
+4. **Tests and gates**: F44-024, -045, -065, -082, -089, and F44-007's
+   diagnostics.
+5. **The interface**: the dashboard audit not done here (4.7) first, then
+   F44-018, -032, -033, -034, -035, -074, -075, -091, -073, -076.
+6. **Documentation and the first run**: F44-016, -017, -019 (the
+   runbook), -030, -031, -046, -067 to -072, -078 to -081, -037.
+7. **Legacy**: F44-025 to -029, -038, -077, after the owner's decision.
+
+### Questions for the owner
+
+1. **Code execution on the target (F44-003).** May the field trial import
+   the target's Python (runtime introspection), or does it run
+   `--no-import` only?
+2. **Legacy surfaces (F44-025 to -029, -038, -077).** Keep, mark as
+   history, or retire: incidents, postmortems, RAG memory and the Python
+   MCP server, anomaly detection, the ingest gateway.
+3. **Secret-scanning alert #1 (F44-087).** Dismiss it as a test fixture,
+   and should `/ci` gate on secret scanning?
+4. **The dashboard audit (4.7).** Allow the screenshot run to sign in with
+   the quickstart's admin account (it reads `infra/.env.prod`), or brief
+   another way to render the routes; and regenerate or patch this
+   machine's `infra/.env.prod` (F44-009).
+5. **Publishing (F44-008).** Should `main`'s publish wait for `gate`, at
+   about 40 s on `main` and tags?
+6. **Where a confirmed field finding is recorded, and disclosure to the
+   target project (F44-019).**
+
 ---
 
 ## §6. Batches (written by the reviews)
