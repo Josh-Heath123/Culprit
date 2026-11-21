@@ -64,10 +64,10 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-20**, with C4's close-out. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes next is the owner's to decide. |
-| Current phase | **None. Housekeeping, part 2: the last alerts** — `not started`. Brief: `docs/DELIVERY_PLAN.md`, Phase 43, "Housekeeping, part 2 — the last alerts": #67, #68 and #69 merged by their heads, and alert #9 dismissed under Q45. Step 0: `main`'s push run 44877153270 on `b9ea38c`. |
+| Current phase | **None. Housekeeping, part 2: the last alerts** — `complete` pending review and merge (PR #70): #67, #68 and #69 merged by their heads, none re-locked; alert #9 dismissed (`not_used`, Q45's comment), read back; CI green on the merge result (run 44879138798). Report in §5. |
 | Previous phase | **Housekeeping: the Dependabot backlog — merged as `b9ea38c` (PR #66) and signed off 2026-11-21.** Runs 44803269241 and 44805484085 (the report) green on every job, read from GitHub; #57, #59, #60, #61, #62 and #63 closed as merged; every commit Verified. Q45 ruled. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `deps-2026-11-21`, to be cut from `origin/main` = `b9ea38c`. Its first commit is the review, signed: `git apply ../housekeeping-review.patch`, then `git commit -F ../housekeeping-review.txt` (`docs/DELIVERY_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Open a draft pull request and mark it ready when the run report is committed; if the run stops on a question, it stays a draft. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
+| Branch | `deps-2026-11-21`, cut from `origin/main` = `b9ea38c`: `2f51a7d` the review, then one signed merge per pull request (`a7fdc95`, `7fa9916`, `3c50a3e`), then this report. Pull request #70, marked ready once this report is committed. Do not stage `shared/uv.lock`. |
 | Blocking questions | None. |
 
 ---
@@ -131,7 +131,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 43, close-out part 1 | Q42 and Q43 | **complete** (PR #64, `527d965`) | **Signed off 2026-11-20** (architecture session): runs 44748685372 and 44750683640 (the report) green on every job, read from GitHub, `narration-parity` included; every commit Verified; the run's mutations confirmed, and five of the architecture session's own, one surviving (C5). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 1". |
 | 43, close-out | C4, the signer workflow, and C5 | **complete** (PR #65, `91f62fb`) | **Signed off 2026-11-20** (architecture session): runs 44760584788, 44766464671 and 44768657523 (the report) green on every job, read from GitHub; `cli-release.yml` by hand on the branch, 44758619408 and 44766453375, verified with both flags; every commit Verified; six mutations shown red by the architecture session. `main`'s push run 44798857512: green on every job, with `publish`'s guard and tightened verify passing on all five images. Phase 43 and the delivery plan are complete. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 2". |
 | — | Housekeeping: the Dependabot backlog | **complete** (PR #66, `b9ea38c`) | **Signed off 2026-11-21** (architecture session): runs 44803269241 and 44805484085 (the report) green on every job, read from GitHub; the six closed as merged; every commit Verified; each lockfile moved only its bump. `main`'s push run 44877153270: green on every job, `publish` included. Q45 ruled (dismiss alert #9: the path is unreachable, counted at runtime). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping". |
-| — | Housekeeping, part 2: the last alerts | not started | **Brief (2026-11-21):** `docs/DELIVERY_PLAN.md`, Phase 43, "Housekeeping, part 2 — the last alerts": #67, #68 and #69 merged by their heads, signed; alert #9 dismissed with `gh api`, reason `not_used`, with Q45's comment. Branch `deps-2026-11-21` from `origin/main` = `b9ea38c`; its first commit is the review (`../housekeeping-review.patch`, message `../housekeeping-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| — | Housekeeping, part 2: the last alerts | **complete** pending review and merge (PR #70) | **Run 2026-11-21:** step 0 met (44877153270 on `b9ea38c` green; #67, #68, #69 Dependabot's, heads Verified); the three merged by their heads, signed, none conflicting, so none re-locked; `uv lock --check` clean in `api` and `worker`; alert #9 dismissed and read back; no test result changed; run 44879138798 green on every job on the merge result. Report in §5. **Brief (2026-11-21):** `docs/DELIVERY_PLAN.md`, Phase 43, "Housekeeping, part 2 — the last alerts": #67, #68 and #69 merged by their heads, signed; alert #9 dismissed with `gh api`, reason `not_used`, with Q45's comment. Branch `deps-2026-11-21` from `origin/main` = `b9ea38c`; its first commit is the review (`../housekeeping-review.patch`, message `../housekeeping-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -163,60 +163,53 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        none — housekeeping: the Dependabot backlog
-Branch:       deps-2026-11-20, cut from origin/main = 91f62fb. 3ce3e98 the
-              sign-off (../phase-43-signoff.patch, .txt), then one signed
-              merge commit per pull request, then this report. Every commit
-              of ours signed (%G? = G); Dependabot's own commits Verified by
-              GitHub. Pushed. Pull request #66.
-Run:          2026-11-20, /next.
+Phase:        none — housekeeping, part 2: the last alerts
+Branch:       deps-2026-11-21, cut from origin/main = b9ea38c. 2f51a7d the
+              review (../housekeeping-review.patch, .txt; git apply --check
+              clean), then one signed merge commit per pull request, then
+              this report. Every commit of ours signed (%G? = G);
+              Dependabot's own commits Verified by GitHub. Pushed. Pull
+              request #70.
+Run:          2026-11-21, by the owner's instruction (the brief).
 Status:       COMPLETE pending review and merge — CI green on the merge
-              result. Q45 raised (not blocking): the frontend's minimatch
-              advisory cannot be fixed by Dependabot.
+              result. No question raised.
 
 STEP 0
-  1 main's push run 44798857512 on 91f62fb (the merge of PR #65), attempt
-    1: success on every job (25; deploy skipped). On all five publish
-    jobs, "Refuse a ref ci-cd.yml does not push on" and the tightened
-    "Verify both attestations" (--signer-workflow images.yml,
-    --source-ref "$GITHUB_REF") success - C4's publish half, proved on
-    main.
-  2 Dependabot's npm job for /frontend, run 44715925208 ("npm_and_yarn in
-    /frontend for minimatch", 2026-11-20 10:03 UTC): a security update,
-    failed with security_update_not_possible. The patched minimatch is
-    11.0.1; shadcn@4.23.0 requires minimatch@^10.0.1 (through
-    @ts-morph/common@0.27.0) and openapi-typescript@7.13.0 requires
-    minimatch@5.1.9 (through @redocly/openapi-core@1.34.23), so npm's only
-    path downgraded shadcn to 1.0.0, which Dependabot refuses. The
-    advisory is GHSA-g3hv-75wg-m249 (Dependabot alert #9, medium,
-    frontend/package-lock.json, scope development). Attribution: the
-    advisory's fix is outside what the frontend's direct dependencies
-    allow; nothing to retry. Nothing in frontend changed. Raised as Q45.
+  1 main's push run 44877153270, read by id: event push, head b9ea38c,
+    conclusion success.
+  2 #67, #68 and #69: author app/dependabot, base main, open, each a single
+    commit on b9ea38c; each head Verified by GitHub's API (verified=true,
+    reason valid, author dependabot[bot]).
 
-THE SIX, in number order, each merged by its head with
-git merge --no-ff -S (head Verified by GitHub's API before merging)
-  #57 werkzeug 3.1.8 -> 3.1.9, extractors/python   d8863fd0bf  0b230ae
-      (its head is the owner's "Update branch" merge over Dependabot's
-      9c6429e)
-  #59 opentelemetry-api 1.44.0 -> 1.45.2, worker     a88831367a  69c5d68
-  #60 multidict 6.7.1 -> 6.9.1, mcp_server           5403e2c508  ad256d3
-  #61 github.com/jackc/pgx/v5 5.9.0 -> 5.9.2, cli    ccda8fa41a  8f0c211
-  #62 mako 1.4.1 -> 1.4.2, extractors/python         676a02f7b1  e10535b
-  #63 opentelemetry-api 1.44.0 -> 1.45.2, demo-services 0876d9cf21 000b193
-  Merged by their head: all six. Re-locked: none - no merge conflicted,
-  #62's extractors/python/uv.lock change included (git merged it cleanly
-  over #57's). Checked with each project's own tool, not by eye: uv lock
-  --check in extractors/python, worker, mcp_server and demo-services
-  resolves with no change; extractors/python/uv.lock holds werkzeug 3.1.9
-  and mako 1.4.2; go mod verify: all modules verified, pgx v5.9.2. The
-  diff from 3ce3e98: cli/go.mod, cli/go.sum and the four uv.lock files
-  only. No lockfile edited by hand; nothing else bumped.
+THE THREE, in number order, each merged by its head with
+git merge --no-ff -S (head Verified before merging)
+  #67 opentelemetry-api 1.44.0 -> 1.45.2, api   ed24bc67d1  a7fdc95
+  #68 mako 1.3.12 -> 1.4.2, api                 a84e29a42d  7fa9916
+  #69 multidict 6.7.1 -> 6.9.1, worker          82371df880  3c50a3e
+  Merged by their head: all three. Re-locked: none - no merge conflicted;
+  #68's api/uv.lock change merged cleanly over #67's. Checked with the
+  project's own tool: uv lock --check in api (74 packages) and worker (103)
+  resolves with no change. api/uv.lock holds mako 1.4.2 and
+  opentelemetry-api 1.45.2, the OpenTelemetry family moving together
+  (1.45.2 / 0.66b2) and adding opentelemetry-exporter-http-transport and
+  opentelemetry-exporter-otlp-common, as in worker and demo-services last
+  time; worker/uv.lock holds multidict 6.9.1. The diff from 2f51a7d:
+  api/uv.lock and worker/uv.lock only. No lockfile edited by hand; nothing
+  else bumped.
+
+ALERT #9 (Q45)
+  gh api -X PATCH repos/Josh-Heath123/Culprit/dependabot/alerts/9,
+  state dismissed, dismissed_reason not_used, the brief's comment. Read
+  back: state "dismissed", dismissed_reason "not_used", dismissed_at
+  2026-11-21T07:02:23Z, by Josh-Heath123, dismissed_comment exactly:
+  "Unreachable here: the only user is shadcn's @ts-morph/common (dev-only,
+  in no image), which calls minimatch(path, pattern) with default options;
+  the flaw needs optimizationLevel >= 2. minimatch 5.1.9 is unaffected.
+  See DELIVERY_PLAN.md, Q45."
 
 A BUMP THAT CHANGED A TEST RESULT
-  None. just test 1998 passed, 6 skipped - the same 6 skips as every run
-  today; 1998 is C4's run's 1995 on a1d5757 plus the three tests 0128be5
-  added. cli-test 18 packages ok. In CI the fault library's results.json
-  is unchanged (below).
+  None. just test 1998 passed, 6 skipped - the same as the first
+  housekeeping. In CI the fault library's results.json is unchanged.
 
 GATES (local, Windows, one at a time, in the foreground)
   just lint: green before the push. just typecheck: green.
@@ -226,32 +219,33 @@ GATES (local, Windows, one at a time, in the foreground)
   The fault library was not run locally.
 
 CI
-  Pull request #66, draft. Run 44803269241 (pull_request) on 000b193, the
-  merge result (origin/main 91f62fb is in the branch: it was cut from it):
-  conclusion success. Every job success - lint, cli, test, typecheck,
-  migration-round-trip, kind-capture, self-check, the five builds (Trivy
-  included, over the bumped lockfiles), fault-library 1-4 (each rewrites
-  results.json and fails on git diff --exit-code: unchanged), e2e (none),
-  e2e (stub), narration-parity, gate; build/publish and deploy skipped, as
-  on every pull request. gh pr checks 66: 26 pass, 2 skipping. Open
-  code-scanning alerts: none (pr=66, refs/pull/66/merge,
-  refs/pull/66/head all empty). Verdict: green on the merge result.
+  Pull request #70, draft. Run 44879138798 (pull_request) on 3c50a3e, the
+  merge result (origin/main b9ea38c is in the branch: it was cut from it,
+  and main had not moved at the run): conclusion success. Every job
+  success - lint, typecheck, cli, test, migration-round-trip,
+  kind-capture, self-check, the five builds (Trivy included, over the
+  bumped lockfiles), fault-library 1-4 (each fails on git diff
+  --exit-code of results.json: unchanged), e2e (none), e2e (stub),
+  narration-parity, gate; build/publish and deploy skipped, as on every
+  pull request. gh pr checks 70: 27 pass, 2 skipping (CodeQL and its four
+  analyses included). Open code-scanning alerts: none (pr=70,
+  refs/pull/70/merge, refs/pull/70/head all empty). Verdict: green on the
+  merge result.
 
-OPEN DEPENDABOT ALERTS THESE SIX DO NOT CLOSE (read from the API; nothing
-done, by the brief - nothing bumped that Dependabot did not propose)
-  Mako 1.4.1 in api/uv.lock (GHSA-5639-2j2p-m4mx, #1);
-  opentelemetry-api in api/uv.lock (#2, #3);
-  multidict in worker/uv.lock (GHSA-54p9-h82j-f925, #15);
-  minimatch in frontend (Q45, #9).
-  Dependabot opened no pull request for these. Whether the six's merge
-  closes the alerts they name (#4 pgx, #5/#6 demo-services, #7 Mako
-  extractors, #8 Werkzeug, #10 multidict mcp_server, #16/#17 worker) is
-  seen on main after merge.
+OPEN DEPENDABOT ALERTS (read from the API after the dismissal)
+  #1 Mako, api/uv.lock (GHSA-5639-2j2p-m4mx);
+  #2, #3 opentelemetry-api, api/uv.lock (GHSA-xcq7-p3pf-p88h,
+  GHSA-mf5v-w3w3-f6cg);
+  #15 multidict, worker/uv.lock (GHSA-54p9-h82j-f925).
+  All four are the ones #67, #68 and #69 fix; an alert closes only when
+  main's dependency graph moves, so whether they close is seen on main
+  after the merge. #9 is no longer open.
 
 NOT DONE, BY DESIGN
-  frontend untouched; no Dependabot pull request closed by hand; nothing
-  published, released or deployed; the ruleset untouched; shared/uv.lock
-  not staged.
+  frontend untouched, no npm override; nothing bumped that Dependabot did
+  not propose; no pull request closed by hand (#67, #68 and #69 close as
+  merged when #70 merges); nothing published, released or deployed; the
+  ruleset untouched; shared/uv.lock not staged.
 ```
 
 ## §6. Escalate to the architecture session when
