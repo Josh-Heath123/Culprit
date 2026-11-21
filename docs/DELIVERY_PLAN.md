@@ -1310,6 +1310,85 @@ branch takes them all.
 - close a Dependabot pull request by hand;
 - publish, release or deploy anything, or touch the ruleset.
 
+### Review of the housekeeping — merged as `b9ea38c` (PR #66), 2026-11-21
+
+**Signed off.** All six Dependabot pull requests are in, each closed by GitHub
+as merged, none by hand.
+
+**CI.** Read by id from GitHub's API:
+- 44803269241 on `000b193` (the merge result) and 44805484085 on the report,
+  `c73acf2`: success on every job; `publish` and `deploy` skipped, as on every
+  pull request.
+- `main`'s push run 44877153270 on `b9ea38c`: success on every job (25;
+  `deploy` skipped), `narration-parity` and `gate` included; all five
+  `publish` jobs passed the ref guard and the tightened verify over the bumped
+  images.
+- **Every commit is Verified:** `3ce3e98`, the six merges, `c73acf2` and the
+  merge commit `b9ea38c`, and Dependabot's own commits, signed by GitHub.
+  `3ce3e98`'s tree is exactly the sign-off patch's.
+
+**Verified on disk:**
+- The diff from `3ce3e98` is `cli/go.mod`, `cli/go.sum` and four `uv.lock`
+  files. Each lockfile moved only its bump and what the bump requires: the
+  OpenTelemetry family moves together, adding two exporter packages in
+  `worker` and `demo-services`.
+- **The alerts the six did not close** (#1 Mako and #2, #3 OpenTelemetry in
+  `api`; #15 multidict in `worker`): within two minutes of the merge,
+  Dependabot opened #67, #68 and #69 for them itself. The run was right not to
+  bump them unasked.
+
+### Q45 — the frontend's minimatch advisory (ruled 2026-11-21)
+
+**Ruled: dismiss alert #9 (GHSA-g3hv-75wg-m249) as vulnerable code not used,
+with the evidence. No override.** Checked in the architecture session's
+workspace on `b9ea38c`, from `frontend/package-lock.json` installed with `npm
+ci --ignore-scripts`:
+
+- The flaw is in `firstPhasePreProcess`, which minimatch runs only when a
+  caller passes `optimizationLevel` 2 or more. The default is 1.
+- minimatch 10.2.6 is reached only through `shadcn`, via `ts-morph` and
+  `@ts-morph/common`: a development tool, in no image. `@ts-morph/common`
+  calls `minimatch(path, pattern)` with no options. **Counted at runtime:**
+  the vulnerable function ran 0 times as it is called there, and 3 times for
+  the same patterns with `optimizationLevel` 2.
+- minimatch 5.1.9, under `openapi-typescript`, does not contain the function.
+  Playwright bundles its own copy and loads neither.
+- **Why not an override:** forcing 11.0.1 crosses a major under a tool CI
+  never runs (the `shadcn` CLI), so a break would go unseen, and the 11.0 line
+  has advisories of its own.
+- **Why not wait:** an open alert on a path shown unreachable is noise beside
+  the alerts that matter.
+- **Revisit** whenever `shadcn` or `ts-morph` is bumped: repeat the count,
+  since a caller that passes `optimizationLevel` would make the path
+  reachable.
+
+### Housekeeping, part 2 — the last alerts (brief, 2026-11-21)
+
+**Decided:**
+1. **Step 0.** Confirm `main`'s push run 44877153270 on `b9ea38c` by id, and
+   that #67, #68 and #69 are Dependabot's, each head Verified.
+2. **Merge #67, #68 and #69 by their heads,** in number order, signed, exactly
+   as in the first housekeeping: a lockfile conflict re-locked with the
+   project's own tool, never by hand.
+3. **Dismiss Dependabot alert #9** with `gh api` (`PATCH` on
+   `repos/Josh-Heath123/Culprit/dependabot/alerts/9`, `state` dismissed,
+   `dismissed_reason` `not_used`) and exactly this comment:
+
+   > Unreachable here: the only user is shadcn's @ts-morph/common (dev-only, in no image), which calls minimatch(path, pattern) with default options; the flaw needs optimizationLevel >= 2. minimatch 5.1.9 is unaffected. See DELIVERY_PLAN.md, Q45.
+
+   - Read the alert back and quote its state and reason in the report. If the
+     API refuses, say so and leave it: the owner dismisses it in GitHub.
+4. **Gates** as in the first housekeeping. List the open Dependabot alerts in
+   the report, read from the API. An alert closes only when `main`'s
+   dependency graph moves, so the review confirms #1, #2, #3 and #15 closed
+   after the merge.
+
+**Do NOT:**
+- bump anything Dependabot did not propose, add an npm override, or change
+  `frontend`;
+- close a pull request by hand;
+- publish, release or deploy anything, or touch the ruleset.
+
 ---
 
 ## §4. Out of scope
