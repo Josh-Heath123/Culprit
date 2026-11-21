@@ -63,11 +63,11 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-20**, with C4's close-out. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes next is the owner's to decide. |
-| Current phase | **None. Housekeeping, part 2: the last alerts** — `complete` pending review and merge (PR #70): #67, #68 and #69 merged by their heads, none re-locked; alert #9 dismissed (`not_used`, Q45's comment), read back; CI green on the merge result (run 44879138798). Report in §5. |
-| Previous phase | **Housekeeping: the Dependabot backlog — merged as `b9ea38c` (PR #66) and signed off 2026-11-21.** Runs 44803269241 and 44805484085 (the report) green on every job, read from GitHub; #57, #59, #60, #61, #62 and #63 closed as merged; every commit Verified. Q45 ruled. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping". |
+| Plan of record | `docs/FIELD_READINESS_PLAN.md` (Phase 44), from 2026-11-21: the audit and optimisation of the whole application before the first field trial. `docs/DELIVERY_PLAN.md` (40–43), `docs/PERFORMANCE_PLAN.md` (36–39) and `docs/DIAGNOSTIC_PLAN.md` (26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
+| Current phase | **44, part 1 — the audit** — `awaiting decision`: the register is written (`docs/FIELD_READINESS_PLAN.md` §5, 92 findings, six S1), with the dashboard's rendering (4.7) not covered; the review rules on every finding and on the six questions in §5. Step 0 done: run 44881325932 attributed (a kind image import that left nothing on the node; F44-007) and green on attempt 2. Report in §5 below. |
+| Previous phase | **Housekeeping, part 2: the last alerts — merged as `ddb275e` (PR #70) and signed off 2026-11-21.** Runs 44879138798 and 44880245200 (the report) green on every job, read from GitHub; #67, #68 and #69 closed as merged; alert #9 dismissed under Q45; every commit Verified. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping, part 2". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `deps-2026-11-21`, cut from `origin/main` = `b9ea38c`: `2f51a7d` the review, then one signed merge per pull request (`a7fdc95`, `7fa9916`, `3c50a3e`), then this report. Pull request #70, marked ready once this report is committed. Do not stage `shared/uv.lock`. |
+| Branch | `phase-44-audit`, to be cut from `origin/main` = `ddb275e`. Its first commit is the review, signed: `git apply ../phase-44-brief.patch`, then `git commit -F ../phase-44-brief.txt` (`docs/FIELD_READINESS_PLAN.md`, new; `docs/DELIVERY_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Scratch work, screenshots and logs go to `../audit-44/`, never into the repository. Open a draft pull request and mark it ready when the run report is committed; if the run stops on a question, it stays a draft. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
 | Blocking questions | None. |
 
 ---
@@ -131,7 +131,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 43, close-out part 1 | Q42 and Q43 | **complete** (PR #64, `527d965`) | **Signed off 2026-11-20** (architecture session): runs 44748685372 and 44750683640 (the report) green on every job, read from GitHub, `narration-parity` included; every commit Verified; the run's mutations confirmed, and five of the architecture session's own, one surviving (C5). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 1". |
 | 43, close-out | C4, the signer workflow, and C5 | **complete** (PR #65, `91f62fb`) | **Signed off 2026-11-20** (architecture session): runs 44760584788, 44766464671 and 44768657523 (the report) green on every job, read from GitHub; `cli-release.yml` by hand on the branch, 44758619408 and 44766453375, verified with both flags; every commit Verified; six mutations shown red by the architecture session. `main`'s push run 44798857512: green on every job, with `publish`'s guard and tightened verify passing on all five images. Phase 43 and the delivery plan are complete. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 2". |
 | — | Housekeeping: the Dependabot backlog | **complete** (PR #66, `b9ea38c`) | **Signed off 2026-11-21** (architecture session): runs 44803269241 and 44805484085 (the report) green on every job, read from GitHub; the six closed as merged; every commit Verified; each lockfile moved only its bump. `main`'s push run 44877153270: green on every job, `publish` included. Q45 ruled (dismiss alert #9: the path is unreachable, counted at runtime). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping". |
-| — | Housekeeping, part 2: the last alerts | **complete** pending review and merge (PR #70) | **Run 2026-11-21:** step 0 met (44877153270 on `b9ea38c` green; #67, #68, #69 Dependabot's, heads Verified); the three merged by their heads, signed, none conflicting, so none re-locked; `uv lock --check` clean in `api` and `worker`; alert #9 dismissed and read back; no test result changed; run 44879138798 green on every job on the merge result. Report in §5. **Brief (2026-11-21):** `docs/DELIVERY_PLAN.md`, Phase 43, "Housekeeping, part 2 — the last alerts": #67, #68 and #69 merged by their heads, signed; alert #9 dismissed with `gh api`, reason `not_used`, with Q45's comment. Branch `deps-2026-11-21` from `origin/main` = `b9ea38c`; its first commit is the review (`../housekeeping-review.patch`, message `../housekeeping-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| — | Housekeeping, part 2: the last alerts | **complete** (PR #70, `ddb275e`) | **Signed off 2026-11-21** (architecture session): runs 44879138798 and 44880245200 (the report) green on every job, read from GitHub; #67, #68 and #69 closed as merged; alert #9 dismissed under Q45; every commit Verified. `main`'s push run 44881325932: red on `e2e (stub)` (the agent's Kubernetes and systemd recipes), where the same tree passed on the pull request; Phase 44 part 1's step 0 attributes it. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping, part 2". |
+| 44, part 1 | The audit | **awaiting decision** (PR on `phase-44-audit`; the register in `FIELD_READINESS_PLAN.md` §5; the dashboard's rendering not covered) | **Brief (2026-11-21):** `docs/FIELD_READINESS_PLAN.md` §4, under §2's rules: map every surface (the legacy ones included, removing nothing); the journeys end to end; determinism, Go and Python parity, honest absence and gates that cannot fail; the backend, security (every exit an exfiltration path), reliability, performance, the interface at three widths, tests, and the documented path from a clean clone. No product change; the findings register in §5, `phase-auditor` re-running a sample, then stop for review. Branch `phase-44-audit` from `origin/main` = `ddb275e`; its first commit is the review (`../phase-44-brief.patch`, message `../phase-44-brief.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -163,89 +164,161 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        none — housekeeping, part 2: the last alerts
-Branch:       deps-2026-11-21, cut from origin/main = b9ea38c. 2f51a7d the
-              review (../housekeeping-review.patch, .txt; git apply --check
-              clean), then one signed merge commit per pull request, then
-              this report. Every commit of ours signed (%G? = G);
-              Dependabot's own commits Verified by GitHub. Pushed. Pull
-              request #70.
+Phase:        44, part 1 — the audit (docs/FIELD_READINESS_PLAN.md §4)
+Branch:       phase-44-audit, cut from origin/main = ddb275e. 95e1e77 the
+              review (../phase-44-brief.patch, .txt; git apply --check
+              clean; signed, %G? = G), then the register and this report.
+              Pushed. Pull request #71.
 Run:          2026-11-21, by the owner's instruction (the brief).
-Status:       COMPLETE pending review and merge — CI green on the merge
-              result. No question raised.
+Status:       AWAITING DECISION — the register is written and the review
+              rules on it. Not every area is covered: the dashboard was not
+              rendered (4.7), and the journeys through the control plane,
+              the API-side recipes and the stack's edge cases were not run
+              locally (below). No product code, test, workflow or
+              dependency changed; nothing dismissed, bumped, published,
+              released or deployed; the ruleset untouched; shared/uv.lock
+              not staged.
 
-STEP 0
-  1 main's push run 44877153270, read by id: event push, head b9ea38c,
-    conclusion success.
-  2 #67, #68 and #69: author app/dependabot, base main, open, each a single
-    commit on b9ea38c; each head Verified by GitHub's API (verified=true,
-    reason valid, author dependabot[bot]).
+STEP 0 — main's push run 44881325932 on ddb275e
+  Read: gh run view 44881325932 --log-failed, and both e2e (stub) job
+  logs in full (../audit-44/logs/). It failed at check_agent_recipes.sh:79,
+  "FAIL: the agent image is not on the kind node", 1.5 s after kind load
+  image-archive returned 0. PR #70's run 44880245200, same tree, same
+  runner image (ubuntu-26.04 20261116.202.1), kind v0.33.0, kindest/node
+  v1.37.0: the image was listed and the recipe passed.
+  Attribution: an infrastructure flake inside kind's image import, not the
+  code; the guard (added after run 42804120023) caught it as designed. Its
+  exact cause is UNTESTED: nothing on that failure path prints the node's
+  containerd state. First occurrence: over the last 100 runs, the other
+  attempt-1 failures were an apt mirror outage (44522173729) and the Q42
+  HOSTNAME record (44597852296, since fixed).
+  Rerun: gh run rerun 44881325932 --failed -> attempt 2, conclusion
+  success, every job green (e2e (stub), narration-parity and gate
+  included). Recorded as F44-007 (S3, D6): diagnostics on that path, not a
+  retry.
 
-THE THREE, in number order, each merged by its head with
-git merge --no-ff -S (head Verified before merging)
-  #67 opentelemetry-api 1.44.0 -> 1.45.2, api   ed24bc67d1  a7fdc95
-  #68 mako 1.3.12 -> 1.4.2, api                 a84e29a42d  7fa9916
-  #69 multidict 6.7.1 -> 6.9.1, worker          82371df880  3c50a3e
-  Merged by their head: all three. Re-locked: none - no merge conflicted;
-  #68's api/uv.lock change merged cleanly over #67's. Checked with the
-  project's own tool: uv lock --check in api (74 packages) and worker (103)
-  resolves with no change. api/uv.lock holds mako 1.4.2 and
-  opentelemetry-api 1.45.2, the OpenTelemetry family moving together
-  (1.45.2 / 0.66b2) and adding opentelemetry-exporter-http-transport and
-  opentelemetry-exporter-otlp-common, as in worker and demo-services last
-  time; worker/uv.lock holds multidict 6.9.1. The diff from 2f51a7d:
-  api/uv.lock and worker/uv.lock only. No lockfile edited by hand; nothing
-  else bumped.
+BASELINE (local, Windows, one gate at a time, in the foreground)
+  just lint, typecheck, lint-imports (6 kept), check-schema-drift (22
+  tables), test (api, scripts, shared 1998 passed, 6 skipped; worker 93;
+  mcp_server 21; extractors 39), check_coupled_files.py, cli-test (18
+  packages), cli-build, culprit check --fail-on=breaks_request_path, and
+  LLM_PROVIDER=none culprit check: all exit 0. The fault library was not
+  run locally.
 
-ALERT #9 (Q45)
-  gh api -X PATCH repos/Josh-Heath123/Culprit/dependabot/alerts/9,
-  state dismissed, dismissed_reason not_used, the brief's comment. Read
-  back: state "dismissed", dismissed_reason "not_used", dismissed_at
-  2026-11-21T07:02:23Z, by Josh-Heath123, dismissed_comment exactly:
-  "Unreachable here: the only user is shadcn's @ts-morph/common (dev-only,
-  in no image), which calls minimatch(path, pattern) with default options;
-  the flaw needs optimizationLevel >= 2. minimatch 5.1.9 is unaffected.
-  See DELIVERY_PLAN.md, Q45."
+THE REGISTER (FIELD_READINESS_PLAN.md §5): 92 numbers, 91 findings
+  (F44-020 withdrawn: this run misread its own output; the auditor caught
+  it).
+  By severity: S1 6, S2 15, S3 40, S4 30.
+  By label: VERIFIED 66, RISK 25.
+  By area (a finding may have two): core 22, security 20, readiness 18,
+  interface 14, backend 13, legacy 7, tests 6, reliability 5, parity 1,
+  performance 1.
 
-A BUMP THAT CHANGED A TEST RESULT
-  None. just test 1998 passed, 6 skipped - the same as the first
-  housekeeping. In CI the fault library's results.json is unchanged.
+  S1
+    F44-001  culprit intent prints an extractor's stderr unredacted (a DSN
+             password, in text and JSON)                       VERIFIED
+    F44-002  the shared credential pattern misses 13 of 15 common shapes
+             (DB_PASSWORD=, redis://:pw@, ?access_token=, Bearer, JSON
+             and YAML password ...); check's SARIF carries one   VERIFIED
+    F44-003  culprit check imports the target's Python and writes
+             __pycache__ into the target repository (the GUIDE tour,
+             followed exactly)                                VERIFIED
+    F44-004  Go's RedactReading skips []string: a JWT audience holding a
+             DSN leaves in probe JSON                         VERIFIED
+    F44-005  agent tasks keep probe inputs (a token) verbatim and serve
+             them back                                RISK (partly shown)
+    F44-006  the agent's audit log and outbox take raw error text with a
+             DSN                                              VERIFIED
+  S2
+    F44-008 publish before gate on main; F44-009 the quickstart over a
+    pre-Phase-35 env file dies in a migration traceback (on this machine);
+    F44-010 an Alembic merge read as three heads; F44-011 WORKERS=1 vs 4
+    as different kinds of value; F44-012 the process adapter captures the
+    shell's own variables (Q42's class); F44-013 Kubernetes capture marked
+    complete from the template only; F44-014 a claimed agent task never
+    expires; F44-015 one sign-in rate-limit bucket behind Caddy; F44-016
+    the documented path needs Git Bash, and cli-build writes no .exe on
+    Windows; F44-017 restore never tested; F44-018 nothing fails CI when
+    nothing was checked; F44-019 no field-trial runbook (the draft is in
+    ../audit-44/notes); F44-021 --change action: unredacted by the CLI;
+    F44-022 422 messages quote values; F44-023 no data framing for
+    system text reaching the narrator and MCP agents.
 
-GATES (local, Windows, one at a time, in the foreground)
-  just lint: green before the push. just typecheck: green.
-  just test: green (api, scripts, shared 1998 passed, 6 skipped; worker
-  93, mcp_server 21, extractors 39 passed). just cli-test: green, 18
-  packages. just extractors-test: green (Python 39 passed, Node 22 pass).
-  The fault library was not run locally.
+COVERAGE (the full record is in §5 of the plan)
+  Covered by reading: every area 4.1-4.9 (five read-only auditors in
+  parallel; their notes in ../audit-44/notes/).
+  Run here: step 0; the baseline; intent, check and SARIF twice each,
+  identical once ids and times are removed; 13 mutations (two survive in
+  isolate: F44-024); secrets through every CLI exit and MCP; 14 edge
+  cases; start-up (median 56 ms, n=20), check (median 7.3 s, n=5), the
+  binary (13.96 MB), the dashboard bundle (about 171 kB gzip first load,
+  under its 200,000-byte budget); go test -cover; the GUIDE tour steps
+  0-2 on Windows.
+  NOT covered, and why:
+   - 4.7 the dashboard at 1440/768/390: `just quickstart` failed here
+     (F44-009), and the screenshot script, which signs in with the
+     quickstart's admin account from infra/.env.prod, was refused by this
+     session's permission classifier. No screenshot exists. UNTESTED.
+   - 4.2 the journeys through the agent, the control plane and MCP against
+     the demo stack; 4.5's stack conditions (kubectl denied, a container
+     exiting mid-capture, clock skew, an interrupted verify, concurrent
+     requests, a control-plane restart); 4.6's capture and walk time
+     against environment size, API latency, and the statement and N+1
+     probes on Culprit's own API. All need the stack. CI's fault library
+     and e2e cover the journeys (green on 44881325932 attempt 2); the rest
+     is UNTESTED.
+   - 4.3 not all 19 roles' grants against PERMISSIONS.md (three read);
+     Redis authentication (a grep was refused).
+   - 4.4 a full git log -p sweep for secrets, and Trivy.
+   - 4.8 Python coverage; 4.9 install.sh, the Linux fresh clone, the tour
+     from step 3.
+
+PHASE-AUDITOR (every S1 and fourteen others, re-run from fresh copies in
+../audit-44/rerun/): 18 reproduced, F44-004 and F44-006 raised to VERIFIED,
+F44-005 partly, F44-020 not reproduced (withdrawn). Repository left clean
+by it (isolate.go mutated and restored).
+
+PROPOSED BATCHES (plan §5): 1 S1 and security; 2 correctness of facts;
+3 reliability and the backend; 4 tests and gates; 5 the interface,
+starting with the dashboard audit not done here; 6 documentation and the
+first run; 7 legacy, after the owner's decision.
+
+QUESTIONS FOR THE OWNER (plan §5): code execution on the target (import
+or --no-import); the legacy surfaces; secret-scanning alert #1 and
+whether /ci gates on secret scanning; permission for the dashboard run
+and this machine's infra/.env.prod; whether main's publish waits for
+gate; where a confirmed field finding is recorded. None is blocking for
+the review; none is added to §3, since none stops this part.
+
+../audit-44/
+  logs/       step 0's logs, every gate's output, the quickstart log,
+              go-cover.log, mutations.log, frontend-build.log
+  notes/      the five auditors' notes (4.1-map, 4.2-core, 4.3-backend,
+              4.4-security, 4.7-4.9-docs-cli-tests), auditor-sample.md,
+              auditor-results.md
+  scripts/    tour-setup.sh, edges.sh, canon.py, mcp_session.py,
+              mutate.py, mutations.json, mutations2.json
+  det/, edges/, tour/, rerun/   the inputs and outputs of every run
+  register.md the register as inserted into the plan
+  screens/    empty: no screenshot was taken
+
+CLAUDE.md still says part 1 is "not started": this part commits only the
+plan's §5 and the handoff, and the handoff wins.
 
 CI
-  Pull request #70, draft. Run 44879138798 (pull_request) on 3c50a3e, the
-  merge result (origin/main b9ea38c is in the branch: it was cut from it,
-  and main had not moved at the run): conclusion success. Every job
-  success - lint, typecheck, cli, test, migration-round-trip,
-  kind-capture, self-check, the five builds (Trivy included, over the
-  bumped lockfiles), fault-library 1-4 (each fails on git diff
-  --exit-code of results.json: unchanged), e2e (none), e2e (stub),
-  narration-parity, gate; build/publish and deploy skipped, as on every
-  pull request. gh pr checks 70: 27 pass, 2 skipping (CodeQL and its four
-  analyses included). Open code-scanning alerts: none (pr=70,
-  refs/pull/70/merge, refs/pull/70/head all empty). Verdict: green on the
-  merge result.
-
-OPEN DEPENDABOT ALERTS (read from the API after the dismissal)
-  #1 Mako, api/uv.lock (GHSA-5639-2j2p-m4mx);
-  #2, #3 opentelemetry-api, api/uv.lock (GHSA-xcq7-p3pf-p88h,
-  GHSA-mf5v-w3w3-f6cg);
-  #15 multidict, worker/uv.lock (GHSA-54p9-h82j-f925).
-  All four are the ones #67, #68 and #69 fix; an alert closes only when
-  main's dependency graph moves, so whether they close is seen on main
-  after the merge. #9 is no longer open.
-
-NOT DONE, BY DESIGN
-  frontend untouched, no npm override; nothing bumped that Dependabot did
-  not propose; no pull request closed by hand (#67, #68 and #69 close as
-  merged when #70 merges); nothing published, released or deployed; the
-  ruleset untouched; shared/uv.lock not staged.
+  Pull request #71, draft. origin/main = ddb275e is in the branch (cut
+  from it; main had not moved), so the branch is the merge result. Local
+  gates: the baseline above ran on ddb275e plus this branch's docs; only
+  the two Markdown files changed after it, and just lint was rerun green.
+  Run 44887167519 (pull_request) on 3f171f1: conclusion success, 10 m 44 s.
+  Every job success - lint, typecheck, cli, test, migration-round-trip,
+  kind-capture, self-check, the five builds, fault-library 1-4, e2e (none),
+  e2e (stub), narration-parity, gate; build/publish and deploy skipped, as
+  on every pull request. gh pr checks 71: every check pass or skipping
+  (CodeQL and its four analyses included). Open code-scanning alerts: none
+  (pr=71, refs/pull/71/merge, refs/pull/71/head all empty). Verdict: green
+  on the merge result. This report's own commit runs CI again; the review
+  reads it.
 ```
 
 ## §6. Escalate to the architecture session when
