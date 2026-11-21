@@ -1229,6 +1229,87 @@ and C5 first.
 - change any action's version;
 - touch the ruleset.
 
+### Review of the close-out, part 2 — C4 and C5, merged as `91f62fb` (PR #65), 2026-11-20
+
+**C4 and C5 are signed off, and with them Phase 43 and the delivery plan.**
+
+**CI.** Read by id from GitHub's API:
+- 44760584788 on `a1d5757`, 44766464671 on `0128be5` (the merge result) and
+  44768657523 on the report, `3ee8b62`: success on every job; `publish` and
+  `deploy` skipped, as on every pull request.
+- `cli-release.yml` started by hand on the branch, 44758619408 on `a1d5757`
+  and 44766453375 on `0128be5`: "Attest the binaries' build provenance" and
+  "Verify every binary's attestation" success, the verify with both flags;
+  Publish skipped; no tag cut.
+- `main`'s push run 44798857512 on `91f62fb`: success on every job (25;
+  `deploy` skipped), `narration-parity` and `gate` included. In all five
+  `publish` jobs, "Refuse a ref ci-cd.yml does not push on" and the tightened
+  "Verify both attestations" passed: decision 4's second half.
+- **Every commit is Verified** by GitHub's API: `504bf4d`, `0095364`,
+  `a1d5757`, `0128be5` and `3ee8b62`, and the merge commit `91f62fb`.
+  `504bf4d`'s tree is exactly the review patch's.
+
+**Verified on disk,** on `91f62fb`, in the architecture session's workspace:
+- `scripts/tests/test_ci_workflow.py`: 68 passed. `go test ./internal/capture/
+  ./internal/verify/ ./internal/model/` (Go 1.27.0): ok.
+- **Six mutations of its own, each red and then restored:**
+  - `publish`'s guard moved after the login: the guard test red;
+  - `images.yml`'s provenance verify pinned to `refs/heads/main`: "every
+    verify names its workflow and its ref" red;
+  - the guard's fallback arm made to exit 0: the guard test red;
+  - the guard widened to every tag (`refs/tags/*`): the guard test red;
+  - the hostname's read error ignored: the capture test red;
+  - the empty-hostname guard removed, which survived the last review: now red.
+    C5 is closed.
+- `docs/GUIDE.md`'s commands name the images and binaries as `images.yml` and
+  `cli-release.yml` build them, and say plainly that none can be fetched yet.
+
+**The run's decisions, accepted:**
+- **The audits' three findings,** fixed in `0128be5` and each shown red first:
+  the verifies' line continuations and the test's join, every arm of the guard
+  read, and LIMITS' wording.
+- **The shell's `v*` also matches a slash,** which the trigger's glob does
+  not. It cannot be reached, since no trigger delivers such a ref to
+  `publish`. Not changed.
+- **The binaries' certificate could not be fetched by digest.** The verify
+  step's success under `bash -e`, with a count of five, is the evidence.
+
+**The delivery plan is complete.** Every attestation verify now names the
+workflow and the ref that must have signed, held by the workflow test. The
+release path is proved by test and by a hand-started run, and its tag path
+waits for the first `v*` tag. What comes next is the owner's to decide.
+
+### Housekeeping — the Dependabot backlog (brief, 2026-11-20)
+
+Six Dependabot pull requests are open: #57, #59, #60, #61, #62 and #63, at
+least three naming an advisory. Each is behind `main`, and `gate` is strict,
+so merging them one by one costs six rounds of updating and waiting. One
+branch takes them all.
+
+**Decided:**
+1. **Step 0.** Confirm `main`'s push run 44798857512 on `91f62fb` by id. Read
+   the failed log of Dependabot's npm update job for `/frontend` (run
+   44715925208) and attribute it in the report. Change nothing in `frontend`
+   in this run; if the log names an advisory, raise it as a question.
+2. **For each of the six, in number order,** merge its head into the branch,
+   signed (`git merge --no-ff -S`), so Dependabot's own commit lands and
+   GitHub closes the pull request as merged.
+   - A conflict can only be in a lockfile. Abort that merge, and re-lock that
+     one package at the pull request's version with the project's own tool
+     (`uv lock --upgrade-package NAME==VERSION`, or `go get MODULE@VERSION`
+     then `go mod tidy`), in a signed commit naming the pull request.
+   - Never edit a lockfile by hand. Nothing moves but what each bump requires.
+3. **Gates:** `just lint`, `just typecheck`, `just test` and `just cli-test`,
+   one at a time, in the foreground. In CI, the fault library's `results.json`
+   is unchanged.
+4. **Report** which pull requests merged by their head and which were
+   re-locked, and any bump that changed a test result.
+
+**Do NOT:**
+- bump anything Dependabot did not propose, or touch `frontend`;
+- close a Dependabot pull request by hand;
+- publish, release or deploy anything, or touch the ruleset.
+
 ---
 
 ## §4. Out of scope

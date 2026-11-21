@@ -63,12 +63,12 @@ wrong architectural turn gets caught before it is built on.
 
 | | |
 |---|---|
-| Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-19**, with one close-out item, C4; Q42 and Q43, found on the way, are done. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes after C4 is the owner's to decide. |
-| Current phase | **43, close-out — C4, the signer workflow, as amended by Q44** — `complete` pending review and merge: CI green on the merge result (run 44766464671 on `0128be5`); `publish`'s tightened verify is proved on `main`'s push run after merge. C5 done first. Report in §5. |
-| Previous phase | **43, close-out part 1 — Q42 and Q43 — merged as `527d965` (PR #64) and signed off 2026-11-20.** Runs 44748685372 and 44750683640 (the report) green on every job, read from GitHub; every commit Verified; five mutations by the architecture session, four red and one surviving (C5). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 1". |
+| Plan of record | `docs/DELIVERY_PLAN.md` (Phases 40–43), **complete 2026-11-20**, with C4's close-out. `docs/PERFORMANCE_PLAN.md` (Phases 36–39) and `docs/DIAGNOSTIC_PLAN.md` (Phases 26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. What comes next is the owner's to decide. |
+| Current phase | **None. Housekeeping: the Dependabot backlog** — `complete` pending review and merge (PR #66): #57, #59, #60, #61, #62 and #63 merged by their heads, none re-locked; CI green on the merge result (run 44803269241). Q45 raised, not blocking. Report in §5. |
+| Previous phase | **43, close-out — C4 and C5 — merged as `91f62fb` (PR #65) and signed off 2026-11-20. The delivery plan is complete.** Runs 44760584788, 44766464671 and 44768657523 (the report) green on every job, and `cli-release.yml` by hand, 44758619408 and 44766453375, read from GitHub; every commit Verified; six mutations by the architecture session, all red. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 2". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-43-c4`, cut from `origin/main` = `527d965`: `504bf4d` the review, `0095364` C5, `a1d5757` C4, `0128be5` the audits' findings, then this report; all signed, pushed. Pull request #65, marked ready once this report is committed. Do not stage `shared/uv.lock`. |
-| Blocking questions | None. |
+| Branch | `deps-2026-11-20`, cut from `origin/main` = `91f62fb`: `3ce3e98` the sign-off, then one signed merge per pull request (`0b230ae`, `69c5d68`, `ad256d3`, `8f0c211`, `e10535b`, `000b193`), then this report. Pull request #66, marked ready once this report is committed. Do not stage `shared/uv.lock`. |
+| Blocking questions | None. Q45 (§3) is open and blocks nothing. |
 
 ---
 
@@ -79,7 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q42, Q43 and Q44 are recorded at the end of Phase 43 in `DELIVERY_PLAN.md`. | | |
+| Q45 | **The frontend's minimatch advisory cannot be fixed by Dependabot.** GHSA-g3hv-75wg-m249 (alert #9, medium, `frontend/package-lock.json`, development scope only, so in no image) is fixed in minimatch 11.0.1. Dependabot's security update (run 44715925208) failed `security_update_not_possible`: `shadcn@4.23.0` needs `minimatch@^10.0.1` through `@ts-morph/common@0.27.0`, and `openapi-typescript@7.13.0` pins `minimatch@5.1.9` through `@redocly/openapi-core@1.34.23`, so npm's only path downgraded shadcn to 1.0.0. **Which, if any:** an `overrides` entry in `frontend/package.json` forcing minimatch 11.0.1 (it may break the two tools that pin an older major; both are development tools, the shadcn CLI and type generation); waiting for shadcn and openapi-typescript to move; or dismissing the alert as development-only with that reason. Nothing changed in `frontend`, as briefed. Q42, Q43 and Q44 are recorded at the end of Phase 43 in `DELIVERY_PLAN.md`. | 2026-11-20, the Dependabot backlog, step 0 | Nothing |
 
 ---
 
@@ -129,7 +129,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | 42 | Ownership on the record | **complete** (PR #53, `bb92e48`) | **Signed off 2026-11-19** (architecture session): runs 44534379764, 44543993249 and 44546655296 (the report) green on every job, read from GitHub; `reuse lint` and the map rerun, two mutations shown red; the header commit insertions only; Q41 ruled (#3 fixed; #2 and #4 dismissed by the owner); `AUTHORSHIP.md`'s merge fact corrected. Recorded in `DELIVERY_PLAN.md`, Phase 42, "Review". |
 | 43 | Authenticated | **complete** (PR #55, `090cc4b`) | **Signed off 2026-11-19** (architecture session): runs 44573995497, 44579250490 and 44581822123 (the report) green on every job, read from GitHub; every commit Verified; 56 action references pinned and two mutations shown red; the verifies to be tightened as C4. The delivery plan is complete. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review". |
 | 43, close-out part 1 | Q42 and Q43 | **complete** (PR #64, `527d965`) | **Signed off 2026-11-20** (architecture session): runs 44748685372 and 44750683640 (the report) green on every job, read from GitHub, `narration-parity` included; every commit Verified; the run's mutations confirmed, and five of the architecture session's own, one surviving (C5). Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 1". |
-| 43, close-out | C4, the signer workflow | **complete** pending review and merge (PR #65) | **Run 2026-11-20:** step 0 met (44755314601 on `527d965`, all five `publish` jobs attested and verified); C5 (`0095364`) and C4 (`a1d5757`, `0128be5`) built, every mutation shown red; `cli-release.yml` started by hand on the branch, verify green with both flags (44758619408, 44766453375); both auditors run, their findings fixed; run 44766464671 green on every job on the merge result. Report in §5. **Brief (2026-11-20, as amended by Q44):** `docs/DELIVERY_PLAN.md`, Phase 43, "Close-out — C4, the signer workflow, as amended by Q44": C5 first; then every `gh attestation verify` names the workflow it runs in and `$GITHUB_REF`, with `publish` guarded to `main` and `v*` tags, held by `test_ci_workflow.py` against `ci-cd.yml`'s triggers; users given the commands; shown on a hand-started `cli-release.yml` run and on `main`'s push run after merge. |
+| 43, close-out | C4, the signer workflow, and C5 | **complete** (PR #65, `91f62fb`) | **Signed off 2026-11-20** (architecture session): runs 44760584788, 44766464671 and 44768657523 (the report) green on every job, read from GitHub; `cli-release.yml` by hand on the branch, 44758619408 and 44766453375, verified with both flags; every commit Verified; six mutations shown red by the architecture session. `main`'s push run 44798857512: green on every job, with `publish`'s guard and tightened verify passing on all five images. Phase 43 and the delivery plan are complete. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the close-out, part 2". |
+| — | Housekeeping: the Dependabot backlog | **complete** pending review and merge (PR #66) | **Run 2026-11-20:** step 0 met (44798857512 on `91f62fb`, `publish`'s guard and tightened verify green on all five images; the npm job 44715925208 attributed, Q45); all six merged by their heads, signed, none conflicting, so none re-locked; every lockfile checked by its own tool; no test result changed; run 44803269241 green on every job on the merge result. Report in §5. **Brief (2026-11-20):** `docs/DELIVERY_PLAN.md`, Phase 43, "Housekeeping — the Dependabot backlog": #57, #59, #60, #61, #62 and #63 merged by their heads, signed, on one branch, a lockfile conflict re-locked by the project's own tool. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -161,149 +162,95 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        43, close-out — C4, the signer workflow, as amended by Q44
-Branch:       phase-43-c4, cut from origin/main = 527d965. 504bf4d the
-              review (../phase-43-c4-review.patch, .txt), 0095364 C5,
-              a1d5757 C4, 0128be5 the audits' findings, then this report.
-              Every commit signed (%G? = G). Pushed. Pull request #65.
+Phase:        none — housekeeping: the Dependabot backlog
+Branch:       deps-2026-11-20, cut from origin/main = 91f62fb. 3ce3e98 the
+              sign-off (../phase-43-signoff.patch, .txt), then one signed
+              merge commit per pull request, then this report. Every commit
+              of ours signed (%G? = G); Dependabot's own commits Verified by
+              GitHub. Pushed. Pull request #66.
 Run:          2026-11-20, /next.
 Status:       COMPLETE pending review and merge — CI green on the merge
-              result; publish's tightened verify is proved on main's push
-              run after merge (decision 4), not before.
+              result. Q45 raised (not blocking): the frontend's minimatch
+              advisory cannot be fixed by Dependabot.
 
 STEP 0
-  main's push run 44755314601 on 527d965 (the merge of PR #64), attempt 1:
-  success on every job (deploy skipped), narration-parity and gate
-  included. All five publish jobs (api, worker, frontend, mcp_server,
-  cli): "Attest the image's build provenance", "Attest the image's SBOM"
-  and "Verify both attestations" success - the repository-only verify,
-  which this run tightens.
+  1 main's push run 44798857512 on 91f62fb (the merge of PR #65), attempt
+    1: success on every job (25; deploy skipped). On all five publish
+    jobs, "Refuse a ref ci-cd.yml does not push on" and the tightened
+    "Verify both attestations" (--signer-workflow images.yml,
+    --source-ref "$GITHUB_REF") success - C4's publish half, proved on
+    main.
+  2 Dependabot's npm job for /frontend, run 44715925208 ("npm_and_yarn in
+    /frontend for minimatch", 2026-11-20 10:03 UTC): a security update,
+    failed with security_update_not_possible. The patched minimatch is
+    11.0.1; shadcn@4.23.0 requires minimatch@^10.0.1 (through
+    @ts-morph/common@0.27.0) and openapi-typescript@7.13.0 requires
+    minimatch@5.1.9 (through @redocly/openapi-core@1.34.23), so npm's only
+    path downgraded shadcn to 1.0.0, which Dependabot refuses. The
+    advisory is GHSA-g3hv-75wg-m249 (Dependabot alert #9, medium,
+    frontend/package-lock.json, scope development). Attribution: the
+    advisory's fix is outside what the frontend's direct dependencies
+    allow; nothing to retry. Nothing in frontend changed. Raised as Q45.
 
-504bf4d — the review
-  git apply --check, then applied: DELIVERY_PLAN.md, HANDOFF.md, CLAUDE.md.
+THE SIX, in number order, each merged by its head with
+git merge --no-ff -S (head Verified by GitHub's API before merging)
+  #57 werkzeug 3.1.8 -> 3.1.9, extractors/python   d8863fd0bf  0b230ae
+      (its head is the owner's "Update branch" merge over Dependabot's
+      9c6429e)
+  #59 opentelemetry-api 1.44.0 -> 1.45.2, worker     a88831367a  69c5d68
+  #60 multidict 6.7.1 -> 6.9.1, mcp_server           5403e2c508  ad256d3
+  #61 github.com/jackc/pgx/v5 5.9.0 -> 5.9.2, cli    ccda8fa41a  8f0c211
+  #62 mako 1.4.1 -> 1.4.2, extractors/python         676a02f7b1  e10535b
+  #63 opentelemetry-api 1.44.0 -> 1.45.2, demo-services 0876d9cf21 000b193
+  Merged by their head: all six. Re-locked: none - no merge conflicted,
+  #62's extractors/python/uv.lock change included (git merged it cleanly
+  over #57's). Checked with each project's own tool, not by eye: uv lock
+  --check in extractors/python, worker, mcp_server and demo-services
+  resolves with no change; extractors/python/uv.lock holds werkzeug 3.1.9
+  and mako 1.4.2; go mod verify: all modules verified, pgx v5.9.2. The
+  diff from 3ce3e98: cli/go.mod, cli/go.sum and the four uv.lock files
+  only. No lockfile edited by hand; nothing else bumped.
 
-0095364 — C5
-  TestTheRuntimesIdentityIsNotConfiguration's environment gains EMPTY=;
-  with the hostname empty, and with it unreadable, EMPTY must stay shaped
-  and Identity 0. Mutation, red and reverted: the guard `own != ""`
-  removed - the "empty" subtest FAIL ("an empty value was taken for an
-  empty hostname: {Value: Known:false}"; Identity 1). internal/capture ok.
-
-a1d5757 — C4, decisions 1 to 3
-  1 images.yml publish: both verifies name --signer-workflow
-    "$GITHUB_REPOSITORY/.github/workflows/images.yml" and --source-ref
-    "$GITHUB_REF". Its first step, before downloading, logging in or
-    pushing, is a guard: case "$GITHUB_REF" in refs/heads/main or
-    refs/tags/v* goes on; *) names the ref it got and exits 1.
-    cli-release.yml's verify names cli-release.yml and "$GITHUB_REF" (the
-    tag, or a hand-started run's branch). No action version changed; no
-    permission changed.
-  2 test_ci_workflow.py: every verify in every workflow names the file it
-    sits in as signer and "$GITHUB_REF" as ref (3 found); publish has one
-    guard, before its first login or push; the refs it accepts equal
-    ci-cd.yml's on.push (branches and tags).
-  3 docs/GUIDE.md "Verifying what Culprit publishes": an image from main
-    (refs/heads/main), a release's image and a released binary
-    (refs/tags/vX.Y.Z), each with both flags, the SBOM form; what a pass
-    proves (these bytes, that workflow, this repository, that ref) and
-    does not (that the code is right, or that whoever pushed meant well);
-    "Not usable yet" - private packages, no release. SECURITY.md links it.
-    LIMITS: a verify names the workflow and ref, not the commit; the
-    release path has not run.
-
-0128be5 — the audits' findings (no criterion failed; all three fixed)
-  1 The verifies had lost their backslash continuations (one long line
-    each), and the test's join, run.replace("\\n", " "), matched the two
-    characters backslash-n, not a line-end backslash: its docstring was
-    false, and a correctly continued verify would have failed it. The
-    verifies are continued again; the join is CONTINUATION
-    ([ \t]*\\\n\s*); test_a_continued_command_is_read_as_one. With the old
-    join and the continued workflows: 2 failed - shown before the fix.
-  2 The guard test read only the first case arm, so a second accepting
-    arm passed (the phase-auditor's probe). guard_accepts unions every arm
-    but *), and the *) arm must exist and exit non-zero;
-    test_a_second_accepting_arm_is_named,
-    test_a_fallback_that_lets_a_ref_through_is_named.
-  3 LIMITS said the guard "has run on main"; it first runs on main's push
-    run after merge. Reworded.
-  test_ci_workflow.py: 68 passed.
-
-MUTATIONS OF THE REAL FILES (0128be5), each red, each reverted
-  MA --source-ref dropped from images.yml's SBOM verify: "a verify names
-     no --source-ref" (2 failed).
-  MB cli-release.yml's verify naming images.yml: "a verify names
-     images.yml as its signer, not the workflow it is in" (2 failed).
-  MC `release` added to ci-cd.yml's on.push, the guard unchanged:
-     "publish's guard accepts ['refs/heads/main', 'refs/tags/v*'], but
-     ci-cd.yml pushes on [..., 'refs/heads/release', ...]" (2 failed).
-  MD a second accepting arm, refs/heads/release, in images.yml's guard:
-     "publish's guard accepts [main, release, v*], but ci-cd.yml pushes on
-     [main, v*]" (2 failed).
-  ME the test's continuation join removed: the continued verifies read
-     as "names no --signer-workflow", and the join's own test red
-     (3 failed).
-  MA to MC are the brief's three. The same three were also shown red on
-  a1d5757, before the continuations were restored.
-
-DECISION 4 — PROOF
-  Hand-started cli-release.yml on phase-43-c4 (no tag cut):
-    44758619408 on a1d5757: success; "Attest the binaries' build
-      provenance" and "Verify every binary's attestation" success;
-      Publish skipped.
-    44766453375 on 0128be5 (the continued verify): the same - success,
-      Publish skipped.
-  The verify step runs under bash -e and requires a count of 5, so its
-  success means all five binaries verified with both flags (gh prints
-  nothing on success off a terminal). Not shown: the certificate of these
-  binaries' attestation - the log names no digest, and the attestation
-  could not be fetched by digest (404); not counted as evidence.
-  publish's guard and verify: NOT RUN until main's push run after merge.
-  The tag path: NOT RUN until the owner cuts the first v* tag; held by
-  test_ci_workflow.py, and LIMITS says so.
-
-AUDITS
-  invariant-auditor (on a1d5757): CLEAN. No permission, action, trigger
-    or gate changed; the guard first in publish; nothing in api, worker,
-    shared, migrations or subjects. Its risks 1 and 2 are 0128be5's 1;
-    risk 3 (the shell's v* also matches a slash) cannot be reached: no
-    trigger delivers such a ref to publish. Not run by it: lint-imports,
-    schema drift, actionlint.
-  phase-auditor (on a1d5757): every decision and C5 MET, each executed -
-    the three mutations reproduced red, C5's mutation red, the run read,
-    the GUIDE anchor resolved, no tag or release (tags: 0); decision 4's
-    publish half NOT TESTABLE until merge; the handoff status not yet
-    written (this report). Its weak spots 1 to 3 are fixed in 0128be5.
-    It left its backups and probe scripts in /tmp/c4audit, outside the
-    repository (its delete was refused).
+A BUMP THAT CHANGED A TEST RESULT
+  None. just test 1998 passed, 6 skipped - the same 6 skips as every run
+  today; 1998 is C4's run's 1995 on a1d5757 plus the three tests 0128be5
+  added. cli-test 18 packages ok. In CI the fault library's results.json
+  is unchanged (below).
 
 GATES (local, Windows, one at a time, in the foreground)
-  just lint: green before every push. just typecheck: green.
-  just test: green (api, scripts, shared 1995 passed, 6 skipped as
-  before; worker, mcp_server, extractors passed). just cli-lint: green.
-  just cli-test: green, 18 packages. test_ci_workflow.py after 0128be5:
-  68 passed. The fault library was not run locally.
+  just lint: green before the push. just typecheck: green.
+  just test: green (api, scripts, shared 1998 passed, 6 skipped; worker
+  93, mcp_server 21, extractors 39 passed). just cli-test: green, 18
+  packages. just extractors-test: green (Python 39 passed, Node 22 pass).
+  The fault library was not run locally.
 
 CI
-  Pull request #65, draft. Run 44766464671 (pull_request) on 0128be5, the
-  merge result (origin/main 527d965 is in the branch: it was cut from it):
+  Pull request #66, draft. Run 44803269241 (pull_request) on 000b193, the
+  merge result (origin/main 91f62fb is in the branch: it was cut from it):
   conclusion success. Every job success - lint, cli, test, typecheck,
   migration-round-trip, kind-capture, self-check, the five builds (Trivy
-  included), fault-library 1-4 (results.json unchanged), e2e (none),
-  e2e (stub), narration-parity, gate; build/publish and deploy skipped,
-  as on every pull request. gh pr checks 65: 26 pass, 2 skipping
-  (publish, deploy), CodeQL and its analyses included. Open code-scanning
-  alerts: none (pr=65, refs/pull/65/merge, refs/pull/65/head all empty).
-  Earlier, run 44760584788 on a1d5757: success on every job.
-  Verdict: green on the merge result.
+  included, over the bumped lockfiles), fault-library 1-4 (each rewrites
+  results.json and fails on git diff --exit-code: unchanged), e2e (none),
+  e2e (stub), narration-parity, gate; build/publish and deploy skipped, as
+  on every pull request. gh pr checks 66: 26 pass, 2 skipping. Open
+  code-scanning alerts: none (pr=66, refs/pull/66/merge,
+  refs/pull/66/head all empty). Verdict: green on the merge result.
+
+OPEN DEPENDABOT ALERTS THESE SIX DO NOT CLOSE (read from the API; nothing
+done, by the brief - nothing bumped that Dependabot did not propose)
+  Mako 1.4.1 in api/uv.lock (GHSA-5639-2j2p-m4mx, #1);
+  opentelemetry-api in api/uv.lock (#2, #3);
+  multidict in worker/uv.lock (GHSA-54p9-h82j-f925, #15);
+  minimatch in frontend (Q45, #9).
+  Dependabot opened no pull request for these. Whether the six's merge
+  closes the alerts they name (#4 pgx, #5/#6 demo-services, #7 Mako
+  extractors, #8 Werkzeug, #10 multidict mcp_server, #16/#17 worker) is
+  seen on main after merge.
 
 NOT DONE, BY DESIGN
-  No tag cut; nothing published, released or deployed; no action version
-  changed; the ruleset untouched; shared/uv.lock not staged.
-
-FOR THE REVIEW
-  After merge, main's push run must show publish's "Refuse a ref ci-cd.yml
-  does not push on" step and the tightened "Verify both attestations"
-  green on all five images.
+  frontend untouched; no Dependabot pull request closed by hand; nothing
+  published, released or deployed; the ruleset untouched; shared/uv.lock
+  not staged.
 ```
 
 ## §6. Escalate to the architecture session when
