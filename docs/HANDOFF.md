@@ -64,7 +64,7 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/FIELD_READINESS_PLAN.md` (Phase 44), from 2026-11-21: the audit and optimisation of the whole application before the first field trial. `docs/DELIVERY_PLAN.md` (40–43), `docs/PERFORMANCE_PLAN.md` (36–39) and `docs/DIAGNOSTIC_PLAN.md` (26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **44, batch 2 — facts that hold** — `not started`. Brief: `docs/FIELD_READINESS_PLAN.md` §6, "Batch 2 — facts that hold", under §2's rules: lexical format classes, the working directory in the identity rule, observations not counted as configuration, severity's third state, honest absence, two readers on one fixture, Q46. Step 0: `main`'s push run 45216449983 on `f694cb6`. |
+| Current phase | **44, batch 2 — facts that hold** — `awaiting review` (PR #73; §5). Brief: `docs/FIELD_READINESS_PLAN.md` §6, "Batch 2 — facts that hold", under §2's rules: lexical format classes, the working directory in the identity rule, observations not counted as configuration, severity's third state, honest absence, two readers on one fixture, Q46. Step 0: `main`'s push run 45216449983 on `f694cb6`. |
 | Previous phase | **44, batch 1 — secrets stay in — merged as `f694cb6` (PR #72) and signed off 2026-11-23.** Runs 45169821500 and 45171911160 (the report) green on every job, read from GitHub; the six S1 reproductions clean against the merged binary; three mutations by the architecture session, all red. Recorded in `FIELD_READINESS_PLAN.md` §6, "Review of batch 1". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
 | Branch | `phase-44-b2`, to be cut from `origin/main` = `f694cb6`. Its first commit is the review, signed: `git apply ../phase-44-b2-review.patch`, then `git commit -F ../phase-44-b2-review.txt` (`docs/FIELD_READINESS_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Scratch work goes to `../audit-44/`, never into the repository. Open a draft pull request and mark it ready when the run report is committed; if the run stops on a question, it stays a draft. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
@@ -79,7 +79,8 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| — | None open. Q46 is ruled in `FIELD_READINESS_PLAN.md` §6, "Review of batch 1"; Q42 to Q45 are recorded at the end of Phase 43 in `DELIVERY_PLAN.md`. | | |
+| 47 | **Kubernetes `verify` no longer sees a template key change.** F44-013 made every Kubernetes capture incomplete, as briefed. `verify` (through the engine's env_vs_env rule) and `env diff` honour that skip, so between two Kubernetes captures a key added to or removed from the Deployment's template is no longer a difference, and a fix that changed one can be `verified`. `GET /captures/diff` still lists it (LIMITS says so). Should a key both templates enumerate count, the image's ENV and webhooks aside? | 2026-11-23, batch 2 (§5) | nothing; not blocking |
+| 48 | **`unknown` ranks below `degrades`.** F44-063 moves findings behind an unclassified edge from `degrades` to `unknown`, so the default `--fail-on=degrades` no longer fails CI on them (UPGRADING and LIMITS say so). Is that the intent, or should `unknown` be counted at `degrades`? | 2026-11-23, batch 2 (§5) | nothing; not blocking |
 
 ---
 
@@ -134,7 +135,7 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | — | Housekeeping, part 2: the last alerts | **complete** (PR #70, `ddb275e`) | **Signed off 2026-11-21** (architecture session): runs 44879138798 and 44880245200 (the report) green on every job, read from GitHub; #67, #68 and #69 closed as merged; alert #9 dismissed under Q45; every commit Verified. `main`'s push run 44881325932: red on `e2e (stub)` (the agent's Kubernetes and systemd recipes), where the same tree passed on the pull request; Phase 44 part 1's step 0 attributes it. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping, part 2". |
 | 44, part 1 | The audit | **complete** (PR #71, `6f64f69`) | **Accepted 2026-11-23** (architecture session): runs 44887167519 and 44888134489 (the report) green on every job, read from GitHub; 92 findings (6 S1, 15 S2), every S1 reproduced; `main`'s push run 45125493937: green on every job. The dashboard's screens move to CI (batch 5). Recorded in `FIELD_READINESS_PLAN.md` §6. |
 | 44, batch 1 | Secrets stay in | **complete** (PR #72, `f694cb6`) | **Signed off 2026-11-23** (architecture session): runs 45169821500 and 45171911160 (the report) green on every job, read from GitHub; every S1 reproduction clean against the merged binary; three mutations of its own red. `main`'s push run 45216449983: green on every job. Recorded in `FIELD_READINESS_PLAN.md` §6. |
-| 44, batch 2 | Facts that hold | not started | **Brief (2026-11-23):** `docs/FIELD_READINESS_PLAN.md` §6, "Batch 2 — facts that hold": F44-010 to -013, -055, -057, -058, -063, -064, -090 and Q46; format classes lexical; the working directory in the identity rule; `verify` counting configuration, not observations; severity `unknown` behind an edge that does not say; fixtures for every value two languages compute. Branch `phase-44-b2` from `origin/main` = `f694cb6`; its first commit is the review (`../phase-44-b2-review.patch`, message `../phase-44-b2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 44, batch 2 | Facts that hold | **awaiting review** (PR #73; run 45232041694 green) | **Brief (2026-11-23):** `docs/FIELD_READINESS_PLAN.md` §6, "Batch 2 — facts that hold": F44-010 to -013, -055, -057, -058, -063, -064, -090 and Q46; format classes lexical; the working directory in the identity rule; `verify` counting configuration, not observations; severity `unknown` behind an edge that does not say; fixtures for every value two languages compute. Branch `phase-44-b2` from `origin/main` = `f694cb6`; its first commit is the review (`../phase-44-b2-review.patch`, message `../phase-44-b2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -166,114 +167,89 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        44, batch 1 — secrets stay in (docs/FIELD_READINESS_PLAN.md §6)
-Branch:       phase-44-b1, cut from origin/main = 6f64f69. 14938df the review
-              (../phase-44-b1-review.patch, .txt; git apply --check clean;
+Phase:        44, batch 2 — facts that hold (docs/FIELD_READINESS_PLAN.md §6)
+Branch:       phase-44-b2, cut from origin/main = f694cb6. bc4e833 the review
+              (../phase-44-b2-review.patch, .txt; git apply --check clean;
               signed, %G? = G), then one commit per decision. Pull request
-              #72, draft until this report.
+              #73, draft until this report.
 Run:          2026-11-23, by the owner's instruction (the brief).
-Status:       AWAITING REVIEW. Decisions 1-7 done, each fix with a test
-              shown red first and each canary's mutation shown red; decision
-              8 measured in part (the PowerShell leg refused, below). Q46
-              raised, not blocking. Nothing published, released or deployed;
-              no stored task or audit row touched; the ruleset untouched;
-              shared/uv.lock not staged.
+Status:       AWAITING REVIEW. Step 0 and decisions 2-9 done; every fix with
+              a test shown red first, every new fixture's mutation red. The
+              fault library's results.json unchanged (CI's git diff
+              --exit-code passed). Q47, Q48 raised, not blocking. Nothing
+              published, released or deployed; the ruleset untouched;
+              shared/uv.lock not staged (once swept in by `git add shared`
+              in decision 4, removed by amending before any push).
 
-STEP 0 — main's push run 45125493937 on 6f64f69: success, 25 jobs, deploy
-  skipped (read from GitHub).
+STEP 0 — main's push run 45216449983 on f694cb6: success, 26 jobs (the
+  review said 25), deploy skipped (read from GitHub).
 
-DECISIONS (red logs and mutation logs in ../audit-44/b1/)
-1 70bd3bf  SECURITY.md §8 and LIMITS: the two layers, the fixture as the
-           pattern's whole coverage, what no pattern catches.
-2 97ebe5d  F44-002. redaction_conformance.json widened (credential-word
-  9cd7643  keys after _ - ., any case, = ": " or JSON; URL userinfo with an
-           empty user and @ in the password; credential-named query
-           parameters; Authorization, Bearer, Basic; sk_live_/sk_test_,
-           github_pat_, gho_/ghs_, glpat-, xox*, AIza), plus "survive" and
-           "over_redacted" sections, read by Go and Python. Red first: Go
-           36 failure lines, Python 28 failed. The key is kept and only the
-           value removed, so five old rows changed their expected text.
-           9cd7643 narrows the YAML colon form after the API's round trip of
-           a recorded investigation went red: Culprit's own reason
-           "probe.auth.token_shape: no token ..." lost its "no". A sweep of
-           every repo string through old and new patterns
-           (../audit-44/b1/sweepdiff.txt) found two more of Culprit's own
-           messages; all three are "survive" rows (red: 3 failed).
-3 86d4ec5  Every exit at its one place: render's skip reasons (with
-           render's first tests, F44-082), RedactReading walking []string
-           and maps in lists (shared row "readings_redacted"), the agent's
-           finish, parseChanges' action words, main -> execute/errorLine,
-           MCP's failed(), the API's 422 msg (every given string replaced by
-           "(the value given)", then the pattern), a task's symptom and an
-           agent's reported reason. Canaries: Go
-           TestNoPlantedSecretLeavesAnyExit (12 classes; red 14 leak lines),
-           API test_no_planted_secret_leaves_any_route (red 6). Mutations:
-           all 6 Go exits and all 3 API exits, each removed in turn: red.
-4 b92e1c0  F44-005. "secret": true (and "env") declared on the input,
-           mirrored to the API; the task route answers 422 naming
-           inputs.token and inputs.token_env; nothing stored. Red: Go 2
-           failed, API 3 accepted with 201. Mutations red. UPGRADING: how
-           to find tasks stored before, and to rotate; nothing deleted.
-5 5ac9c3d  F44-003. PYTHONDONTWRITEBYTECODE=1 for every extractor;
-           sys.dont_write_bytecode first in the Python extractor. Canary:
-           a project's tree (paths, sizes, hashes) unchanged after intent
-           and check in import mode, with ours and a stand-in third-party
-           extractor. Red: 2 .pyc; mutation (variable dropped): red. The
-           extractor's own test with the variable unset: red, 3 .pyc;
-           mutation: red. GUIDE, EXTRACTOR_PROTOCOL §7 and every MCP tool
-           say what import mode and culprit.yaml run.
-6 b35877a  F44-023. Narrator evidence in one fence longer than any run of
-           backticks; the prompt names it quoted data. Red 3; mutation (a
-           fixed fence) red. MCP: system text was already only a whole
-           value under measured (that half was not red); the instructions
-           and six descriptions now say those fields are untrusted (red).
-7 45cf461  F44-087. Alert #1 dismissed as used_in_tests and read back
-           (08:06:03Z). /ci reads open secret- and code-scanning alerts.
-           Its query was red at once on alert #2 (google_api_key), opened
-           by this branch's first push: the fixture's AIza row. The owner
-           approved dismissing it; dismissed and read back (11:55:24Z).
-           F44-083's docs and MCP half landed with decision 5.
-8          F44-012, measure only, owner-approved; nothing changed. Git Bash:
-           108 keys; the order-service image's own env (docker run, not the
-           compose env, not culprit inside it): 7 keys, 3 common (HOME,
-           LANG, PATH, each value differing). Keys whose value equals an OS
-           fact: Git Bash COMPUTERNAME, USERDOMAIN, USERDOMAIN_ROAMINGPROFILE
-           and USERNAME (hostname), PWD (cwd); container HOSTNAME. Shell-set
-           keys in Git Bash: EXEPATH MSYSTEM OLDPWD PWD SHELL SHLVL TERM _
-           (_ did not compare equal to the executable: a POSIX path against
-           a Windows one). PowerShell leg NOT RUN: refused by this session's
-           permission classifier even after approval. Hashes only, no value
-           written: ../audit-44/b1/env/.
-  ae375e1  README and GUIDE: the self-check's fact count, 1,754 (CI's).
+DECISIONS (red logs and mutations in ../audit-44/b2/)
+2 b55f9ae  F44-011. Format classes lexical: booleanish words only, no bare
+           number is port (the class stays in the vocabulary). Readers of
+           port/booleanish grepped first: none is a rule. Fixture rows 1 0 4
+           22 8080 65500 numeric, Off yes booleanish; 5432 port -> numeric.
+           Red: Go 6, Python 6. Golden fastapi-orders: PORT "8000" numeric.
+3 d578256  F44-012. The working directory joins the hostname as the
+           identity rule's OS fact (os.Getwd, injected; meta counts it).
+           Red: capture test, 2. Mutation (directory dropped): red. The
+           brief's verify test (SHLVL 1->12, PWD in two dirs) was NOT red
+           before: paths are one class at any length, SHLVL fixed by 2. It
+           holds the comparison; the capture test holds the rule. GUIDE's
+           tour captures from env -i PATH HOME.
+4 57d5705  F44-055. model.ConfiguredPredicateKinds / CONFIGURED_PREDICATE_
+           KINDS, held to verification_conformance.json: dns_resolves,
+           port_reachable, tls_certificate are observations. Difference
+           gains observation (omitempty in Go); Judge needs no change to
+           explain one; a flag on a configuration predicate is refused; an
+           unflagged (older) record is judged as before, so stored
+           verifications validate. Red: Python 2, Go 2, the brief's verify
+           test (DNS only -> changed_underneath). Mutations (the refusal
+           removed), Go and Python: red. UPGRADING: control plane first.
+5 a5516f8  F44-063, -064 c. Severity unknown behind an unknown-criticality
+           edge, naming it; request_path_conformance.json read by Go's
+           severity and Python's upstream_connections. Red: Go 6 lines;
+           Python already agreed, its mutation red (2). Go mutation red (6).
+           This repo's and the demo's edges are all classified. Q48.
+6 e1f39fa  F44-010 merge head (tuple/list; red: [b2 c3 d4] x3). F44-013
+           Kubernetes never complete, naming unreadable envFrom sources
+           (red 2). F44-057 unread/too-deep dirs named, Go (fs.FS, want *,
+           20 named + a count), Node, Python (red 3, 2, 2). F44-058 an
+           unparseable migration declines the chain, named (red; the old
+           "is ignored" test was the finding). F44-090 a non-UTF-8 key is a
+           skip, bytes escaped, never a subject (red).
+  6d9c8c8  ruff RUF043 in the new migration test.
+  5ed4057  kind-capture (CI only) asserted no skip against a readable
+           cluster: the claim F44-013 withdrew. Now exactly the template's
+           one skip, its exact reason. Red in run 45229026168, green after.
+7 35bd5c9  F44-064 a, b. capture_diff_conformance.json (9 cases) read by
+           verify.Differences and diff_captures; render_value_conformance.
+           json (13) read by renderValue and render_value. Go disagreed on
+           two, red first: a one-sided key (Go listed exists only; now also
+           its other questions, no verdict moves) and an unparseable subject
+           (Go printed the value; now Python's safe direction). Python
+           mutations red. LIMITS: the stored diff ignores skips (Q47).
+8 c224192  Q46. propagation takes token_env (tokenInput shared with
+           token_shape), version 2, catalogue mirror regenerated. Red: Go 2,
+           API 1.
+9 0d79414  token_env=NAME an over_redacted row (mutation: "token" out of the
+           credential words, Go and Python red). readOnlyHint: system_model,
+           check, explain_connection true only under --no-plugins; probe,
+           diagnose, verify never. Red 9; mutation red 3.
 
-PUSH PROTECTION. The first push was refused: the Stripe row used Stripe's
-  documented example key. The unpushed commits were rewritten with a short
-  fake (sk_live_EXAMPLEnotreal1); nothing was bypassed. A request to write
-  the AIza row as a JSON escape was refused by the classifier as evading the
-  scanner, and not pursued.
-
-OPEN, for the review
-  Q46 (not blocking): probe.auth.propagation requires token and has no _env
-  input, so as a task it can no longer be sent at all; its 422 says so. The
-  brief said token_env already exists; it does only for token_shape.
-  Observed, not changed: every MCP tool keeps ReadOnlyHint true, though an
-  extractor it runs is the user's code.
-
-LOCAL GATES (Windows, one at a time, foreground) on 45cf461: just lint,
-  typecheck (5 x 0 errors), lint-imports (6 kept), check-no-llm-imports,
-  check-invariants, check_coupled_files; api 2040 passed 6 skipped; worker
-  96; mcp_server 21; go test ./... ok; extractors python 40, node 22. The
-  fault library not run locally. The local self-check differs from CI's in
-  every figure (extractor setup), so CI's figure is the one used.
+LOCAL GATES (Windows, one at a time, foreground) on 0d79414/6d9c8c8: just
+  lint, typecheck (5 x 0 errors), lint-imports (6 kept),
+  check-no-llm-imports, check-invariants; api 2082 passed 6 skipped;
+  worker 96; mcp_server 21; go test ./... ok; extractors python 42, node 24.
+  The fault library not run locally.
 
 CI
-  Runs 45134071396 (86d4ec5) and 45137290142 (45cf461): red on self-check
-  only (README/GUIDE quoted 1,753 facts; the tree has 1,754), and gate.
-  Run 45169821500 on ae375e1: conclusion success, every job success,
-  build/publish and deploy skipped. gh pr checks 72: every check pass or
-  skipping, CodeQL and its four analyses included. Open alerts: none
-  (code scanning by pr=72, refs/pull/72/merge, refs/pull/72/head and
-  repo-wide; secret scanning repo-wide). origin/main = 6f64f69 is in the
+  Run 45229026168 on 6d9c8c8: red on kind-capture only (above), and gate.
+  Run 45232041694 on 5ed4057: conclusion success, 20 jobs success,
+  build/publish and deploy skipped; fault-library 1-4 success (results.json
+  unchanged). gh pr checks 73: 26 pass, 2 skipping. Open alerts: none
+  (code scanning by pr=73, refs/pull/73/merge, refs/pull/73/head and
+  repo-wide; secret scanning repo-wide). origin/main = f694cb6 is in the
   branch, so the branch is the merge result. Verdict: green on the merge
   result. This report's own commit runs CI again; the review reads it.
 ```
