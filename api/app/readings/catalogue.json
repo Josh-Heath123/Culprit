@@ -9,6 +9,7 @@
     "inputs": {
       "properties": {
         "token": {
+          "secret": true,
           "type": "string"
         },
         "url": {
@@ -54,6 +55,8 @@
           "type": "string"
         },
         "token": {
+          "env": "token_env",
+          "secret": true,
           "type": "string"
         },
         "token_env": {

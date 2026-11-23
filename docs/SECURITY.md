@@ -270,7 +270,10 @@ secret. What it promises about them comes in two layers (Phase 44, batch 1).
   out of names.
 - **Secrets never travel through the control plane.** An agent reads a
   token from its own environment (a probe's `_env` input); the API refuses
-  a task that carries one.
+  a task that sets an input the probe catalogue declares secret, and
+  stores nothing.
+  `cli/internal/probe/secret_inputs_test.go::TestEverySecretInputIsDeclaredOnTheInput`,
+  `api/tests/test_agents_api.py::test_a_task_setting_a_secret_input_is_refused_and_not_stored`
 - **Culprit never writes into the project it reads.** Import mode does run
   the project's own code (`docs/EXTRACTOR_PROTOCOL.md`); a `culprit.yaml`
   runs its commands as you, so review one as you would a Makefile.

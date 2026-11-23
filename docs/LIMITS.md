@@ -1578,6 +1578,20 @@ fixture does not list, is shown as an ordinary word. And the pattern errs
 the other way too: the fixture's "over-redacted" rows list ordinary text it
 removes, each with its reason.
 
+## A probe's secret input is refused as a task
+
+The probe catalogue declares on an input that it carries a secret
+(`"secret": true` in its JSON Schema, mirrored to the API), and the control
+plane refuses an agent task that sets one, with a 422 naming the field
+(Phase 44 batch 1, F44-005). For `probe.auth.token_shape` it names
+`token_env` instead: the agent reads the token from its own environment,
+under `config.inspect.values`. **`probe.auth.propagation` has no `_env`
+alternative**, so it cannot be sent as a task at all: run it where the
+token is, with `culprit probe` or through `culprit mcp`. The refusal looks
+only at the probes the catalogue knows: a task naming a probe id it does
+not know is not checked here. Tasks stored before this keep what they were
+given (`docs/UPGRADING.md`).
+
 ## The credential heuristic in a reading is a net, not a proof
 
 A `Reading`'s evidence is refused at construction if it looks like a

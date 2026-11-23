@@ -898,6 +898,7 @@ API_PLANTED = {
     "refused body: an investigation's subject": "ApiLeakS4",
     "refused body: change words": "ApiLeakS5",
     "refused body: a grant name": "ApiLeakS6",
+    "probe input declared secret": "ApiLeakS7",
 }
 
 
@@ -1006,6 +1007,24 @@ def test_no_planted_secret_leaves_any_route(client: TestClient) -> None:
                 },
             ),
         ),
+        # A probe input the catalogue declares secret (decision 4).
+        keep(
+            "422 secret probe input",
+            client.post(
+                f"/agents/{agent.id}/tasks",
+                json={
+                    "environment": "production",
+                    "kind": "probe",
+                    "probe": {
+                        "probe_id": "probe.auth.token_shape",
+                        "target": build(
+                            "auth", from_component="a", to_component="b", aspect="audience"
+                        ),
+                        "inputs": {"token": f"eyJ{secret['probe input declared secret']}.x"},
+                    },
+                },
+            ),
+        ),
     ]
     for response in refused:
         assert response.status_code == 422, response.text
@@ -1017,3 +1036,62 @@ def test_no_planted_secret_leaves_any_route(client: TestClient) -> None:
         if value in body
     ]
     assert not leaks, "\n".join(leaks)
+
+
+@pytest.mark.parametrize(
+    ("probe_id", "alternative"),
+    [("probe.auth.token_shape", "token_env"), ("probe.auth.propagation", None)],
+)
+async def test_a_task_setting_a_secret_input_is_refused_and_not_stored(
+    client: TestClient, db_engine: AsyncEngine, probe_id: str, alternative: str | None
+) -> None:
+    """F44-005, decision 4: secrets never travel through the control plane.
+    A probe task that sets an input the catalogue declares secret is a 422
+    naming the field and, where the probe has one, its `_env` alternative;
+    nothing is stored."""
+    agent = paired(client)
+    token = "eyJhbGciOiJub25lIn0.eyJhdWQiOiJ4In0.c2ln"
+    response = client.post(
+        f"/agents/{agent.id}/tasks",
+        json={
+            "environment": "production",
+            "kind": "probe",
+            "probe": {
+                "probe_id": probe_id,
+                "target": build("auth", from_component="a", to_component="b", aspect="audience"),
+                "inputs": {"token": token, "url": "http://b/x"},
+            },
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert token not in response.text and "c2ln" not in response.text
+    message = " ".join(error["msg"] for error in response.json()["detail"])
+    assert "inputs.token" in message
+    if alternative:
+        assert alternative in message
+    else:
+        assert "no _env alternative" in message
+    async with db_engine.connect() as conn:
+        stored = await conn.scalar(
+            text("SELECT count(*) FROM agent_tasks WHERE agent_id = :agent"), {"agent": agent.id}
+        )
+    assert stored == 0
+
+
+def test_a_task_naming_the_env_alternative_is_accepted(client: TestClient) -> None:
+    """The alternative works: token_env names a variable in the agent's own
+    environment, and carries no secret."""
+    agent = paired(client)
+    response = client.post(
+        f"/agents/{agent.id}/tasks",
+        json={
+            "environment": "production",
+            "kind": "probe",
+            "probe": {
+                "probe_id": "probe.auth.token_shape",
+                "target": build("auth", from_component="a", to_component="b", aspect="audience"),
+                "inputs": {"token_env": "ORDERS_TOKEN", "expect_audience": "b"},
+            },
+        },
+    )
+    assert response.status_code == 201, response.text
