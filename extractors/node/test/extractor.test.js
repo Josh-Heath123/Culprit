@@ -17,7 +17,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -341,4 +342,47 @@ test('a good component name still yields calls, so the test above is not vacuous
   );
   assert.ok(response.facts.length > 0);
   assert.deepEqual(response.skipped, []);
+});
+
+// --- F44-057: what could not be read is named, never a silent hole ------
+
+test('a directory that cannot be listed is a skip naming its path', () => {
+  const root = mkdtempSync(join(tmpdir(), 'culprit-node-'));
+  mkdirSync(join(root, 'src', 'locked'), { recursive: true });
+  writeFileSync(join(root, 'src', 'app.js'), "fetch('/api/orders');\n");
+  const list = (path, options) => {
+    if (path === join(root, 'src', 'locked')) {
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    }
+    return readdirSync(path, options);
+  };
+  const result = runRequest(
+    { root, component: 'web', want: ['client_calls', 'http_routes'] },
+    { listDir: list }
+  );
+  for (const want of ['client_calls', 'http_routes']) {
+    assert.ok(
+      result.skipped.some(
+        (skip) =>
+          skip.want === want &&
+          skip.reason.includes('src/locked/') &&
+          skip.reason.includes('could not be read')
+      ),
+      `${want}: ${JSON.stringify(result.skipped)}`
+    );
+  }
+});
+
+test('a directory below the depth bound is a skip naming its path', () => {
+  const root = mkdtempSync(join(tmpdir(), 'culprit-node-'));
+  const deep = join(root, ...Array(9).fill('d'));
+  mkdirSync(deep, { recursive: true });
+  writeFileSync(join(deep, 'app.js'), "fetch('/api/orders');\n");
+  writeFileSync(join(root, 'app.js'), "fetch('/api/items');\n");
+  const result = runRequest({ root, component: 'web', want: ['client_calls'] });
+  const named = 'd/'.repeat(9);
+  assert.ok(
+    result.skipped.some((skip) => skip.want === 'client_calls' && skip.reason.includes(named)),
+    JSON.stringify(result.skipped)
+  );
 });

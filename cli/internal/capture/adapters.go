@@ -323,9 +323,18 @@ func (a kubernetesAdapter) Workload(
 	if err != nil {
 		return Workload{}, err
 	}
+	// Never complete (F44-013): the Deployment's template is not the
+	// container's environment. The image's own ENV and whatever a
+	// mutating admission webhook injects are added after it, and neither
+	// is in the spec, so a key absent from it is not shown to be absent.
+	// The capture says what it could not read, and judges no key missing.
 	workload := Workload{
 		Env:      map[string]EnvValue{},
-		Complete: true,
+		Complete: false,
+		Incomplete: []string{
+			"the image's own ENV and anything a mutating admission webhook adds are not in the " +
+				"Deployment's template",
+		},
 		Artefact: "kubernetes:deployment/" + settings.WorkloadFor(component),
 		Replicas: 1,
 	}
@@ -342,9 +351,9 @@ func (a kubernetesAdapter) Workload(
 				Data map[string]string `json:"data"`
 			}
 			if err != nil || json.Unmarshal(out, &configMap) != nil {
-				workload.Complete = false
-				workload.Incomplete = append(workload.Incomplete,
-					"the keys of a ConfigMap it loads with envFrom could not be read")
+				workload.Incomplete = append(workload.Incomplete, fmt.Sprintf(
+					"the keys of ConfigMap %s, which it loads with envFrom, could not be read",
+					source.ConfigMapRef.Name))
 				continue
 			}
 			for key, value := range configMap.Data {
@@ -359,9 +368,9 @@ func (a kubernetesAdapter) Workload(
 				"get", "secret", source.SecretRef.Name,
 				"-o", `go-template={{range $key, $_ := .data}}{{$key}}{{"\n"}}{{end}}`))
 			if err != nil {
-				workload.Complete = false
-				workload.Incomplete = append(workload.Incomplete,
-					"the keys of a Secret it loads with envFrom could not be listed")
+				workload.Incomplete = append(workload.Incomplete, fmt.Sprintf(
+					"the keys of Secret %s, which it loads with envFrom, could not be listed",
+					source.SecretRef.Name))
 				continue
 			}
 			for _, key := range strings.Fields(string(out)) {

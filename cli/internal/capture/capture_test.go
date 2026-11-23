@@ -468,8 +468,15 @@ environments:
 	if digest, _ := find(bundle, "image:orders-api", PredicateDigest); digest.Value != "sha256:bbbb" {
 		t.Errorf("digest = %v", digest.Value)
 	}
-	if len(bundle.Skipped) != 0 {
-		t.Errorf("a complete enumeration recorded skips: %+v", bundle.Skipped)
+	// F44-013: every envFrom source was read, and the capture still says
+	// it did not see the whole environment. The image's own ENV and what
+	// a mutating admission webhook adds are not in the Deployment's
+	// template, so no key is judged missing.
+	if len(bundle.Skipped) != 1 || bundle.Skipped[0].Want != string(model.WantConfigKeys) ||
+		!strings.Contains(bundle.Skipped[0].Reason, "no key is judged missing") ||
+		!strings.Contains(bundle.Skipped[0].Reason, "image's own ENV") ||
+		!strings.Contains(bundle.Skipped[0].Reason, "admission webhook") {
+		t.Errorf("a template read whole was taken for the whole environment: %+v", bundle.Skipped)
 	}
 }
 
@@ -494,8 +501,9 @@ environments:
 	}}
 	bundle := runCapture(t, manifest, "production", Options{Runner: runner})
 	if len(bundle.Skipped) != 1 || bundle.Skipped[0].Want != string(model.WantConfigKeys) ||
-		!strings.Contains(bundle.Skipped[0].Reason, "no key is judged missing") {
-		t.Errorf("an incomplete enumeration was not recorded: %+v", bundle.Skipped)
+		!strings.Contains(bundle.Skipped[0].Reason, "no key is judged missing") ||
+		!strings.Contains(bundle.Skipped[0].Reason, "Secret locked") {
+		t.Errorf("an incomplete enumeration was not recorded, naming the source: %+v", bundle.Skipped)
 	}
 }
 

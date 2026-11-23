@@ -872,7 +872,10 @@ column list will be missing whatever those did.
 
 It also **declines entirely** rather than guessing when the revision
 chain does not form a single line — a merge revision, two roots, a cycle,
-or an unreachable file. A partially replayed chain would produce a
+or an unreachable file — and when a file in `versions/` does not parse
+under the extractor's interpreter (F44-058): the skip names the file, and
+no `schema:` fact comes from the chain, so no column is reported "not
+migrated" because a file was unreadable. A partially replayed chain would produce a
 confident column list that is simply wrong, and every difference against
 it would be a false positive.
 
@@ -891,6 +894,41 @@ created by `op.execute("CREATE INDEX ...")`, or a constraint dropped by a
 name the reader never saw, is invisible to it, and the report will say
 the database has an index the migrations do not declare. The ORM's models
 are not read for indexes.
+
+## What a scan cannot read is named, by path (F44-057)
+
+The built-in readers in the binary look at most 6 directories below a
+component's root, the Python extractor's static scan 6, and the Node
+extractor 8; all three leave out third-party code, build output and
+caches (`node_modules`, `.venv`, `dist` and the like) by design. A
+directory below that depth, or one that could not be listed (a
+permission, a vanished mount), is a skip naming its path relative to the
+root, with want `*` in the binary and under each scanning want in the
+extractors, so a clean report never hides a part of the tree nothing
+looked at. The binary names at most 20 such directories one by one and
+counts the rest in one more line. A file inside a readable directory
+that does not parse is still left out by the static scans without a
+line of its own; a migration that does not parse is not (below).
+
+## A `.env.example` key that is not UTF-8 is named, not read (F44-090)
+
+A key whose bytes are not valid UTF-8 cannot be a name any environment
+matches, and encoded it would become U+FFFD. The binary's `.env.example`
+reader records it as a skip naming the file, the line and the key's bytes
+escaped (`"\xff\xfeBADKEY"`), and makes no subject of it; the file's
+other keys are read as before. Values are not affected: a value is shaped,
+never stored, whatever its encoding.
+
+## The binary's migration head is read from the revision headers alone
+
+`culprit intent` and `check` read each Alembic `versions/` file's
+`revision` and `down_revision` lines, with no Alembic installed and
+nothing run, and the head is every revision no other names as its
+`down_revision`. A merge's parents, written by `alembic merge` as a tuple
+(`down_revision = ("b2", "c3")`) or as a list, are read, so a merge is the
+one head (F44-010). Not read: a header split across lines, a computed
+value, `branch_labels` and `depends_on`. A file whose header is not read
+contributes no revision, so its parent can be reported as a second head.
 
 ## A test assertion says a route is exercised, not what it returns
 
@@ -1052,6 +1090,18 @@ missing from it** — including one that genuinely is. "I could not see
 all of it" must never become "it is not there". A variable set by
 `valueFrom` is known to exist but has an unknown shape, and an unknown
 shape compares on presence alone.
+
+**A Kubernetes capture is never complete (F44-013).** It reads the
+Deployment's template, and the container's environment is more than that:
+the image's own `ENV` and anything a mutating admission webhook injects
+are added after it, and neither is in the spec. So every Kubernetes
+capture records that its environment was not enumerated completely,
+naming what it could not read — the image's `ENV` and webhooks always,
+and each `envFrom` ConfigMap or Secret by name when `kubectl` could not
+read it — and no key is ever reported missing from a Kubernetes
+environment. A key the code reads that the cluster really lacks is found
+by a probe, or by a Compose or process capture, not by this one. Keys the
+template does set are still compared by kind.
 
 A Secret loaded with `envFrom` contributes its key names only: Culprit
 lists them through a `kubectl` template that never prints the data, so

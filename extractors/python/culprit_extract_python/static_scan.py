@@ -21,6 +21,7 @@ the two disagree, without ever being silently discarded (§2.4).
 """
 
 import ast
+import os
 from pathlib import Path
 from typing import Any
 
@@ -62,18 +63,54 @@ MAX_DEPTH = 6
 _DEFAULTING_CALLS = frozenset({"get", "getenv"})
 
 
+def _walk(root: Path) -> tuple[list[Path], list[str]]:
+    """Every project-owned .py file under root, in a stable order, and what
+    the walk could not look inside (F44-057): a directory that could not
+    be listed, or one more than MAX_DEPTH directories below root, each
+    named by its path relative to root. A directory in SKIP_DIRS is left
+    out by choice and not named."""
+    root = root.resolve()
+    found: list[Path] = []
+    unread: list[str] = []
+
+    def refused(error: OSError) -> None:
+        if error.filename is None:
+            return
+        path = Path(error.filename)
+        if path == root:
+            return
+        unread.append(
+            f"{path.relative_to(root).as_posix()}/ could not be read "
+            f"({type(error).__name__}); nothing under it was read"
+        )
+
+    for current, dirs, files in os.walk(root, onerror=refused):
+        here = Path(current)
+        depth = len(here.relative_to(root).parts)
+        kept = []
+        for name in sorted(dirs):
+            if name in SKIP_DIRS:
+                continue
+            if depth + 1 > MAX_DEPTH:
+                unread.append(
+                    f"{(here / name).relative_to(root).as_posix()}/ is more than {MAX_DEPTH} "
+                    "directories below the root; nothing under it was read"
+                )
+                continue
+            kept.append(name)
+        dirs[:] = kept
+        found.extend(here / name for name in files if name.endswith(".py"))
+    return sorted(found), sorted(unread)
+
+
 def python_files(root: Path) -> list[Path]:
     """Every project-owned .py file under root, in a stable order."""
-    found: list[Path] = []
-    root = root.resolve()
-    for path in sorted(root.rglob("*.py")):
-        relative = path.relative_to(root)
-        if SKIP_DIRS.intersection(relative.parts):
-            continue
-        if len(relative.parts) - 1 > MAX_DEPTH:
-            continue
-        found.append(path)
-    return found
+    return _walk(root)[0]
+
+
+def unscanned(root: Path) -> list[str]:
+    """Why each part of root the scan could not read was not read."""
+    return _walk(root)[1]
 
 
 def extract_config_keys(root: Path, builder: FactBuilder) -> list[Any]:

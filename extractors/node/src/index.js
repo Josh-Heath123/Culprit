@@ -52,13 +52,20 @@ const SOURCE_EXTENSIONS = ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts',
 /** Same bound and same reason as the Go side's maxScanDepth. */
 const MAX_DEPTH = 8;
 
-/** Every source file under root, in a stable lexical order. */
-export function sourceFiles(root, depth = 0) {
-  if (depth > MAX_DEPTH) return [];
+/**
+ * Every source file under root, in a stable lexical order.
+ *
+ * What it could not look inside — a directory that could not be listed,
+ * or one below MAX_DEPTH — is pushed onto `unread` as `{ path, why }`
+ * (F44-057), so the caller can say so instead of reporting a clean scan of
+ * part of the tree. `list` is readdirSync, injectable for a test.
+ */
+export function sourceFiles(root, unread = [], list = readdirSync, depth = 0, top = root) {
   let entries;
   try {
-    entries = readdirSync(root, { withFileTypes: true });
-  } catch {
+    entries = list(root, { withFileTypes: true });
+  } catch (error) {
+    if (root !== top) unread.push({ path: root, why: `could not be read (${error.code ?? 'error'})` });
     return [];
   }
   const found = [];
@@ -66,13 +73,30 @@ export function sourceFiles(root, depth = 0) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
       if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
-      found.push(...sourceFiles(path, depth + 1));
+      if (depth + 1 > MAX_DEPTH) {
+        unread.push({ path, why: `is more than ${MAX_DEPTH} directories below the root` });
+        continue;
+      }
+      found.push(...sourceFiles(path, unread, list, depth + 1, top));
     } else if (SOURCE_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) {
       if (entry.name.endsWith('.d.ts')) continue; // declarations, not behaviour
       found.push(path);
     }
   }
   return found;
+}
+
+/**
+ * One skip per directory a scan could not look inside, naming its path
+ * relative to the root, before the scan's own skips (F44-057).
+ */
+function withUnread(want, root, unread, result) {
+  const named = unread.map(({ path, why }) => ({
+    want,
+    reason: `${forwardSlash(root, path)}/ ${why}; nothing under it was read`,
+    extractor: EXTRACTOR_ID,
+  }));
+  return { facts: result.facts, skipped: [...named, ...result.skipped] };
 }
 
 function provenance({ sourceKind, artefact, locator, rank }) {
@@ -113,11 +137,17 @@ function forwardSlash(root, path) {
  * a truthful inventory line ("web calls GET /api/v2/users"); it simply
  * has nothing to be compared against yet.
  */
-export function extractClientCalls(root, context, clientFunctions = []) {
+export function extractClientCalls(root, context, clientFunctions = [], list = readdirSync) {
+  const unread = [];
+  const result = clientCalls(root, context, clientFunctions, unread, list);
+  return withUnread('client_calls', root, unread, result);
+}
+
+function clientCalls(root, context, clientFunctions, unread, list) {
   const facts = [];
   const refused = [];
   let scanned = 0;
-  for (const path of sourceFiles(root)) {
+  for (const path of sourceFiles(root, unread, list)) {
     const ast = readAndParse(path);
     if (!ast) continue;
     scanned += 1;
@@ -193,10 +223,15 @@ export function extractClientCalls(root, context, clientFunctions = []) {
 }
 
 /** Server route definitions (rank 60 — static extraction from framework code). */
-export function extractRoutes(root, context) {
+export function extractRoutes(root, context, list = readdirSync) {
+  const unread = [];
+  return withUnread('http_routes', root, unread, routes(root, context, unread, list));
+}
+
+function routes(root, context, unread, list) {
   const facts = [];
   let scanned = 0;
-  for (const path of sourceFiles(root)) {
+  for (const path of sourceFiles(root, unread, list)) {
     const ast = readAndParse(path);
     if (!ast) continue;
     scanned += 1;
@@ -322,9 +357,10 @@ export function runRequest(request, options = {}) {
     }
     let result;
     try {
+      const list = options.listDir ?? readdirSync;
       if (want === 'client_calls')
-        result = extractClientCalls(root, context, options.clientFunctions ?? []);
-      else if (want === 'http_routes') result = extractRoutes(root, context);
+        result = extractClientCalls(root, context, options.clientFunctions ?? [], list);
+      else if (want === 'http_routes') result = extractRoutes(root, context, list);
       else result = extractDependencies(root, context);
     } catch (error) {
       // The honesty rule: never fail the run. A crash in one want

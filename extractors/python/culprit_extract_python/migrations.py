@@ -153,8 +153,15 @@ class _Revision:
 def _read_revision(path: Path) -> _Revision | None:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-    except SyntaxError:
-        return None
+    except SyntaxError as exc:
+        # Named, never dropped (F44-058). Without this file the rest of
+        # the chain can still look linear, and replaying it would leave
+        # out every column the file adds: each a false "not migrated"
+        # finding. So the chain is declined, naming the file.
+        raise ChainError(
+            f"{path.name} does not parse under this interpreter (line {exc.lineno}), so the "
+            "chain cannot be known whole"
+        ) from exc
     revision: str | None = None
     down: Any = None
     # Both `revision = "x"` and Alembic's own generated

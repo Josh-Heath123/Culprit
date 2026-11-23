@@ -4,9 +4,12 @@
 package extract
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -59,6 +62,7 @@ func readDotenv(ctx captureContext) ([]model.Fact, []model.Skip) {
 	}
 
 	var facts []model.Fact
+	var skips []model.Skip
 	for _, path := range paths {
 		text, ok := readFile(path)
 		if !ok {
@@ -68,6 +72,18 @@ func readDotenv(ctx captureContext) ([]model.Fact, []model.Skip) {
 		for index, line := range strings.Split(text, "\n") {
 			key, value, ok := parseDotenvLine(line)
 			if !ok {
+				continue
+			}
+			// A key whose bytes are not UTF-8 is not a name any environment
+			// can match, and encoded it becomes U+FFFD (F44-090). Named, its
+			// bytes escaped, and never made a subject.
+			if !utf8.ValidString(key) {
+				skips = append(skips, model.Skip{
+					Want: string(model.WantConfigKeys),
+					Reason: fmt.Sprintf("%s, line %d: the key %s is not valid UTF-8 and was not read",
+						artefact, index+1, strconv.QuoteToASCII(key)),
+					Extractor: ctx.Extractor,
+				})
 				continue
 			}
 			provenance := ctx.provenance(
@@ -99,7 +115,7 @@ func readDotenv(ctx captureContext) ([]model.Fact, []model.Skip) {
 			}
 		}
 	}
-	return facts, nil
+	return facts, skips
 }
 
 // parseDotenvLine reads one KEY=value line. Comments, blanks and
@@ -372,12 +388,57 @@ func readAlembicRevisions(dir string) (revisions map[string]bool, downRevisions 
 			if value, ok := alembicHeaderValue(trimmed, "revision"); ok {
 				revisions[value] = true
 			}
-			if value, ok := alembicHeaderValue(trimmed, "down_revision"); ok {
+			for _, value := range alembicDownRevisions(trimmed) {
 				downRevisions[value] = true
 			}
 		}
 	}
 	return revisions, downRevisions
+}
+
+// alembicDownRevisions reads a down_revision header: one quoted revision,
+// or a merge's parents (F44-010). `alembic merge` writes them as a tuple
+// of quoted strings, `("b2", "c3")`; a list is the same claim. Anything
+// else — None, a computed value, an item that is not a quoted string —
+// contributes nothing rather than a guess.
+func alembicDownRevisions(line string) []string {
+	if value, ok := alembicHeaderValue(line, "down_revision"); ok {
+		return []string{value}
+	}
+	if !strings.HasPrefix(line, "down_revision") {
+		return nil
+	}
+	rest := strings.TrimPrefix(line, "down_revision")
+	if rest == "" || (rest[0] != ':' && rest[0] != ' ' && rest[0] != '=') {
+		return nil
+	}
+	_, after, found := strings.Cut(rest, "=")
+	if !found {
+		return nil
+	}
+	value := strings.TrimSpace(after)
+	var inner string
+	switch {
+	case strings.HasPrefix(value, "(") && strings.HasSuffix(value, ")"):
+		inner = value[1 : len(value)-1]
+	case strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]"):
+		inner = value[1 : len(value)-1]
+	default:
+		return nil
+	}
+	var parents []string
+	for _, item := range strings.Split(inner, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue // a trailing comma: ("b2",)
+		}
+		quoted := len(item) >= 2 && (item[0] == '"' || item[0] == '\'') && item[len(item)-1] == item[0]
+		if !quoted || len(item) == 2 {
+			return nil
+		}
+		parents = append(parents, item[1:len(item)-1])
+	}
+	return parents
 }
 
 func alembicHeaderValue(line, name string) (string, bool) {
