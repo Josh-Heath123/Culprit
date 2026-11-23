@@ -11,14 +11,13 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** none; housekeeping, part 2 (the last alerts) on branch
-  `deps-2026-11-21` (PR #70), complete pending review and merge; alert #9
-  dismissed. Phase 43 and the delivery plan are complete and signed off.
-- **Plan of record:** `docs/DELIVERY_PLAN.md` (Phases 40–43), after
-  `docs/DIAGNOSTIC_PLAN.md` (26–35) and `docs/PERFORMANCE_PLAN.md`
-  (36–39). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8) and §2 (the core model),
-  the delivery plan's §1–§3, and the phase you are working on — not
-  whole files.
+- **Current phase:** 44, part 1 (the audit) — on branch `phase-44-audit`,
+  from `ddb275e`; not started. No product change in this part.
+- **Plan of record:** `docs/FIELD_READINESS_PLAN.md` (Phase 44), after
+  `docs/DELIVERY_PLAN.md` (40–43), `docs/PERFORMANCE_PLAN.md` (36–39) and
+  `docs/DIAGNOSTIC_PLAN.md` (26–35). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8)
+  and §2, the delivery plan's §2 (the identity), and the field-readiness
+  plan's §1–§3 with the part you are working on.
 - **Deploy is paused** (2026-11-05): the hosted VM is offline, and the `deploy`
   job runs only when started by hand. Phase 33 builds against a local control
   plane.

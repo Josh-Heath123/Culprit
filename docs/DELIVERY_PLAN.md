@@ -1389,6 +1389,39 @@ ci --ignore-scripts`:
 - close a pull request by hand;
 - publish, release or deploy anything, or touch the ruleset.
 
+### Review of the housekeeping, part 2 — merged as `ddb275e` (PR #70), 2026-11-21
+
+**Signed off, subject to step 0 of Phase 44 part 1** attributing `main`'s red
+`e2e (stub)` (below). The Dependabot backlog is clear, and the plan of record
+moves to `docs/FIELD_READINESS_PLAN.md` (Phase 44).
+
+**CI.** Read by id from GitHub's API:
+- 44879138798 on `3c50a3e` (the merge result) and 44880245200 on the report,
+  `4e9814d`: success on every job; `publish` and `deploy` skipped, as on every
+  pull request. The owner marked the pull request ready after the report's run
+  finished green.
+- `main`'s push run 44881325932 on `ddb275e`: **failure.** `e2e (stub)` failed
+  at its step "The agent's Kubernetes and systemd recipes", so
+  `narration-parity` was skipped and `gate` failed, although the same tree
+  passed that step on 44880245200. Every `publish` job had passed its guard
+  and tightened verify. Not attributed here: job logs need a token. Phase 44
+  part 1's step 0 reads the log and reruns the failed jobs; a flaky required
+  check is a defect (D6).
+- **Every commit is Verified:** `2f51a7d`, `a7fdc95`, `7fa9916`, `3c50a3e`,
+  `4e9814d` and the merge commit `ddb275e`, and Dependabot's own. `2f51a7d`'s
+  tree is exactly the review patch's.
+
+**Verified on disk:**
+- #67, #68 and #69 closed as merged. `api/uv.lock` and `worker/uv.lock` moved
+  only their bumps: the OpenTelemetry family in `api` (with the same two
+  exporter packages as in `worker`), Mako 1.3.12 to 1.4.2, and multidict in
+  `worker`.
+- **Alert #9** was dismissed through `gh api` as `not_used`, with Q45's
+  comment, and read back by the run. Alerts #1, #2, #3 and #15 close when
+  `main`'s dependency graph moves; its update after the merge (44881331364)
+  succeeded. The architecture session cannot read alerts without a token, so
+  part 1 of Phase 44 lists the open ones.
+
 ---
 
 ## §4. Out of scope
