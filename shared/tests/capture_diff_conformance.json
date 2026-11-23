@@ -1,0 +1,383 @@
+{
+  "why": [
+    "The snapshot diff of two CONFIGURED captures, read by both languages",
+    "(F44-064 a). Go's verify.Differences (what `culprit verify` compares, through",
+    "the divergence engine's env_vs_env comparison) and Python's",
+    "capture_diff.diff_captures (GET /captures/diff) answer one question: which",
+    "(subject, predicate) the two captures answer differently, a key present in",
+    "one and not the other included. capture_diff.py's own docstring says a diff",
+    "that disagreed with the CLI's about the same two captures would be worse",
+    "than none; this file is what holds them to it.",
+    "",
+    "Each case gives the facts of capture a and capture b (only the fields a",
+    "diff reads) and every (subject, predicate) that differs, sorted. Shapes",
+    "compare by the shape fixture's equivalence: a length class only as",
+    "empty-or-not."
+  ],
+  "cases": [
+    {
+      "name": "the same captures",
+      "a": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": []
+    },
+    {
+      "name": "a length class within non-empty is the same kind of value",
+      "a": [
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "medium",
+            "format": "dsn",
+            "present": true,
+            "scheme": "postgresql"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "long",
+            "format": "dsn",
+            "present": true,
+            "scheme": "postgresql"
+          }
+        }
+      ],
+      "differs": []
+    },
+    {
+      "name": "a different kind of value",
+      "a": [
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "medium",
+            "format": "dsn",
+            "present": true,
+            "scheme": "postgresql"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "medium",
+            "format": "hostname",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": [
+        {
+          "subject": "config:orders/DATABASE_URL",
+          "predicate": "value_shape"
+        }
+      ]
+    },
+    {
+      "name": "set, then empty",
+      "a": [
+        {
+          "subject": "config:orders/TOKEN",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/TOKEN",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "medium",
+            "format": "opaque",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/TOKEN",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/TOKEN",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "empty",
+            "format": "not_applicable",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": [
+        {
+          "subject": "config:orders/TOKEN",
+          "predicate": "value_shape"
+        }
+      ]
+    },
+    {
+      "name": "a key only in b",
+      "a": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "booleanish",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": [
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "exists"
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "value_shape"
+        }
+      ]
+    },
+    {
+      "name": "a key only in a",
+      "a": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "booleanish",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": [
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "exists"
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "value_shape"
+        }
+      ]
+    },
+    {
+      "name": "an endpoint observation",
+      "a": [
+        {
+          "subject": "component:orders",
+          "predicate": "dns_resolves",
+          "value": true
+        }
+      ],
+      "b": [
+        {
+          "subject": "component:orders",
+          "predicate": "dns_resolves",
+          "value": false
+        }
+      ],
+      "differs": [
+        {
+          "subject": "component:orders",
+          "predicate": "dns_resolves"
+        }
+      ]
+    },
+    {
+      "name": "an image's digest",
+      "a": [
+        {
+          "subject": "image:orders",
+          "predicate": "digest",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "b": [
+        {
+          "subject": "image:orders",
+          "predicate": "digest",
+          "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "differs": [
+        {
+          "subject": "image:orders",
+          "predicate": "digest"
+        }
+      ]
+    },
+    {
+      "name": "an image's digest, the same",
+      "a": [
+        {
+          "subject": "image:orders",
+          "predicate": "digest",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "b": [
+        {
+          "subject": "image:orders",
+          "predicate": "digest",
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "differs": []
+    }
+  ]
+}

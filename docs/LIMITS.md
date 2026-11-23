@@ -2389,6 +2389,20 @@ leaves:
   refuses a verification that carries the flag: upgrade the control plane
   before its agents (`docs/UPGRADING.md`).
 
+### The control plane's diff does not know what a capture could not see
+
+`GET /captures/diff` and `culprit verify` list the same differences for
+the same two captures, held to one fixture
+(`shared/tests/capture_diff_conformance.json`, F44-064 a): a key on one
+side only is listed on its existence and on every other question it
+answers there, its shape included. One difference remains. `verify`
+honours a capture's own record that it could not enumerate an
+environment completely, and does not count a key missing from such a
+capture; the stored diff reads facts only, so it lists that key as
+`only_in_a` or `only_in_b`. Every Kubernetes capture records that
+(F44-013), so between two Kubernetes captures `verify` sees no key added
+or removed in the Deployment's template, and the stored diff does.
+
 ### Two runs is a floor, not a proof
 
 Every reading is run twice in a row, and a result that differs between the

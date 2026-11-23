@@ -17,7 +17,10 @@ which exist in one and not the other. That is what this returns, and it
 is labelled as such in the API so nobody mistakes one for the other.
 
 Two rules it shares with the CLI, because a diff that disagreed with
-`culprit diff` about the same two captures would be worse than none:
+`culprit diff` about the same two captures would be worse than none. Since
+Phase 44 batch 2 both are held to Go by shared fixtures, not by this
+docstring: `shared/tests/capture_diff_conformance.json` (this function
+against `verify.Differences`) and `render_value_conformance.json`.
 
 - **Shapes compare by `ValueShape.equivalent`**, the rule held by
   `shared/tests/shape_conformance.json` — length class only as
