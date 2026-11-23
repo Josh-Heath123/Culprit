@@ -283,6 +283,24 @@ Capture again after upgrading, and diagnose again before verifying a fix
 for an investigation walked by the older binary. Captures taken by the
 same version always agree.
 
+## A capture from before Phase 44 batch 2 may shape a number differently (F44-011)
+
+Phase 44 batch 2 made the value-format classifier lexical, in the CLI and
+the control plane together. Digits alone are now `numeric` whatever the
+number: `1` and `0` are no longer `booleanish`, and no bare number from
+`1` to `65499` is `port`. Nothing in the database changes, and no
+migration runs. But a capture records shapes, not values, so a capture
+taken by an older binary still says `port` or `booleanish` for such a
+value, and the newer binary says `numeric`:
+
+- `culprit verify` across the upgrade can count that key as changed and
+  answer `changed_underneath` for a fix that did not touch it.
+- `culprit env diff` between a capture from each side of the upgrade can
+  report the same key as a shape difference.
+
+As for Q42: capture again after upgrading, and diagnose again before
+verifying a fix for an investigation walked by the older binary.
+
 ## Agent tasks stored before Phase 44 may hold a token
 
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a

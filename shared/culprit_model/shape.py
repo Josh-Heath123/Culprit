@@ -154,8 +154,11 @@ _FORMAT_PATTERNS: tuple[tuple[ValueFormat, re.Pattern[str]], ...] = (
         re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I),
     ),
     (ValueFormat.EMAIL, re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")),
-    (ValueFormat.BOOLEANISH, re.compile(r"^(true|false|yes|no|on|off|1|0)$", re.IGNORECASE)),
-    (ValueFormat.PORT, re.compile(r"^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2})$")),
+    # A format class is lexical (F44-011): it never depends on a number's
+    # size. booleanish is words only, and no bare number is a port - digits
+    # alone are numeric, so a counter keeps one class whatever it counts.
+    # PORT stays in the vocabulary; no pattern here produces it.
+    (ValueFormat.BOOLEANISH, re.compile(r"^(true|false|yes|no|on|off)$", re.IGNORECASE)),
     (ValueFormat.DURATION, re.compile(r"^\d+(?:\.\d+)?\s*(?:ms|s|m|h|d)$", re.IGNORECASE)),
     (ValueFormat.NUMERIC, re.compile(r"^-?\d+(?:\.\d+)?$")),
     # IPv6 needs at least two colons (Q42): a single-label hex string, such

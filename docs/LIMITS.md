@@ -2241,6 +2241,26 @@ treated this way, never their values. What that leaves:
   a change no one made (`docs/UPGRADING.md`). Capture again after
   upgrading.
 
+### A value's format class is lexical (F44-011)
+
+A value's format class says what the value looks like, never what its
+size suggests. Digits alone are `numeric` whatever the number, so
+`WORKERS=1` and `WORKERS=4`, or a shell's `SHLVL=1` and `SHLVL=2`, are one
+kind of value and a change between them is not a shape difference.
+`booleanish` is the words `true`, `false`, `yes`, `no`, `on` and `off`, in
+any case. What that leaves:
+
+- No bare value is classed `port`. A port number is `numeric`, like any
+  other count; the class stays in the vocabulary for an extractor that
+  knows a value is a port.
+- `1` and `0` are `numeric`, not `booleanish`, so a flag moved from
+  `DEBUG=true` to `DEBUG=1` between two environments is reported as a
+  different kind of value. It is one, written down.
+- A change of number inside one class is never seen: the shape records the
+  class and a length bucket, not the value.
+- A capture from before this rule may say `port` or `booleanish` for a
+  number; capture again after upgrading (`docs/UPGRADING.md`).
+
 ### What a named change explains
 
 `--change` takes four kinds. `config:<component>/<key>` explains a
