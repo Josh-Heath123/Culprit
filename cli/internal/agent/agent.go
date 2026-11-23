@@ -102,6 +102,11 @@ func (a *Agent) Handle(ctx context.Context, incoming *Incoming) error {
 	result := Result{TaskID: task.ID, Environment: task.Environment, Kind: task.Kind, StartedAt: started, GrantsHeld: []string{}}
 
 	finish := func(outcome, reason string) error {
+		// The one place a task's reason leaves the agent: its audit log,
+		// which is append-only and shipped to the control plane, its
+		// result and its log (F44-006). A reason can quote the task — a
+		// symptom that is not a component — so it is redacted here.
+		reason = model.RedactCredentials(reason)
 		result.Outcome, result.Reason = outcome, reason
 		result.FinishedAt = a.now()
 		if _, err := a.Audit.Append(Entry{

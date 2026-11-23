@@ -438,5 +438,66 @@
         }
       }
     }
+  ],
+  "readings_redacted": [
+    {
+      "why": "Phase 44 batch 1 (F44-004): a reading's measured and expected values are redacted wherever a string sits: in a list, in a map inside a list, in a list inside a map. Numbers and booleans keep their type. Go's measured lists are typed []string (a response's body keys, a token's audiences), which Go's own test also covers.",
+      "measured": {
+        "fields": [
+          "id",
+          "postgresql://app:Hunter2pw@db.internal/app"
+        ],
+        "audiences": [
+          "orders",
+          "DB_PASSWORD=Hunter3pw"
+        ],
+        "rows": [
+          {
+            "dsn": "redis://:Hunter4pw@redis:6379"
+          },
+          7
+        ],
+        "nested": {
+          "tokens": [
+            "Bearer Hunter5pwXYZ"
+          ]
+        },
+        "port": 443,
+        "ok": true
+      },
+      "expected": {
+        "urls": [
+          "https://u:Hunter6pw@h/x"
+        ]
+      },
+      "redacted_measured": {
+        "fields": [
+          "id",
+          "[redacted]db.internal/app"
+        ],
+        "audiences": [
+          "orders",
+          "DB_PASSWORD=[redacted]"
+        ],
+        "rows": [
+          {
+            "dsn": "[redacted]redis:6379"
+          },
+          7
+        ],
+        "nested": {
+          "tokens": [
+            "Bearer [redacted]"
+          ]
+        },
+        "port": 443,
+        "ok": true
+      },
+      "redacted_expected": {
+        "urls": [
+          "[redacted]h/x"
+        ]
+      }
+    }
   ]
 }

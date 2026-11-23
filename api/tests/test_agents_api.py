@@ -884,3 +884,136 @@ async def test_a_verify_task_names_an_investigation_in_its_environment(
     assert "hunter2-not-real" not in spec
     for wrong in ("restart:order-service", "commit:main", "action:   "):
         assert task(verify=verify | {"changes": [wrong]}).status_code == 422, wrong
+
+
+# ---- the secrets canary (Phase 44 batch 1, decision 3) ----------------------------------
+
+#: One distinct secret per input class the API takes from outside Culprit,
+#: each in a shape shared/tests/redaction_conformance.json lists. The
+#: binary's half is cli/cmd/culprit/secrets_canary_test.go.
+API_PLANTED = {
+    "agent task symptom": "ApiLeakS1",
+    "change action in a task": "ApiLeakS2",
+    "agent's reported reason": "ApiLeakS3",
+    "refused body: an investigation's subject": "ApiLeakS4",
+    "refused body: change words": "ApiLeakS5",
+    "refused body: a grant name": "ApiLeakS6",
+}
+
+
+def _with_symptom_subject(subject: str) -> dict[str, Any]:
+    """A recorded investigation, valid in every field but its symptom's
+    subject, so the subject's own validator is what refuses it."""
+    body = json.loads((RECORDED / "network-partition.json").read_text("utf-8"))
+    body["symptom"]["subject"] = subject
+    return body
+
+
+def test_no_planted_secret_leaves_any_route(client: TestClient) -> None:
+    """Every planted secret is sent through the route that takes it, and
+    none appears in any response body: not as stored and served back, not
+    in a 422. (A task's stored spec is checked through the route that
+    serves it, GET /agents/{id}/tasks/{task}.)"""
+    bodies: dict[str, str] = {}
+
+    def keep(where: str, response: Any) -> Any:
+        bodies[where] = bodies.get(where, "") + response.text
+        return response
+
+    agent = paired(client)
+    secret = API_PLANTED
+
+    # An agent task's symptom, stored, claimed and served back.
+    created = keep(
+        "create diagnose task",
+        client.post(
+            f"/agents/{agent.id}/tasks",
+            json={
+                "environment": "production",
+                "kind": "diagnose",
+                "diagnose": {"symptom": f"postgresql://app:{secret['agent task symptom']}@db/x"},
+            },
+        ),
+    )
+    assert created.status_code == 201, created.text
+    diagnose_task = created.json()["id"]
+    keep("claim the diagnose task", agent.send("POST", "/agents/me/tasks/claim"))
+    # The agent's reported reason, recorded and served back.
+    reported = agent.send(
+        "POST",
+        f"/agents/me/tasks/{diagnose_task}/result",
+        {
+            "outcome": "error",
+            "reason": f"connect postgresql://u:{secret["agent's reported reason"]}@h/d failed",
+        },
+    )
+    assert reported.status_code == 204, reported.text
+    keep("served diagnose task", client.get(f"/agents/{agent.id}/tasks/{diagnose_task}"))
+
+    # A change named in words, in a verify task.
+    verify = keep(
+        "create verify task",
+        client.post(
+            f"/agents/{agent.id}/tasks",
+            json={
+                "environment": "production",
+                "kind": "verify",
+                "verify": {
+                    "investigation_id": "inv-0000000000000000",
+                    "changes": [f"action:rotated DB_PASSWORD={secret['change action in a task']}"],
+                    "source": "real",
+                },
+            },
+        ),
+    )
+    if verify.status_code == 201:
+        keep("served verify task", client.get(f"/agents/{agent.id}/tasks/{verify.json()['id']}"))
+
+    # Refused bodies: each answer is a 422 that names the field, not the value.
+    refused = [
+        keep(
+            "422 investigation subject",
+            client.post(
+                "/investigations",
+                json=_with_symptom_subject(
+                    f"postgresql://u:{secret["refused body: an investigation's subject"]}@db/x"
+                ),
+                headers={"Authorization": f"Bearer {PROJECT_TOKEN}"},
+            ),
+        ),
+        keep(
+            "422 change words",
+            client.post(
+                f"/agents/{agent.id}/tasks",
+                json={
+                    "environment": "production",
+                    "kind": "verify",
+                    "verify": {
+                        "investigation_id": "inv-0000000000000000",
+                        "changes": [f"DB_PASSWORD={secret['refused body: change words']}"],
+                        "source": "real",
+                    },
+                },
+            ),
+        ),
+        keep(
+            "422 grant name",
+            client.patch(
+                f"/agents/{agent.id}/grants",
+                json={
+                    "environment": "production",
+                    "grants": [f"token={secret['refused body: a grant name']}"],
+                },
+            ),
+        ),
+    ]
+    for response in refused:
+        assert response.status_code == 422, response.text
+
+    leaks = [
+        f"the {cls} ({value}) leaves through {where}"
+        for cls, value in API_PLANTED.items()
+        for where, body in bodies.items()
+        if value in body
+    ]
+    assert not leaks, "\n".join(leaks)

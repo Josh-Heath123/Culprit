@@ -21,6 +21,7 @@ from culprit_model.readings import (
     Reading,
     UndeclaredVerdict,
     Verdict,
+    redact_reading,
     validate_for,
 )
 from pydantic import ValidationError
@@ -188,3 +189,16 @@ def test_readings_are_held_to_their_probes_declared_verdicts(case: dict) -> None
     else:
         with pytest.raises(UndeclaredVerdict):
             validate_for(reading, manifest)
+
+
+@pytest.mark.parametrize(
+    "case", FIXTURE["readings_redacted"], ids=lambda case: case["why"][:40]
+)
+def test_redact_reading_holds_to_the_shared_cases(case: dict) -> None:
+    """F44-004: the Python half of readings_redacted, which Go reads too.
+    A string is redacted wherever it sits, a map inside a list included."""
+    raw = dict(FIXTURE["readings_accepted"][0]["reading"])
+    raw.update(measured=case["measured"], expected=case["expected"])
+    redacted = redact_reading(Reading.model_validate(raw))
+    assert redacted.measured == case["redacted_measured"]
+    assert redacted.expected == case["redacted_expected"]

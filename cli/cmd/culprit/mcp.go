@@ -245,8 +245,9 @@ func (s *mcpServer) protocol() *mcp.Server {
 
 // failed is a call that could not run: a tool result, so the agent reads
 // why, not a protocol error.
+// Its text can quote an argument the agent passed, so it is redacted.
 func failed(err error) mcp.Result {
-	return mcp.Result{Structured: map[string]any{"error": err.Error()}, IsError: true}
+	return mcp.Result{Structured: map[string]any{"error": model.RedactCredentials(err.Error())}, IsError: true}
 }
 
 func (s *mcpServer) intent(ctx context.Context, only []string) (check.Report, error) {

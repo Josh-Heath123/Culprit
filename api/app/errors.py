@@ -19,7 +19,11 @@ exist to prevent, and it would be strange to hold extractors to that rule
 while the error path quietly breaks it.
 
 **What is kept:** the location (`loc`), the message (`msg`) and the error
-type. That is everything a caller needs to fix the request — an error at
+type. Since Phase 44 batch 1 (F44-022) the message names the field and
+never the value: a validator that quoted what it refused (a subject, the
+words of a change, a grant name) has that value replaced in `msg` before
+it leaves, and what remains passes the shared credential pattern. That
+is everything a caller needs to fix the request — an error at
 `facts.0` saying a fact is on the CONFIGURED plane while the capture
 declares INTENT names both the field and the problem. Only the echoed
 value goes.
@@ -33,6 +37,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import structlog
+from culprit_model.redaction import redact_credentials
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse, Response
@@ -46,11 +51,40 @@ logger = structlog.get_logger("api.validation")
 _REDACTED_KEYS = ("input", "ctx")
 
 
+#: What a refused value is called in a message, in its place.
+_THE_VALUE = "(the value given)"
+
+
+def _strings(value: Any) -> list[str]:
+    """Every string in a refused input, a nested body's included."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for item in value.values() for text in _strings(item)]
+    if isinstance(value, list | tuple):
+        return [text for item in value for text in _strings(item)]
+    return []
+
+
+def _message(error: dict[str, Any]) -> str:
+    """The error's message with every value it was given taken out: each
+    string in the input, quoted or not, longest first, then the shared
+    credential pattern over what is left."""
+    message = str(error.get("msg", ""))
+    for text in sorted(set(_strings(error.get("input"))), key=len, reverse=True):
+        if text.strip():
+            message = message.replace(repr(text), _THE_VALUE).replace(text, _THE_VALUE)
+    return redact_credentials(message)
+
+
 def _scrub(errors: Sequence[Any]) -> list[dict[str, Any]]:
-    return [
-        {key: value for key, value in dict(error).items() if key not in _REDACTED_KEYS}
-        for error in errors
-    ]
+    scrubbed = []
+    for error in errors:
+        kept = {key: value for key, value in dict(error).items() if key not in _REDACTED_KEYS}
+        if "msg" in kept:
+            kept["msg"] = _message(dict(error))
+        scrubbed.append(kept)
+    return scrubbed
 
 
 async def redacting_validation_handler(

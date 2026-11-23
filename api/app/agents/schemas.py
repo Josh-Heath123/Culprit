@@ -123,6 +123,14 @@ class DiagnoseSpec(_Strict):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    @field_validator("symptom")
+    @classmethod
+    def _redact_symptom(cls, value: str) -> str:
+        # F44-005: a symptom is free text a person typed; it is stored in
+        # agent_tasks.spec, served back and sent to the agent, so it is
+        # redacted here, at the choke point, as change words are.
+        return redact_credentials(value)
+
 
 class VerifySpec(_Strict):
     """`culprit verify` as a task (Phase 34 part 2): measure again what an
@@ -222,6 +230,15 @@ class ClaimedTask(BaseModel):
 class TaskResult(_Strict):
     outcome: Literal["completed", "refused", "error"]
     reason: str | None = Field(default=None, max_length=4096)
+
+    @field_validator("reason")
+    @classmethod
+    def _redact_reason(cls, value: str | None) -> str | None:
+        # F44-006: an agent redacts its own reason before it sends it; an
+        # older or a third-party agent may not, and agent_tasks.reason is
+        # served back, so the control plane redacts it on the way in too.
+        return None if value is None else redact_credentials(value)
+
     grants_held: list[str] = []
     allowance_ignored: list[str] = []
     readings: int = 0

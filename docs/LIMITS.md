@@ -569,6 +569,39 @@ genuine loss of debugging convenience, taken deliberately: it would be
 strange to hold extractors to "never carry a config value" while the
 error path published one.
 
+Since Phase 44 batch 1 (F44-022) the message itself never quotes the
+value either. A validator that wrote "`'postgresql://…' is not a subject
+URI`" or "`'token=…' is not a capability`" had the value it was given in
+`msg`, and that went back in the body. Now every string the request gave
+for that field is replaced in the message by "(the value given)", and
+what is left passes the shared credential pattern. A message about a
+short value can read oddly as a result ("(the value given)" where a
+one-letter value happened to appear in a word of the message), and a
+client that read the refused value out of the message now reads only the
+rule.
+
+## A command's error line, an agent's reason, a task's symptom: redacted
+
+Since Phase 44 batch 1 (F44-006, F44-021, F44-084), free text that quotes
+what Culprit was given is redacted at the one place it leaves:
+
+- **`culprit`'s error line** on stderr (and so in a CI log): an argument
+  it refused — a `--input` with no key, a symptom that is not a
+  component, a `--change` of no known kind — or a manifest value the
+  loader quoted. The same for an MCP tool's `error`.
+- **An agent's task reason**, before it reaches the append-only audit log,
+  the result it posts and its own log; and the control plane redacts a
+  reported reason again on the way in, for an agent that did not.
+- **A task's symptom**, when the control plane stores it; **`--change
+  action:` words**, where the binary parses them (the API already did).
+- **`culprit intent`'s skip reasons**, text and JSON, as `culprit check`'s
+  already were; and every string in a reading's measured and expected
+  values, a list's and a map's inside a list included.
+
+Redacted means the shared pattern (see "Secrets: two layers"): a shape it
+does not list is shown as given. An audit log written before this keeps
+what it holds: it is append-only, and nothing rewrites it.
+
 ## `culprit intent` extracts only what you point it at
 
 A component is extracted only if `culprit.yaml`'s `extract.components`

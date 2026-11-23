@@ -259,7 +259,11 @@ secret. What it promises about them comes in two layers (Phase 44, batch 1).
   of a `--change action:`, a refused request's message, a CLI argument
   echoed in an error. The pattern's coverage is exactly the rows of
   `shared/tests/redaction_conformance.json`, which Go and Python are both
-  held to; a shape not in it is not promised.
+  held to; a shape not in it is not promised. One canary in each language
+  plants a distinct secret in every input class and fails if any leaves
+  through any output, file or response:
+  `cli/cmd/culprit/secrets_canary_test.go::TestNoPlantedSecretLeavesAnyExit`,
+  `api/tests/test_agents_api.py::test_no_planted_secret_leaves_any_route`.
 - **What no pattern can catch:** a bare secret with no key, no scheme and
   no known prefix (`hunter2` alone in a sentence) reads as an ordinary word,
   and is shown as one. Keep secrets out of free text you hand Culprit, and

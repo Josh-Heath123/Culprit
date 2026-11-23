@@ -370,33 +370,51 @@ func RedactReading(reading Reading) Reading {
 // Only strings are rewritten. A number or a bool cannot carry a
 // credential, and rendering them through a regex would turn `443` into a
 // string in the JSON output, changing the wire shape to no purpose.
-// Nested maps are walked, because a third-party probe may return one.
+// Nested maps and lists are walked, because a third-party probe may
+// return one.
 func redactMap(values map[string]any) map[string]any {
 	if values == nil {
 		return nil
 	}
 	redacted := make(map[string]any, len(values))
 	for key, value := range values {
-		switch typed := value.(type) {
-		case string:
-			redacted[key] = RedactCredentials(typed)
-		case map[string]any:
-			redacted[key] = redactMap(typed)
-		case []any:
-			items := make([]any, len(typed))
-			for index, item := range typed {
-				if text, ok := item.(string); ok {
-					items[index] = RedactCredentials(text)
-					continue
-				}
-				items[index] = item
-			}
-			redacted[key] = items
-		default:
-			redacted[key] = value
-		}
+		redacted[key] = redactValue(value)
 	}
 	return redacted
+}
+
+// redactValue redacts a string wherever it sits (F44-004). The built-in
+// probes put typed []string into measured — a response's body keys, a
+// token's audiences — and before Phase 44 those fell to the default case
+// and left unredacted; a map inside a list did too. Each slice keeps its
+// type, so the wire shape does not change.
+func redactValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return RedactCredentials(typed)
+	case map[string]any:
+		return redactMap(typed)
+	case []string:
+		items := make([]string, len(typed))
+		for index, item := range typed {
+			items[index] = RedactCredentials(item)
+		}
+		return items
+	case []map[string]any:
+		items := make([]map[string]any, len(typed))
+		for index, item := range typed {
+			items[index] = redactMap(item)
+		}
+		return items
+	case []any:
+		items := make([]any, len(typed))
+		for index, item := range typed {
+			items[index] = redactValue(item)
+		}
+		return items
+	default:
+		return value
+	}
 }
 
 func knownHypothesisKind(kind string) bool {
