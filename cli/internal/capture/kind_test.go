@@ -65,8 +65,17 @@ environments:
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(bundle.Skipped) != 0 {
-		t.Fatalf("the capture recorded gaps against a cluster it can fully read: %+v", bundle.Skipped)
+	// Every envFrom source here is readable, so the one gap is the one no
+	// Kubernetes capture can close (F44-013): the image's own ENV and what
+	// an admission webhook injects are not in the Deployment's template.
+	// No other gap — a ConfigMap or Secret it could not read — is allowed.
+	const templateOnly = "orders-api's environment could not be enumerated completely (the image's own ENV " +
+		"and anything a mutating admission webhook adds are not in the Deployment's template), so no key " +
+		"is judged missing from it"
+	if len(bundle.Skipped) != 1 || bundle.Skipped[0].Want != string(model.WantConfigKeys) ||
+		bundle.Skipped[0].Reason != templateOnly {
+		t.Fatalf("the capture recorded a gap other than the template's own against a cluster it can "+
+			"fully read: %+v", bundle.Skipped)
 	}
 
 	for key, want := range map[string]model.ValueType{
