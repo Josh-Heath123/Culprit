@@ -100,7 +100,7 @@ def test_a_file_that_does_not_parse_is_named_and_the_chain_declined(tmp_path: Pa
     "not migrated" finding against the ORM. It is named, and the chain is
     not replayed."""
     path = write(tmp_path, "broken.py", "def upgrade(:\n")
-    with pytest.raises(ChainError, match="broken.py"):
+    with pytest.raises(ChainError, match=r"broken.py"):
         _read_revision(path)
 
     versions = chain(
@@ -114,7 +114,7 @@ def test_a_file_that_does_not_parse_is_named_and_the_chain_declined(tmp_path: Pa
         component = "orders-api"
         schema_database = "orders-api-db"
 
-    with pytest.raises(ChainError, match="0002_revision.py"):
+    with pytest.raises(ChainError, match=r"0002_revision.py"):
         extract_migration_schema(tmp_path / "repo", Builder())  # type: ignore[arg-type]
 
 
