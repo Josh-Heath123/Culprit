@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -100,6 +101,12 @@ func RunPlugin(
 	// No shell, ever. spec.Command is argv — see ExtractorSpec.Command.
 	command := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
 	command.Dir = request.Root
+	// Culprit never writes into the project it reads (Phase 44 batch 1,
+	// F44-003). An extractor runs in the project, and one that imports the
+	// project's Python would leave __pycache__ beside it; this is set for
+	// every extractor, Culprit's and anyone else's. The last value of a
+	// repeated variable is the one a process sees.
+	command.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
 	command.Stdin = bytes.NewReader(payload)
 	// A *bounded* writer, not a plain bytes.Buffer. Reading everything and
 	// then checking its size is not a defence against a runaway

@@ -1578,6 +1578,19 @@ fixture does not list, is shown as an ordinary word. And the pattern errs
 the other way too: the fixture's "over-redacted" rows list ordinary text it
 removes, each with its reason.
 
+## Culprit writes nothing into the project, but an extractor runs as you
+
+Since Phase 44 batch 1 (F44-003) every extractor runs with
+`PYTHONDONTWRITEBYTECODE=1`, and `culprit-extract-python` sets
+`sys.dont_write_bytecode` before it imports anything, so reading a project
+in import mode leaves no `__pycache__` in it; a test snapshots a project's
+tree before and after `intent` and `check` and requires it unchanged. That
+is all Culprit can promise about what an extractor does. Import mode runs
+the project's own code, which can write, connect or send whatever it
+likes, and an extractor is any command `culprit.yaml` names, run as you.
+On a project you do not control, use `--no-import` (and `--no-plugins` for
+a `culprit.yaml` you have not reviewed).
+
 ## A probe's secret input is refused as a task
 
 The probe catalogue declares on an input that it carries a secret

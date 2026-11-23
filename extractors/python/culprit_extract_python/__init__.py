@@ -31,7 +31,17 @@ The sources, in the preference order `.claude/rules/model.md` fixes:
 2. Static extraction (ranks 60/50) — `os.environ` read sites and test
    status-code assertions, via the `ast` module. Used only for what
    introspection cannot give.
+
+**It writes nothing into the project it reads** (Phase 44 batch 1,
+F44-003). Importing the project's modules would otherwise leave
+`__pycache__` beside them, so bytecode writing is turned off here, in the
+package's first statement, before anything is imported: this module runs
+before `cli`, and before any of the project's code.
 """
+
+import sys
+
+sys.dont_write_bytecode = True
 
 __version__ = "0.1.0"
 

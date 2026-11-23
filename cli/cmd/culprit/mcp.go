@@ -151,13 +151,13 @@ func (s *mcpServer) protocol() *mcp.Server {
 		return mcp.Annotations{Title: title, ReadOnlyHint: true, DestructiveHint: false, OpenWorldHint: openWorld}
 	}
 	environment := mcp.Property{Type: mcp.String, Description: "an environment declared under environments: in culprit.yaml; its grants decide what may be probed"}
-	return &mcp.Server{
+	server := &mcp.Server{
 		Name: "culprit", Version: Version, Instructions: mcpInstructions,
 		Tools: []mcp.Tool{
 			{
 				Name: "culprit_system_model", Title: "The system model",
 				Description: "The components and connections culprit.yaml declares, each environment's adapter and grants, " +
-					"this server's vantage, and the INTENT facts the walk measures against. Reads files only.",
+					"this server's vantage, and the INTENT facts the walk measures against.",
 				Input:       mcp.Schema{Properties: map[string]mcp.Property{}},
 				Annotations: readOnly("The system model", false),
 				Handler:     s.pinnedTo(s.systemModel),
@@ -165,7 +165,7 @@ func (s *mcpServer) protocol() *mcp.Server {
 			{
 				Name: "culprit_check", Title: "Check the repository",
 				Description: "culprit check: every fact the repository states, compared, and every contradiction " +
-					"reported with its severity. Reads files only; the same JSON as culprit check --format json.",
+					"reported with its severity; the same JSON as culprit check --format json.",
 				Input: mcp.Schema{Properties: map[string]mcp.Property{
 					"components":   {Type: mcp.Strings, Description: "check only these components"},
 					"unverifiable": {Type: mcp.Boolean, Description: "also report subjects only one source describes"},
@@ -241,7 +241,19 @@ func (s *mcpServer) protocol() *mcp.Server {
 			},
 		},
 	}
+	for index := range server.Tools {
+		server.Tools[index].Description += " " + runsExtractors
+	}
+	return server
 }
+
+// runsExtractors ends every tool's description (Phase 44 batch 1; F44-003,
+// F44-083). Every tool resolves INTENT, so every one can run what
+// culprit.yaml's extract: section declares, and a coding agent deciding
+// whether to call one is told so rather than "reads files only".
+const runsExtractors = "Unless culprit mcp was started with --no-plugins, this runs the extractors " +
+	"culprit.yaml declares: commands that run as you, so review a culprit.yaml as you would a Makefile; " +
+	"an extractor in import mode runs the project's own code."
 
 // failed is a call that could not run: a tool result, so the agent reads
 // why, not a protocol error.

@@ -277,6 +277,8 @@ secret. What it promises about them comes in two layers (Phase 44, batch 1).
 - **Culprit never writes into the project it reads.** Import mode does run
   the project's own code (`docs/EXTRACTOR_PROTOCOL.md`); a `culprit.yaml`
   runs its commands as you, so review one as you would a Makefile.
+  `cli/cmd/culprit/no_write_canary_test.go::TestCulpritWritesNothingIntoTheProjectItReads`,
+  `extractors/python/tests/test_extractor.py::test_import_mode_writes_no_bytecode_into_the_project_by_itself`
 
 ## What this model does not cover
 

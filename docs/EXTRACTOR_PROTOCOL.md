@@ -351,14 +351,30 @@ than shipped inside Culprit.
 Say so in your README. Users are entitled to know before they install.
 
 If your extractor imports, offer a way not to: `culprit-extract-python`
-has `--no-import`, which degrades to static extraction only for projects
-whose settings module opens a database connection on import.
+has `--no-import`, which degrades to static extraction only. Import mode
+runs the project's own code: on a project the user does not control, that
+code can write, connect or send anything, and `--no-import` is the safe
+choice there.
+
+**Write nothing into the project you read.** The orchestrator runs every
+extractor with `PYTHONDONTWRITEBYTECODE=1`, and `culprit-extract-python`
+also sets `sys.dont_write_bytecode` before it imports anything, so it
+holds even when run by hand. An extractor in another language holds itself
+to the same rule: no cache, no lock file, no output beside the source.
+
+**`culprit.yaml` is code.** Its `extract.extractors[].command` is any argv,
+run as the user who runs `culprit`, and it runs by default in `check`,
+`intent`, `diff`, `diagnose`, `verify`, `probe` and `culprit mcp`. Review a
+change to it as you would a change to a Makefile or a CI workflow; for a
+pull request you do not trust, run with `--no-plugins`, which runs none.
 
 The orchestrator's side of the bargain:
 
-- Your command is **argv, never a shell string**. `culprit.yaml` is a
-  committed file, and a command interpreted by a shell would make it an
-  arbitrary-execution vector for anyone who can open a pull request.
+- Your command is **argv, never a shell string**. That spares it a
+  shell's quoting and expansion, and nothing more: an argv can still be
+  any program with any arguments (`["python", "-c", "..."]`).
+- You are run with **`PYTHONDONTWRITEBYTECODE=1`** added to the
+  environment you inherit.
 - You are run with a **timeout** (90 s by default). Exceeding it is a
   skip naming the timeout.
 - Your stdout is **capped** (64 MiB). Exceeding it is a skip, not a
