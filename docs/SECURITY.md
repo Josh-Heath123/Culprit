@@ -274,6 +274,11 @@ secret. What it promises about them comes in two layers (Phase 44, batch 1).
   stores nothing.
   `cli/internal/probe/secret_inputs_test.go::TestEverySecretInputIsDeclaredOnTheInput`,
   `api/tests/test_agents_api.py::test_a_task_setting_a_secret_input_is_refused_and_not_stored`
+- **Text from the diagnosed system is data.** The narrator's evidence is one
+  fenced block its instructions name as quoted data; through `culprit mcp`
+  such text is only ever a value in a structured field, and every tool says
+  so. `worker/tests/test_narrate_prompts.py::test_a_reason_cannot_close_the_fence`,
+  `cli/cmd/culprit/mcp_descriptions_test.go::TestSystemTextReachesAnAgentOnlyAsData`
 - **Culprit never writes into the project it reads.** Import mode does run
   the project's own code (`docs/EXTRACTOR_PROTOCOL.md`); a `culprit.yaml`
   runs its commands as you, so review one as you would a Makefile.

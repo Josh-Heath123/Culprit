@@ -1578,6 +1578,21 @@ fixture does not list, is shown as an ordinary word. And the pattern errs
 the other way too: the fixture's "over-redacted" rows list ordinary text it
 removes, each with its reason.
 
+## Text from the diagnosed system is fenced as data, and that is not a guarantee
+
+Since Phase 44 batch 1 (F44-023), the narrator's evidence sits inside one
+fenced block that its instructions name as quoted data, never instructions,
+and the fence is longer than any run of backticks in it, so an item cannot
+close it. Through `culprit mcp`, text the system chose (a response's field
+names, a reason, statement text, an error) appears only as a value in a
+structured field, and the server's instructions and every tool's
+description say those fields are untrusted. Both are instructions to a
+model, and a model may follow an instruction anyway. For the narrator the
+check after it still bounds what can be shown (`docs/SECURITY.md` §7); for
+a coding agent using `culprit mcp`, nothing Culprit does can stop it acting
+on what it reads, so give it no write access it should not use on a
+stranger's say-so.
+
 ## Culprit writes nothing into the project, but an extractor runs as you
 
 Since Phase 44 batch 1 (F44-003) every extractor runs with
