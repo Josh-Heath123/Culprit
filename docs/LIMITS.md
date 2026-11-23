@@ -1528,6 +1528,23 @@ Relatedly, `GET /probes` serves the catalogue from a committed JSON file
 that mirrors the Go one. The mirror is checked for validity but the two
 can still drift in content; the binary is the authority.
 
+## Secrets: two layers, and what no pattern can catch
+
+Since Phase 44 batch 1 (`docs/SECURITY.md` §8), what Culprit promises about
+a secret it reads is two layers. **Configuration values** are shown only
+as shapes unless `config.read.values` names the key; that is structural.
+**Free text from outside Culprit** — an extractor's stderr, a probe's
+reason and measured strings, an agent's failure, change words, a refused
+request's message, an echoed CLI argument — is redacted at its one exit by
+the shared pattern, and that pattern covers exactly the rows of
+`shared/tests/redaction_conformance.json`, no more.
+
+What no pattern can catch: a bare secret with no key, no scheme and no
+known prefix. `hunter2` alone in a sentence, or a token in a format the
+fixture does not list, is shown as an ordinary word. And the pattern errs
+the other way too: the fixture's "over-redacted" rows list ordinary text it
+removes, each with its reason.
+
 ## The credential heuristic in a reading is a net, not a proof
 
 A `Reading`'s evidence is refused at construction if it looks like a

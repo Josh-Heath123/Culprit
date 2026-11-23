@@ -241,6 +241,36 @@ What it can still do is describe the cited evidence wrongly in plain words.
 The evidence is shown beside the prose, and the prose is labelled as
 derived, for that reason (`docs/LIMITS.md`, "Narration").
 
+## 8. A secret in what Culprit reads
+
+Not a compromise: the ordinary case. Culprit reads configuration, error
+text and responses from the system it diagnoses, and some of that is a
+secret. What it promises about them comes in two layers (Phase 44, batch 1).
+
+- **Values it reads as configuration are shown only as shapes.** A config
+  key's value is never printed, stored in a report or served by the API
+  unless `config.read.values` names that key, and a value read under
+  `config.inspect.values` is never stored or emitted at all
+  (`docs/PERMISSIONS.md`). This layer is structural: it does not depend on
+  recognising what a secret looks like.
+- **Free text that comes from outside Culprit is redacted at its one exit**
+  by one shared credential pattern: an extractor's error, a probe's reason
+  and measured strings, an agent task's symptom and its failure, the words
+  of a `--change action:`, a refused request's message, a CLI argument
+  echoed in an error. The pattern's coverage is exactly the rows of
+  `shared/tests/redaction_conformance.json`, which Go and Python are both
+  held to; a shape not in it is not promised.
+- **What no pattern can catch:** a bare secret with no key, no scheme and
+  no known prefix (`hunter2` alone in a sentence) reads as an ordinary word,
+  and is shown as one. Keep secrets out of free text you hand Culprit, and
+  out of names.
+- **Secrets never travel through the control plane.** An agent reads a
+  token from its own environment (a probe's `_env` input); the API refuses
+  a task that carries one.
+- **Culprit never writes into the project it reads.** Import mode does run
+  the project's own code (`docs/EXTRACTOR_PROTOCOL.md`); a `culprit.yaml`
+  runs its commands as you, so review one as you would a Makefile.
+
 ## What this model does not cover
 
 - **The machine the agent runs on.** Root there owns the agent's key, its
