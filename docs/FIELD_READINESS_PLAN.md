@@ -1548,6 +1548,175 @@ numeric order in their block.
 
 The review that rules on each batch writes that batch's brief here.
 
+### Review of part 1 — the audit, merged as `6f64f69` (PR #71), 2026-11-23
+
+**Accepted.** The register is sound: every S1 reproduced here, and the audit
+says plainly what it could not reach. The batches below are the plan; the
+owner's two questions are put to him and do not block batch 1.
+
+**CI.** Read by id from GitHub's API:
+- 44887167519 on `3f171f1` (the merge result) and 44888134489 on the report,
+  `210d107`: success on every job; `publish` and `deploy` skipped, as on every
+  pull request.
+- `main`'s push run 45125493937 on `6f64f69`: success on every job (25;
+  `deploy` skipped), `narration-parity` and `gate` included.
+- **Step 0.** 44881325932's red `e2e (stub)` was kind's image import ending
+  without error but leaving nothing on the node (attributed from the log by
+  Claude Code); attempt 2 is green on every job. Accepted as F44-007:
+  diagnostics on that path, not a retry.
+- **Every commit is Verified:** `95e1e77`, `3f171f1`, `210d107` and the merge
+  `6f64f69`.
+
+**Reproduced here,** with a binary built from `6f64f69` (Go 1.27.0) and the
+inputs in `../audit-44/`, each password planted by the test:
+- **F44-001:** `culprit intent`, text and JSON, printed `LeakPw77` and
+  `LeakPw88` from an extractor's stderr.
+- **F44-002:** the shared pattern redacted 2 of 15 common shapes
+  (`DB_PASSWORD=`, `?access_token=`, `Bearer`, `redis://:pw@`, provider
+  prefixes and JSON all passed); `culprit check --format sarif` kept
+  `DB_PASSWORD=LeakPw88`.
+- **F44-003:** `culprit check` with the Python extractor as the GUIDE
+  configures it imported a fixture's `config.wsgi` and left three `.pyc` files
+  in the project.
+- **F44-004:** `probe.auth.token_shape --format json` carried a DSN with its
+  password in `measured.audiences`, while the reason line was redacted.
+- **F44-005:** read, not run: a probe task's `inputs` are stored in
+  `agent_tasks.spec` as given and served back by `GET
+  /agents/{id}/tasks/{task}`.
+- **F44-006:** `culprit agent --once` wrote `AgentPw66` to its audit log, its
+  outbox and its stderr.
+
+**Rulings on the questions for the architecture session:**
+- **F44-002, how wide the pattern is.** Two layers, written into `SECURITY.md`
+  and LIMITS as the promise. Values Culprit reads as configuration are shown
+  only as shapes unless granted (unchanged, structural). Free text that comes
+  from outside Culprit is redacted at its one exit by the shared pattern, and
+  the pattern's coverage is exactly the fixture's rows. LIMITS names what no
+  pattern can catch: a bare secret with no key, scheme or known prefix.
+- **F44-003 and the owner's question 1.** Culprit never writes into a project
+  it reads. **The field trial runs `--no-import`:** import mode executes the
+  project's own code, which on a stranger's project can write, connect or send
+  anything. The product's default is unchanged; the docs say plainly what
+  import mode does.
+- **F44-005, how an agent gets a token.** Secrets never travel through the
+  control plane. The probe catalogue declares which inputs carry a secret; the
+  task route refuses them, naming the `_env` alternative; the agent reads the
+  secret from its own environment (`token_env` already exists).
+- **F44-023.** Text from the diagnosed system is data: fenced as quoted data
+  in the narrator's prompt, and in MCP results only ever in structured fields.
+- **F44-087 and question 3.** Dismiss secret-scanning alert #1 as a test
+  fixture, with the evidence; `/ci` reports no run green while a
+  secret-scanning or code-scanning alert is open.
+- **F44-008 and question 5.** Yes: `main`'s and a tag's publish waits for
+  `gate`. About 40 seconds is a fair price for never publishing an image whose
+  tests failed. Batch 3.
+- **Question 4, the dashboard.** The screens are rendered in CI, not on the
+  laptop: a hand-started job on the batch's branch, using the e2e stack's own
+  generated admin, uploading the screenshots as an artifact. No local
+  credentials, Linux as the reference, nothing for the laptop's memory. Batch
+  5's first step. `infra/.env.prod` on the laptop is never regenerated:
+  F44-009's fix only adds missing keys (batch 3).
+- **F44-012, F44-055 and F44-063** are ruled in batch 2's brief. Batch 1 takes
+  F44-012's measurement (decision 8).
+
+**Put to the owner,** not blocking batch 1:
+- **The legacy surfaces** (F44-025 to F44-029, F44-038, F44-077): keep, mark
+  as history, or retire. Retiring removes code, routes and screens, never
+  stored data.
+- **Where a confirmed field finding is recorded, and how it is disclosed** to
+  the target project (F44-019).
+
+**The batches,** as part 1 proposed them, in this order: 1 security (below); 2
+correctness of facts; 3 reliability and the backend, with F44-008 and F44-009;
+4 tests and gates, with F44-007's diagnostics; 5 the interface, the
+dashboard's screens first; 6 documentation and the first run, with the runbook
+(F44-019); 7 legacy, after the owner. F44-020 stays withdrawn. Each review may
+move a finding between batches.
+
+
+### Batch 1 — secrets stay in (brief, 2026-11-23)
+
+**Findings:** F44-001, -002, -003, -004, -005, -006, -021, -022, -023, -082,
+-083, -084 and -087. Branch `phase-44-b1`, from `origin/main`; its first
+commit is this review.
+
+**Decided:**
+1. **Write the promise first.** `SECURITY.md` and LIMITS state the two layers
+   above, and what no pattern can catch.
+2. **The pattern (F44-002),** widened under one fixture in `shared/tests/`
+   that Go and Python both read, its new rows failing first. It covers:
+   - a key whose name contains a credential word as one of its parts, in any
+     case and after `_`, `-` or `.` (password, passwd, pwd, secret, token,
+     apikey or api_key, access_key, private_key, credential, auth), with `=`,
+     `:` or JSON quoting;
+   - URL userinfo, the password running to the last `@` before the host,
+     `:pw@` included, and query parameters with credential-word names;
+   - `Authorization` values and `Bearer` and `Basic` credentials, and PEM
+     private-key blocks;
+   - the provider token prefixes well known enough to be formats: `sk_live_`,
+     `sk_test_`, `ghp_`, `gho_`, `ghs_`, `github_pat_`, `glpat-`, Slack's
+     `xox` tokens, `AKIA` keys and `AIza` keys.
+   - The fixture also has a section of strings that must survive (subjects,
+     digests, URLs without credentials) and a section of accepted
+     over-redactions, each with a `why`. A subject or a digest is never
+     redacted.
+3. **Every exit through it, held by one canary test** (F44-001, -004, -006,
+   -021, -022, -084). Fix each exit at its one place: render's skip reasons
+   (with render's first tests, F44-082); `RedactReading` walking `[]string`,
+   with a shared fixture row; the agent's failure reason; `--change action:`;
+   422 messages, which name the field and never the value; CLI errors that
+   echo input.
+   - **The canary:** plant a distinct secret in every input class (an
+     extractor's stderr, a probe input and a measured list, an agent task's
+     symptom, a change action, a manifest value, a bad CLI argument, a refused
+     API body), run every command and route, and assert no planted secret
+     appears in stdout, stderr, any file written (reports, SARIF, captures,
+     the audit log, the outbox) or any response body. One test in Go and one
+     in the API's suite.
+   - **Its mutation:** remove one exit's redaction; the canary goes red.
+4. **Secrets never travel through the control plane (F44-005).** The probe
+   catalogue declares, on the input itself, which inputs carry a secret; the
+   catalogue mirror carries the declaration to the API. The task route refuses
+   a task that sets one, with a 422 naming the field and its `_env`
+   alternative. Tasks stored before this keep what they were given:
+   `docs/UPGRADING.md` says so and how to find them; nothing is deleted.
+5. **Culprit never writes into the project it reads (F44-003).** Every
+   extractor runs with `PYTHONDONTWRITEBYTECODE=1`, and the Python extractor
+   sets `sys.dont_write_bytecode` before any import.
+   - **Its canary:** snapshot a fixture project's tree (paths, sizes, hashes)
+     before and after `intent` and `check` in import mode, and require it
+     unchanged. Mutation: drop the variable; the canary goes red.
+   - `docs/GUIDE.md`, `docs/EXTRACTOR_PROTOCOL.md` and the MCP tool
+     descriptions say plainly that import mode runs the project's code;
+     `culprit_check` no longer says it only reads files.
+6. **System text is data (F44-023).** In the narrator's prompt, every string
+   from the diagnosed system sits inside one fenced block that the
+   instructions name as quoted data. In MCP results it appears only in
+   structured fields, never inside the fixed sentences, and the tool
+   descriptions say those fields are untrusted. Test: a reason holding an
+   instruction appears only inside the fence or the field.
+   `narration-parity`'s checks do not change.
+7. **The rest of the batch.**
+   - **F44-083:** the docs say a `culprit.yaml` runs its commands as the user,
+     so a manifest is reviewed like code; any MCP tool that can run a manifest
+     command says so.
+   - **F44-087:** dismiss secret-scanning alert #1 with `gh api` as
+     `used_in_tests`, with a one-line evidence comment, and read it back.
+     `/ci` reads the open secret-scanning and code-scanning alerts and does
+     not report a run green while one is open.
+8. **For batch 2, measure only (F44-012):** capture the process environment
+   from Git Bash, from PowerShell and inside the demo's order-service
+   container; diff the key sets and values; for each key that varies, record
+   whether its value equals one the OS reports about the process (hostname,
+   working directory, executable path). Change nothing.
+
+**Do NOT:**
+- change a verdict rule, the shapes Culprit shows, or `narration-parity`;
+- widen a grant, or add a dependency (a secret-scanning library included);
+- rewrite or delete a stored task or an audit-log row: append-only stays
+  append-only;
+- publish, release or deploy anything, or touch the ruleset.
+
 ---
 
 ## §7. Readiness (the last part)
