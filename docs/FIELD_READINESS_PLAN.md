@@ -1717,6 +1717,169 @@ commit is this review.
   append-only;
 - publish, release or deploy anything, or touch the ruleset.
 
+### Review of batch 1 — secrets stay in, merged as `f694cb6` (PR #72), 2026-11-23
+
+**Signed off.** Every S1 from the audit is closed, shown by the architecture
+session's own reproductions against the merged binary, and the canaries are
+real gates.
+
+**CI.** Read by id from GitHub's API:
+- 45169821500 on `ae375e1` (the merge result) and 45171911160 on the report,
+  `4fe8935`: success on every job; `publish` and `deploy` skipped, as on every
+  pull request.
+- 45134071396 and 45137290142 were red on `self-check` only: the README and
+  GUIDE quoted 1,753 facts and the tree had 1,754, fixed in `ae375e1`.
+  Attributed; not a flake.
+- `main`'s push run 45216449983 on `f694cb6`: success on every job (25;
+  `deploy` skipped), `narration-parity` and `gate` included.
+- **Every commit is Verified,** `14938df` to `4fe8935` and the merge
+  `f694cb6`. `14938df`'s tree is exactly the review patch's.
+
+**Verified here,** with a binary built from `f694cb6` (Go 1.27.0):
+- **The six S1 reproductions,** rerun with freshly planted values: none of
+  them appeared in `intent` text or JSON, `check` text or SARIF (F44-001,
+  F44-002), the probe's JSON (F44-004), or the agent's audit log, outbox and
+  stderr (F44-006); `check` in import mode left no `.pyc` in the project
+  (F44-003).
+- **The pattern** caught 12 of the review's 15 shapes. The three misses were
+  the review's own malformed strings: `AIza` and `glpat-` keys of their real
+  length are caught, and a password with a raw `/` is not a URL (its
+  percent-encoded form is caught).
+- **Three mutations of its own, each red and restored:** render's skip-reason
+  redaction removed, and the agent's reason redaction removed, each turned
+  `TestNoPlantedSecretLeavesAnyExit` red; `PYTHONDONTWRITEBYTECODE` dropped
+  turned `TestCulpritWritesNothingIntoTheProjectItReads` red, naming both
+  `.pyc` files.
+- **A nit, carried:** `token_env=NAME` is redacted, though its value names a
+  variable, and the fixture records it in neither `survive` nor
+  `over_redacted`.
+
+**The run's decisions, accepted:**
+- The key stays and only its value goes. The YAML colon form was narrowed when
+  a sweep of the repository's own strings found three of Culprit's messages
+  mangled; each is now a `survive` row.
+- Push protection was respected: the documented Stripe example key was
+  replaced with a short fake before anything was pushed. Alert #2, the
+  fixture's `AIza` row, was dismissed as used in tests, with the owner's
+  approval.
+- The README's fact count is CI's, since the local self-check differs in every
+  figure.
+- Decision 8 measured Git Bash and the order-service image; the PowerShell leg
+  was refused by the session's classifier. The measurement is enough to rule
+  F44-012.
+
+**The owner's decisions,** given on 2026-11-23:
+- **The legacy surfaces are retired** (F44-025 to F44-029, F44-038, F44-077):
+  incidents, postmortems, RAG memory with the Python MCP server, anomaly
+  detection, and the ingest gateway with Redis Streams. In batch 7, their
+  code, routes and screens go; stored data stays, and no table or row is
+  deleted without the owner's say. Anything the owner's own Claude Code setup
+  relies on is checked first and raised if removing it would break it.
+- **Confirmed field findings are private, then disclosed** (F44-019): kept in
+  a private record outside the public repository; a security issue goes
+  through the target project's private vulnerability reporting or its
+  `SECURITY.md` contact, any other bug as a normal issue; nothing is published
+  before the project has been told, and never the target's configuration
+  values. The runbook says so (batch 6).
+
+**Rulings:**
+- **F44-011, what a shape claims.** A format class is lexical: it never
+  depends on a number's size. Digits alone are `numeric`; `booleanish` is
+  words only; a bare number is never `port`. The vocabulary does not change.
+- **F44-012, the launcher's own variables.** Keyed on an OS fact, never a
+  name, as Q42 ruled: the working directory joins the hostname, so a variable
+  whose value is the directory the OS reports for the process is recorded
+  present with its value unshaped. With F44-011, a counter such as `SHLVL`
+  keeps one shape. What remains is real: a different launcher is a different
+  environment. LIMITS says to launch `diagnose` and `verify` the same way, and
+  the tour captures from a clean environment.
+- **F44-055, observations are not configuration.** A DNS, port or TLS reading
+  is an observation the capture made at one moment. Every CONFIGURED predicate
+  declares which it is, where the predicate is defined; `verify` counts
+  unexplained changes of configuration only, and reports an observation that
+  changed as an observation. No fact changes plane: that would be a schema
+  change, and LIMITS records that these observations live in the CONFIGURED
+  capture.
+- **F44-063, an edge that does not say.** Neither guess is right: following it
+  overstates (Python), dropping it understates (Go, against its own doc). A
+  component reachable from an entry point only through an edge of `unknown`
+  criticality has severity `unknown`, naming that edge, in both languages,
+  from one fixture.
+- **Q46.** `probe.auth.propagation` takes `token_env`, as
+  `probe.auth.token_shape` does, so it can be sent as a task again, under
+  F44-005's rule.
+- **MCP's `readOnlyHint`.** A tool that can run a manifest's command runs the
+  user's code, so its hint is false; it stays true only where a tool runs
+  nothing.
+
+### Batch 2 — facts that hold (brief, 2026-11-23)
+
+**Findings:** F44-010, -011, -012, -013, -055, -057, -058, -063, -064 and
+-090, Q46, and the two carried nits. Branch `phase-44-b2`, from `origin/main`;
+its first commit is this review.
+
+**Decided:**
+1. **Step 0.** Confirm `main`'s push run 45216449983 on `f694cb6` by id.
+2. **Lexical format classes (F44-011).** Rows in the shared `formats` fixture
+   first: `1`, `0`, `4`, `22`, `8080` and `65500` are `numeric`; `true`, `Off`
+   and `yes` are `booleanish`. Before changing the rule, `git grep` every
+   reader of `port` and `booleanish`; if any rule depends on them, stop and
+   raise it. `docs/UPGRADING.md`: re-capture after upgrading, as for Q42.
+3. **The working directory joins the identity rule (F44-012).** In the process
+   adapter, the directory is injected like the hostname, a variable equal to
+   it is recorded present with its value unshaped, and the capture's meta
+   counts it. Nothing is keyed on a name.
+   - **Test:** `verify` over two process captures from one kind of shell, at
+     different depths and directories, finds no difference in `SHLVL` or
+     `PWD`; the same change on a variable that is neither the directory nor a
+     counter still counts.
+   - **Docs:** LIMITS says the process adapter records the environment it is
+     launched in, the launcher's own variables included, so `diagnose` and
+     `verify` are launched the same way; the GUIDE's tour captures from a
+     clean environment (`env -i` with `PATH` and `HOME`).
+4. **Observations are not configuration (F44-055).** Each CONFIGURED predicate
+   declares whether it is configuration or an observation, where it is
+   defined, read by Go and Python from one place. `verify` counts
+   configuration only; an observation that changed appears in the record as
+   one, never as `changed_underneath`.
+   - **Test:** a pair of captures differing only in a DNS observation is not
+     `changed_underneath`; the same difference on a configuration predicate
+     still is.
+5. **Severity's third state (F44-063, F44-064 c).** A component reachable from
+   an entry point only through an edge of `unknown` criticality gets severity
+   `unknown`, naming the edge. Go's `severity` and Python's
+   `upstream_connections` read one fixture under `shared/tests/`. UPGRADING
+   says where findings' severities change.
+6. **Honest absence.**
+   - **F44-010:** the migration-head reader reads a tuple `down_revision`, a
+     merge; the `c09` fixture first.
+   - **F44-013:** the Kubernetes capture is never complete from a Deployment
+     template alone, since the image, `envFrom` and admission webhooks add
+     keys it cannot see. It says which sources it could not read, and judges
+     no key missing.
+   - **F44-057:** an unreadable or too-deep part of a repository is a skipped
+     entry naming its path, in every extractor.
+   - **F44-058:** a migration file that does not parse is named as unreadable,
+     and a chain with an unreadable file yields no "not migrated" finding.
+   - **F44-090:** a key that is not valid UTF-8 is named as unreadable, its
+     bytes escaped, and never becomes a subject.
+7. **Two readers, one value (F44-064 a, b).** The snapshot diff and
+   never-render-a-value each get one fixture under `shared/tests/` that Go and
+   Python both read.
+8. **Q46.** `probe.auth.propagation` takes `token_env`, read in the agent's
+   memory only, as `token_shape` does; its catalogue version rises, and its
+   422 no longer says it cannot be sent.
+9. **The nits.** `token_env=NAME` becomes an `over_redacted` row with its
+   `why`. Every MCP tool that can run a manifest's command sets `readOnlyHint`
+   false.
+
+**Do NOT:**
+- change a verdict rule beyond decision 4, or the shape vocabulary;
+- move a fact between planes, or key anything on a list of names;
+- change the fault library's expectations: if an outcome in `results.json`
+  changes, stop and raise it;
+- publish, release or deploy anything, or touch the ruleset.
+
 ---
 
 ## §7. Readiness (the last part)
