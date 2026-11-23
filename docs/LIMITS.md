@@ -2654,10 +2654,18 @@ config value or a reading's content.
 
 ### Read-only means the system under test
 
-Every tool is offered with `readOnlyHint`. `culprit_diagnose` and
-`culprit_verify` still write to the server's own state directory — the
-investigation, its record, the capture before and each verification — as the
-commands do; nothing else.
+No tool changes the system under test, and none is offered as destructive.
+But `readOnlyHint` says a tool runs nothing, and a tool that can run a
+command `culprit.yaml` declares runs your code: every tool resolves INTENT,
+which runs the declared extractors, and `culprit_probe`, `culprit_diagnose`
+and `culprit_verify` also read the environment, which can run its declared
+commands (an `exec` adapter, a package listing). So `culprit_system_model`,
+`culprit_check` and `culprit_explain_connection` are offered with
+`readOnlyHint` only when the server was started with `--no-plugins`, and
+the other three never are. An agent host that auto-approves read-only tools
+will ask before those. `culprit_diagnose` and `culprit_verify` also write
+to the server's own state directory — the investigation, its record, the
+capture before and each verification — as the commands do; nothing else.
 
 ### Refused before anything is sent is per capability
 

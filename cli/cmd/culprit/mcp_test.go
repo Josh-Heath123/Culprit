@@ -674,8 +674,8 @@ func TestNoToolWrites(t *testing.T) {
 	var names []string
 	for _, tool := range tools.Tools {
 		names = append(names, tool.Name)
-		if !tool.Annotations.ReadOnly || tool.Annotations.Destructive || tool.InputSchema["additionalProperties"] != false {
-			t.Errorf("%s is not offered as read-only with closed arguments", tool.Name)
+		if tool.Annotations.Destructive || tool.InputSchema["additionalProperties"] != false {
+			t.Errorf("%s is offered as destructive, or with open arguments", tool.Name)
 		}
 	}
 	sort.Strings(names)
@@ -927,5 +927,48 @@ func TestALatencyProbeReachesOnlyItsBudgetsComponent(t *testing.T) {
 		"probes": []string{"probe.http.latency"}, "inputs": map[string]any{"url": "http://payments.internal:8443/health"}})
 	if result.IsError {
 		t.Fatalf("payments' own endpoint was refused for its latency: %s", result.Structured)
+	}
+}
+
+// MCP's readOnlyHint (ruled 2026-11-23, after Phase 44 batch 1): a tool
+// that can run a command culprit.yaml declares runs the user's code, so it
+// is not offered as read-only. Every tool resolves INTENT, which runs the
+// declared extractors unless the server was started with --no-plugins;
+// probe, diagnose and verify also capture and probe the environment, which
+// can run its declared commands (an exec adapter, a package listing)
+// either way. The hint stays true only where a tool runs nothing.
+func TestOnlyAToolThatRunsNothingIsOfferedAsReadOnly(t *testing.T) {
+	loop, _ := newLoop(t)
+	runsNothingUnderNoPlugins := map[string]bool{
+		"culprit_system_model": true, "culprit_check": true, "culprit_explain_connection": true,
+	}
+	for _, noPlugins := range []bool{true, false} {
+		args := []string{"-f", loop.manifest, "--from", "web", "--state-dir", loop.state}
+		if noPlugins {
+			args = append(args, "--no-plugins")
+		}
+		client := mcpCommandSession(t, args...)
+		var tools struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				Annotations struct {
+					ReadOnly    bool `json:"readOnlyHint"`
+					Destructive bool `json:"destructiveHint"`
+				} `json:"annotations"`
+			} `json:"tools"`
+		}
+		if err := json.Unmarshal(client.request("tools/list", map[string]any{}).Result, &tools); err != nil {
+			t.Fatal(err)
+		}
+		if len(tools.Tools) != 6 {
+			t.Fatalf("%d tools listed", len(tools.Tools))
+		}
+		for _, tool := range tools.Tools {
+			want := noPlugins && runsNothingUnderNoPlugins[tool.Name]
+			if tool.Annotations.ReadOnly != want || tool.Annotations.Destructive {
+				t.Errorf("--no-plugins=%v: %s readOnlyHint %v, want %v (destructiveHint %v)",
+					noPlugins, tool.Name, tool.Annotations.ReadOnly, want, tool.Annotations.Destructive)
+			}
+		}
 	}
 }
