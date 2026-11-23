@@ -1040,7 +1040,7 @@ def test_no_planted_secret_leaves_any_route(client: TestClient) -> None:
 
 @pytest.mark.parametrize(
     ("probe_id", "alternative"),
-    [("probe.auth.token_shape", "token_env"), ("probe.auth.propagation", None)],
+    [("probe.auth.token_shape", "token_env"), ("probe.auth.propagation", "token_env")],
 )
 async def test_a_task_setting_a_secret_input_is_refused_and_not_stored(
     client: TestClient, db_engine: AsyncEngine, probe_id: str, alternative: str | None

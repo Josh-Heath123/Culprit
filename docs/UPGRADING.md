@@ -343,8 +343,10 @@ connection. Nothing stored changes, and no migration runs.
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a
 probe input the catalogue declares secret — today `token`, on
 `probe.auth.token_shape` and `probe.auth.propagation` — with a 422 naming
-the field and, for `token_shape`, `token_env` instead: the name of a
-variable in the agent's own environment (`docs/SECURITY.md` §8).
+the field and `token_env` instead: the name of a variable in the agent's
+own environment (`docs/SECURITY.md` §8). `probe.auth.propagation` takes
+`token_env` since Phase 44 batch 2 (version 2); before, it could not be
+sent as a task at all.
 
 **Tasks stored before the upgrade keep what they were given.** Nothing
 rewrites or deletes them: `agent_tasks` is a record. To find any that hold

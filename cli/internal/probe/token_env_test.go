@@ -97,3 +97,46 @@ func TestATokenReadFromTheEnvironmentNeverReachesTheReading(t *testing.T) {
 		}
 	}
 }
+
+// Q46 (ruled 2026-11-23): probe.auth.propagation takes token_env, as
+// token_shape does, so it can be sent as a task again under F44-005's rule.
+// The token is read in the agent's memory only, under config.inspect.values
+// for the caller's own variable, goes out on the wire, and never reaches
+// the reading.
+func TestPropagationReadsItsTokenFromTheEnvironment(t *testing.T) {
+	_, parts, _ := model.ParseSubject(authTarget)
+	holder := parts["from_component"] + "/INVENTORY_TOKEN"
+	run := func(secrets *fakeSecrets, http *fakeHTTP) model.Reading {
+		runner := NewRunner(Options{
+			Ledger: grantEverything(t),
+			Deps:   Deps{Secrets: secrets, HTTP: http, Now: fixedClock()},
+		})
+		return runner.Run(context.Background(), []Request{{
+			ProbeID: "probe.auth.propagation", Target: authTarget, Environment: "staging",
+			Inputs: map[string]any{"url": "http://inventory.internal/stock", "token_env": "INVENTORY_TOKEN"},
+		}})[0]
+	}
+
+	http := &fakeHTTP{response: HTTPResponse{Status: 401}}
+	granted := &fakeSecrets{values: map[string]string{holder: goodToken}, granted: map[string]bool{holder: true}}
+	reading := run(granted, http)
+	if reading.Verdict != model.VerdictFail || http.lastHeaders["Authorization"] != "Bearer "+goodToken {
+		t.Fatalf("with the grant: %s (%q), sent %q; want fail, the token sent",
+			reading.Verdict, reading.Reason, http.lastHeaders["Authorization"])
+	}
+	if len(granted.asked) != 1 || granted.asked[0] != holder {
+		t.Errorf("asked for %v, want the caller's own variable %s", granted.asked, holder)
+	}
+	encoded, _ := json.Marshal(reading)
+	for _, segment := range strings.Split(goodToken, ".") {
+		if strings.Contains(string(encoded), segment) {
+			t.Errorf("a segment of the token reached the reading: %s", encoded)
+		}
+	}
+
+	ungranted := &fakeSecrets{values: map[string]string{holder: goodToken}}
+	if reading := run(ungranted, &fakeHTTP{response: HTTPResponse{Status: 200}}); reading.Verdict != model.VerdictRefused ||
+		!strings.Contains(reading.Reason, "config.inspect.values") {
+		t.Errorf("without the grant: %s (%q), want refused naming config.inspect.values", reading.Verdict, reading.Reason)
+	}
+}

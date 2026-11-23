@@ -1677,11 +1677,13 @@ a `culprit.yaml` you have not reviewed).
 The probe catalogue declares on an input that it carries a secret
 (`"secret": true` in its JSON Schema, mirrored to the API), and the control
 plane refuses an agent task that sets one, with a 422 naming the field
-(Phase 44 batch 1, F44-005). For `probe.auth.token_shape` it names
-`token_env` instead: the agent reads the token from its own environment,
-under `config.inspect.values`. **`probe.auth.propagation` has no `_env`
-alternative**, so it cannot be sent as a task at all: run it where the
-token is, with `culprit probe` or through `culprit mcp`. The refusal looks
+(Phase 44 batch 1, F44-005), and names `token_env` instead: the agent
+reads the token from its own environment, under `config.inspect.values`
+for that variable, and it never leaves the agent's memory except on the
+wire `probe.auth.propagation` sends it on. Both auth probes take it,
+`probe.auth.propagation` since Phase 44 batch 2 (Q46, version 2). The
+token is read from the environment of the *caller*, the `from` component
+of the `auth:` target. The refusal looks
 only at the probes the catalogue knows: a task naming a probe id it does
 not know is not checked here. Tasks stored before this keep what they were
 given (`docs/UPGRADING.md`).

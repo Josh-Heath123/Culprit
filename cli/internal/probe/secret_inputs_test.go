@@ -55,11 +55,11 @@ func TestEverySecretInputIsDeclaredOnTheInput(t *testing.T) {
 	}
 }
 
-// TestTheTokenShapesTokenNamesItsEnvAlternative: the one secret input
-// with an alternative today. probe.auth.propagation's token has none: it
-// is declared secret, and refused as a task, with no alternative to name.
+// TestTheTokenShapesTokenNamesItsEnvAlternative: every secret input names
+// its alternative. probe.auth.propagation's token gained token_env with
+// Q46, so a task can send it again under F44-005's rule.
 func TestTheTokenShapesTokenNamesItsEnvAlternative(t *testing.T) {
-	for id, want := range map[string]string{"probe.auth.token_shape": "token_env", "probe.auth.propagation": ""} {
+	for id, want := range map[string]string{"probe.auth.token_shape": "token_env", "probe.auth.propagation": "token_env"} {
 		probe, ok := BuiltIn().Get(id)
 		if !ok {
 			t.Fatalf("no %s", id)
