@@ -301,6 +301,23 @@ value, and the newer binary says `numeric`:
 As for Q42: capture again after upgrading, and diagnose again before
 verifying a fix for an investigation walked by the older binary.
 
+## A verification can record an observation (F44-055)
+
+Since Phase 44 batch 2, a difference between the captures before and after
+a fix on an endpoint's `dns_resolves`, `port_reachable` or
+`tls_certificate` is recorded with `"observation": true`, and no longer
+makes a verdict `changed_underneath`. Nothing in the database changes and
+no migration runs; verifications stored before keep their verdicts and
+still validate.
+
+- **Upgrade the control plane before its agents.** An older control plane
+  refuses, with a 422, a verification whose difference carries the new
+  field. An older agent's verifications are accepted by the newer control
+  plane unchanged.
+- A fix verified again after the upgrade can answer `verified` where it
+  answered `changed_underneath` before, when an observation was the only
+  unexplained difference.
+
 ## Agent tasks stored before Phase 44 may hold a token
 
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a

@@ -260,6 +260,66 @@ type Difference struct {
 	// ExplainedBy is the label of the first named change that touches the
 	// subject, or nil when none does.
 	ExplainedBy *string `json:"explained_by"`
+	// Observation is true when the predicate is an observation, not
+	// configuration (F44-055): recorded as one, and never needing a change
+	// to explain it. A record written before the rule leaves it false and
+	// is judged as it was.
+	Observation bool `json:"observation,omitempty"`
+}
+
+// PredicateKind is what a CONFIGURED predicate records (F44-055).
+type PredicateKind string
+
+const (
+	// KindConfiguration is what the environment is set up to do: a key,
+	// an image, a schema.
+	KindConfiguration PredicateKind = "configuration"
+	// KindObservation is a reading the capture made of a live network at
+	// one moment: whether a name resolved, a port answered, a
+	// certificate's class. Held in the CONFIGURED capture; not
+	// configuration.
+	KindObservation PredicateKind = "observation"
+)
+
+// Predicates a CONFIGURED capture emits beyond the shared vocabulary in
+// protocol.go, defined here so their kind is declared where they are:
+// internal/capture names them through these.
+const (
+	PredicateReference        = "reference"
+	PredicateDigest           = "digest"
+	PredicateImageID          = "image_id"
+	PredicateInstalledVersion = "installed_version"
+	PredicateDNSResolves      = "dns_resolves"
+	PredicatePortReachable    = "port_reachable"
+	PredicateTLSCertificate   = "tls_certificate"
+	PredicateValue            = "value"
+)
+
+// ConfiguredPredicateKinds is every predicate a CONFIGURED capture emits,
+// and which kind it is. The Python half is verifications.py's
+// CONFIGURED_PREDICATE_KINDS; both are held to
+// shared/tests/verification_conformance.json. A predicate not listed is
+// configuration: the direction that counts it.
+var ConfiguredPredicateKinds = map[string]PredicateKind{
+	PredicateExists:           KindConfiguration,
+	PredicateValueShape:       KindConfiguration,
+	PredicateValue:            KindConfiguration,
+	PredicateReference:        KindConfiguration,
+	PredicateDigest:           KindConfiguration,
+	PredicateImageID:          KindConfiguration,
+	PredicateInstalledVersion: KindConfiguration,
+	PredicateColumns:          KindConfiguration,
+	PredicateNullable:         KindConfiguration,
+	PredicateLeadsIndex:       KindConfiguration,
+	PredicateMigrationHead:    KindConfiguration,
+	PredicateDNSResolves:      KindObservation,
+	PredicatePortReachable:    KindObservation,
+	PredicateTLSCertificate:   KindObservation,
+}
+
+// IsObservation says whether a predicate is an observation.
+func IsObservation(predicate string) bool {
+	return ConfiguredPredicateKinds[predicate] == KindObservation
 }
 
 // Explain fills ExplainedBy from the changes named: the first that
@@ -318,7 +378,9 @@ func Judge(reran []Rerun, changes []Change, beforeCapture, afterCapture *string,
 	}
 	explained := true
 	for _, difference := range differences {
-		if difference.ExplainedBy == nil {
+		// An observation is not configuration (F44-055): it is recorded,
+		// and no change needs to explain it.
+		if difference.ExplainedBy == nil && !difference.Observation {
 			explained = false
 		}
 	}
@@ -435,6 +497,10 @@ func (v Verification) Validate() error {
 		}
 		if strings.TrimSpace(difference.Predicate) == "" {
 			return fmt.Errorf("the difference on %s names no predicate", difference.Subject)
+		}
+		if difference.Observation && !IsObservation(difference.Predicate) {
+			return fmt.Errorf("the difference on %s (%s) is flagged as an observation; that predicate is configuration",
+				difference.Subject, difference.Predicate)
 		}
 		want := Explain(difference, v.AppliedChange).ExplainedBy
 		if !sameLabel(difference.ExplainedBy, want) {

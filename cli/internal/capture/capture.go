@@ -59,18 +59,20 @@ import (
 
 // Predicates the CONFIGURED plane emits beyond the shared vocabulary in
 // model/protocol.go. Plain strings, like every predicate: the comparator
-// compares them without knowing what any of them mean.
+// compares them without knowing what any of them mean. Defined in
+// model/verification.go, beside the kind each declares (F44-055): the
+// endpoint's three are observations, the rest configuration.
 const (
-	PredicateReference        = "reference"
-	PredicateDigest           = "digest"
-	PredicateImageID          = "image_id"
-	PredicateInstalledVersion = "installed_version"
-	PredicateDNSResolves      = "dns_resolves"
-	PredicatePortReachable    = "port_reachable"
-	PredicateTLSCertificate   = "tls_certificate"
+	PredicateReference        = model.PredicateReference
+	PredicateDigest           = model.PredicateDigest
+	PredicateImageID          = model.PredicateImageID
+	PredicateInstalledVersion = model.PredicateInstalledVersion
+	PredicateDNSResolves      = model.PredicateDNSResolves
+	PredicatePortReachable    = model.PredicatePortReachable
+	PredicateTLSCertificate   = model.PredicateTLSCertificate
 	// PredicateValue carries a literal config value, only ever for a key
 	// on the `config.read.values` allowlist and only ever with a grant_ref.
-	PredicateValue = "value"
+	PredicateValue = model.PredicateValue
 )
 
 // Check names. The "check" in a refusal is always one of these, so a

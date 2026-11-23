@@ -423,3 +423,46 @@ func TestASameRunMustBeTheSameRequest(t *testing.T) {
 		}
 	}
 }
+
+// withFact adds one non-config fact to a capture: an endpoint observation
+// or an image's digest.
+func withFact(bundle *model.CaptureBundle, subject, predicate string, value any) *model.CaptureBundle {
+	bundle.Facts = append(bundle.Facts, model.Fact{Plane: model.PlaneConfigured, Subject: subject,
+		Predicate: predicate, Value: value, Environment: env,
+		Provenance: model.Provenance{SourceKind: model.SourceIntrospection, Extractor: "culprit@test",
+			ConfidenceRank: model.RankRuntimeIntrospection},
+		CapturedAt: clock, CaptureID: bundle.CaptureID})
+	return bundle
+}
+
+// F44-055. A DNS reading is an observation the capture made at one moment,
+// not configuration: a pair of captures differing only in one is not
+// changed_underneath, and the record says the observation changed. The
+// same difference on a configuration predicate still is.
+func TestAnObservationThatChangedIsNotAChangeUnderneath(t *testing.T) {
+	before, after := unchanged()
+	withFact(before, "component:order-service", model.PredicateDNSResolves, true)
+	withFact(after, "component:order-service", model.PredicateDNSResolves, false)
+	verification, _ := verifyIn(t, scenario{world: fixed, changes: contractFx, before: before, after: after})
+	if verification.Verdict != model.VerificationVerified {
+		t.Fatalf("verdict %s, want verified: %s", verification.Verdict, verification.Reason)
+	}
+	if len(verification.Differences) != 1 || !verification.Differences[0].Observation ||
+		verification.Differences[0].Predicate != model.PredicateDNSResolves {
+		t.Errorf("the record does not hold the DNS change as an observation: %+v", verification.Differences)
+	}
+	if !strings.Contains(verification.Reason, "observation") {
+		t.Errorf("the reason does not say an observation changed: %s", verification.Reason)
+	}
+
+	before, after = unchanged()
+	withFact(before, "image:order-service", model.PredicateDigest, "sha256:"+strings.Repeat("a", 64))
+	withFact(after, "image:order-service", model.PredicateDigest, "sha256:"+strings.Repeat("b", 64))
+	verification, _ = verifyIn(t, scenario{world: fixed, changes: contractFx, before: before, after: after})
+	if verification.Verdict != model.VerificationChangedUnderneath {
+		t.Fatalf("a configuration change judged %s: %s", verification.Verdict, verification.Reason)
+	}
+	if verification.Differences[0].Observation {
+		t.Errorf("a digest was recorded as an observation: %+v", verification.Differences)
+	}
+}

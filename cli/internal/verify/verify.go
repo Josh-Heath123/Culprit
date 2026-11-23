@@ -286,7 +286,8 @@ func Differences(before, after model.CaptureBundle) []model.Difference {
 			continue
 		}
 		seen[key] = true
-		differences = append(differences, model.Difference{Subject: divergence.Subject, Predicate: divergence.Predicate})
+		differences = append(differences, model.Difference{Subject: divergence.Subject, Predicate: divergence.Predicate,
+			Observation: model.IsObservation(divergence.Predicate)})
 	}
 	sort.Slice(differences, func(i, j int) bool {
 		if differences[i].Subject != differences[j].Subject {
@@ -358,16 +359,33 @@ func describe(judged model.Judgement, reran []model.Rerun, changes []model.Chang
 	case model.VerificationChangedUnderneath:
 		var unexplained []string
 		for _, difference := range differences {
-			if model.Explain(difference, changes).ExplainedBy == nil {
+			if model.Explain(difference, changes).ExplainedBy == nil && !difference.Observation {
 				unexplained = append(unexplained, isolate.Describe(difference.Subject)+" ("+difference.Predicate+")")
 			}
 		}
 		return fmt.Sprintf("the readings that failed pass now, but the environment changed where %s does not explain it: %s",
 			changeList(changes), strings.Join(unexplained, ", "))
 	case model.VerificationVerified:
+		configured, observed := 0, 0
+		for _, difference := range differences {
+			if difference.Observation {
+				observed++
+			} else {
+				configured++
+			}
+		}
 		since := "nothing the capture records changed since diagnosis"
-		if len(differences) > 0 {
-			since = fmt.Sprintf("every difference since diagnosis (%d) is explained by %s", len(differences), changeList(changes))
+		switch {
+		case configured > 0:
+			since = fmt.Sprintf("every difference since diagnosis (%d) is explained by %s", configured, changeList(changes))
+		case observed > 0:
+			since = "nothing the capture configures changed since diagnosis"
+		}
+		if observed > 0 {
+			// Said, not hidden (F44-055): an observation is not configuration,
+			// and the record holds it as one.
+			since += fmt.Sprintf("; %d observation(s) the capture made changed, which no change needs to explain",
+				observed)
 		}
 		return fmt.Sprintf("every reading that failed passes on both runs (%s), every reading that passed still passes, and %s",
 			readings(where(model.VerdictFail, model.VerdictPass)), since)

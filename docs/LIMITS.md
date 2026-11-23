@@ -2299,6 +2299,30 @@ most 500 characters. It too explains nothing a capture records, and its
 words are the operator's: Culprit records them and checks nothing in them.
 The fault library names its three runtime fixes this way.
 
+### An observation that changed is not a change underneath (F44-055)
+
+A capture records an endpoint's `dns_resolves`, `port_reachable` and
+`tls_certificate`: readings of a live network it made at one moment. They
+live in the CONFIGURED capture, and no fact moves plane, but they are
+observations, not configuration, and each predicate declares which it is
+(`model.ConfiguredPredicateKinds` and `CONFIGURED_PREDICATE_KINDS`, held to
+one fixture). So `culprit verify` counts only changes of configuration
+against the changes you name. A name that stopped resolving for a moment, a
+port that was closed while the fixed service restarted, or a certificate
+that crossed the 30-day line between `diagnose` and `verify` is recorded in
+the verification's `differences` with `observation: true`, and the reason
+counts it, but it never makes the verdict `changed_underneath`. What that
+leaves:
+
+- A real network change — a DNS record repointed, a firewall rule added —
+  is not counted either. The readings are what notice it: a probe that
+  needs the endpoint fails, and the verdict is `not_resolved` or
+  `regressed`, not `verified`.
+- A verification recorded before this rule holds no flag and is judged as
+  it was, so stored records still validate. A control plane from before it
+  refuses a verification that carries the flag: upgrade the control plane
+  before its agents (`docs/UPGRADING.md`).
+
 ### Two runs is a floor, not a proof
 
 Every reading is run twice in a row, and a result that differs between the

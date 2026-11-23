@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from culprit_model.verifications import (
+    CONFIGURED_PREDICATE_KINDS,
     Change,
     ChangeKind,
     Verification,
@@ -29,6 +30,14 @@ def test_the_verdicts_match_the_shared_fixture() -> None:
 
 def test_the_change_kinds_match_the_shared_fixture() -> None:
     assert FIXTURE["change_kinds"] == [k.value for k in ChangeKind]
+
+
+def test_the_configured_predicate_kinds_match_the_shared_fixture() -> None:
+    # F44-055: which CONFIGURED predicates are observations, declared once
+    # per language and held together here.
+    assert FIXTURE["configured_predicates"] == {
+        name: kind.value for name, kind in CONFIGURED_PREDICATE_KINDS.items()
+    }
 
 
 @pytest.mark.parametrize("case", FIXTURE["touches"], ids=lambda c: f"{c['change']}~{c['subject']}")
