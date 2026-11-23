@@ -63,3 +63,37 @@ func TestRedactionHoldsToTheSharedCases(t *testing.T) {
 		}
 	}
 }
+
+// TestRedactionKeepsWhatMustSurvive: the fixture's "survive" rows come back
+// unchanged and are not credential-shaped (a subject or a digest is never
+// redacted), and its "over_redacted" rows are redacted exactly as accepted
+// there (Phase 44 batch 1, decision 2).
+func TestRedactionKeepsWhatMustSurvive(t *testing.T) {
+	fixture := readFixture[struct {
+		Survive []struct {
+			Why  string `json:"why"`
+			Text string `json:"text"`
+		} `json:"survive"`
+		OverRedacted []struct {
+			Why      string `json:"why"`
+			Text     string `json:"text"`
+			Redacted string `json:"redacted"`
+		} `json:"over_redacted"`
+	}](t, "redaction_conformance.json")
+	if len(fixture.Survive) == 0 || len(fixture.OverRedacted) == 0 {
+		t.Fatal("the redaction fixture has no survive or over_redacted rows")
+	}
+	for _, c := range fixture.Survive {
+		if got := RedactCredentials(c.Text); got != c.Text {
+			t.Errorf("%s: %q became %q", c.Why, c.Text, got)
+		}
+		if LooksLikeCredential(c.Text) {
+			t.Errorf("%s: %q looks like a credential", c.Why, c.Text)
+		}
+	}
+	for _, c := range fixture.OverRedacted {
+		if got := RedactCredentials(c.Text); got != c.Redacted {
+			t.Errorf("%s: %q, want %q", c.Why, got, c.Redacted)
+		}
+	}
+}

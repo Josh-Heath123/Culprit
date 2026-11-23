@@ -1549,17 +1549,21 @@ removes, each with its reason.
 
 A `Reading`'s evidence is refused at construction if it looks like a
 credential and is not marked redacted. "Looks like" is
-`looks_like_credential`, which matches known shapes — DSNs with inline
-passwords, PEM headers, AWS keys, GitHub tokens, JWTs, `sk-` keys, and
-since Phase 37 part 1 a `password=`, `passwd=` or `pwd=` outside a URL
-(libpq's keyword form, a literal in a statement), Slack tokens (`xox…-`,
-`xapp-`) and `user:pass@host` with no scheme. Go and Python are held to
-one set of cases (`shared/tests/redaction_conformance.json`). It is
-pattern matching, so a novel or unusual key format passes it — and it
-errs the other way too: any `word:word@` in free text is removed as if it
-were a credential. One known
-gap: the `sk-` pattern requires the remainder to be alphanumeric, so a
-hyphenated variant such as `sk-live-abcdef0123456789` is not matched.
+`looks_like_credential`, which matches the shapes in
+`shared/tests/redaction_conformance.json` and no others (see "Secrets: two
+layers" above): since Phase 44 batch 1, a key with a credential word as one
+of its parts (`DB_PASSWORD=`, `x-auth-token:`, `"api_key":`), URL userinfo
+(`redis://:pw@` included) and credential-named query parameters, an
+`Authorization` value and a `Bearer` or `Basic` credential, PEM private
+keys, and the provider formats the fixture lists (AWS, GitHub, GitLab,
+Stripe, Google, Slack, Anthropic, `sk-` keys, JWTs). Where there is a key,
+the key is kept and only its value is redacted. It is pattern matching, so
+a bare secret or a format the fixture does not list passes it — and it
+errs the other way too: the fixture's `over_redacted` rows (any
+`word:word@` in free text, a `token: 3`) are removed as if they were
+credentials. One known gap: the `sk-` pattern requires the remainder to be
+alphanumeric, so a hyphenated variant such as `sk-live-abcdef0123456789` is
+not matched.
 
 What is actually true, stated precisely, because an earlier draft of this
 section overclaimed it and the Phase 31 audit caught the overclaim:
@@ -2539,8 +2543,9 @@ owner inserts naming a sentence, a URL or a key is shown as labels. A
 token can still be up to 80 characters of the model's own text joined by
 underscores or hyphens. "No credential" means nothing the shared credential
 pattern (`redact_credentials`, and its Go twin) recognises: a key of a
-shape it does not know — `password=hunter2`, a Slack token, `user:pass@host`
-with no scheme — is served as a token like any other word.
+shape the shared fixture (`shared/tests/redaction_conformance.json`) does
+not list — a bare secret with no key, scheme or known prefix — is served as
+a token like any other word.
 For a name written in backticks only its first unknown word is named, so
 a sentence in code form is never shown. At most 20 are kept.
 

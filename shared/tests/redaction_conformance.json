@@ -1,7 +1,8 @@
 {
   "why": [
     "One function decides what looks like a credential, in Go (cli/internal/model/redact.go) and Python (shared/culprit_model/redaction.py). Both are held to these cases: the exact text each must give back, and whether looks_like_credential is true.",
-    "Phase 37 part 1 widens it before any statement text is read (PERFORMANCE_PLAN.md, Phase 37, carried in from the Phase 35 close-out, F2): password=… outside a URL, Slack tokens, and user:pass@host with no scheme. A connection string or a password literal in a normalised statement is exactly what it must catch."
+    "Phase 37 part 1 widens it before any statement text is read (PERFORMANCE_PLAN.md, Phase 37, carried in from the Phase 35 close-out, F2): password=… outside a URL, Slack tokens, and user:pass@host with no scheme. A connection string or a password literal in a normalised statement is exactly what it must catch.",
+    "Phase 44 batch 1 (FIELD_READINESS_PLAN.md §6, decision 2; F44-002): this fixture is the promise. Free text from outside Culprit is redacted by this pattern, and its coverage is exactly these rows: 'cases' (each credential redacted, the key kept where there is one, so a subject or probe id never disappears with its value), 'survive' (text that must come back unchanged and is not credential-shaped: subjects, digests, URLs without credentials, Culprit's own reasons) and 'over_redacted' (ordinary text the pattern removes, accepted, each with why). A shape not here is not promised (docs/SECURITY.md §8)."
   ],
   "cases": [
     {
@@ -11,9 +12,9 @@
       "credential": true
     },
     {
-      "why": "a password in a URL's query",
+      "why": "a password in a URL's query (Phase 44 batch 1: the key is kept, the value removed)",
       "text": "see https://api.example.com/v1?user=a&password=hunter2&x=1",
-      "redacted": "see [redacted]&x=1",
+      "redacted": "see https://api.example.com/v1?user=a&password=[redacted]&x=1",
       "credential": true
     },
     {
@@ -47,27 +48,27 @@
       "credential": true
     },
     {
-      "why": "a JWT",
+      "why": "a JWT (Phase 44 batch 1: the key is kept, the value removed)",
       "text": "bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJ4In0.sig",
-      "redacted": "bearer [redacted]sig",
+      "redacted": "bearer [redacted]",
       "credential": true
     },
     {
-      "why": "new: password= in libpq keyword form",
+      "why": "new: password= in libpq keyword form (Phase 44 batch 1: the key is kept, the value removed)",
       "text": "host=db.internal user=app password=hunter2 dbname=orders",
-      "redacted": "host=db.internal user=app [redacted] dbname=orders",
+      "redacted": "host=db.internal user=app password=[redacted] dbname=orders",
       "credential": true
     },
     {
-      "why": "new: a password literal in a statement, quoted, spaces around =",
+      "why": "new: a password literal in a statement, quoted, spaces around = (Phase 44 batch 1: the key is kept, the value removed)",
       "text": "SELECT id FROM users WHERE password = 'hunter2' AND active",
-      "redacted": "SELECT id FROM users WHERE [redacted] AND active",
+      "redacted": "SELECT id FROM users WHERE password = [redacted] AND active",
       "credential": true
     },
     {
-      "why": "new: passwd= and pwd= too",
+      "why": "new: passwd= and pwd= too (Phase 44 batch 1: the key is kept, the value removed)",
       "text": "passwd=abc pwd=\"x y\"",
-      "redacted": "[redacted] [redacted]",
+      "redacted": "passwd=[redacted] pwd=[redacted]",
       "credential": true
     },
     {
@@ -117,6 +118,181 @@
       "text": "no token variable is named; the password grant is withheld",
       "redacted": "no token variable is named; the password grant is withheld",
       "credential": false
+    },
+    {
+      "why": "Phase 44 batch 1: F44-001's own line: a DSN and an env-style password after an underscore",
+      "text": "connect failed: postgresql://app:LeakPw77@db.internal/app DB_PASSWORD=LeakPw88",
+      "redacted": "connect failed: [redacted]db.internal/app DB_PASSWORD=[redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a credential word as the last part of a key, after _, any case, quoted or not",
+      "text": "POSTGRES_PASSWORD=hunter2 REDIS_PASSWORD='a b' db_Password = x",
+      "redacted": "POSTGRES_PASSWORD=[redacted] REDIS_PASSWORD=[redacted] db_Password = [redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: every credential word as a part, after _, - or .",
+      "text": "X-Api-Key: abc123 apikey=k1 api_key=k2 ACCESS_KEY=k3 private-key=k4 credentials=k5 AUTH_TOKEN=k6 client.secret=k7 pwd=k8",
+      "redacted": "X-Api-Key: [redacted] apikey=[redacted] api_key=[redacted] ACCESS_KEY=[redacted] private-key=[redacted] credentials=[redacted] AUTH_TOKEN=[redacted] client.secret=[redacted] pwd=[redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a dotted and a hyphenated key",
+      "text": "x-auth-token: abc spring.datasource.password=abc SECRET_KEY=django-insecure-abc",
+      "redacted": "x-auth-token: [redacted] spring.datasource.password=[redacted] SECRET_KEY=[redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: JSON quoting",
+      "text": "{\"password\": \"hunter2\", \"user\": \"app\", \"api_key\":\"k\"}",
+      "redacted": "{\"password\": [redacted], \"user\": \"app\", \"api_key\":[redacted]}",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: YAML: a key, a colon and a space",
+      "text": "db:\n  password: hunter2\n  host: db",
+      "redacted": "db:\n  password: [redacted]\n  host: db",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: URL userinfo with an empty user, Redis's form",
+      "text": "redis://:hunter2@redis:6379/0",
+      "redacted": "[redacted]redis:6379/0",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: URL userinfo whose password holds an @: to the last @ before the host",
+      "text": "postgresql://app:hun@ter2@db.internal/app",
+      "redacted": "[redacted]db.internal/app",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: query parameters with credential-word names, the rest of the URL kept",
+      "text": "GET https://api.example.com/cb?code=1&access_token=abc123&state=x",
+      "redacted": "GET https://api.example.com/cb?code=1&access_token=[redacted]&state=x",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: client_secret and refresh_token in a query",
+      "text": "https://login.example.com/token?client_secret=s3cr3t&refresh_token=r1",
+      "redacted": "https://login.example.com/token?client_secret=[redacted]&refresh_token=[redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: an Authorization header's whole value",
+      "text": "Authorization: Bearer abcdefghijklmnop",
+      "redacted": "Authorization: [redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: an Authorization header in a command line",
+      "text": "curl -H \"Authorization: Basic dXNlcjpwYXNz\" http://h",
+      "redacted": "curl -H \"Authorization: [redacted]\" http://h",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a Bearer credential in a sentence",
+      "text": "sent Bearer 9f8e7d6c5b4a and got 401",
+      "redacted": "sent Bearer [redacted] and got 401",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a Basic credential in a sentence",
+      "text": "retrying with basic dXNlcjpwYXNz now",
+      "redacted": "retrying with basic [redacted] now",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: Stripe's live and test keys",
+      "text": "stripe sk_live_EXAMPLEnotreal1 and sk_test_EXAMPLEnotreal1",
+      "redacted": "stripe [redacted] and [redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a Google API key",
+      "text": "google AIzaSyA1234567890abcdefghijklmnopqrstuv end",
+      "redacted": "google [redacted] end",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a GitLab personal access token",
+      "text": "gitlab glpat-xxxxxxxxxxxxxxxxxxxx end",
+      "redacted": "gitlab [redacted] end",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: GitHub's fine-grained, OAuth and server tokens",
+      "text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz gho_0123456789abcdefghijklmnopqrstuv ghs_0123456789abcdefghijklmnopqrstuv",
+      "redacted": "[redacted] [redacted] [redacted]",
+      "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a Slack xox token of another type",
+      "text": "xoxe-EXAMPLE-not-a-real-token",
+      "redacted": "[redacted]",
+      "credential": true
+    }
+  ],
+  "survive": [
+    {
+      "why": "subjects, auth: included, whose kind is a credential word",
+      "text": "component:orders-svc config:orders-svc/DATABASE_URL config:api/SECRET_KEY auth:orders-svc->payments-svc/audience"
+    },
+    {
+      "why": "a subject naming a token key, in a reason",
+      "text": "config:order-service/INVENTORY_TOKEN is not granted (config.inspect.values)"
+    },
+    {
+      "why": "an http and a dep subject, and a probe id",
+      "text": "http:orders-svc/POST /api/v1/orders dep:web/@babel/parser probe.auth.token_shape"
+    },
+    {
+      "why": "digests, bare and in an image reference",
+      "text": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 ghcr.io/josh/culprit@sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    },
+    {
+      "why": "URLs without credentials: a port, an @ in a path, a query",
+      "text": "https://example.com:443/users/@alice postgresql://db.internal:5432/orders https://api.example.com/v1?user=a&limit=50 redis://redis:6379/0"
+    },
+    {
+      "why": "Culprit's own reasons",
+      "text": "the values of 7 key(s) were not captured — only their shape (config.read.values is not granted)"
+    },
+    {
+      "why": "words about credentials, Bearer and Basic among them",
+      "text": "Bearer token missing; basic authentication is not configured; probe.auth.token_shape needs token_env or a token"
+    },
+    {
+      "why": "a route, a time, an email address",
+      "text": "GET /orders at 10:30, mail ops@example.com"
+    }
+  ],
+  "over_redacted": [
+    {
+      "why": "a YAML-shaped key with a credential word: its value goes, whatever it is",
+      "text": "token: 3",
+      "redacted": "token: [redacted]"
+    },
+    {
+      "why": "a probe id with auth and token as parts, followed by a colon and a space: the id is kept, the next word goes",
+      "text": "probe.auth.token_shape: refused",
+      "redacted": "probe.auth.token_shape: [redacted]"
+    },
+    {
+      "why": "a setting named for auth: its value goes, though it is not a secret",
+      "text": "auth_mode=disabled",
+      "redacted": "auth_mode=[redacted]"
+    },
+    {
+      "why": "a config subject naming a password key, then a colon and a space: the subject is kept, the next word goes",
+      "text": "config:api/DB_PASSWORD: missing",
+      "redacted": "config:api/DB_PASSWORD: [redacted]"
+    },
+    {
+      "why": "any word:word@ in free text reads as user:pass@host",
+      "text": "see me:later@home",
+      "redacted": "see [redacted]home"
     }
   ]
 }

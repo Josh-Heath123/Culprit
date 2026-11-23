@@ -3,7 +3,10 @@
 
 package model
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+)
 
 // Free text — a skip reason, a refusal reason, a meta value — that crosses
 // a trust boundary: read out of a capture envelope somebody else wrote,
@@ -22,31 +25,66 @@ import "regexp"
 // Unanchored, unlike ClassifyFormat: a credential inside a sentence is
 // still a credential. The same six patterns the value classifier and the
 // manifest loader use, so "looks like a credential" means one thing.
+// Phase 44 batch 1 (F44-002): the pattern's coverage is exactly the rows of
+// shared/tests/redaction_conformance.json, which Python's redaction.py is
+// held to as well; a shape not there is not promised (docs/SECURITY.md §8).
+//
+// A key whose name has a credential word as one of its parts (DB_PASSWORD,
+// x-auth-token, spring.datasource.password, "api_key"), in any case. The
+// key and its separator are kept and only the value goes, so a subject or a
+// probe id is never removed with it. A colon counts only when quoted (JSON)
+// or followed by whitespace (YAML): `auth:a->b/audience` is a subject.
+const (
+	credentialWord = `(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key` +
+		`|private[_-]?key|credentials?|auth)`
+	credentialKey   = `\b(?:[a-z0-9]+[_.-])*` + credentialWord + `(?:[_.-][a-z0-9]+)*`
+	credentialValue = `(?:'[^']*'|"[^"]*"|[^\s&;,'"}]+)`
+	// A Bearer or Basic credential: a run with an upper-case letter, a
+	// digit or base64 punctuation after its third character, so "Bearer
+	// token" and "basic authentication" stay words.
+	opaqueCredential = `[a-z0-9._~+/-]{3,}(?-i:[A-Z0-9+/=])[a-z0-9._~+/=-]*`
+)
+
 var credentialPattern = regexp.MustCompile(
-	`(?i)[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@` + // user:pass@ in a URL
-		// ?password=… — consuming the value, so redaction removes it and
-		// does not leave it standing after the marker.
-		`|[a-z][a-z0-9+.-]*://\S*[?&](password|passwd|secret|token|api[_-]?key)=[^&\s]*` +
-		`|-----BEGIN [A-Z ]*PRIVATE KEY-----(?s:.*?)(-----END [A-Z ]*PRIVATE KEY-----|\z)` +
+	`(?i)(?P<key>` + credentialKey + `(?:\s*=\s*|["']\s*:\s*|\s*:\s+))` + credentialValue +
+		`|(?P<authz>\b(?:proxy-)?authorization["']?\s*[=:]\s*)(?:[a-z]+\s+)?[^\s,;'"]+` +
+		`|(?P<scheme>\b(?:bearer|basic)\s+)` + opaqueCredential +
+		// URL userinfo, an empty user included (redis://:pw@), the
+		// password running to the last @ before the host.
+		`|[a-z][a-z0-9+.-]*://[^/\s:@]*:[^\s/?#]*@` +
+		`|-----BEGIN [A-Z ]*PRIVATE KEY-----(?s:.*?)(?:-----END [A-Z ]*PRIVATE KEY-----|\z)` +
+		// Provider formats.
 		`|\bAKIA[0-9A-Z]{16}\b` +
 		`|\bgh[pousr]_[A-Za-z0-9]{20,}` +
+		`|\bgithub_pat_[A-Za-z0-9_]{20,}` +
+		`|\bglpat-[A-Za-z0-9_-]{20,}` +
+		`|\bsk_(?:live|test)_[A-Za-z0-9]{10,}` +
+		`|\bAIza[0-9A-Za-z_-]{35}` +
 		`|\bsk-[A-Za-z0-9]{20,}` +
 		// Anthropic's keys (sk-ant-api03-...): hyphens break the pattern
 		// above. Phase 35 part 2 made this a key the control plane holds.
 		`|\bsk-ant-[A-Za-z0-9_-]{20,}` +
-		`|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.` +
-		// Phase 37 part 1, before any statement text is read: a password
-		// outside a URL (libpq's keyword form, a literal in a statement),
-		// Slack tokens, and user:pass@host with no scheme. Each is a case
-		// in shared/tests/redaction_conformance.json, which Python's
-		// redaction.py is held to as well.
-		`|\b(password|passwd|pwd)\s*=\s*('[^']*'|"[^"]*"|[^\s&;,'"]+)` +
-		`|\bxox[abposr]-[A-Za-z0-9-]{10,}` +
+		// A JWT, its signature included.
+		`|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*` +
+		`|\bxox[a-z]-[A-Za-z0-9-]{10,}` +
 		`|\bxapp-[0-9]+-[A-Za-z0-9-]{10,}` +
+		// user:pass@host with no scheme (Phase 37 part 1).
 		`|\b[A-Za-z0-9._%+-]+:[^\s/@:]+@` +
 		// SQL's own form: CREATE/ALTER ROLE or USER ... PASSWORD '...',
 		// which pg_stat_statements keeps verbatim for a utility statement.
 		`|\bPASSWORD\s+'[^']*'`)
+
+// The groups whose text is kept before the marker: a key and its
+// separator, an Authorization header's name, the word Bearer or Basic.
+var keptGroups = func() []int {
+	var kept []int
+	for index, name := range credentialPattern.SubexpNames() {
+		if name == "key" || name == "authz" || name == "scheme" {
+			kept = append(kept, index)
+		}
+	}
+	return kept
+}()
 
 // LooksLikeCredential reports whether free text carries something
 // credential-shaped anywhere in it.
@@ -58,5 +96,23 @@ func LooksLikeCredential(text string) bool {
 // For rendering: a report must show that a reason existed even when it
 // cannot show what it said.
 func RedactCredentials(text string) string {
-	return credentialPattern.ReplaceAllString(text, "[redacted]")
+	matches := credentialPattern.FindAllStringSubmatchIndex(text, -1)
+	if matches == nil {
+		return text
+	}
+	var out strings.Builder
+	last := 0
+	for _, match := range matches {
+		out.WriteString(text[last:match[0]])
+		for _, group := range keptGroups {
+			if start := match[2*group]; start >= 0 {
+				out.WriteString(text[start:match[2*group+1]])
+				break
+			}
+		}
+		out.WriteString("[redacted]")
+		last = match[1]
+	}
+	out.WriteString(text[last:])
+	return out.String()
 }
