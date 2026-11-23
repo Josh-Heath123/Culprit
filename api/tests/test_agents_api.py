@@ -884,3 +884,214 @@ async def test_a_verify_task_names_an_investigation_in_its_environment(
     assert "hunter2-not-real" not in spec
     for wrong in ("restart:order-service", "commit:main", "action:   "):
         assert task(verify=verify | {"changes": [wrong]}).status_code == 422, wrong
+
+
+# ---- the secrets canary (Phase 44 batch 1, decision 3) ----------------------------------
+
+#: One distinct secret per input class the API takes from outside Culprit,
+#: each in a shape shared/tests/redaction_conformance.json lists. The
+#: binary's half is cli/cmd/culprit/secrets_canary_test.go.
+API_PLANTED = {
+    "agent task symptom": "ApiLeakS1",
+    "change action in a task": "ApiLeakS2",
+    "agent's reported reason": "ApiLeakS3",
+    "refused body: an investigation's subject": "ApiLeakS4",
+    "refused body: change words": "ApiLeakS5",
+    "refused body: a grant name": "ApiLeakS6",
+    "probe input declared secret": "ApiLeakS7",
+}
+
+
+def _with_symptom_subject(subject: str) -> dict[str, Any]:
+    """A recorded investigation, valid in every field but its symptom's
+    subject, so the subject's own validator is what refuses it."""
+    body = json.loads((RECORDED / "network-partition.json").read_text("utf-8"))
+    body["symptom"]["subject"] = subject
+    return body
+
+
+def test_no_planted_secret_leaves_any_route(client: TestClient) -> None:
+    """Every planted secret is sent through the route that takes it, and
+    none appears in any response body: not as stored and served back, not
+    in a 422. (A task's stored spec is checked through the route that
+    serves it, GET /agents/{id}/tasks/{task}.)"""
+    bodies: dict[str, str] = {}
+
+    def keep(where: str, response: Any) -> Any:
+        bodies[where] = bodies.get(where, "") + response.text
+        return response
+
+    agent = paired(client)
+    secret = API_PLANTED
+
+    # An agent task's symptom, stored, claimed and served back.
+    created = keep(
+        "create diagnose task",
+        client.post(
+            f"/agents/{agent.id}/tasks",
+            json={
+                "environment": "production",
+                "kind": "diagnose",
+                "diagnose": {"symptom": f"postgresql://app:{secret['agent task symptom']}@db/x"},
+            },
+        ),
+    )
+    assert created.status_code == 201, created.text
+    diagnose_task = created.json()["id"]
+    keep("claim the diagnose task", agent.send("POST", "/agents/me/tasks/claim"))
+    # The agent's reported reason, recorded and served back.
+    reported = agent.send(
+        "POST",
+        f"/agents/me/tasks/{diagnose_task}/result",
+        {
+            "outcome": "error",
+            "reason": f"connect postgresql://u:{secret["agent's reported reason"]}@h/d failed",
+        },
+    )
+    assert reported.status_code == 204, reported.text
+    keep("served diagnose task", client.get(f"/agents/{agent.id}/tasks/{diagnose_task}"))
+
+    # A change named in words, in a verify task.
+    verify = keep(
+        "create verify task",
+        client.post(
+            f"/agents/{agent.id}/tasks",
+            json={
+                "environment": "production",
+                "kind": "verify",
+                "verify": {
+                    "investigation_id": "inv-0000000000000000",
+                    "changes": [f"action:rotated DB_PASSWORD={secret['change action in a task']}"],
+                    "source": "real",
+                },
+            },
+        ),
+    )
+    if verify.status_code == 201:
+        keep("served verify task", client.get(f"/agents/{agent.id}/tasks/{verify.json()['id']}"))
+
+    # Refused bodies: each answer is a 422 that names the field, not the value.
+    refused = [
+        keep(
+            "422 investigation subject",
+            client.post(
+                "/investigations",
+                json=_with_symptom_subject(
+                    f"postgresql://u:{secret["refused body: an investigation's subject"]}@db/x"
+                ),
+                headers={"Authorization": f"Bearer {PROJECT_TOKEN}"},
+            ),
+        ),
+        keep(
+            "422 change words",
+            client.post(
+                f"/agents/{agent.id}/tasks",
+                json={
+                    "environment": "production",
+                    "kind": "verify",
+                    "verify": {
+                        "investigation_id": "inv-0000000000000000",
+                        "changes": [f"DB_PASSWORD={secret['refused body: change words']}"],
+                        "source": "real",
+                    },
+                },
+            ),
+        ),
+        keep(
+            "422 grant name",
+            client.patch(
+                f"/agents/{agent.id}/grants",
+                json={
+                    "environment": "production",
+                    "grants": [f"token={secret['refused body: a grant name']}"],
+                },
+            ),
+        ),
+        # A probe input the catalogue declares secret (decision 4).
+        keep(
+            "422 secret probe input",
+            client.post(
+                f"/agents/{agent.id}/tasks",
+                json={
+                    "environment": "production",
+                    "kind": "probe",
+                    "probe": {
+                        "probe_id": "probe.auth.token_shape",
+                        "target": build(
+                            "auth", from_component="a", to_component="b", aspect="audience"
+                        ),
+                        "inputs": {"token": f"eyJ{secret['probe input declared secret']}.x"},
+                    },
+                },
+            ),
+        ),
+    ]
+    for response in refused:
+        assert response.status_code == 422, response.text
+
+    leaks = [
+        f"the {cls} ({value}) leaves through {where}"
+        for cls, value in API_PLANTED.items()
+        for where, body in bodies.items()
+        if value in body
+    ]
+    assert not leaks, "\n".join(leaks)
+
+
+@pytest.mark.parametrize(
+    ("probe_id", "alternative"),
+    [("probe.auth.token_shape", "token_env"), ("probe.auth.propagation", None)],
+)
+async def test_a_task_setting_a_secret_input_is_refused_and_not_stored(
+    client: TestClient, db_engine: AsyncEngine, probe_id: str, alternative: str | None
+) -> None:
+    """F44-005, decision 4: secrets never travel through the control plane.
+    A probe task that sets an input the catalogue declares secret is a 422
+    naming the field and, where the probe has one, its `_env` alternative;
+    nothing is stored."""
+    agent = paired(client)
+    token = "eyJhbGciOiJub25lIn0.eyJhdWQiOiJ4In0.c2ln"
+    response = client.post(
+        f"/agents/{agent.id}/tasks",
+        json={
+            "environment": "production",
+            "kind": "probe",
+            "probe": {
+                "probe_id": probe_id,
+                "target": build("auth", from_component="a", to_component="b", aspect="audience"),
+                "inputs": {"token": token, "url": "http://b/x"},
+            },
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert token not in response.text and "c2ln" not in response.text
+    message = " ".join(error["msg"] for error in response.json()["detail"])
+    assert "inputs.token" in message
+    if alternative:
+        assert alternative in message
+    else:
+        assert "no _env alternative" in message
+    async with db_engine.connect() as conn:
+        stored = await conn.scalar(
+            text("SELECT count(*) FROM agent_tasks WHERE agent_id = :agent"), {"agent": agent.id}
+        )
+    assert stored == 0
+
+
+def test_a_task_naming_the_env_alternative_is_accepted(client: TestClient) -> None:
+    """The alternative works: token_env names a variable in the agent's own
+    environment, and carries no secret."""
+    agent = paired(client)
+    response = client.post(
+        f"/agents/{agent.id}/tasks",
+        json={
+            "environment": "production",
+            "kind": "probe",
+            "probe": {
+                "probe_id": "probe.auth.token_shape",
+                "target": build("auth", from_component="a", to_component="b", aspect="audience"),
+                "inputs": {"token_env": "ORDERS_TOKEN", "expect_audience": "b"},
+            },
+        },
+    )
+    assert response.status_code == 201, response.text

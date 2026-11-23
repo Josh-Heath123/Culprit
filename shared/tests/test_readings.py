@@ -21,6 +21,7 @@ from culprit_model.readings import (
     Reading,
     UndeclaredVerdict,
     Verdict,
+    redact_reading,
     validate_for,
 )
 from pydantic import ValidationError
@@ -147,6 +148,24 @@ def test_redaction_holds_to_the_shared_cases(case: dict) -> None:
     assert looks_like_credential(case["text"]) is case["credential"]
 
 
+@pytest.mark.parametrize("case", REDACTION["survive"], ids=lambda case: case["why"][:60])
+def test_redaction_keeps_what_must_survive(case: dict) -> None:
+    """Phase 44 batch 1: a subject, a digest, a URL without credentials and
+    Culprit's own reasons come back unchanged (Go reads the same rows)."""
+    from culprit_model.redaction import looks_like_credential, redact_credentials
+
+    assert redact_credentials(case["text"]) == case["text"]
+    assert looks_like_credential(case["text"]) is False
+
+
+@pytest.mark.parametrize("case", REDACTION["over_redacted"], ids=lambda case: case["why"][:60])
+def test_redaction_over_redacts_only_as_accepted(case: dict) -> None:
+    """The over-redactions the fixture accepts, each with its why."""
+    from culprit_model.redaction import redact_credentials
+
+    assert redact_credentials(case["text"]) == case["redacted"]
+
+
 _MANIFESTS = {case["id"]: case for case in FIXTURE["manifests_accepted"]}
 
 
@@ -170,3 +189,16 @@ def test_readings_are_held_to_their_probes_declared_verdicts(case: dict) -> None
     else:
         with pytest.raises(UndeclaredVerdict):
             validate_for(reading, manifest)
+
+
+@pytest.mark.parametrize(
+    "case", FIXTURE["readings_redacted"], ids=lambda case: case["why"][:40]
+)
+def test_redact_reading_holds_to_the_shared_cases(case: dict) -> None:
+    """F44-004: the Python half of readings_redacted, which Go reads too.
+    A string is redacted wherever it sits, a map inside a list included."""
+    raw = dict(FIXTURE["readings_accepted"][0]["reading"])
+    raw.update(measured=case["measured"], expected=case["expected"])
+    redacted = redact_reading(Reading.model_validate(raw))
+    assert redacted.measured == case["redacted_measured"]
+    assert redacted.expected == case["redacted_expected"]

@@ -25,6 +25,12 @@ import (
 // directory: `culprit diagnose` now keeps what it diagnoses for `culprit
 // verify`, and a test run must not leave investigations in $HOME.
 func TestMain(m *testing.M) {
+	// The secrets canary runs this binary as an extractor that fails with
+	// its planted text on stderr (secrets_canary_test.go).
+	if leak := os.Getenv(leakyExtractorVariable); leak != "" {
+		fmt.Fprintln(os.Stderr, leak)
+		os.Exit(3)
+	}
 	dir, err := os.MkdirTemp("", "culprit-state-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

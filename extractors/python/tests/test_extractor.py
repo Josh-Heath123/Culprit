@@ -377,3 +377,55 @@ def test_a_project_with_no_sqlalchemy_reports_the_gap() -> None:
     reasons = {skip["want"]: skip["reason"] for skip in response["skipped"]}
     assert "db_schema" in reasons
     assert "SQLAlchemy" in reasons["db_schema"] or "alembic" in reasons["db_schema"]
+
+
+# --- Culprit never writes into the project it reads (Phase 44 batch 1) ---
+
+#: A project whose conventional entry point (config.wsgi) imports a module
+#: of its own and then fails, as the GUIDE's tour did (F44-003).
+IMPORTED_PROJECT = {
+    "config/__init__.py": "",
+    "config/settings.py": "DEBUG = False\n",
+    "config/wsgi.py": "from config import settings  # noqa: F401\n"
+    "raise KeyError('DATABASE_URL')\n",
+}
+
+
+def _tree(root: Path) -> dict[str, tuple[int, str]]:
+    """Every file under root: its size and a hash of its bytes."""
+    import hashlib
+
+    return {
+        path.relative_to(root).as_posix(): (
+            path.stat().st_size,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def test_import_mode_writes_no_bytecode_into_the_project_by_itself(tmp_path: Path) -> None:
+    """F44-003: the extractor sets sys.dont_write_bytecode before it imports
+    anything, so even with PYTHONDONTWRITEBYTECODE unset — run by hand, or
+    by an orchestrator that does not set it — importing the project's code
+    leaves no __pycache__ in it."""
+    import os
+
+    for relative, text in IMPORTED_PROJECT.items():
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / relative).write_text(text, encoding="utf-8")
+    before = _tree(tmp_path)
+    environment = {k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"}
+    process = subprocess.run(
+        [sys.executable, "-m", "culprit_extract_python.cli"],
+        input=json.dumps(request_payload(tmp_path, ["http_routes"], "api")),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    assert process.returncode == 0, process.stderr[:500]
+    # It did import the project: the failure is config.wsgi's own.
+    assert "DATABASE_URL" in process.stdout
+    assert _tree(tmp_path) == before

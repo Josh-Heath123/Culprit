@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -53,27 +54,45 @@ const (
 )
 
 func main() {
-	if err := newRootCommand().Execute(); err != nil {
+	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// execute runs the root command and returns the exit code: main without
+// the os.Exit, so a test can see exactly what reaches stderr.
+func execute(arguments []string, stdout, stderr io.Writer) int {
+	command := newRootCommand()
+	command.SetArgs(arguments)
+	command.SetOut(stdout)
+	command.SetErr(stderr)
+	if err := command.Execute(); err != nil {
 		// A findingsError is not a failure of the command; it is the
 		// command's answer. It has already printed its report, so it exits
 		// quietly with the code CI reads rather than printing an error
 		// line that would make a real finding look like a crash.
 		var findings *findingsError
 		if errors.As(err, &findings) {
-			os.Exit(exitFindings)
+			return exitFindings
 		}
 		var partial *partialDiagnosisError
 		if errors.As(err, &partial) {
-			os.Exit(exitFindings)
+			return exitFindings
 		}
 		var unverified *verificationError
 		if errors.As(err, &unverified) {
-			os.Exit(exitFindings)
+			return exitFindings
 		}
-		fmt.Fprintln(os.Stderr, "culprit:", err)
-		os.Exit(exitError)
+		fmt.Fprintln(stderr, errorLine(err))
+		return exitError
 	}
-	os.Exit(exitOK)
+	return exitOK
+}
+
+// errorLine is the one place a command's error reaches stderr, and from
+// there a CI log (F44-084). An error can quote what it was given — a
+// --input, a symptom, a --change — so it is redacted here, once, rather
+// than at each of the call sites that build one.
+func errorLine(err error) string {
+	return "culprit: " + model.RedactCredentials(err.Error())
 }
 
 // findingsError signals "the run succeeded and found something at or

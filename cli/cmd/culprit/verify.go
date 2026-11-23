@@ -419,7 +419,11 @@ func parseChanges(values []string) ([]model.Change, error) {
 		case "commit":
 			change = model.Change{Kind: model.ChangeCommit, Ref: strings.ToLower(strings.TrimSpace(rest))}
 		case "action":
-			change = model.Change{Kind: model.ChangeAction, Description: strings.TrimSpace(rest)}
+			// Words a person typed, kept as the change's record: redacted
+			// here, the one place the CLI, MCP and the agent parse them
+			// (F44-021), as the API redacts its own copy.
+			change = model.Change{Kind: model.ChangeAction,
+				Description: model.RedactCredentials(strings.TrimSpace(rest))}
 		case "image":
 			subject, err := model.BuildSubject(model.KindImage, model.Parts{"component": rest})
 			if err != nil {

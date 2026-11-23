@@ -11,8 +11,9 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 44, part 1 (the audit) — on branch `phase-44-audit`,
-  from `ddb275e`; not started. No product change in this part.
+- **Current phase:** 44, batch 1 (secrets stay in) — on branch
+  `phase-44-b1`, from `6f64f69`; not started. Brief: the field-readiness
+  plan's §6.
 - **Plan of record:** `docs/FIELD_READINESS_PLAN.md` (Phase 44), after
   `docs/DELIVERY_PLAN.md` (40–43), `docs/PERFORMANCE_PLAN.md` (36–39) and
   `docs/DIAGNOSTIC_PLAN.md` (26–35). Read `DIAGNOSTIC_PLAN.md` §1 (D1–D8)

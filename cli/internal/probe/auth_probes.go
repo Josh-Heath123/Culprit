@@ -60,9 +60,12 @@ func (authTokenShape) Manifest() model.ProbeManifest {
 		Cost: model.CostCheap,
 		Inputs: map[string]any{
 			"type": "object",
-			// One of token or token_env.
+			// One of token or token_env. token carries a secret, and says
+			// so on the input: the API refuses a task that sets it and
+			// names token_env, a variable in the agent's own environment,
+			// instead (Phase 44 batch 1, F44-005).
 			"properties": map[string]any{
-				"token":           map[string]any{"type": "string"},
+				"token":           map[string]any{"type": "string", "secret": true, "env": "token_env"},
 				"token_env":       map[string]any{"type": "string"},
 				"expect_audience": map[string]any{"type": "string"},
 				"expect_issuer":   map[string]any{"type": "string"},
@@ -241,8 +244,11 @@ func (authPropagation) Manifest() model.ProbeManifest {
 			"type":     "object",
 			"required": []any{"url", "token"},
 			"properties": map[string]any{
-				"url":   map[string]any{"type": "string"},
-				"token": map[string]any{"type": "string"},
+				"url": map[string]any{"type": "string"},
+				// A secret, declared so the API refuses a task that sets
+				// it. This probe has no _env alternative yet: as a task it
+				// cannot be sent through the control plane at all.
+				"token": map[string]any{"type": "string", "secret": true},
 			},
 		},
 	}

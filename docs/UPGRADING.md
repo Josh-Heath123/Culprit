@@ -283,6 +283,30 @@ Capture again after upgrading, and diagnose again before verifying a fix
 for an investigation walked by the older binary. Captures taken by the
 same version always agree.
 
+## Agent tasks stored before Phase 44 may hold a token
+
+Since Phase 44 batch 1 the control plane refuses an agent task that sets a
+probe input the catalogue declares secret — today `token`, on
+`probe.auth.token_shape` and `probe.auth.propagation` — with a 422 naming
+the field and, for `token_shape`, `token_env` instead: the name of a
+variable in the agent's own environment (`docs/SECURITY.md` §8).
+
+**Tasks stored before the upgrade keep what they were given.** Nothing
+rewrites or deletes them: `agent_tasks` is a record. To find any that hold
+a token, as an operator with read access to the database:
+
+```sql
+SELECT id, agent_id, created_by, created_at
+FROM agent_tasks
+WHERE kind = 'probe' AND spec->'inputs' ? 'token';
+```
+
+If any come back, treat the token in each as exposed to everyone who could
+read `agent_tasks` or `GET /agents/{id}/tasks/{task}`: rotate it at its
+issuer. A diagnose task's symptom and an agent's reported reason stored
+before the upgrade were not redacted either; the same table holds them
+(`spec->'diagnose'->>'symptom'`, `reason`).
+
 ## Picking a version
 
 Pin `IMAGE_TAG` in `infra/.env.prod` to a specific release

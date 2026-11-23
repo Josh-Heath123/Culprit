@@ -1,6 +1,6 @@
 ---
 name: ci
-description: Verify CI is green on the merge result, for this exact commit. Push, watch the run pinned to its SHA, assert its conclusion, then gate on every check on the pull request (including Code scanning results) and on no open code-scanning alert, and triage any failure. Use before reporting any phase complete and before merging.
+description: Verify CI is green on the merge result, for this exact commit. Push, watch the run pinned to its SHA, assert its conclusion, then gate on every check on the pull request (including Code scanning results) and on no open code-scanning or secret-scanning alert, and triage any failure. Use before reporting any phase complete and before merging.
 argument-hint: "[branch]"
 ---
 
@@ -96,15 +96,28 @@ for q in "pr=$PR" "ref=refs/pull/$PR/merge" "ref=refs/pull/$PR/head"; do
 done
 ```
 
-Any line printed is red. If the API call itself fails (no code scanning, no
-permission), the result is `NOT RUN`, not pass.
+Then the repository as a whole (Phase 44 batch 1, F44-087): no open
+secret-scanning alert, and no open code-scanning alert on the default branch.
+A secret found in any commit the branch pushed opens an alert on the
+repository, not on the pull request, and no check on the PR reports it.
 
-**Green** = step 4 holds, every PR check is `pass`/`skipping`, and the three
+```bash
+gh api "repos/$REPO/secret-scanning/alerts?state=open&per_page=100" \
+  -q '.[] | "open secret-scanning alert #\(.number)  \(.secret_type)  \(.html_url)"'
+gh api "repos/$REPO/code-scanning/alerts?state=open&per_page=100" \
+  -q '.[] | "open code-scanning alert #\(.number)  \(.rule.id)  \(.most_recent_instance.ref)  \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+```
+
+Any line printed by any of the five alert queries is red. If an API call
+itself fails (no code scanning, secret scanning off, no permission), the
+result is `NOT RUN`, not pass.
+
+**Green** = step 4 holds, every PR check is `pass`/`skipping`, and the five
 alert queries print nothing. Anything less is not green, however the runs
 concluded.
 
-An open alert is never cleared from here: no dismissal, no `# lgtm`/`codeql`
-suppression comment, no query-suite or severity change. Either fix the defect
+An open alert, code- or secret-scanning, is never cleared from here: no
+dismissal, no `# lgtm`/`codeql` suppression comment, no query-suite or severity change. Either fix the defect
 with a test that reproduces it, or write the false-positive argument into the
 handoff (§5 and a blocking §3 question) and stop. Dismissing is the
 architecture session's decision.
@@ -145,8 +158,8 @@ run      <id>  <url>
 ```
 
 Then one line per job: conclusion and name. Then one line per PR check from
-`gh pr checks`: bucket and name. Then the open code-scanning alerts, or
-`none` with the three queries that returned empty. Then the verdict. Then
+`gh pr checks`: bucket and name. Then the open code-scanning and
+secret-scanning alerts, or `none` with the five queries that returned empty. Then the verdict. Then
 whether what you tested was the **merge result** or the branch alone, stated
 explicitly.
 

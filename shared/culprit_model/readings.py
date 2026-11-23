@@ -465,19 +465,19 @@ def _redact_mapping(values: dict | None) -> dict | None:
     """
     if values is None:
         return None
-    redacted: dict = {}
-    for key, value in values.items():
-        if isinstance(value, str):
-            redacted[key] = redact_credentials(value)
-        elif isinstance(value, dict):
-            redacted[key] = _redact_mapping(value)
-        elif isinstance(value, list):
-            redacted[key] = [
-                redact_credentials(item) if isinstance(item, str) else item for item in value
-            ]
-        else:
-            redacted[key] = value
-    return redacted
+    return {key: _redact_value(value) for key, value in values.items()}
+
+
+def _redact_value(value: object) -> object:
+    """A string wherever it sits, a map inside a list included (F44-004,
+    held with Go by reading_conformance.json's readings_redacted)."""
+    if isinstance(value, str):
+        return redact_credentials(value)
+    if isinstance(value, dict):
+        return _redact_mapping(value)
+    if isinstance(value, list):
+        return [_redact_value(item) for item in value]
+    return value
 
 
 class UndeclaredVerdict(ValueError):

@@ -35,10 +35,29 @@ import (
 // containing `&` is not mangled into `&`, which would make the
 // output differ from the same fact rendered by Python.
 func JSON(writer io.Writer, bundle model.CaptureBundle) error {
+	bundle = redactSkips(bundle)
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
 	return encoder.Encode(bundle)
+}
+
+// redactSkips is the one place a skip reason leaves `culprit intent`
+// (F44-001). A reason can be an extractor's first line of stderr, or the
+// exception the user's application raised on import: text Culprit did not
+// write. `culprit check` redacts the same reasons (report.allSkips).
+// The caller's bundle is not changed: Skipped is copied.
+func redactSkips(bundle model.CaptureBundle) model.CaptureBundle {
+	if bundle.Skipped == nil {
+		return bundle
+	}
+	skipped := make([]model.Skip, len(bundle.Skipped))
+	for index, skip := range bundle.Skipped {
+		skip.Reason = model.RedactCredentials(skip.Reason)
+		skipped[index] = skip
+	}
+	bundle.Skipped = skipped
+	return bundle
 }
 
 // Text writes a human-readable inventory.
@@ -49,6 +68,7 @@ func JSON(writer io.Writer, bundle model.CaptureBundle) error {
 // looked like a finding here would make this phase's output impossible
 // to tell apart from the next one's.
 func Text(writer io.Writer, bundle model.CaptureBundle) error {
+	bundle = redactSkips(bundle)
 	byKind := map[string][]model.Fact{}
 	for _, fact := range bundle.Facts {
 		kind, _, err := model.ParseSubject(fact.Subject)

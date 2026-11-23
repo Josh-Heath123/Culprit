@@ -12,9 +12,10 @@ from culprit_model.capabilities import Capability
 from culprit_model.redaction import redact_credentials
 from culprit_model.subjects import SubjectError, build
 from culprit_model.verifications import Change, ChangeKind
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.agents.signing import AGENT_ID
+from app.readings import catalogue
 
 
 def _grant_names(names: list[str]) -> list[str]:
@@ -116,12 +117,50 @@ class ProbeSpec(_Strict):
     target: str = Field(min_length=1, max_length=1024)
     inputs: dict[str, Any] | None = None
 
+    @model_validator(mode="after")
+    def _no_secret_inputs(self) -> "ProbeSpec":
+        # F44-005, Phase 44 batch 1: secrets never travel through the
+        # control plane. The probe catalogue declares, on the input, which
+        # inputs carry a secret (mirrored from the binary); a task setting
+        # one is refused, naming the field and the `_env` input that names
+        # a variable in the agent's own environment instead. The message
+        # names fields only: what was given is never repeated.
+        manifest = catalogue.get(self.probe_id)
+        if manifest is None or not self.inputs:
+            return self
+        properties = manifest.inputs.get("properties", {})
+        for name in sorted(self.inputs):
+            declared = properties.get(name)
+            if not isinstance(declared, dict) or declared.get("secret") is not True:
+                continue
+            alternative = declared.get("env")
+            instead = (
+                f"set inputs.{alternative}, the name of a variable in the agent's own "
+                "environment, instead"
+                if alternative
+                else "this probe has no _env alternative, so run it where the secret is "
+                "(culprit probe or culprit mcp), not as a task"
+            )
+            raise ValueError(
+                f"inputs.{name} carries a secret, and secrets never travel through the "
+                f"control plane: {instead}"
+            )
+        return self
+
 
 class DiagnoseSpec(_Strict):
     symptom: str = Field(min_length=1, max_length=1024)
     from_: str | None = Field(default=None, alias="from")
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @field_validator("symptom")
+    @classmethod
+    def _redact_symptom(cls, value: str) -> str:
+        # F44-005: a symptom is free text a person typed; it is stored in
+        # agent_tasks.spec, served back and sent to the agent, so it is
+        # redacted here, at the choke point, as change words are.
+        return redact_credentials(value)
 
 
 class VerifySpec(_Strict):
@@ -222,6 +261,15 @@ class ClaimedTask(BaseModel):
 class TaskResult(_Strict):
     outcome: Literal["completed", "refused", "error"]
     reason: str | None = Field(default=None, max_length=4096)
+
+    @field_validator("reason")
+    @classmethod
+    def _redact_reason(cls, value: str | None) -> str | None:
+        # F44-006: an agent redacts its own reason before it sends it; an
+        # older or a third-party agent may not, and agent_tasks.reason is
+        # served back, so the control plane redacts it on the way in too.
+        return None if value is None else redact_credentials(value)
+
     grants_held: list[str] = []
     allowance_ignored: list[str] = []
     readings: int = 0

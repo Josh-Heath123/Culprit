@@ -569,6 +569,39 @@ genuine loss of debugging convenience, taken deliberately: it would be
 strange to hold extractors to "never carry a config value" while the
 error path published one.
 
+Since Phase 44 batch 1 (F44-022) the message itself never quotes the
+value either. A validator that wrote "`'postgresql://…' is not a subject
+URI`" or "`'token=…' is not a capability`" had the value it was given in
+`msg`, and that went back in the body. Now every string the request gave
+for that field is replaced in the message by "(the value given)", and
+what is left passes the shared credential pattern. A message about a
+short value can read oddly as a result ("(the value given)" where a
+one-letter value happened to appear in a word of the message), and a
+client that read the refused value out of the message now reads only the
+rule.
+
+## A command's error line, an agent's reason, a task's symptom: redacted
+
+Since Phase 44 batch 1 (F44-006, F44-021, F44-084), free text that quotes
+what Culprit was given is redacted at the one place it leaves:
+
+- **`culprit`'s error line** on stderr (and so in a CI log): an argument
+  it refused — a `--input` with no key, a symptom that is not a
+  component, a `--change` of no known kind — or a manifest value the
+  loader quoted. The same for an MCP tool's `error`.
+- **An agent's task reason**, before it reaches the append-only audit log,
+  the result it posts and its own log; and the control plane redacts a
+  reported reason again on the way in, for an agent that did not.
+- **A task's symptom**, when the control plane stores it; **`--change
+  action:` words**, where the binary parses them (the API already did).
+- **`culprit intent`'s skip reasons**, text and JSON, as `culprit check`'s
+  already were; and every string in a reading's measured and expected
+  values, a list's and a map's inside a list included.
+
+Redacted means the shared pattern (see "Secrets: two layers"): a shape it
+does not list is shown as given. An audit log written before this keeps
+what it holds: it is append-only, and nothing rewrites it.
+
 ## `culprit intent` extracts only what you point it at
 
 A component is extracted only if `culprit.yaml`'s `extract.components`
@@ -1528,21 +1561,84 @@ Relatedly, `GET /probes` serves the catalogue from a committed JSON file
 that mirrors the Go one. The mirror is checked for validity but the two
 can still drift in content; the binary is the authority.
 
+## Secrets: two layers, and what no pattern can catch
+
+Since Phase 44 batch 1 (`docs/SECURITY.md` §8), what Culprit promises about
+a secret it reads is two layers. **Configuration values** are shown only
+as shapes unless `config.read.values` names the key; that is structural.
+**Free text from outside Culprit** — an extractor's stderr, a probe's
+reason and measured strings, an agent's failure, change words, a refused
+request's message, an echoed CLI argument — is redacted at its one exit by
+the shared pattern, and that pattern covers exactly the rows of
+`shared/tests/redaction_conformance.json`, no more.
+
+What no pattern can catch: a bare secret with no key, no scheme and no
+known prefix. `hunter2` alone in a sentence, or a token in a format the
+fixture does not list, is shown as an ordinary word. And the pattern errs
+the other way too: the fixture's "over-redacted" rows list ordinary text it
+removes, each with its reason.
+
+## Text from the diagnosed system is fenced as data, and that is not a guarantee
+
+Since Phase 44 batch 1 (F44-023), the narrator's evidence sits inside one
+fenced block that its instructions name as quoted data, never instructions,
+and the fence is longer than any run of backticks in it, so an item cannot
+close it. Through `culprit mcp`, text the system chose (a response's field
+names, a reason, statement text, an error) appears only as a value in a
+structured field, and the server's instructions and every tool's
+description say those fields are untrusted. Both are instructions to a
+model, and a model may follow an instruction anyway. For the narrator the
+check after it still bounds what can be shown (`docs/SECURITY.md` §7); for
+a coding agent using `culprit mcp`, nothing Culprit does can stop it acting
+on what it reads, so give it no write access it should not use on a
+stranger's say-so.
+
+## Culprit writes nothing into the project, but an extractor runs as you
+
+Since Phase 44 batch 1 (F44-003) every extractor runs with
+`PYTHONDONTWRITEBYTECODE=1`, and `culprit-extract-python` sets
+`sys.dont_write_bytecode` before it imports anything, so reading a project
+in import mode leaves no `__pycache__` in it; a test snapshots a project's
+tree before and after `intent` and `check` and requires it unchanged. That
+is all Culprit can promise about what an extractor does. Import mode runs
+the project's own code, which can write, connect or send whatever it
+likes, and an extractor is any command `culprit.yaml` names, run as you.
+On a project you do not control, use `--no-import` (and `--no-plugins` for
+a `culprit.yaml` you have not reviewed).
+
+## A probe's secret input is refused as a task
+
+The probe catalogue declares on an input that it carries a secret
+(`"secret": true` in its JSON Schema, mirrored to the API), and the control
+plane refuses an agent task that sets one, with a 422 naming the field
+(Phase 44 batch 1, F44-005). For `probe.auth.token_shape` it names
+`token_env` instead: the agent reads the token from its own environment,
+under `config.inspect.values`. **`probe.auth.propagation` has no `_env`
+alternative**, so it cannot be sent as a task at all: run it where the
+token is, with `culprit probe` or through `culprit mcp`. The refusal looks
+only at the probes the catalogue knows: a task naming a probe id it does
+not know is not checked here. Tasks stored before this keep what they were
+given (`docs/UPGRADING.md`).
+
 ## The credential heuristic in a reading is a net, not a proof
 
 A `Reading`'s evidence is refused at construction if it looks like a
 credential and is not marked redacted. "Looks like" is
-`looks_like_credential`, which matches known shapes — DSNs with inline
-passwords, PEM headers, AWS keys, GitHub tokens, JWTs, `sk-` keys, and
-since Phase 37 part 1 a `password=`, `passwd=` or `pwd=` outside a URL
-(libpq's keyword form, a literal in a statement), Slack tokens (`xox…-`,
-`xapp-`) and `user:pass@host` with no scheme. Go and Python are held to
-one set of cases (`shared/tests/redaction_conformance.json`). It is
-pattern matching, so a novel or unusual key format passes it — and it
-errs the other way too: any `word:word@` in free text is removed as if it
-were a credential. One known
-gap: the `sk-` pattern requires the remainder to be alphanumeric, so a
-hyphenated variant such as `sk-live-abcdef0123456789` is not matched.
+`looks_like_credential`, which matches the shapes in
+`shared/tests/redaction_conformance.json` and no others (see "Secrets: two
+layers" above): since Phase 44 batch 1, a key with a credential word as one
+of its parts (`DB_PASSWORD=`, `x-auth-token:`, `"api_key":`), URL userinfo
+(`redis://:pw@` included) and credential-named query parameters, an
+`Authorization` value and a `Bearer` or `Basic` credential, PEM private
+keys, and the provider formats the fixture lists (AWS, GitHub, GitLab,
+Stripe, Google, Slack, Anthropic, `sk-` keys, JWTs). Where there is a key,
+the key is kept and only its value is redacted. It is pattern matching, so
+a bare secret or a format the fixture does not list passes it — and it
+errs the other way too: the fixture's `over_redacted` rows (any
+`word:word@` in free text, a `token: 3`) are removed as if they were
+credentials. One known gap: the `sk-` pattern requires the remainder to be
+alphanumeric, so a hyphenated variant such as `sk-live-abcdef0123456789` is
+not matched.
 
 What is actually true, stated precisely, because an earlier draft of this
 section overclaimed it and the Phase 31 audit caught the overclaim:
@@ -2522,8 +2618,9 @@ owner inserts naming a sentence, a URL or a key is shown as labels. A
 token can still be up to 80 characters of the model's own text joined by
 underscores or hyphens. "No credential" means nothing the shared credential
 pattern (`redact_credentials`, and its Go twin) recognises: a key of a
-shape it does not know — `password=hunter2`, a Slack token, `user:pass@host`
-with no scheme — is served as a token like any other word.
+shape the shared fixture (`shared/tests/redaction_conformance.json`) does
+not list — a bare secret with no key, scheme or known prefix — is served as
+a token like any other word.
 For a name written in backticks only its first unknown word is named, so
 a sentence in code form is never shown. At most 20 are kept.
 

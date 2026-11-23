@@ -447,6 +447,19 @@ environments:
 YAML
 ```
 
+**What `extract:` runs.** Every command under `extract.extractors` runs as
+you, in the component's directory, whenever `culprit check`, `intent`,
+`diff`, `diagnose`, `verify`, `probe` or `culprit mcp` reads INTENT — so
+review a `culprit.yaml` as you would a Makefile (`--no-plugins` runs none
+of them). And `culprit-extract-python` without `--no-import` is **import
+mode**: it imports the project's application to read its route table, which
+runs the project's own code — here, `api/config.py`, whose `KeyError` you
+will see in step 1. On a project you do not control, that code can write,
+connect or send anything; give the extractor `--no-import` there, which
+reads the source without running it. Culprit itself writes nothing into
+the project: every extractor runs with `PYTHONDONTWRITEBYTECODE=1`, so
+importing leaves no `__pycache__` behind.
+
 **1. Check the repository.** The code and `.env.example` agree, so there is
 nothing to report — and the "Not checked" list says exactly what was not
 looked at:
@@ -923,7 +936,7 @@ run: probes see what their vantage sees ([`docs/LIMITS.md`](LIMITS.md),
 | `just test` | everything below that needs no cluster: the api, worker and MCP server suites (with the repository's own scripts and the shared model's conformance tests), `go test` across the CLI, and both extractors. Needs Docker for Postgres |
 | `just cli-test` | every Go package: extraction, the comparator, severity, every report format, capture, all 18 probes, and the eval suites in `cli/testdata/faults` and `cli/testdata/envdiff`, which assert the exact divergence set with zero false positives |
 | `just extractors-test` | the Python and Node extractors |
-| `just self-check` | `culprit check` on this repository, failing on `degrades`: **no divergences, 1,753 facts across 631 subjects**, 9 gaps listed, and the dashboard's first load within its 200,000-byte gzip budget (run `just frontend-build` first, or the budget is "Not checked") |
+| `just self-check` | `culprit check` on this repository, failing on `degrades`: **no divergences, 1,754 facts across 631 subjects**, 9 gaps listed, and the dashboard's first load within its 200,000-byte gzip budget (run `just frontend-build` first, or the budget is "Not checked") |
 | `just self-check-coverage` | the 535 subjects only one source describes — places where a mistake would go uncaught |
 | `just cli-test-docker`, `just cli-test-kind` | environment capture against real Compose projects and a kind cluster |
 | `just check-migration-round-trip` | every migration upgrades, downgrades and upgrades again against a real database with rows in it |
