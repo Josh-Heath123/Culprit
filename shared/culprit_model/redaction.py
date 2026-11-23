@@ -23,13 +23,16 @@ import re
 # A key whose name has a credential word as one of its parts (DB_PASSWORD,
 # x-auth-token, spring.datasource.password, "api_key"), in any case. The key
 # and its separator are kept and only the value goes, so a subject or a probe
-# id is never removed with it. A colon counts only when quoted (JSON) or
-# followed by whitespace (YAML): `auth:a->b/audience` is a subject.
+# id is never removed with it. A colon counts only when quoted (JSON), or
+# for a YAML key: no dots, starting the text or a line, or after {, a
+# comma, (, [ or a quote, and followed by whitespace. So `auth:a->b/audience` is a
+# subject and `probe.auth.token_shape: no token ...` a probe id, not keys.
 _WORD = (
     r"(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key"
     r"|private[_-]?key|credentials?|auth)"
 )
 _KEY = r"\b(?:[a-z0-9]+[_.-])*" + _WORD + r"(?:[_.-][a-z0-9]+)*"
+_YAML_KEY = r"""(?:^|[\n{,(\['"])[ \t]*(?:[a-z0-9]+[_-])*""" + _WORD + r"(?:[_-][a-z0-9]+)*"
 _VALUE = r"""(?:'[^']*'|"[^"]*"|[^\s&;,'"}]+)"""
 # A Bearer or Basic credential: a run with an upper-case letter, a digit or
 # base64 punctuation after its third character, so "Bearer token" and
@@ -37,7 +40,8 @@ _VALUE = r"""(?:'[^']*'|"[^"]*"|[^\s&;,'"}]+)"""
 _OPAQUE = r"[a-z0-9._~+/-]{3,}(?-i:[A-Z0-9+/=])[a-z0-9._~+/=-]*"
 
 _CREDENTIAL = re.compile(
-    r"(?P<key>" + _KEY + r"""(?:\s*=\s*|["']\s*:\s*|\s*:\s+))""" + _VALUE
+    r"(?P<key>" + _KEY + r"""(?:\s*=\s*|["']\s*:\s*))""" + _VALUE
+    + r"|(?P<yaml>" + _YAML_KEY + r"\s*:\s+)" + _VALUE
     + r"""|(?P<authz>\b(?:proxy-)?authorization["']?\s*[=:]\s*)(?:[a-z]+\s+)?[^\s,;'"]+"""
     + r"|(?P<scheme>\b(?:bearer|basic)\s+)" + _OPAQUE
     # URL userinfo, an empty user included (redis://:pw@), the password
@@ -69,7 +73,13 @@ _CREDENTIAL = re.compile(
 
 
 def _marker(match: re.Match[str]) -> str:
-    kept = match.group("key") or match.group("authz") or match.group("scheme") or ""
+    kept = (
+        match.group("key")
+        or match.group("yaml")
+        or match.group("authz")
+        or match.group("scheme")
+        or ""
+    )
     return kept + "[redacted]"
 
 

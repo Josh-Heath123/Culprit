@@ -150,7 +150,7 @@
       "credential": true
     },
     {
-      "why": "Phase 44 batch 1: YAML: a key, a colon and a space",
+      "why": "Phase 44 batch 1: YAML: a key, a colon and a space (a YAML key: no dots, starting the text or a line, or after {, a comma, (, [ or a quote)",
       "text": "db:\n  password: hunter2\n  host: db",
       "redacted": "db:\n  password: [redacted]\n  host: db",
       "credential": true
@@ -232,6 +232,12 @@
       "text": "xoxe-EXAMPLE-not-a-real-token",
       "redacted": "[redacted]",
       "credential": true
+    },
+    {
+      "why": "Phase 44 batch 1: a YAML key after a comma, a brace or a quote",
+      "text": "{user: app, password: hunter2} and -H 'X-Api-Key: k9'",
+      "redacted": "{user: app, password: [redacted]} and -H 'X-Api-Key: [redacted]'",
+      "credential": true
     }
   ],
   "survive": [
@@ -266,6 +272,26 @@
     {
       "why": "a route, a time, an email address",
       "text": "GET /orders at 10:30, mail ops@example.com"
+    },
+    {
+      "why": "a probe id with auth and token as parts, then a colon and a space: a YAML key has no dots, so this is not one",
+      "text": "probe.auth.token_shape: refused"
+    },
+    {
+      "why": "Culprit's own reason, from a recorded investigation (api/tests/data/investigations/partial-with-boundary.json)",
+      "text": "no probe could be placed: probe.auth.token_shape: no token for order-service -> inventory-service is available to this agent"
+    },
+    {
+      "why": "a config subject naming a password key, then a colon and a space: the key starts after a /, so it is not a YAML key",
+      "text": "config:api/DB_PASSWORD: missing"
+    },
+    {
+      "why": "Culprit's own error (cli/internal/agent/config.go): a word and a colon in a sentence is English, not a YAML key",
+      "text": "control_plane.url must not carry credentials: the agent signs with its key"
+    },
+    {
+      "why": "prose naming a role: auth-service is not a key here",
+      "text": "api-reader, not auth-service: this path only ever reads"
     }
   ],
   "over_redacted": [
@@ -275,19 +301,9 @@
       "redacted": "token: [redacted]"
     },
     {
-      "why": "a probe id with auth and token as parts, followed by a colon and a space: the id is kept, the next word goes",
-      "text": "probe.auth.token_shape: refused",
-      "redacted": "probe.auth.token_shape: [redacted]"
-    },
-    {
       "why": "a setting named for auth: its value goes, though it is not a secret",
       "text": "auth_mode=disabled",
       "redacted": "auth_mode=[redacted]"
-    },
-    {
-      "why": "a config subject naming a password key, then a colon and a space: the subject is kept, the next word goes",
-      "text": "config:api/DB_PASSWORD: missing",
-      "redacted": "config:api/DB_PASSWORD: [redacted]"
     },
     {
       "why": "any word:word@ in free text reads as user:pass@host",

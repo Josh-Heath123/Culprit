@@ -23,8 +23,8 @@ import (
 // to redact such text wherever a report renders it.
 //
 // Unanchored, unlike ClassifyFormat: a credential inside a sentence is
-// still a credential. The same six patterns the value classifier and the
-// manifest loader use, so "looks like a credential" means one thing.
+// still a credential.
+//
 // Phase 44 batch 1 (F44-002): the pattern's coverage is exactly the rows of
 // shared/tests/redaction_conformance.json, which Python's redaction.py is
 // held to as well; a shape not there is not promised (docs/SECURITY.md §8).
@@ -32,12 +32,16 @@ import (
 // A key whose name has a credential word as one of its parts (DB_PASSWORD,
 // x-auth-token, spring.datasource.password, "api_key"), in any case. The
 // key and its separator are kept and only the value goes, so a subject or a
-// probe id is never removed with it. A colon counts only when quoted (JSON)
-// or followed by whitespace (YAML): `auth:a->b/audience` is a subject.
+// probe id is never removed with it. A colon counts only when quoted
+// (JSON), or for a YAML key: no dots, starting the text or a line, or
+// after {, a comma, (, [ or a quote, and followed by whitespace. So
+// `auth:a->b/audience` is a subject and `probe.auth.token_shape: no token
+// ...` a probe id, not keys.
 const (
 	credentialWord = `(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key` +
 		`|private[_-]?key|credentials?|auth)`
 	credentialKey   = `\b(?:[a-z0-9]+[_.-])*` + credentialWord + `(?:[_.-][a-z0-9]+)*`
+	yamlKey         = `(?:^|[\n{,(\['"])[ \t]*(?:[a-z0-9]+[_-])*` + credentialWord + `(?:[_-][a-z0-9]+)*`
 	credentialValue = `(?:'[^']*'|"[^"]*"|[^\s&;,'"}]+)`
 	// A Bearer or Basic credential: a run with an upper-case letter, a
 	// digit or base64 punctuation after its third character, so "Bearer
@@ -46,7 +50,8 @@ const (
 )
 
 var credentialPattern = regexp.MustCompile(
-	`(?i)(?P<key>` + credentialKey + `(?:\s*=\s*|["']\s*:\s*|\s*:\s+))` + credentialValue +
+	`(?i)(?P<key>` + credentialKey + `(?:\s*=\s*|["']\s*:\s*))` + credentialValue +
+		`|(?P<yaml>` + yamlKey + `\s*:\s+)` + credentialValue +
 		`|(?P<authz>\b(?:proxy-)?authorization["']?\s*[=:]\s*)(?:[a-z]+\s+)?[^\s,;'"]+` +
 		`|(?P<scheme>\b(?:bearer|basic)\s+)` + opaqueCredential +
 		// URL userinfo, an empty user included (redis://:pw@), the
@@ -75,11 +80,12 @@ var credentialPattern = regexp.MustCompile(
 		`|\bPASSWORD\s+'[^']*'`)
 
 // The groups whose text is kept before the marker: a key and its
-// separator, an Authorization header's name, the word Bearer or Basic.
+// separator (a YAML key with the character before it), an Authorization
+// header's name, the word Bearer or Basic.
 var keptGroups = func() []int {
 	var kept []int
 	for index, name := range credentialPattern.SubexpNames() {
-		if name == "key" || name == "authz" || name == "scheme" {
+		if name == "key" || name == "yaml" || name == "authz" || name == "scheme" {
 			kept = append(kept, index)
 		}
 	}
