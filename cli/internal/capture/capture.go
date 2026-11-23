@@ -115,6 +115,9 @@ type Options struct {
 	// Hostname is the process's own hostname, as the OS reports it: the
 	// process adapter's runtime-identity rule (Q42).
 	Hostname func() (string, error)
+	// WorkingDir is the process's working directory, as the OS reports
+	// it: the identity rule's second OS fact (F44-012).
+	WorkingDir func() (string, error)
 	// Grants, when set, are what the capture runs under instead of the
 	// environment's grants in culprit.yaml: an agent captures under its
 	// own configuration's grants, narrowed by its task's allowance, as it
@@ -141,6 +144,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.Hostname == nil {
 		o.Hostname = os.Hostname
+	}
+	if o.WorkingDir == nil {
+		o.WorkingDir = os.Getwd
 	}
 	if o.Now.IsZero() {
 		o.Now = time.Now().UTC()
@@ -178,7 +184,7 @@ func Run(ctx context.Context, options Options) (model.CaptureBundle, error) {
 	if options.Grants != nil {
 		grants = *options.Grants
 	}
-	adapter, err := NewAdapter(spec, options.ManifestDir, options.Runner, options.Environ, options.Hostname)
+	adapter, err := NewAdapter(spec, options.ManifestDir, options.Runner, options.Environ, options.Hostname, options.WorkingDir)
 	if err != nil {
 		return model.CaptureBundle{}, err
 	}
@@ -320,7 +326,8 @@ func (r *runState) environment(ctx context.Context, component string, settings e
 	}
 	if workload.Identity > 0 {
 		r.meta["identity."+component] = fmt.Sprintf(
-			"%d variable(s) held this process's hostname, the runtime's identity; "+
+			"%d variable(s) held this process's hostname or working directory, "+
+				"the runtime's or the launcher's identity; "+
 				"recorded as present, their value not shaped", workload.Identity)
 	}
 	if workload.Replicas > 1 {

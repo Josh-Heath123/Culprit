@@ -49,9 +49,10 @@ type Workload struct {
 	// Replicas counts how many instances were found; only the first, in a
 	// stable order, is read. Said in the report when it is more than one.
 	Replicas int
-	// Identity counts the keys whose value is the process's own hostname:
-	// the runtime's identity, not its configuration (Q42). Their values
-	// are not shaped (Known is false); only the process adapter sets it.
+	// Identity counts the keys whose value is the process's own hostname
+	// or its working directory: the runtime's and the launcher's identity,
+	// not configuration (Q42, F44-012). Their values are not shaped (Known
+	// is false); only the process adapter sets it.
 	Identity int
 }
 
@@ -93,7 +94,7 @@ var ErrNoImage = fmt.Errorf("this adapter has no notion of an image")
 // NewAdapter builds the adapter an environment names.
 func NewAdapter(
 	spec extract.EnvironmentSpec, manifestDir string, runner Runner, environ func() []string,
-	hostname func() (string, error),
+	hostname func() (string, error), workingDir func() (string, error),
 ) (Adapter, error) {
 	switch spec.Adapter {
 	case extract.AdapterCompose:
@@ -104,7 +105,10 @@ func NewAdapter(
 		if hostname == nil {
 			hostname = os.Hostname
 		}
-		return processAdapter{environ: environ, hostname: hostname}, nil
+		if workingDir == nil {
+			workingDir = os.Getwd
+		}
+		return processAdapter{environ: environ, hostname: hostname, workingDir: workingDir}, nil
 	case extract.AdapterExec:
 		return execAdapter{commands: spec.Exec, runner: runner}, nil
 	}
@@ -461,9 +465,21 @@ func (a kubernetesAdapter) Image(
 // key is treated this way. Only this adapter does it: compose and
 // kubernetes read configuration, not a live process, and the exec
 // adapter cannot know a remote process's hostname (docs/LIMITS.md).
+//
+// # Nor is the launcher's working directory (F44-012)
+//
+// The environment this adapter reads is the one culprit was launched in,
+// the launcher's own variables included, and `diagnose` and `verify` are
+// two launches. The working directory is the second OS fact the rule is
+// keyed on: a variable whose value equals the directory the OS reports for
+// this process (a shell's PWD, and anything set from it) is treated as the
+// hostname is. A counter such as SHLVL needs no rule: its value is digits,
+// one lexical class whatever it counts (F44-011). Nothing is keyed on a
+// name; what the launcher adds beyond these is a different environment.
 type processAdapter struct {
-	environ  func() []string
-	hostname func() (string, error)
+	environ    func() []string
+	hostname   func() (string, error)
+	workingDir func() (string, error)
 }
 
 func (a processAdapter) Name() string { return extract.AdapterProcess }
@@ -473,13 +489,18 @@ func (a processAdapter) Workload(
 ) (Workload, error) {
 	env := parseEnvList(a.environ())
 	identity := 0
-	if a.hostname != nil {
-		if own, err := a.hostname(); err == nil && own != "" {
-			for key, entry := range env {
-				if entry.Known && entry.Value == own {
-					env[key] = EnvValue{Known: false}
-					identity++
-				}
+	for _, fact := range []func() (string, error){a.hostname, a.workingDir} {
+		if fact == nil {
+			continue
+		}
+		own, err := fact()
+		if err != nil || own == "" {
+			continue
+		}
+		for key, entry := range env {
+			if entry.Known && entry.Value == own {
+				env[key] = EnvValue{Known: false}
+				identity++
 			}
 		}
 	}

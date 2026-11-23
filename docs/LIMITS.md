@@ -2202,6 +2202,22 @@ A value changed to another of the same shape (one URL for another, one
 neither a difference the fix explains nor a change underneath. A key
 added, removed, or changed in shape is seen.
 
+### A process capture records the environment it was launched in (F44-012)
+
+With `adapter: process`, a capture reads the environment `culprit` itself
+runs in, and that includes what the launcher added: a shell's `SHLVL`,
+`OLDPWD`, `TERM` and `_`, an SSH session's `SSH_*`, systemd's
+`INVOCATION_ID`. `diagnose` and `verify` are two separate launches, so
+launch them the same way — the same kind of shell, from the same script or
+service unit. Two things a launcher changes are not counted as a change:
+the working directory (above), and a counter such as `SHLVL`, which is
+digits at any depth and so one kind of value (F44-011). Anything else the
+launcher adds or drops — `OLDPWD` after a `cd`, `TERM` in an interactive
+shell and not in a script, `_` when it holds a different program — is a
+different environment, and `verify` counts it as a change underneath. To
+capture only what you set, start from a clean environment:
+`env -i PATH="$PATH" HOME="$HOME" … culprit env capture <env>`.
+
 ### A process capture sees one component's environment
 
 With `adapter: process`, a capture reads the environment `culprit` runs in,
@@ -2235,6 +2251,12 @@ treated this way, never their values. What that leaves:
   container's random id — and a `verify` across a recreation can count it
   as a change underneath. Use the process adapter inside the workload, or
   compose, for a workload your fix recreates.
+- The working directory is the rule's second OS fact (F44-012): a
+  variable whose value equals the directory the OS reports for the process
+  — a shell's `PWD`, and anything set from it — is treated as the hostname
+  is, and counted in the same meta line. A variable you configured that
+  happens to hold the directory culprit was started in loses its shape the
+  same way.
 - Across an upgrade to a version with Q42's classifier fix, a capture from
   the older binary may call a hex value `ip_address` where the newer calls
   it `opaque`, so one `verify` or `env diff` spanning the upgrade can show

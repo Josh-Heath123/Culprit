@@ -1007,3 +1007,51 @@ environments:
 		}
 	}
 }
+
+// F44-012: the working directory joins the hostname. A variable whose
+// value is the directory the OS reports for the process is the launcher's,
+// not the workload's configuration: recorded present, its value not
+// shaped, and counted in the meta. A path that is not the directory is
+// shaped as before.
+func TestTheWorkingDirectoryIsIdentityNotConfiguration(t *testing.T) {
+	manifest := loadManifest(t, `
+version: 1
+components:
+  - name: order-service
+environments:
+  local:
+    adapter: process
+    grants: {config.read.names: true}
+    components:
+      order-service: {}
+`)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	own, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := runCapture(t, manifest, "local", Options{
+		Environ:  func() []string { return []string{"PWD=" + own, "APP_DIR=/srv/app"} },
+		Hostname: func() (string, error) { return "orders-host", nil },
+	})
+	if _, ok := find(bundle, "config:order-service/PWD", model.PredicateExists); !ok {
+		t.Error("PWD's existence was not recorded")
+	}
+	shape, ok := find(bundle, "config:order-service/PWD", model.PredicateValueShape)
+	if !ok || shape.ValueShape == nil || shape.ValueShape.Type != model.TypeUnknown {
+		t.Errorf("PWD's shape = %+v, want unknown", shape.ValueShape)
+	}
+	app, ok := find(bundle, "config:order-service/APP_DIR", model.PredicateValueShape)
+	if !ok || app.ValueShape == nil || app.ValueShape.Format != model.FormatPath {
+		t.Errorf("APP_DIR's shape = %+v, want a path", app.ValueShape)
+	}
+	if !strings.Contains(bundle.Meta["identity.order-service"], "1 variable") {
+		t.Errorf("the capture does not count the directory: %v", bundle.Meta)
+	}
+	for _, text := range bundle.Meta {
+		if strings.Contains(text, own) {
+			t.Errorf("the meta records the directory: %q", text)
+		}
+	}
+}

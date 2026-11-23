@@ -470,13 +470,17 @@ culprit check
 
 **2. Capture two environments and diff them.** The `process` adapter reads
 the environment `culprit` itself runs in, so each capture gets its own. It
-records every variable in your shell by name and shape — never a value — so
-its "Refused" count will be larger than the image's:
+records every variable in that environment by name and shape — never a
+value — your shell's own (`SHLVL`, `OLDPWD`, `_`) included. So the tour
+starts each capture from a clean environment, `env -i` with only `PATH` and
+`HOME`, and the capture holds what you set and nothing the shell added:
 
 ```bash
-DATABASE_URL=postgresql://app:example@db.example.internal:5432/app PAYMENTS_API_KEY=example-key LOG_LEVEL=debug \
+env -i PATH="$PATH" HOME="$HOME" \
+  DATABASE_URL=postgresql://app:example@db.example.internal:5432/app PAYMENTS_API_KEY=example-key LOG_LEVEL=debug \
   culprit env capture staging -o staging.capture
-DATABASE_URL=postgresql://app:example@db.example.internal:5432/app LOG_LEVEL=info \
+env -i PATH="$PATH" HOME="$HOME" \
+  DATABASE_URL=postgresql://app:example@db.example.internal:5432/app LOG_LEVEL=info \
   culprit env capture production -o production.capture
 culprit diff staging.capture production.capture
 ```
@@ -545,7 +549,9 @@ Diagnosis (COMPLETE)
 
 The same samples tell the hop from the component: connection setup alone
 is within the budget, so the time is `api`'s own, not the network's. Take
-the `time.sleep(0.4)` out, restart it, and `culprit verify <id> --from web
+the `time.sleep(0.4)` out, restart it, and — from the same shell that ran
+`diagnose`, since a process capture records the shell it is launched in —
+`culprit verify <id> --from web
 --no-plugins --state-dir ./state --change "action:took the sleep out of
 /health"` measures every reading again and says `verified`. Delete the
 `budgets:` section and the same walk stays partial, saying no budget is
