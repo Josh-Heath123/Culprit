@@ -25,6 +25,9 @@ branch); `orders-svc` also reaches `orders-db` over SQL rather than HTTP
 request path.
 """
 
+import json
+from pathlib import Path
+
 import pytest
 from culprit_model.graph import (
     Component,
@@ -250,3 +253,42 @@ def test_connection_kinds_match_the_shared_fixture():
     for refused in fixture["refused"]:
         with pytest.raises(ValueError):
             ConnectionKind(refused)
+
+
+# --- the request path, held to Go by a shared fixture (F44-063, F44-064 c)
+
+_REQUEST_PATH = json.loads(
+    (Path(__file__).parent / "request_path_conformance.json").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize("case", _REQUEST_PATH["cases"], ids=lambda c: c["name"])
+def test_the_request_path_matches_the_shared_fixture(case: dict) -> None:
+    """What a request from every entry can reach is exactly what Go's
+    severity calls on the request path or unknown; each unknown component's
+    'via' edge is crossed, and is of unknown criticality."""
+    graph = SystemGraph(
+        components=tuple(
+            _component(c["name"], ComponentKind(c["kind"])) for c in case["components"]
+        ),
+        connections=tuple(
+            _connection(
+                c["from"],
+                c["to"],
+                criticality=Criticality(c.get("criticality", Criticality.UNKNOWN.value)),
+            )
+            for c in case["connections"]
+        ),
+    )
+    crossed = [edge for entry in case["entries"] for edge in graph.upstream_connections(entry)]
+    reached = set(case["entries"]) | {edge.to_component for edge in crossed}
+    assert reached == {name for name, r in case["reach"].items() if r["state"] != "not_on_path"}
+    for name, r in case["reach"].items():
+        if r["state"] == "unknown":
+            via = r["via"]
+            assert any(
+                edge.from_component == via["from"]
+                and edge.to_component == via["to"]
+                and edge.criticality is Criticality.UNKNOWN
+                for edge in crossed
+            ), f"{name}: {via} is not crossed as an unknown edge"

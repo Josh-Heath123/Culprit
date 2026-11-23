@@ -20,7 +20,12 @@
 // # What it does when it does not know
 //
 // It returns `unknown`, and `unknown` ranks *above* `cosmetic` (see
-// `Severity.Rank`). A tool that quietly files everything it cannot
+// `Severity.Rank`). That includes a component reachable from an entry
+// point only through an edge whose criticality is not declared (F44-063):
+// following that edge would overstate, dropping it would understate, so
+// the severity is `unknown` and the reason names the edge. Python's
+// SystemGraph.upstream_connections follows the same edges, and
+// shared/tests/request_path_conformance.json holds the two together. A tool that quietly files everything it cannot
 // classify under "trivial" is a tool that hides its own blind spots,
 // and the blind spots here are real: a manifest with no `criticality`
 // anywhere gives this package nothing to work with, and it should say
@@ -44,6 +49,10 @@ type Graph struct {
 	// why records, per component, the path that put it there — so a
 	// severity can explain itself instead of being asserted.
 	why map[string]string
+	// unknownVia is, for a component not on the request path that a
+	// request may still reach through an edge of unknown criticality, the
+	// first such edge on the way ("orders -> payments") (F44-063).
+	unknownVia map[string]string
 	// declared is every component in the manifest, used to tell "not on
 	// the request path" from "not in the model at all".
 	declared map[string]bool
@@ -69,6 +78,7 @@ func BuildGraph(manifest *extract.Manifest) *Graph {
 	graph := &Graph{
 		onRequestPath: map[string]bool{},
 		why:           map[string]string{},
+		unknownVia:    map[string]string{},
 		declared:      map[string]bool{},
 		referenced:    map[string]bool{},
 		owners:        map[string][]string{},
@@ -130,7 +140,48 @@ func BuildGraph(manifest *extract.Manifest) *Graph {
 			}
 		}
 	}
+
+	// Then every edge that is not background, from what is on the path:
+	// an edge of unknown criticality (or none declared) may carry a
+	// request and may not. What lies only beyond one is neither on the
+	// request path nor off it, and says which edge it is behind.
+	var frontier []string
+	for _, component := range manifest.Components {
+		if graph.onRequestPath[component.Name] {
+			frontier = append(frontier, component.Name)
+		}
+	}
+	sort.Strings(frontier)
+	for len(frontier) > 0 {
+		current := frontier[0]
+		frontier = frontier[1:]
+		for _, connection := range outgoing[current] {
+			if connection.Criticality == "background" {
+				continue
+			}
+			if graph.onRequestPath[connection.To] || graph.unknownVia[connection.To] != "" {
+				continue
+			}
+			via := graph.unknownVia[current]
+			if via == "" {
+				via = current + " -> " + connection.To
+			}
+			graph.unknownVia[connection.To] = via
+			frontier = append(frontier, connection.To)
+		}
+	}
 	return graph
+}
+
+// unknownReason says why a component's place on the request path is not
+// known, or "" when it is.
+func (g *Graph) unknownReason(component string) string {
+	via := g.unknownVia[component]
+	if via == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s is reached from an entry point only through %s, whose criticality "+
+		"is not declared, so whether a request waits on it is unknown", component, via)
 }
 
 // Classifier assigns severities, applying the manifest's overrides last.
@@ -194,6 +245,9 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 		if c.graph.onRequestPath[component] {
 			return model.SeverityBreaksRequestPath, c.graph.why[component]
 		}
+		if reason := c.graph.unknownReason(component); reason != "" {
+			return model.SeverityUnknown, reason
+		}
 		if !c.graph.declared[component] {
 			return model.SeverityUnknown, fmt.Sprintf(
 				"%s is not declared in culprit.yaml, so its place in the system is unknown",
@@ -246,6 +300,9 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 			return model.SeverityBreaksRequestPath, fmt.Sprintf(
 				"%s, and the key is read", c.graph.why[component])
 		}
+		if reason := c.graph.unknownReason(component); reason != "" {
+			return model.SeverityUnknown, reason + ", and the key is read"
+		}
 		if !c.graph.declared[component] {
 			return model.SeverityUnknown, fmt.Sprintf(
 				"%s is not declared in culprit.yaml", component)
@@ -263,6 +320,11 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 			if c.graph.onRequestPath[owner] {
 				return model.SeverityBreaksRequestPath, fmt.Sprintf(
 					"%s backs %s, which is on the request path", database, owner)
+			}
+		}
+		for _, owner := range c.graph.owners[database] {
+			if reason := c.graph.unknownReason(owner); reason != "" {
+				return model.SeverityUnknown, fmt.Sprintf("%s backs %s; %s", database, owner, reason)
 			}
 		}
 		return model.SeverityDegrades, "a schema mismatch fails the queries that use it"
@@ -311,6 +373,9 @@ func (c *Classifier) Classify(divergence model.Divergence) (model.Severity, stri
 		if c.graph.onRequestPath[name] {
 			return model.SeverityBreaksRequestPath, fmt.Sprintf(
 				"%s, and this is a fact about it as deployed", c.graph.why[name])
+		}
+		if reason := c.graph.unknownReason(name); reason != "" {
+			return model.SeverityUnknown, reason
 		}
 		return model.SeverityDegrades, fmt.Sprintf(
 			"%s is declared but not reachable along an on_request_path edge", name)

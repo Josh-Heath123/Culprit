@@ -929,6 +929,22 @@ the classifier nothing to work with, and it says so — findings come back
 includes it. "We could not work out how bad this is" must not be quieter
 than "we worked it out and it is trivial".
 
+### An edge that does not say is `unknown`, not followed or dropped (F44-063)
+
+A connection whose `criticality` is `unknown`, or not given, does not say
+whether a request waits on it. A component reachable from an entry point
+only through such an edge — and anything beyond it — gets severity
+`unknown`, and the reason names the edge (`orders -> payments`). A
+component that also has a route of `on_request_path` edges is on the
+request path; a `background` edge is never followed. The dashboard's
+request path (`GET /model/graph?symptom=`) follows the same edges, so the
+two agree, held by `shared/tests/request_path_conformance.json`. What that
+costs: a manifest that leaves criticality off most edges gets mostly
+`unknown` findings, and `unknown` ranks below `degrades`, so the default
+`--fail-on=degrades` does not fail on them; only `--fail-on=any` does.
+Set `criticality` on the edges you know, and the findings behind them are
+ranked.
+
 ## The fault corpus evaluates the engine, not extraction
 
 `cli/testdata/faults/` is the eval suite: each fixture is a committed

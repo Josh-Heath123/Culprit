@@ -318,6 +318,26 @@ still validate.
   answered `changed_underneath` before, when an observation was the only
   unexplained difference.
 
+## A finding behind an unclassified edge is now `unknown` (F44-063)
+
+Since Phase 44 batch 2, `culprit check` and `culprit diff` give severity
+`unknown` to a finding on a component reachable from an entry point only
+through a connection whose `criticality` is `unknown` or not given, and
+the reason names that connection. Before, such a finding was `degrades`
+("declared but not reachable along an on_request_path edge"). Where your
+`culprit.yaml` leaves criticality off a connection:
+
+- findings on the components behind it move from `degrades` to
+  `unknown`. `unknown` ranks below `degrades` and above `cosmetic`, so a
+  CI job on the default `--fail-on=degrades` **no longer fails on them**;
+  only `--fail-on=any` counts them. If such a job relied on them, gate it
+  with `--fail-on=any`, or classify the connection;
+- a suppression or a `severity_overrides` entry still applies first, as
+  before.
+
+To rank them, set `criticality: on_request_path` or `background` on the
+connection. Nothing stored changes, and no migration runs.
+
 ## Agent tasks stored before Phase 44 may hold a token
 
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a
