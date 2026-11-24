@@ -328,15 +328,33 @@ the reason names that connection. Before, such a finding was `degrades`
 `culprit.yaml` leaves criticality off a connection:
 
 - findings on the components behind it move from `degrades` to
-  `unknown`. `unknown` ranks below `degrades` and above `cosmetic`, so a
-  CI job on the default `--fail-on=degrades` **no longer fails on them**;
-  only `--fail-on=any` counts them. If such a job relied on them, gate it
-  with `--fail-on=any`, or classify the connection;
+  `unknown`. Since Phase 44 batch 3 (Q48), `--fail-on` counts `unknown` as
+  `degrades`, so a CI job on the default `--fail-on=degrades` still fails
+  on them, and says why; `--fail-on=breaks_request_path` does not. (Batch
+  2's note here said the default no longer failed on them. That was true
+  of batch 2 alone, and is corrected below.)
 - a suppression or a `severity_overrides` entry still applies first, as
   before.
 
 To rank them, set `criticality: on_request_path` or `background` on the
 connection. Nothing stored changes, and no migration runs.
+
+## `unknown` fails the default gate (Q48)
+
+Since Phase 44 batch 3, `culprit check` and `culprit diff` count a finding
+of severity `unknown` as `degrades` for `--fail-on`. A finding Culprit
+cannot classify must not pass the default gate silently, and must not be
+guessed as breaking either:
+
+- `--fail-on=degrades`, the default, fails on it, and the message says how
+  many of the findings were `unknown` and why they counted.
+- `--fail-on=breaks_request_path` does not fail on it; `--fail-on=any`
+  does, as before.
+- A report's order and every stored severity are unchanged: an `unknown`
+  finding is still listed as `unknown`, below `degrades`.
+
+If a job on the default now fails, set `criticality` on the connections
+the reasons name, or suppress the finding with a reason.
 
 ## Two Kubernetes captures compare what both read (Q47)
 

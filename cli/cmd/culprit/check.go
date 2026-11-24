@@ -110,9 +110,8 @@ could not run.`,
 
 			warnExpiredSuppressions(command.ErrOrStderr(), result.Manifest, captureTime())
 
-			count := check.CountFailing(result.Result, threshold)
-			if count > 0 {
-				return &findingsError{count: count, threshold: threshold}
+			if failed := newFindingsError(result.Result, threshold); failed != nil {
+				return failed
 			}
 			return nil
 		},
@@ -125,7 +124,8 @@ could not run.`,
 	command.Flags().StringVarP(&outputPath, "output", "o", "",
 		"write the report to this file instead of stdout")
 	command.Flags().StringVar(&failOn, "fail-on", "degrades",
-		"exit 1 when a finding reaches this severity: breaks_request_path, degrades or any")
+		"exit 1 when a finding reaches this severity: breaks_request_path, degrades or any "+
+			"(unknown counts as degrades)")
 	command.Flags().BoolVar(&unverifiable, "unverifiable", false,
 		"also report subjects only one source describes, where nothing could catch a mistake")
 	command.Flags().StringSliceVar(&only, "component", nil,

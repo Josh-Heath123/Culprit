@@ -64,8 +64,20 @@ func (s Severity) Rank() int {
 	}
 }
 
-// AtLeast reports whether this severity meets a threshold.
-func (s Severity) AtLeast(threshold Severity) bool { return s.Rank() >= threshold.Rank() }
+// AtLeast reports whether this severity meets a `--fail-on` threshold.
+//
+// For the gate, `unknown` counts as `degrades` (Q48, Phase 44 batch 3): a
+// finding Culprit cannot classify must not pass the default gate
+// silently, and must not be guessed as breaking either. So the default,
+// `degrades`, fails on it and `breaks_request_path` does not. Rank, which
+// orders a report, is unchanged.
+func (s Severity) AtLeast(threshold Severity) bool {
+	rank := s.Rank()
+	if s == SeverityUnknown {
+		rank = SeverityDegrades.Rank()
+	}
+	return rank >= threshold.Rank()
+}
 
 // DivergenceStatus mirrors §2.5.
 type DivergenceStatus string

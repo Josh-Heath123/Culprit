@@ -15,6 +15,7 @@ import (
 
 	"github.com/josh-heath123/culprit/cli/internal/capture"
 	"github.com/josh-heath123/culprit/cli/internal/check"
+	"github.com/josh-heath123/culprit/cli/internal/diverge"
 	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 	"github.com/josh-heath123/culprit/cli/internal/report"
@@ -220,8 +221,10 @@ Everything the capture was refused is listed. Exit codes as for
 			}
 			warnExpiredSuppressions(command.ErrOrStderr(), result.Manifest, now)
 
-			if count := check.CountAtOrAbove(result.Result.Divergences, threshold); count > 0 {
-				return &findingsError{count: count, threshold: threshold}
+			// The divergences only, as before: a diff has no bundles.
+			if failed := newFindingsError(diverge.Result{Divergences: result.Result.Divergences},
+				threshold); failed != nil {
+				return failed
 			}
 			return nil
 		},
@@ -231,7 +234,8 @@ Everything the capture was refused is listed. Exit codes as for
 	command.Flags().StringVar(&format, "format", "text", "output format: text, json, sarif or junit")
 	command.Flags().StringVarP(&outputPath, "output", "o", "", "write the report to this file instead of stdout")
 	command.Flags().StringVar(&failOn, "fail-on", "degrades",
-		"exit 1 when a finding reaches this severity: breaks_request_path, degrades or any")
+		"exit 1 when a finding reaches this severity: breaks_request_path, degrades or any "+
+			"(unknown counts as degrades)")
 	command.Flags().StringSliceVar(&only, "component", nil, "only these components (repeatable)")
 	command.Flags().BoolVar(&noPlugins, "no-plugins", false,
 		"extract INTENT with the built-in artefact readers only, skipping every extractor plugin")
