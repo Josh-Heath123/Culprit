@@ -386,7 +386,9 @@ def clock(client: TestClient) -> Clock:
     from app.agents import dependencies as agents_dependencies
 
     fake = Clock()
-    client.app.dependency_overrides[agents_dependencies.get_clock] = lambda: fake
+    app = client.app
+    assert isinstance(app, FastAPI)
+    app.dependency_overrides[agents_dependencies.get_clock] = lambda: fake
     return fake
 
 
