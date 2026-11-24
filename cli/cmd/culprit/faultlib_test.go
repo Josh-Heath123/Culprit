@@ -242,6 +242,7 @@ func TestTheFaultLibrary(t *testing.T) {
 			}
 			verification := stack.verify(fault, inv, state, fault.Fix.Change)
 			stack.checkVerification(verification, inv, fault.Fix.Verdict, fault.Fix.ReasonContains)
+			logBodySizes(t, inv, verification)
 			if fault.Name == "missing-index" {
 				// At 0003 the statement's mean is under 2 ms, in both of
 				// verification's windows.
@@ -266,6 +267,7 @@ func TestTheFaultLibrary(t *testing.T) {
 			stack.applyScenario(scenario.Apply)
 			verification := stack.verify(fault, inv, state, scenario.Change)
 			stack.checkVerification(verification, inv, scenario.Verdict, scenario.ReasonContains)
+			logBodySizes(t, inv, verification)
 			if scenario.Apply == "index-category-only" {
 				// Q35: with category alone the mean is still over the 10 ms
 				// budget, and the plan still filters category on the sku index.
@@ -299,6 +301,7 @@ func TestTheFaultLibrary(t *testing.T) {
 			}
 			verification := stack.verifyThroughMCP(fault, inv, state, fault.Fix.Change)
 			stack.checkVerification(verification, inv, loop.verdict, loop.reason)
+			logBodySizes(t, inv, verification)
 		})
 	}
 	// Phase 34 part 2: the results the README's number is rendered from —
@@ -344,6 +347,18 @@ type faultResult struct {
 	RootSubject string `json:"root_subject"`
 	Complete    bool   `json:"complete"`
 	Verdict     string `json:"verdict"`
+}
+
+// logBodySizes prints the bodies an agent would send for this case — the
+// investigation (POST /investigations) and the verification (POST
+// /investigations/{id}/verifications) — so CI measures the largest a
+// legitimate client sends (F44-043). It changes no result.
+func logBodySizes(t *testing.T, inv model.Investigation, verification model.Verification) {
+	t.Helper()
+	investigation, _ := json.Marshal(inv)
+	submitted, _ := json.Marshal(map[string]any{"source": "planted", "verification": verification})
+	t.Logf("request body sizes (F44-043): investigation %d bytes, verification %d bytes",
+		len(investigation), len(submitted))
 }
 
 func resultOf(name string, inv model.Investigation, verification model.Verification) faultResult {

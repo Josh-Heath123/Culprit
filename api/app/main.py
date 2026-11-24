@@ -261,12 +261,17 @@ async def observability_middleware(
         span.set_attribute("http.status_code", response.status_code)
         if response.status_code >= 400:
             span.set_status(Status(StatusCode.ERROR))
+        # request_bytes: the body's declared size (Content-Length; 0 when
+        # none), which scripts/request_sizes.py reads in CI to measure the
+        # largest body a legitimate client sends (F44-043).
+        declared = request.headers.get("content-length", "")
         access_logger.info(
             "http_request",
             method=request.method,
             path=request.url.path,
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2),
+            request_bytes=int(declared) if declared.isdigit() else 0,
         )
         return response
 

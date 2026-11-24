@@ -763,6 +763,12 @@ jobs:
           QUICKSTART_HTTP_PORT: "8088"
           KIND_CLUSTER: culprit-agent
         run: just agent-recipes
+      # F44-043 (Phase 44 batch 3): the largest body any client sent the
+      # api in every journey above, from its access log (request_bytes).
+      - name: The largest request bodies the journeys sent
+        run: |
+          docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod logs --no-color api \
+            | python3 scripts/request_sizes.py
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
