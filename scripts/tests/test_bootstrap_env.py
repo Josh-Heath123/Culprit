@@ -253,3 +253,107 @@ def test_no_secret_value_is_printed(
     if local:
         assert written["QUICKSTART_ADMIN_PASSWORD"] in secrets
         assert "QUICKSTART_ADMIN_PASSWORD in" in printed
+
+
+# F44-009 (Phase 44 batch 3): `just quickstart` over an env file written
+# before a phase added a key died in a migration with a traceback
+# ("NARRATOR_DB_PASSWORD must be set"). `--backfill` adds every key this
+# script generates that the file lacks, and never overwrites or
+# regenerates one that is there.
+
+
+def _old_env_file(path: Path, *, without: set[str]) -> list[str]:
+    """A --local file as an older bootstrap wrote it: these keys absent."""
+    env, _ = bootstrap_env.build_env(local=True, domain=None)
+    lines = [
+        line
+        for line in bootstrap_env.render_env_file(env).splitlines()
+        if line.split("=", 1)[0] not in without
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return lines
+
+
+def _parse(path: Path) -> dict[str, str]:
+    return dict(
+        line.split("=", 1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if "=" in line and not line.startswith("#")
+    )
+
+
+def _backfill(path: Path, monkeypatch: pytest.MonkeyPatch) -> int:
+    monkeypatch.setattr(bootstrap_env, "ENV_PROD_PATH", path)
+    monkeypatch.setattr(sys, "argv", ["bootstrap_env.py", "--backfill"])
+    return bootstrap_env.main()
+
+
+def test_backfill_adds_a_key_an_older_file_lacks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / ".env.prod"
+    kept = _old_env_file(target, without={"NARRATOR_DB_PASSWORD", "NARRATOR_DATABASE_URL"})
+    before = _parse(target)
+
+    assert _backfill(target, monkeypatch) == 0
+
+    after = _parse(target)
+    generated, _ = bootstrap_env.build_env(local=True, domain=None)
+    assert set(generated) <= set(after), sorted(set(generated) - set(after))
+    # Every key that was there is there unchanged, in its place.
+    assert target.read_text(encoding="utf-8").splitlines()[: len(kept)] == kept
+    assert {k: after[k] for k in before} == before
+    # The derived URL is built from the password added with it.
+    password = after["NARRATOR_DB_PASSWORD"]
+    assert password and len(password) >= 32
+    assert after["NARRATOR_DATABASE_URL"] == (
+        f"postgresql+asyncpg://narrator:{password}@postgres:5432/culprit"
+    )
+    printed = "".join(capsys.readouterr())
+    assert "NARRATOR_DB_PASSWORD" in printed, "the keys added are not named"
+    assert password not in printed, "a generated secret was printed"
+
+
+def test_backfill_keeps_a_password_that_is_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the URL is missing: it is built from the password the file
+    already holds, which is never regenerated, $$-escaping and all."""
+    target = tmp_path / ".env.prod"
+    _old_env_file(target, without={"NARRATOR_DATABASE_URL"})
+    text = target.read_text(encoding="utf-8")
+    old = _parse(target)["NARRATOR_DB_PASSWORD"]
+    target.write_text(text.replace(f"NARRATOR_DB_PASSWORD={old}", "NARRATOR_DB_PASSWORD=pa$$word"),
+                      encoding="utf-8")
+
+    assert _backfill(target, monkeypatch) == 0
+
+    after = _parse(target)
+    assert after["NARRATOR_DB_PASSWORD"] == "pa$$word"
+    assert after["NARRATOR_DATABASE_URL"] == (
+        "postgresql+asyncpg://narrator:pa$$word@postgres:5432/culprit"
+    )
+
+
+def test_backfill_over_a_complete_file_changes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / ".env.prod"
+    _old_env_file(target, without=set())
+    before = target.read_bytes()
+    assert _backfill(target, monkeypatch) == 0
+    assert target.read_bytes() == before
+
+
+def test_backfill_needs_a_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert _backfill(tmp_path / ".env.prod", monkeypatch) == 1
+    assert not (tmp_path / ".env.prod").exists()
+
+
+def test_the_quickstart_backfills_rather_than_naming_one_key() -> None:
+    """The recipe runs --backfill over a file it reuses; the special case
+    for INVENTORY_DB_PASSWORD alone is gone."""
+    justfile = (ROOT / "justfile").read_text(encoding="utf-8")
+    recipe = justfile.split("\nquickstart:\n", 1)[1].split("\n\n", 1)[0]
+    assert "scripts/bootstrap_env.py --backfill" in recipe
+    assert "INVENTORY_DB_PASSWORD" not in recipe

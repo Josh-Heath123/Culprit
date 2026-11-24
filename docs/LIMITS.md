@@ -235,20 +235,24 @@ will now crash on boot rather than start in a broken state. Compare against
 `infra/.env.prod.example`, which lists every variable, or regenerate with
 `just bootstrap-env`. See `docs/UPGRADING.md`.
 
-**The local quickstart hits the same wall, and re-running it does not
-help.** `just quickstart` generates `infra/.env.prod` only if the file does
-not exist, and `just quickstart-down` keeps it (and the database volume).
-So a quickstart first run before Phase 28 keeps an `.env.prod` without the
-`fact-writer`, `capture-writer` and `probe-writer` passwords or
-`CULPRIT_PROJECT_TOKEN`. On the next run the bootstrap migration aborts
-with `FACT_WRITER_DB_PASSWORD must be set in the environment to run this
-migration`, and `api` and `worker` restart in a loop. Found running Phase
-31.1 on a machine that had last run the quickstart in September. Add the
-missing lines by hand, with names from `infra/.env.prod.example`. Do not
-regenerate the file with `--force` while the volume still exists: the
-Postgres superuser password is fixed when the volume is first created, so
-a regenerated file no longer matches it. Removing the volume and the file
-together starts clean, at the cost of the local data.
+**The local quickstart adds what an older file lacks (F44-009).** `just
+quickstart` generates `infra/.env.prod` only if the file does not exist,
+and `just quickstart-down` keeps it (and the database volume). Since Phase
+44 batch 3, when it reuses a file it first runs `bootstrap_env.py
+--backfill`, which adds every key the generator writes that the file lacks
+— a role password a later migration needs, with its URL built from it —
+names them, and prints no value. It never overwrites or regenerates a key
+that is there, so the Postgres superuser password, fixed when the volume
+was first created, still matches. Until then a file from before a phase
+that added a role made the bootstrap migration abort with a traceback
+(`NARRATOR_DB_PASSWORD must be set in the environment to run this
+migration`). What it cannot repair: a key that is there with a wrong
+value, and a backfilled `QUICKSTART_ADMIN_PASSWORD` (a file from before
+Phase 17's quickstart) is new and is not the existing admin's password. Do
+not regenerate the file with `--force` while the volume still exists;
+removing the volume and the file together starts clean, at the cost of the
+local data. A real install's `.env.prod` is not backfilled: add its keys by
+hand from `docs/UPGRADING.md`.
 
 **`infra/.env.prod` holds every secret in plain text, on purpose** — Docker
 Compose reads nothing else — so `just bootstrap-env` creates it readable by
@@ -1804,7 +1808,8 @@ of its own (`inventory`, in the same Postgres, owned by an `inventory`
 role) and fills a table with a million generated products, which adds
 roughly ten to thirty seconds. Its role's password is generated into
 `infra/.env.prod` with the others (`INVENTORY_DB_PASSWORD`); a file made
-before Phase 37's close-out gets one added by the next `just quickstart`,
+before Phase 37's close-out gets one added by the next `just quickstart`
+(its backfill, above),
 and the setup job sets the role's password to it on every run. Until then
 the demo's database had a fixed password written in the compose file. The same Postgres now starts with `pg_stat_statements` preloaded —
 the recipe checks the running value and stops if it is not — which keeps

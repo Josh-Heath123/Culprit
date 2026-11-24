@@ -18,6 +18,12 @@ Two modes:
             embedding for search). This is the real-VM path documented in
             docs/INSTALL.md.
 
+And one repair, for `just quickstart` over a file an older version wrote:
+  --backfill  Adds every key --local generates that infra/.env.prod lacks,
+            and nothing else (F44-009). A key that is there is never
+            overwritten or regenerated; a URL it adds is built from the
+            password the file already holds, or the one added with it.
+
 No LLM key is asked for: since Phase 32 part 2 nothing in Culprit calls a
 model (the incident narrative job was removed).
 
@@ -100,13 +106,19 @@ def _prompt(label: str, *, default: str | None = None, secret: bool = False) -> 
     return value or (default or "")
 
 
-def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
+def build_env(
+    *, local: bool, domain: str | None, keep: dict[str, str] | None = None, announce: bool = True
+) -> tuple[dict[str, str], str]:
     """Returns (env vars to write, admin password to print) -- the admin
     password is generated here (not by create_user.py, which has no
     non-interactive input path by design -- see api/scripts/create_user.py's
     own docstring) so the quickstart bootstrap step can pipe it into
-    create_user.py's stdin without ever putting it on a command line."""
+    create_user.py's stdin without ever putting it on a command line.
+
+    `keep` holds secrets to use instead of generating them (unescaped), so
+    that a URL --backfill adds is built from the password the file holds."""
     passwords = {name: _gen_password() for name, _ in GENERATED_SECRETS}
+    passwords.update({name: value for name, value in (keep or {}).items() if name in passwords})
 
     env: dict[str, str] = {}
     env["POSTGRES_USER"] = DB_NAME
@@ -154,12 +166,13 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
 
     if local:
         env["VOYAGE_API_KEY"] = ""
-        print(
-            "--local mode: no VOYAGE_API_KEY set. Postmortems are stored but not "
-            "embedded for search until it is set in infra/.env.prod and the stack "
-            "is restarted. Nothing else needs a key.",
-            file=sys.stderr,
-        )
+        if announce:
+            print(
+                "--local mode: no VOYAGE_API_KEY set. Postmortems are stored but not "
+                "embedded for search until it is set in infra/.env.prod and the stack "
+                "is restarted. Nothing else needs a key.",
+                file=sys.stderr,
+            )
     else:
         env["VOYAGE_API_KEY"] = _prompt(
             "VOYAGE_API_KEY (optional; embeds postmortems for search)", secret=True
@@ -340,7 +353,9 @@ def build_env(*, local: bool, domain: str | None) -> tuple[dict[str, str], str]:
     # via `just create-user` on the host, not generated. Never printed in
     # either mode (Q41, 2026-11-19): `just quickstart` shows it at the
     # end, locally, read from this file.
-    admin_password = _gen_password() if local else ""
+    admin_password = (keep or {}).get("QUICKSTART_ADMIN_PASSWORD") or (
+        _gen_password() if local else ""
+    )
     env["QUICKSTART_ADMIN_USERNAME"] = "admin" if local else ""
     env["QUICKSTART_ADMIN_PASSWORD"] = admin_password
     return env, admin_password
@@ -356,6 +371,37 @@ def render_env_file(env: dict[str, str]) -> str:
     for name, value in env.items():
         lines.append(f"{name}={_escape_dollars(value)}")
     return "\n".join(lines) + "\n"
+
+
+def read_env_file(text: str) -> dict[str, str]:
+    """Every KEY=value line of an env file, unescaped ($$ -> $)."""
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            name, value = line.split("=", 1)
+            values[name.strip()] = value.replace("$$", "$")
+    return values
+
+
+def backfill(path: Path) -> list[str]:
+    """Append every key --local generates that `path` lacks; return their
+    names. Every line already in the file is kept as it is, byte for byte,
+    and a key that is there -- even one set to nothing -- is never touched."""
+    text = path.read_text(encoding="utf-8")
+    present = read_env_file(text)
+    keep = {name: present[name] for name, _ in GENERATED_SECRETS if present.get(name)}
+    if present.get("QUICKSTART_ADMIN_PASSWORD"):
+        keep["QUICKSTART_ADMIN_PASSWORD"] = present["QUICKSTART_ADMIN_PASSWORD"]
+    env, _ = build_env(local=True, domain=None, keep=keep, announce=False)
+    missing = [name for name in env if name not in present]
+    if not missing:
+        return []
+    if text and not text.endswith("\n"):
+        text += "\n"
+    text += "# Added by scripts/bootstrap_env.py --backfill (keys a later version generates).\n"
+    text += "".join(f"{name}={_escape_dollars(env[name])}\n" for name in missing)
+    write_private(path, text)
+    return missing
 
 
 def write_private(path: Path, text: str) -> None:
@@ -390,7 +436,24 @@ def main() -> int:
     parser.add_argument(
         "--force", action="store_true", help="overwrite an existing infra/.env.prod"
     )
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="add the keys an existing infra/.env.prod lacks; change nothing that is there",
+    )
     args = parser.parse_args()
+
+    if args.backfill:
+        if not ENV_PROD_PATH.exists():
+            print(f"error: {ENV_PROD_PATH} does not exist; nothing to backfill.", file=sys.stderr)
+            return 1
+        added = backfill(ENV_PROD_PATH)
+        if added:
+            print(f"added to {ENV_PROD_PATH}, generated: {', '.join(added)}")
+            print("no secret value is printed; every key that was there is unchanged.")
+        else:
+            print(f"{ENV_PROD_PATH} has every key; nothing added.")
+        return 0
 
     if ENV_PROD_PATH.exists() and not args.force:
         print(
