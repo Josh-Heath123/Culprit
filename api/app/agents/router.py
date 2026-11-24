@@ -18,6 +18,9 @@ No route here runs a probe. An agent runs what it claims, under its own
 configuration's grants intersected with the allowance stamped on the task.
 """
 
+from collections.abc import Callable
+from datetime import datetime
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +30,7 @@ from app.agents.dependencies import (
     AgentPrincipal,
     body_documented_as,
     get_admin_session,
+    get_clock,
     get_gateway_session,
     get_registrar_session,
     require_agent,
@@ -73,8 +77,9 @@ _RESERVED_IDS = {"me", "register", "pairing-codes"}
 async def claim_task(
     agent: AgentPrincipal = Depends(require_agent),
     session: AsyncSession = Depends(get_gateway_session),
+    clock: Callable[[], datetime] = Depends(get_clock),
 ) -> ClaimedTask | Response:
-    task = await service.claim(session, agent.id)
+    task = await service.claim(session, agent.id, clock())
     if task is None:
         return Response(status_code=204)
     logger.info("agent_task_claimed", agent=agent.id, task=task["id"])
@@ -89,9 +94,10 @@ async def report_result(
     result: TaskResult = Depends(_task_result),
     agent: AgentPrincipal = Depends(require_agent),
     session: AsyncSession = Depends(get_gateway_session),
+    clock: Callable[[], datetime] = Depends(get_clock),
 ) -> Response:
     try:
-        await service.complete(session, agent.id, task_id, result)
+        await service.complete(session, agent.id, task_id, result, clock())
     except service.NotFound as exc:
         raise HTTPException(status_code=404, detail="no claimed, open task with that id") from exc
     logger.info("agent_task_completed", agent=agent.id, task=task_id, outcome=result.outcome)
@@ -232,10 +238,13 @@ async def create_task(
     "/{agent_id}/tasks/{task_id}", response_model=TaskView, dependencies=[Depends(require_admin)]
 )
 async def get_task(
-    agent_id: str, task_id: str, session: AsyncSession = Depends(get_read_session)
+    agent_id: str,
+    task_id: str,
+    session: AsyncSession = Depends(get_read_session),
+    clock: Callable[[], datetime] = Depends(get_clock),
 ) -> TaskView:
     try:
-        return TaskView(**await service.load_task(session, agent_id, task_id))
+        return TaskView(**await service.load_task(session, agent_id, task_id, clock()))
     except service.NotFound as exc:
         raise HTTPException(status_code=404, detail="no such task") from exc
 

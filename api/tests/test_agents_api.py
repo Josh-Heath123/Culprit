@@ -20,7 +20,7 @@ import secrets
 import time
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -361,6 +361,86 @@ def test_a_result_is_recorded_once_and_only_by_its_agent(client: TestClient) -> 
     assert agent.send("POST", f"/agents/me/tasks/{task}/result", result).status_code == 404
     stored = client.get(f"/agents/{agent.id}/tasks/{task}").json()
     assert stored["outcome"] == "refused" and stored["allowance"] == []
+
+
+# ---- a claim's deadline (F44-014) ----------------------------------------------------------
+#
+# A claimed task not completed within its deadline is failed, with a reason
+# naming when it was claimed and the deadline, and never re-queued: a probe
+# may have run part-way. Applied when the task is read, with the clock
+# injected; no background service. An agent that asks for its next task has
+# stopped working on any it claimed before (it runs one at a time), so its
+# claim fails them too.
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+@pytest.fixture
+def clock(client: TestClient) -> Clock:
+    from app.agents import dependencies as agents_dependencies
+
+    fake = Clock()
+    client.app.dependency_overrides[agents_dependencies.get_clock] = lambda: fake
+    return fake
+
+
+def test_a_claim_past_its_deadline_is_failed_naming_both_times(
+    client: TestClient, clock: Clock
+) -> None:
+    agent = paired(client)
+    task = _task(client, agent)
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["id"] == task
+
+    clock.now += timedelta(minutes=14)
+    open_task = client.get(f"/agents/{agent.id}/tasks/{task}").json()
+    assert open_task["outcome"] is None and open_task["completed_at"] is None
+
+    clock.now += timedelta(minutes=2)
+    failed = client.get(f"/agents/{agent.id}/tasks/{task}").json()
+    assert failed["outcome"] == "error"
+    assert "2026-11-24T12:00:00" in failed["reason"], failed["reason"]  # claimed
+    assert "2026-11-24T12:15:00" in failed["reason"], failed["reason"]  # the deadline
+    assert "never re-queued" in failed["reason"]
+    assert failed["completed_at"] is not None
+    # Never re-queued: nothing to claim.
+    assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
+
+
+def test_a_result_after_the_deadline_is_kept_and_the_task_stays_failed(
+    client: TestClient, clock: Clock
+) -> None:
+    agent = paired(client)
+    task = _task(client, agent)
+    agent.send("POST", "/agents/me/tasks/claim")
+    clock.now += timedelta(minutes=20)
+    late = {"outcome": "completed", "readings": 1}
+    assert agent.send("POST", f"/agents/me/tasks/{task}/result", late).status_code == 204
+    stored = client.get(f"/agents/{agent.id}/tasks/{task}").json()
+    assert stored["outcome"] == "error"
+    assert "after it" in stored["reason"] and "completed" in stored["reason"], stored["reason"]
+    assert stored["result"]["outcome"] == "completed"
+    assert agent.send("POST", f"/agents/me/tasks/{task}/result", late).status_code == 404
+
+
+def test_claiming_again_fails_the_agents_unfinished_claim(client: TestClient, clock: Clock) -> None:
+    agent = paired(client)
+    first, second = _task(client, agent), _task(client, agent)
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["id"] == first
+    clock.now += timedelta(minutes=1)
+    # The agent restarted mid-task, and asks for its next one.
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["id"] == second
+    failed = client.get(f"/agents/{agent.id}/tasks/{first}").json()
+    assert failed["outcome"] == "error"
+    assert "2026-11-24T12:00:00" in failed["reason"] and "never re-queued" in failed["reason"]
+    result = {"outcome": "completed", "readings": 1}
+    assert agent.send("POST", f"/agents/me/tasks/{first}/result", result).status_code == 404
+    assert agent.send("POST", f"/agents/me/tasks/{second}/result", result).status_code == 204
 
 
 # ---- the signature -----------------------------------------------------------------------

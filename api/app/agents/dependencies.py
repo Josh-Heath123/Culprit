@@ -19,6 +19,7 @@ the caller: a forger learns nothing from the answer.
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import Depends, Header, HTTPException, Request
@@ -54,6 +55,12 @@ class Submitter:
     @property
     def label(self) -> str:
         return f"agent:{self.agent.id}" if self.agent else "project-token"
+
+
+def get_clock() -> Callable[[], datetime]:
+    """The clock a task's deadline is judged by (F44-014): the wall clock,
+    replaced by a test's."""
+    return lambda: datetime.now(UTC)
 
 
 def _session(state_name: str):

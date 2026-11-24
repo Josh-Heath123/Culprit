@@ -2181,8 +2181,35 @@ runs without it.
 Revoking an agent refuses its very next request. A task it had already
 claimed runs to its end on the agent's host — the probes are local — but
 its readings, its investigation and its result are then refused, so the
-control plane keeps the task as claimed and never completed, and the
-agent's local audit log is the only record of what that task did.
+control plane keeps the task as claimed until its deadline (below) fails
+it, and the agent's local audit log is the only record of what that task
+did.
+
+## A claimed task has a deadline, and is never re-queued (F44-014)
+
+A task claimed and not completed within **15 minutes** of its claim is
+failed (`error`), with a reason naming when it was claimed and the
+deadline. Set it with `AGENT_TASK_DEADLINE_MINUTES` on the control plane,
+a whole number above 0; one deadline holds every kind of task, since none
+declares a timeout of its own. It is applied when the task is read and
+when its agent next speaks, by the control plane's clock; nothing runs in
+the background, so until someone reads it, the row says what it said.
+
+- **Never re-queued.** A probe may have run part-way; address the task
+  again if it should run again.
+- **A result after the deadline is kept, and the task stays failed.** The
+  reason says when the result arrived and what it said; the agent is
+  answered as usual and carries on. Its readings and investigation, sent
+  before the result, are stored as they always are.
+- **An agent's next claim fails its unfinished one.** An agent runs one
+  task at a time, so an agent that asks for its next task has stopped
+  working on any it claimed before (it restarted, or stopped mid-task):
+  that one is failed then, with a reason that says so. Two processes
+  sharing one agent's key would fail each other's tasks; the recipes never
+  run two (below).
+- **A walk longer than the deadline is failed** though it was still
+  running. Raise the deadline for an environment whose walks take that
+  long.
 
 ## Agents poll for tasks
 
