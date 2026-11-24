@@ -434,7 +434,7 @@ def test_sign_in_is_limited_per_address_behind_caddy(
     # The peer address a request arrives from, set on the one client the
     # app's engines were started with (a second TestClient runs on another
     # event loop).
-    transport = client._transport  # noqa: SLF001 - TestClient keeps the peer there
+    transport = client._transport  # TestClient keeps the peer there
     via_caddy, direct = (caddy, 41000), (stranger, 41000)
 
     def login(peer: tuple[str, int], forwarded: str) -> int:
