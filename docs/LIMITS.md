@@ -186,6 +186,25 @@ Three things this means in practice:
   error in the worker log is the intended behaviour for that case, not a
   regression.
 
+**An entry Postgres refuses is quarantined the same way (F44-039).** An
+entry that parses but that Postgres will not store — a NUL byte in a text
+column, a value out of range, a broken constraint — made its whole batch's
+write fail until Phase 44 batch 3, and the batch was refused on every tick.
+Now the batch is written one entry at a time, each entry Postgres refuses
+goes to `dead-letter` with `Postgres refused it: <error class> (SQLSTATE
+...)`, and the rest are written and acked. Writing one at a time can store
+part of a batch before a crash, which redelivers it whole: the at-least-once
+duplicates a crash already allowed. **If Postgres refuses every entry of a
+batch, or cannot be reached at all, nothing is quarantined or acked** — the
+drain raises and stalls, as for a batch that fails to parse.
+
+**The drain lock is its holder's (F44-040).** A drain holds a lock with a
+30-second expiry so two never write one batch twice. It is renewed every
+10 seconds while the drain runs, and released only by the drain that holds
+it, by its token. Before, a drain slower than 30 seconds lost the lock to
+the next tick and then deleted that tick's lock when it finished. A worker
+that stops without releasing it holds the drain for up to 30 seconds.
+
 ## A historic narrative's citations were checked for existence, not relevance
 
 Incident narratives written before Phase 32 had every citation verified

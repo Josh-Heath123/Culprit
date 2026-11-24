@@ -155,3 +155,71 @@ async def test_a_clean_batch_quarantines_nothing() -> None:
     assert result == (2, 0)
     assert client.dead_lettered == []
     assert client.acked == ["1-0", "2-0"]
+
+
+# ---- an entry Postgres refuses (F44-039, Phase 44 batch 3) ----------------------------
+#
+# An entry that parses but that Postgres will not store (a NUL byte in a
+# text column, say) made the whole batch's write raise: nothing was acked,
+# and the same batch was reclaimed and refused on every tick, every entry
+# behind it stuck. It is quarantined with Postgres's reason now, as an
+# unparseable entry is, and the drain carries on. A database that cannot
+# be reached still acks nothing.
+
+
+class RefusingWriter(RecordingWriter):
+    """Postgres, refusing any row whose service name holds a NUL byte."""
+
+    async def __call__(self, engine, rows: list[dict]) -> None:
+        from sqlalchemy.exc import DataError
+
+        if any("\x00" in row["service_name"] for row in rows):
+            raise DataError("INSERT INTO raw_events ...", {}, ValueError("invalid byte sequence"))
+        self.written.extend(rows)
+
+
+async def test_an_entry_postgres_refuses_is_quarantined_and_the_rest_written() -> None:
+    client = FakeRedis(
+        [
+            _valid_entry("1-0", "order-service"),
+            _valid_entry("2-0", "pay\x00ments"),
+            _valid_entry("3-0", "inventory"),
+        ]
+    )
+    write = RefusingWriter()
+
+    result = await _drain(client, write)
+
+    assert [row["service_name"] for row in write.written] == ["order-service", "inventory"]
+    assert result == (2, 1)
+    assert client.acked == ["1-0", "2-0", "3-0"]
+    [quarantined] = client.dead_lettered
+    assert quarantined["source_entry_id"] == "2-0"
+    assert "Postgres refused" in quarantined["error"] and "DataError" in quarantined["error"]
+
+
+async def test_a_batch_postgres_refuses_whole_raises_instead_of_acking() -> None:
+    """As for parsing: every entry refused is systemic, not a bad entry."""
+    client = FakeRedis([_valid_entry("1-0", "a\x00"), _valid_entry("2-0", "b\x00")])
+
+    with pytest.raises(RuntimeError, match="refused"):
+        await _drain(client, RefusingWriter())
+
+    assert client.acked == []
+    assert client.dead_lettered == []
+
+
+async def test_a_database_that_cannot_be_reached_acks_nothing() -> None:
+    from sqlalchemy.exc import OperationalError
+
+    class Unreachable(RecordingWriter):
+        async def __call__(self, engine, rows: list[dict]) -> None:
+            raise OperationalError("connect", {}, ConnectionRefusedError("refused"))
+
+    client = FakeRedis([_valid_entry("1-0", "order-service"), _valid_entry("2-0", "payments")])
+
+    with pytest.raises(OperationalError):
+        await _drain(client, Unreachable())
+
+    assert client.acked == []
+    assert client.dead_lettered == []
