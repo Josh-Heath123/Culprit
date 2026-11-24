@@ -571,7 +571,11 @@ def test_an_entry_that_does_not_extend_the_stored_chain_is_refused(client: TestC
     assert agent.send("POST", "/agents/me/audit", {"entries": [first]}).status_code == 200
     refused = agent.send("POST", "/agents/me/audit", {"entries": [third]})
     assert refused.status_code == 409
-    assert refused.json()["detail"]["seq"] == 1
+    # F44-044: the one error shape, {"detail": a sentence}; the control
+    # plane's head is named in it.
+    assert set(refused.json()) == {"detail"}
+    assert isinstance(refused.json()["detail"], str)
+    assert "seq 1" in refused.json()["detail"], refused.json()
     # Sent again, the same entry is no longer an extension either.
     assert agent.send("POST", "/agents/me/audit", {"entries": [first]}).status_code == 409
 

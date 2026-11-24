@@ -124,9 +124,11 @@ async def append_audit(
     except service.Refused as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except service.ChainBroken as exc:
+        # One error shape (F44-044): the control plane's head, in words.
         raise HTTPException(
             status_code=409,
-            detail={"message": str(exc), "seq": exc.head[0], "hash": exc.head[1]},
+            detail=f"{exc} The control plane's chain ends at seq {exc.head[0]}, "
+            f"hash {exc.head[1]}.",
         ) from exc
     return AuditHead(seq=seq, hash=digest)
 

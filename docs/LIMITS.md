@@ -2052,12 +2052,48 @@ if they shrank further, so the chart keeps that width and scrolls inside its
 card on a phone; the page itself never scrolls sideways. Every other page
 reflows to one column instead.
 
+## Sign-in is limited per caller, as Caddy saw it (F44-015)
+
+Behind Caddy every request reaches the api from Caddy's own address, so
+until Phase 44 batch 3 the sign-in limit was one bucket for everyone: ten
+failed sign-ins a minute from anyone locked the whole team out. Now the
+limit is kept per caller: the address in `X-Forwarded-For`, believed only
+from the one proxy the compose files name (`TRUSTED_PROXY_HOST: frontend`,
+resolved to its addresses every 30 seconds). From any other address the
+header is ignored and the peer is the key, so a caller cannot choose its
+own bucket by sending one.
+
+- **A deployment without the shipped compose files** sets
+  `TRUSTED_PROXY_HOST` to its own proxy's host name, or leaves it unset:
+  then every caller behind the proxy shares one bucket, as before.
+- **Callers behind one NAT share a bucket,** and the limit is kept in each
+  api process's memory: two api replicas count apart.
+- **Only sign-in is limited.** The ingest gateway has its own limits.
+
+## Every API error is one shape (F44-044)
+
+Every error `/api/*` answers is `{"detail": "a sentence"}`, or for a 422
+`{"detail": [{"loc", "msg", "type"}]}`; the 429 said `{"error": ...}` and
+an agent's broken audit chain a nested object until Phase 44 batch 3. The
+dashboard shows the sentence (or, for a 422, each field and what is wrong
+with it), never the raw body; a body in any other shape, such as a
+proxy's error page, is shown as its status alone. The ingest gateway
+(`/ingest/*`), a separate service, still answers a 429 as `{"error": ...}`.
+
+## Two creates of one user at once: one is a 409 (F44-047)
+
+`POST /users` checks the name is free, then inserts; two requests for one
+name at once both passed the check, and the second insert's violation of
+the unique index was a 500. It is a 409 now, as the check's is. No write is
+idempotent by key: a task or a postmortem posted twice is two.
+
 ## The browser tests need the whole stack, and sign-in is rate limited
 
 `just e2e` runs against a stack `just quickstart` has started; nothing in
 it mocks the API. CI builds that stack on every pull request, which makes
 the `e2e` job the slowest in the pipeline. Sign-in is limited to 10 attempts
-a minute per address (`api/app/auth/router.py`) and the session lives only in
+a minute per address (`api/app/auth/router.py`; the address is the caller's,
+as Caddy saw it, below) and the session lives only in
 memory, so the suite signs in six times per run and moves between pages
 inside the app; running it twice inside a minute fails with a 429 on sign-in.
 The tour of every route is one test per route (Phase 32.2) sharing one
@@ -2585,7 +2621,12 @@ the task or CI gave when asking for the verification — required, never
 defaulted, and never checked. A drill posted as `real` is counted as real.
 The first verification of an investigation fixes its label: a later one
 that says otherwise is refused, so one investigation is never counted both
-ways.
+ways. Since Phase 44 batch 3 the database holds it (F44-041, migration
+`d1e5b9c3a7f2`, an exclusion constraint), so two verifications posted at
+once with different labels cannot both be stored: the second waits for
+the first and is refused with the same 409. A database that already holds
+an investigation recorded both ways does not upgrade: the migration stops,
+says how many and how to list them, and changes no row (`docs/UPGRADING.md`).
 
 ### Accuracy is counted per investigation, from its newest verification
 

@@ -376,6 +376,30 @@ of. Nothing in the database changes and no migration runs.
   and diagnose again before verifying a fix for an investigation walked by
   the older binary.
 
+## Phase 44 batch 3: one migration, one setting, one error shape
+
+- **Migration `d1e5b9c3a7f2`** adds an exclusion constraint to
+  `verifications`: one investigation's fault is planted or real, never
+  both (F44-041), and creates the `btree_gist` extension, which the
+  timescaledb-ha image ships. It changes no row. If an investigation's
+  verifications already record both, `alembic upgrade head` stops with the
+  count and a query that lists them; nothing is changed, and the choice is
+  yours, since `verifications` is append-only. Stay on the previous
+  release until it is made.
+- **`TRUSTED_PROXY_HOST`** (F44-015): the shipped compose files set it to
+  `frontend`, the Caddy service, so the sign-in limit is kept per caller.
+  A deployment of your own sets it to its proxy's host name, or leaves it
+  unset (one bucket for everyone behind the proxy, as before). Never set it
+  to a host that is not the one proxy in front of the api.
+- **Error bodies** (F44-044): a 429 from `/api/*` is
+  `{"detail": "Rate limit exceeded: ..."}` (was `{"error": ...}`), and an
+  agent's broken audit chain answers its 409 with a sentence naming the
+  head (was `{"detail": {"message", "seq", "hash"}}`). `culprit agent`
+  reads neither body. A client of your own that parsed `error` reads
+  `detail`.
+- **`AGENT_TASK_DEADLINE_MINUTES`** (F44-014), optional: a claimed agent
+  task open longer than this (15 minutes) is failed, never re-queued.
+
 ## Agent tasks stored before Phase 44 may hold a token
 
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a

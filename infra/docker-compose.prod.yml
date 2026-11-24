@@ -77,6 +77,10 @@ services:
       # The api never calls a provider, so it is not handed the key that
       # .env.prod (env_file) would otherwise give every service.
       ANTHROPIC_API_KEY: ""
+      # F44-015: the one proxy whose X-Forwarded-For the sign-in limit
+      # believes, by service name (app/incidents/limiter.py). From any
+      # other address the header is ignored.
+      TRUSTED_PROXY_HOST: frontend
     depends_on:
       postgres:
         condition: service_healthy

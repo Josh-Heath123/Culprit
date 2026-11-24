@@ -6,6 +6,7 @@
 // reimplemented here.
 
 import { getToken, setToken } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 import type {
   AgentList,
   Allowance,
@@ -76,7 +77,7 @@ async function request<T>(
   }
   if (!response.ok) {
     const body = await response.text();
-    throw new ApiError(body || response.statusText, response.status);
+    throw new ApiError(errorMessage(response.status, response.statusText, body), response.status);
   }
   if (response.status === 204 || response.status === 202) {
     return undefined as T;
@@ -92,7 +93,7 @@ export async function login(username: string, password: string): Promise<void> {
   });
   if (!response.ok) {
     const body = await response.text();
-    throw new ApiError(body || response.statusText, response.status);
+    throw new ApiError(errorMessage(response.status, response.statusText, body), response.status);
   }
   const data = (await response.json()) as LoginResponse;
   setToken(data.access_token);

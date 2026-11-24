@@ -23,10 +23,9 @@ from fastapi import Depends, FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from opentelemetry import trace  # noqa: E402
 from opentelemetry.trace import Status, StatusCode  # noqa: E402
-from slowapi.errors import RateLimitExceeded  # noqa: E402
 from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
-from starlette.responses import JSONResponse, Response  # noqa: E402
+from starlette.responses import Response  # noqa: E402
 
 from app.agents.config import (  # noqa: E402
     AGENT_ADMIN_DATABASE_URL,
@@ -68,10 +67,17 @@ configure_observability("culprit-api")
 tracer = trace.get_tracer("culprit.api")
 access_logger = structlog.get_logger("api.access")
 
+def cors_origins(raw: str) -> list[str]:
+    """Origins from a comma-separated list, each trimmed, empties dropped
+    (F44-050): "https://a.example, https://b.example" names two origins,
+    not one and " https://b.example", which no browser sends."""
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 #: Comma-separated list of origins allowed to call this API — the Vite
 #: dev server's default port locally, overridable for any other frontend
 #: origin (a deployed dashboard, a different local port).
-CORS_ALLOW_ORIGINS = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:5173").split(",")
+CORS_ALLOW_ORIGINS = cors_origins(os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:5173"))
 
 
 @asynccontextmanager
@@ -213,27 +219,11 @@ app = FastAPI(title="Culprit API", lifespan=lifespan)
 app.state.limiter = limiter
 
 
-async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:
-    """Replaces slowapi's default handler only to add the explicit
-    structured log (Phase 10: no silent 429s) — the response it builds
-    is otherwise identical to slowapi's own _rate_limit_exceeded_handler."""
-    access_logger.warning(
-        "rate_limit_exceeded",
-        path=request.url.path,
-        method=request.method,
-        detail=str(exc.detail),
-    )
-    response = JSONResponse({"error": f"Rate limit exceeded: {exc.detail}"}, status_code=429)
-    return request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
-
-
-app.add_exception_handler(
-    RateLimitExceeded,
-    _rate_limit_exceeded_handler,  # pyright: ignore[reportArgumentType]
-)
-# A 422 must not echo the request body: a rejected capture bundle
-# would otherwise write the credential it was refused for into this
-# API's access log and the caller's CI log. See app/errors.py.
+# Every error in one shape, {"detail": ...}, the 429 included (F44-044),
+# logged where it is answered (Phase 10: no silent 429s); and a 422 must
+# not echo the request body: a rejected capture bundle would otherwise
+# write the credential it was refused for into this API's access log and
+# the caller's CI log. See app/errors.py.
 install_error_handlers(app)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
