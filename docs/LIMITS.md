@@ -2106,6 +2106,28 @@ name at once both passed the check, and the second insert's violation of
 the unique index was a 500. It is a 409 now, as the check's is. No write is
 idempotent by key: a task or a postmortem posted twice is two.
 
+## A demoted, disabled or re-passworded user's session does not end at once (F44-042)
+
+A signed-in session is a token that lasts `JWT_EXPIRY_MINUTES` (60 by
+default), and nothing on the server can revoke one: there is no session
+store and no sign-out on the server. What that means for an admin acting
+on another user:
+
+- **Demoting or disabling a user** (or deleting one, which disables it)
+  takes effect within **30 seconds**: each api process caches a user's
+  role and disabled state for that long. Until then, a demoted admin's
+  requests still pass admin checks, and a disabled user's token still
+  works, on any api process that read them in the last 30 seconds.
+- **Resetting a user's password** (`POST /users/{id}/reset-password`), or a
+  user changing their own, ends no session: every token issued before it
+  keeps working until it expires, **up to 60 minutes**. If a password is
+  reset because it leaked, disable the user as well — that ends their
+  sessions within 30 seconds — and enable them once they have the new one.
+
+A token version that a password reset would bump, ending every older
+token at once, is deferred past the field trial, whose control plane is a
+local quickstart with one user (Phase 44, F44-042).
+
 ## The browser tests need the whole stack, and sign-in is rate limited
 
 `just e2e` runs against a stack `just quickstart` has started; nothing in
