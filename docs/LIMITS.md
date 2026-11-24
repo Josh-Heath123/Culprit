@@ -1098,10 +1098,32 @@ are added after it, and neither is in the spec. So every Kubernetes
 capture records that its environment was not enumerated completely,
 naming what it could not read — the image's `ENV` and webhooks always,
 and each `envFrom` ConfigMap or Secret by name when `kubectl` could not
-read it — and no key is ever reported missing from a Kubernetes
-environment. A key the code reads that the cluster really lacks is found
-by a probe, or by a Compose or process capture, not by this one. Keys the
-template does set are still compared by kind.
+read it — and no key the code reads is ever reported missing from a
+Kubernetes environment. A key the code reads that the cluster really
+lacks is found by a probe, or by a Compose or process capture, not by
+this one. Keys the template does set are still compared by kind.
+
+**What two Kubernetes captures both read is still compared (Q47).**
+Incompleteness is about what Culprit could not see; it never hides what
+it did see. Each key records the source it was read from — the
+Deployment's template, or a ConfigMap or Secret by name — and between two
+environments, or two captures in `culprit verify`:
+- a key one template lists and the other does not is a difference, said
+  as a change to the template: the other environment may still have it,
+  from a source Culprit cannot read. `verify` is not `verified` past it.
+- a key from a ConfigMap or Secret is compared only when the other
+  capture shows a reading of that same source, by name. From one it
+  could not read, it is never compared. So a ConfigMap whose name differs
+  between environments, one the other template stopped loading, or one
+  read whole but now empty, is not compared either: only keys are.
+- a key from a source neither capture read is in neither, and is never
+  compared.
+
+A capture made before this rule names the template as every key's
+source, envFrom keys included. Compared with a newer capture that could
+not read that ConfigMap or Secret, such a key reads as one the template
+no longer lists. Capture before and after with the same release: after
+an upgrade, take a new capture before diagnosing (`docs/UPGRADING.md`).
 
 A Secret loaded with `envFrom` contributes its key names only: Culprit
 lists them through a `kubectl` template that never prints the data, so
@@ -2391,19 +2413,23 @@ leaves:
   refuses a verification that carries the flag: upgrade the control plane
   before its agents (`docs/UPGRADING.md`).
 
-### The control plane's diff does not know what a capture could not see
+### The control plane's diff does not store what a capture could not see
 
 `GET /captures/diff` and `culprit verify` list the same differences for
 the same two captures, held to one fixture
-(`shared/tests/capture_diff_conformance.json`, F44-064 a): a key on one
-side only is listed on its existence and on every other question it
-answers there, its shape included. One difference remains. `verify`
-honours a capture's own record that it could not enumerate an
-environment completely, and does not count a key missing from such a
-capture; the stored diff reads facts only, so it lists that key as
-`only_in_a` or `only_in_b`. Every Kubernetes capture records that
-(F44-013), so between two Kubernetes captures `verify` sees no key added
-or removed in the Deployment's template, and the stored diff does.
+(`shared/tests/capture_diff_conformance.json`, F44-064 a, Q47): a key on
+one side only is listed on its existence and on every other question it
+answers there, its shape included; a key one Kubernetes template lists
+and the other does not is listed by both; and a key from a ConfigMap or
+Secret the other capture shows no reading of is listed by neither. The
+stored diff says `only_in_a` or `only_in_b`; only `culprit diff` words
+it as a change to the template.
+
+One difference remains. The control plane does not store a capture's
+skips, so where a `process` or `exec` capture recorded that it could not
+read some entries of an environment, `verify` does not count a key
+missing from it and the stored diff lists that key as `only_in_a` or
+`only_in_b`.
 
 ### Two runs is a floor, not a proof
 

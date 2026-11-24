@@ -25,6 +25,14 @@ against `verify.Differences`) and `render_value_conformance.json`.
 - **Shapes compare by `ValueShape.equivalent`**, the rule held by
   `shared/tests/shape_conformance.json` — length class only as
   empty-or-not, an unknown type on presence alone.
+- **A key from a source loaded by reference is compared only when the
+  other capture read that source** (Q47, Phase 44 batch 3). A fact's
+  `artefact` names where a Kubernetes capture read it: the Deployment's
+  template, or a ConfigMap or Secret the template loads with envFrom. A
+  key one template lists and the other does not is a difference; a key on
+  one side only that came from a ConfigMap or Secret the other side shows
+  no reading of is not compared, since that side may have it unseen. Go's
+  twin is `model.LoadedByReference` (`cli/internal/model/sources.go`).
 - **A config value is never rendered** (`render_value`), granted or not —
   the same rule as `renderValue` in `cli/internal/report/report.go`. This
   is the single serialiser every API response about a stored fact goes
@@ -51,6 +59,19 @@ class StoredFact(BaseModel):
     predicate: str
     value: Any = None
     value_shape: ValueShape | None = None
+    #: The source the fact was read from (its provenance artefact), when
+    #: the capture named one.
+    artefact: str | None = None
+
+
+#: Artefact prefixes of a source a workload loads by reference: a key read
+#: from one is compared only against a capture that read the same source.
+#: Go's twin is `model.LoadedByReference`.
+LOADED_BY_REFERENCE = ("kubernetes:configmap/", "kubernetes:secret/")
+
+
+def loaded_by_reference(artefact: str | None) -> bool:
+    return artefact is not None and artefact.startswith(LOADED_BY_REFERENCE)
 
 
 class DiffStatus(StrEnum):
@@ -136,9 +157,22 @@ def diff_captures(a: Iterable[StoredFact], b: Iterable[StoredFact]) -> list[Diff
         return indexed
 
     left, right = index(a), index(b)
+    read = {
+        id(side): {fact.artefact for fact in side.values() if fact.artefact is not None}
+        for side in (left, right)
+    }
+
+    def unseen(fact: StoredFact, other: dict[tuple[str, str], StoredFact]) -> bool:
+        """A one-sided fact from a source the other capture shows no reading of."""
+        return loaded_by_reference(fact.artefact) and fact.artefact not in read[id(other)]
+
     entries: list[DiffEntry] = []
     for key in sorted(set(left) | set(right)):
         subject, predicate = key
+        if (key not in right and unseen(left[key], right)) or (
+            key not in left and unseen(right[key], left)
+        ):
+            continue
         if key not in right:
             entries.append(DiffEntry(subject=subject, predicate=predicate,
                                      status=DiffStatus.ONLY_IN_A,

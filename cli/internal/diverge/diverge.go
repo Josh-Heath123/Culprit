@@ -293,6 +293,11 @@ type coverage struct {
 	// skipped[componentWant] means extraction of that want did not
 	// happen for that component, so absence must not be inferred.
 	skipped map[componentWant]string
+	// artefacts is every source a fact in the capture was read from, and
+	// kubernetes the owners whose facts a Kubernetes capture read (Q47).
+	// Filled only for an environment's capture (buildScopedCoverage).
+	artefacts  map[string]bool
+	kubernetes map[string]bool
 }
 
 type componentKind struct {

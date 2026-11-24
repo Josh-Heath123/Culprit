@@ -338,6 +338,26 @@ the reason names that connection. Before, such a finding was `degrades`
 To rank them, set `criticality: on_request_path` or `background` on the
 connection. Nothing stored changes, and no migration runs.
 
+## Two Kubernetes captures compare what both read (Q47)
+
+Since Phase 44 batch 3, a Kubernetes capture names, for each key, the
+source it was read from: the Deployment's template, or the ConfigMap or
+Secret it loads with `envFrom`. Between two Kubernetes captures, a key one
+template lists and the other does not is a difference again in
+`culprit env diff` and `culprit verify` (it was not, since batch 2), as it
+always was in `GET /captures/diff`. And `GET /captures/diff` no longer
+lists a key from a ConfigMap or Secret the other capture shows no reading
+of. Nothing in the database changes and no migration runs.
+
+- `culprit verify` can answer `changed_underneath` where it answered
+  `verified`, when a key was added to or removed from the template.
+- A capture taken by an older binary names the template as the source of
+  every key, `envFrom` keys included. Compared with a newer capture that
+  could not read that ConfigMap or Secret, such a key reads as one the
+  template no longer lists. As for Q42: capture again after upgrading,
+  and diagnose again before verifying a fix for an investigation walked by
+  the older binary.
+
 ## Agent tasks stored before Phase 44 may hold a token
 
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a

@@ -337,10 +337,13 @@ func (r *runState) environment(ctx context.Context, component string, settings e
 			"%d found; the first by name was read", workload.Replicas)
 	}
 
-	provenance := r.provenance(workload.Artefact)
 	unlisted, unnamable := 0, 0
 	for _, key := range sortedKeys(workload.Env) {
 		entry := workload.Env[key]
+		provenance := r.provenance(workload.Artefact)
+		if entry.Source != "" {
+			provenance = r.provenance(entry.Source)
+		}
 		shape := model.UnknownShape()
 		if entry.Known {
 			shape = model.ShapeOfString(entry.Value)

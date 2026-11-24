@@ -21,6 +21,7 @@ type diffFact struct {
 	Predicate  string            `json:"predicate"`
 	Value      any               `json:"value"`
 	ValueShape *model.ValueShape `json:"value_shape"`
+	Artefact   string            `json:"artefact"`
 }
 
 type diffKey struct {
@@ -35,7 +36,7 @@ func bundleOf(id string, facts []diffFact) model.CaptureBundle {
 		bundle.Facts = append(bundle.Facts, model.Fact{Plane: model.PlaneConfigured, Subject: fact.Subject,
 			Predicate: fact.Predicate, Value: fact.Value, ValueShape: fact.ValueShape, Environment: env,
 			Provenance: model.Provenance{SourceKind: model.SourceIntrospection, Extractor: "culprit@test",
-				ConfidenceRank: model.RankRuntimeIntrospection},
+				Artefact: fact.Artefact, ConfidenceRank: model.RankRuntimeIntrospection},
 			CapturedAt: clock, CaptureID: id})
 	}
 	return bundle
