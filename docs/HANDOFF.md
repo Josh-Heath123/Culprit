@@ -289,7 +289,12 @@ CI
   next push. 45441945846 on 59ce3c0: red on typecheck and self-check, both
   fixed in b5ea2d5. 45454853674 on c9a5af5: e2e twice and fault-library
   1-4 success, results.json unchanged; typecheck and self-check red as
-  above. The run on this report's commit is /ci's, recorded in the PR.
+  above. 45459301798 on 63a671d (the report): red on self-check alone,
+  "The README's self-check figures are this run's": README and GUIDE
+  quoted 1,754 facts and 631 subjects, and the two settings b5ea2d5
+  described make 1,766 and 633. Figures corrected in the next commit;
+  check_readme true against a local --unverifiable self-check. Its CI
+  run is /ci's verdict, in the PR.
 ```
 
 ## §6. Escalate to the architecture session when

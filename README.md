@@ -185,7 +185,7 @@ The full account, with the architecture diagrams, is in
   accuracy block below and the hero's figure are rendered from the fault
   library's results, and a test fails when either is stale.
 - **Culprit checks itself.** `just self-check` runs `culprit check` on this
-  repository: **no divergences, 1,754 facts across 631 subjects**, 9 gaps
+  repository: **no divergences, 1,766 facts across 633 subjects**, 9 gaps
   listed.
 
 <!-- accuracy:begin -->
