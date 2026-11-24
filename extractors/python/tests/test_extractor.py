@@ -429,3 +429,57 @@ def test_import_mode_writes_no_bytecode_into_the_project_by_itself(tmp_path: Pat
     # It did import the project: the failure is config.wsgi's own.
     assert "DATABASE_URL" in process.stdout
     assert _tree(tmp_path) == before
+
+
+# --- F44-057: what could not be read is named, never a silent hole -------
+
+
+def _static_run(root: Path):
+    from culprit_model.protocol import ExtractorRequest, Want
+
+    return run(
+        ExtractorRequest(
+            protocol=1,
+            root=str(root),
+            want=(Want.CONFIG_KEYS, Want.TEST_ASSERTIONS),
+            environment=None,
+            component="svc",
+        ),
+        allow_import=False,
+    )
+
+
+def test_a_directory_that_cannot_be_listed_is_a_skip_naming_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    (tmp_path / "app.py").write_text('import os\nos.environ["A"]\n', encoding="utf-8")
+    (tmp_path / "locked").mkdir()
+    (tmp_path / "locked" / "x.py").write_text('import os\nos.environ["B"]\n', encoding="utf-8")
+    real = os.scandir
+    locked = str(tmp_path / "locked")
+
+    def refusing(path=".", *args, **kwargs):  # what chmod 000 does on Linux
+        if os.fspath(path) == locked:
+            raise PermissionError(13, "Permission denied", os.fspath(path))
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "scandir", refusing)
+    response = _static_run(tmp_path)
+    for want in ("config_keys", "test_assertions"):
+        assert any(
+            s.want == want and "locked/" in s.reason and "could not be read" in s.reason
+            for s in response.skipped
+        ), (want, response.skipped)
+
+
+def test_a_directory_below_the_depth_bound_is_a_skip_naming_it(tmp_path: Path) -> None:
+    deep = tmp_path.joinpath(*(["d"] * 7))
+    deep.mkdir(parents=True)
+    (deep / "x.py").write_text('import os\nos.environ["B"]\n', encoding="utf-8")
+    (tmp_path / "app.py").write_text('import os\nos.environ["A"]\n', encoding="utf-8")
+    response = _static_run(tmp_path)
+    assert any(
+        s.want == "config_keys" and "d/" * 7 in s.reason for s in response.skipped
+    ), response.skipped

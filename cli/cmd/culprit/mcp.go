@@ -147,8 +147,19 @@ func (s *mcpServer) protocol() *mcp.Server {
 	if s.pinned == "" {
 		s.pinned = manifestDigest(s.manifestPath)
 	}
+	// readOnlyHint says a tool runs nothing (ruled after Phase 44 batch 1).
+	// A tool that can run a command culprit.yaml declares runs the user's
+	// code, so it is not offered as read-only, though Culprit itself
+	// changes nothing: every tool resolves INTENT, which runs the declared
+	// extractors unless this server was started with --no-plugins; and
+	// probe, diagnose and verify also read the environment, which can run
+	// its declared commands (an exec adapter, a package listing) either
+	// way. None is destructive.
 	readOnly := func(title string, openWorld bool) mcp.Annotations {
-		return mcp.Annotations{Title: title, ReadOnlyHint: true, DestructiveHint: false, OpenWorldHint: openWorld}
+		return mcp.Annotations{Title: title, ReadOnlyHint: s.noPlugins, DestructiveHint: false, OpenWorldHint: openWorld}
+	}
+	runsEnvironment := func(title string, openWorld bool) mcp.Annotations {
+		return mcp.Annotations{Title: title, ReadOnlyHint: false, DestructiveHint: false, OpenWorldHint: openWorld}
 	}
 	environment := mcp.Property{Type: mcp.String, Description: "an environment declared under environments: in culprit.yaml; its grants decide what may be probed"}
 	server := &mcp.Server{
@@ -205,7 +216,7 @@ func (s *mcpServer) protocol() *mcp.Server {
 					},
 					Required: []string{"target", "environment", "probes"},
 				},
-				Annotations: readOnly("Probe a subject", true),
+				Annotations: runsEnvironment("Probe a subject", true),
 				Handler:     s.pinnedTo(s.probe),
 			},
 			{
@@ -221,7 +232,7 @@ func (s *mcpServer) protocol() *mcp.Server {
 					},
 					Required: []string{"symptom", "environment"},
 				},
-				Annotations: readOnly("Diagnose a symptom", true),
+				Annotations: runsEnvironment("Diagnose a symptom", true),
 				Handler:     s.pinnedTo(s.diagnose),
 			},
 			{
@@ -236,7 +247,7 @@ func (s *mcpServer) protocol() *mcp.Server {
 					},
 					Required: []string{"investigation_id"},
 				},
-				Annotations: readOnly("Verify a fix", true),
+				Annotations: runsEnvironment("Verify a fix", true),
 				Handler:     s.pinnedTo(s.verify),
 			},
 		},

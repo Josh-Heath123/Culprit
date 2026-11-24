@@ -93,9 +93,29 @@ def test_a_file_that_is_not_a_migration_is_ignored(tmp_path: Path) -> None:
     assert _read_revision(path) is None
 
 
-def test_a_file_that_does_not_parse_is_ignored(tmp_path: Path) -> None:
+def test_a_file_that_does_not_parse_is_named_and_the_chain_declined(tmp_path: Path) -> None:
+    """F44-058. A migration that does not parse under this interpreter was
+    dropped, and the rest of the chain could still look linear: replayed,
+    it left out every column the broken file adds, and each became a false
+    "not migrated" finding against the ORM. It is named, and the chain is
+    not replayed."""
     path = write(tmp_path, "broken.py", "def upgrade(:\n")
-    assert _read_revision(path) is None
+    with pytest.raises(ChainError, match=r"broken.py"):
+        _read_revision(path)
+
+    versions = chain(
+        tmp_path / "repo",
+        revision_file("0001", None, CREATE_ORDERS),
+        revision_file("0002", "0001", '    op.add_column("orders", sa.Column("a", sa.Integer()))'),
+    )
+    write(versions, "0002_revision.py", "def upgrade(:\n")
+
+    class Builder:
+        component = "orders-api"
+        schema_database = "orders-api-db"
+
+    with pytest.raises(ChainError, match=r"0002_revision.py"):
+        extract_migration_schema(tmp_path / "repo", Builder())  # type: ignore[arg-type]
 
 
 # --- replaying operations -----------------------------------------------

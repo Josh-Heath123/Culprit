@@ -86,3 +86,50 @@ func TestTheSameChangeOnAnotherKeyIsStillADifference(t *testing.T) {
 		t.Errorf("differences = %+v, want BUILD_ID's value_shape", differences)
 	}
 }
+
+// F44-012. The process adapter records the environment it is launched in,
+// the launcher's own variables included. Two captures from one kind of
+// shell, one nested deeper and started in another directory, differ in
+// SHLVL (a counter: one lexical class, F44-011) and PWD (the working
+// directory: an OS fact, like the hostname). Neither is a change of
+// configuration. (Two absolute paths are one kind of value whatever their
+// length, so this holds the comparison; the capture's own test holds that
+// PWD is not shaped at all.)
+func TestTheLaunchersDepthAndDirectoryAreNoDifference(t *testing.T) {
+	shallow := t.TempDir()
+	deep := filepath.Join(t.TempDir(),
+		"a-directory-nested-well-below-the-first-one", "and-below-that-again-for-length",
+		"so-that-its-path-is-a-long-one-of-more-than-a-hundred-and-twenty-eight-characters")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(shallow)
+	before := processCapture(t, "cap-before", "orders-host", "SHLVL=1", "PWD="+cwd(t), "PORT=8001")
+	t.Chdir(deep)
+	after := processCapture(t, "cap-after", "orders-host", "SHLVL=12", "PWD="+cwd(t), "PORT=8001")
+	if differences := Differences(before, after); len(differences) != 0 {
+		t.Errorf("the launcher's depth or directory was counted as a change: %+v", differences)
+	}
+}
+
+// TestTheSameChangeOnAVariableThatIsNotTheDirectoryStillCounts keeps the
+// rule honest: it hides the directory the OS reports, not every path.
+func TestTheSameChangeOnAVariableThatIsNotTheDirectoryStillCounts(t *testing.T) {
+	t.Chdir(t.TempDir())
+	before := processCapture(t, "cap-before", "orders-host", "APP_DIR=/srv/app", "PWD="+cwd(t))
+	after := processCapture(t, "cap-after", "orders-host", "APP_DIR=srv/app", "PWD="+cwd(t))
+	differences := Differences(before, after)
+	if len(differences) != 1 || differences[0].Subject != "config:order-service/APP_DIR" ||
+		differences[0].Predicate != model.PredicateValueShape {
+		t.Errorf("differences = %+v, want APP_DIR's value_shape", differences)
+	}
+}
+
+func cwd(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}

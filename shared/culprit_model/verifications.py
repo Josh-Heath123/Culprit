@@ -22,7 +22,9 @@ hold:
 1. every reading that failed passes, on both runs;
 2. every reading that passed still passes;
 3. every difference between the environment before and after is explained
-   by a change named — which needs a change named and a capture before.
+   by a change named — which needs a change named and a capture before. A
+   difference in an observation (a DNS, port or TLS reading the capture
+   made) is recorded as one and needs no explaining (F44-055).
 
 Naive verification — re-running the failing probe once — is confidence
 theatre: caching, intermittency and an unrelated change all produce a pass.
@@ -219,6 +221,43 @@ class Rerun(BaseModel):
         return None
 
 
+class PredicateKind(StrEnum):
+    """What a CONFIGURED predicate records (F44-055)."""
+
+    #: what the environment is set up to do: a key, an image, a schema.
+    CONFIGURATION = "configuration"
+    #: a reading the capture made of a live network at one moment: whether
+    #: a name resolved, a port answered, a certificate's class. It is held
+    #: in the CONFIGURED capture, and it is not configuration.
+    OBSERVATION = "observation"
+
+
+#: Every predicate a CONFIGURED capture emits, and which kind it is. The
+#: Go half is `model.ConfiguredPredicateKinds`; both are held to
+#: `shared/tests/verification_conformance.json`'s `configured_predicates`.
+#: A predicate not listed is configuration: the direction that counts it.
+CONFIGURED_PREDICATE_KINDS: dict[str, PredicateKind] = {
+    "exists": PredicateKind.CONFIGURATION,
+    "value_shape": PredicateKind.CONFIGURATION,
+    "value": PredicateKind.CONFIGURATION,
+    "reference": PredicateKind.CONFIGURATION,
+    "digest": PredicateKind.CONFIGURATION,
+    "image_id": PredicateKind.CONFIGURATION,
+    "installed_version": PredicateKind.CONFIGURATION,
+    "columns": PredicateKind.CONFIGURATION,
+    "nullable": PredicateKind.CONFIGURATION,
+    "leads_index": PredicateKind.CONFIGURATION,
+    "migration_head": PredicateKind.CONFIGURATION,
+    "dns_resolves": PredicateKind.OBSERVATION,
+    "port_reachable": PredicateKind.OBSERVATION,
+    "tls_certificate": PredicateKind.OBSERVATION,
+}
+
+
+def is_observation(predicate: str) -> bool:
+    return CONFIGURED_PREDICATE_KINDS.get(predicate) is PredicateKind.OBSERVATION
+
+
 class Difference(BaseModel):
     """One question the capture before and the capture after answer
     differently. Subject and predicate only: never a value."""
@@ -230,6 +269,20 @@ class Difference(BaseModel):
     #: the label of the first named change that touches the subject, or
     #: None when none does.
     explained_by: str | None = None
+    #: True when the predicate is an observation, not configuration
+    #: (F44-055): recorded as one, and never needing a change to explain
+    #: it. A record written before the rule leaves it False and is judged
+    #: as it was.
+    observation: bool = False
+
+    @model_validator(mode="after")
+    def _only_an_observation_is_flagged_as_one(self) -> "Difference":
+        if self.observation and not is_observation(self.predicate):
+            raise ValueError(
+                f"the difference on {self.subject} ({self.predicate}) is flagged as an "
+                "observation; that predicate is configuration"
+            )
+        return self
 
     @field_validator("subject")
     @classmethod
@@ -266,7 +319,9 @@ def judge(
         bool(applied_change)
         and before_capture is not None
         and after_capture is not None
-        and all(d.explained_by is not None for d in differences)
+        # an observation is not configuration (F44-055): it is recorded,
+        # and no change needs to explain it.
+        and all(d.explained_by is not None for d in differences if not d.observation)
     )
 
     if any(r.now is Verdict.FAIL for r in failed):

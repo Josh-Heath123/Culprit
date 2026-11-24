@@ -1,0 +1,142 @@
+{
+  "why": [
+    "Never render a config value (F44-064 b), read by both languages: Go's",
+    "renderValue (cli/internal/report/report.go: text, SARIF, every report) and",
+    "Python's render_value (shared/culprit_model/capture_diff.py: every API",
+    "response about a stored fact). A shape is rendered as its closed fields; a",
+    "config subject's value never is, granted or not, except a boolean; any",
+    "other subject's value is canonical JSON. The config branch is decided by",
+    "the subject, and a subject that does not parse is treated as a config one:",
+    "the safe direction for a renderer whose one job is not to print a value."
+  ],
+  "cases": [
+    {
+      "fact": {
+        "subject": "config:orders/DATABASE_URL",
+        "predicate": "value_shape",
+        "value_shape": {
+          "type": "string",
+          "length_class": "medium",
+          "format": "dsn",
+          "present": true,
+          "scheme": "postgresql"
+        }
+      },
+      "rendered": "string/dsn(postgresql)/medium"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/PORT",
+        "predicate": "value_shape",
+        "value_shape": {
+          "type": "string",
+          "length_class": "short",
+          "format": "numeric",
+          "present": true,
+          "scheme": "not_applicable"
+        }
+      },
+      "rendered": "string/numeric/short"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/GONE",
+        "predicate": "value_shape",
+        "value_shape": {
+          "type": "null",
+          "length_class": "not_applicable",
+          "format": "not_applicable",
+          "present": false,
+          "scheme": "not_applicable"
+        }
+      },
+      "rendered": "absent"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/PORT",
+        "predicate": "read_by",
+        "value": true
+      },
+      "rendered": "true"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/PORT",
+        "predicate": "required",
+        "value": false
+      },
+      "rendered": "false"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/PORT",
+        "predicate": "exists"
+      },
+      "rendered": "(declared)"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/DATABASE_URL",
+        "predicate": "value",
+        "value": "postgresql://u:hunter2@db/orders"
+      },
+      "rendered": "(a value, not shown)"
+    },
+    {
+      "fact": {
+        "subject": "config:orders/WORKERS",
+        "predicate": "value",
+        "value": 4
+      },
+      "rendered": "(a value, not shown)"
+    },
+    {
+      "fact": {
+        "subject": "component:orders",
+        "predicate": "migration_head",
+        "value": [
+          "d4"
+        ]
+      },
+      "rendered": "[\"d4\"]"
+    },
+    {
+      "fact": {
+        "subject": "component:orders",
+        "predicate": "dns_resolves",
+        "value": true
+      },
+      "rendered": "true"
+    },
+    {
+      "fact": {
+        "subject": "http:orders/GET /orders",
+        "predicate": "exists"
+      },
+      "rendered": "(exists)"
+    },
+    {
+      "fact": {
+        "subject": "http:orders/GET /orders",
+        "predicate": "status_codes",
+        "value": {
+          "b": 2,
+          "a": [
+            200,
+            404
+          ]
+        }
+      },
+      "rendered": "{\"a\":[200,404],\"b\":2}"
+    },
+    {
+      "fact": {
+        "subject": "not a subject",
+        "predicate": "value",
+        "value": "hunter2"
+      },
+      "rendered": "(a value, not shown)"
+    }
+  ]
+}

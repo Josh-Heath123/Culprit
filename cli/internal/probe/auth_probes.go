@@ -84,29 +84,45 @@ type jwtClaims struct {
 	NotBefore int64  `json:"nbf"`
 }
 
+// tokenInput is the token an auth probe presents: `token` as given, or
+// the variable `token_env` names, read in this process's memory only from
+// the caller's own environment, under config.inspect.values for that
+// variable (enforced by the source). It returns the outcome to give
+// instead when there is no token to use; `missing` says why none was
+// supplied.
+func tokenInput(ctx context.Context, request Request, deps Deps, missing string) (string, *Outcome) {
+	if token, ok := stringInput(request.Inputs, "token"); ok {
+		return token, nil
+	}
+	variable, named := stringInput(request.Inputs, "token_env")
+	if !named {
+		outcome := inconclusive(missing)
+		return "", &outcome
+	}
+	if deps.Secrets == nil {
+		outcome := inconclusive("this agent cannot read the environment's configuration")
+		return "", &outcome
+	}
+	// The token the caller presents lives in the caller's environment.
+	holder := calleeOfTarget(request.Target)
+	if kind, parts, err := model.ParseSubject(request.Target); err == nil && kind == model.KindAuth {
+		holder = parts["from_component"]
+	}
+	value, err := deps.Secrets.Secret(ctx, holder, variable)
+	if err != nil {
+		if outcome, decided := sourceOutcome(err); decided {
+			return "", &outcome
+		}
+		outcome := inconclusive(fmt.Sprintf("%s could not be read", variable))
+		return "", &outcome
+	}
+	return value, nil
+}
+
 func (authTokenShape) Run(ctx context.Context, request Request, deps Deps) Outcome {
-	token, ok := stringInput(request.Inputs, "token")
-	if !ok {
-		variable, named := stringInput(request.Inputs, "token_env")
-		if !named {
-			return inconclusive("no token was supplied, so its shape cannot be inspected")
-		}
-		if deps.Secrets == nil {
-			return inconclusive("this agent cannot read the environment's configuration")
-		}
-		// The token the caller presents lives in the caller's environment.
-		holder := calleeOfTarget(request.Target)
-		if kind, parts, err := model.ParseSubject(request.Target); err == nil && kind == model.KindAuth {
-			holder = parts["from_component"]
-		}
-		value, err := deps.Secrets.Secret(ctx, holder, variable)
-		if err != nil {
-			if outcome, decided := sourceOutcome(err); decided {
-				return outcome
-			}
-			return inconclusive(fmt.Sprintf("%s could not be read", variable))
-		}
-		token = value
+	token, instead := tokenInput(ctx, request, deps, "no token was supplied, so its shape cannot be inspected")
+	if instead != nil {
+		return *instead
 	}
 
 	claims, err := decodeClaims(token)
@@ -231,24 +247,27 @@ func (authPropagation) Manifest() model.ProbeManifest {
 		ID:            "probe.auth.propagation",
 		Verdicts:      allVerdicts,
 		Discriminates: []string{model.HypothesisAuthRejected},
-		Version:       1,
-		Effect:        model.EffectInterrogate,
-		Capabilities:  []string{"net.http.outbound"},
-		TimeoutMS:     15_000,
-		ExpectedFrom:  model.PlaneIntent,
+		// Version 2 (Phase 44 batch 2, Q46): token_env, as token_shape has,
+		// so it can be sent as a task under F44-005's rule.
+		Version:      2,
+		Effect:       model.EffectInterrogate,
+		Capabilities: []string{"net.http.outbound"},
+		TimeoutMS:    15_000,
+		ExpectedFrom: model.PlaneIntent,
 		Produces: []model.Produces{
 			{SubjectTemplate: "auth:{from}->{to}/propagation", Predicate: "token_accepted"},
 		},
 		Cost: model.CostCheap,
 		Inputs: map[string]any{
 			"type":     "object",
-			"required": []any{"url", "token"},
+			"required": []any{"url"},
+			// One of token or token_env, as for token_shape. token carries
+			// a secret, and says so on the input: the API refuses a task
+			// that sets it and names token_env instead (F44-005, Q46).
 			"properties": map[string]any{
-				"url": map[string]any{"type": "string"},
-				// A secret, declared so the API refuses a task that sets
-				// it. This probe has no _env alternative yet: as a task it
-				// cannot be sent through the control plane at all.
-				"token": map[string]any{"type": "string", "secret": true},
+				"url":       map[string]any{"type": "string"},
+				"token":     map[string]any{"type": "string", "secret": true, "env": "token_env"},
+				"token_env": map[string]any{"type": "string"},
 			},
 		},
 	}
@@ -256,10 +275,14 @@ func (authPropagation) Manifest() model.ProbeManifest {
 
 func (authPropagation) Run(ctx context.Context, request Request, deps Deps) Outcome {
 	url, hasURL := stringInput(request.Inputs, "url")
-	token, hasToken := stringInput(request.Inputs, "token")
-	if !hasURL || !hasToken {
+	if !hasURL {
 		return inconclusive(
 			"a URL and a token are both needed to tell whether credentials survive the hop")
+	}
+	token, instead := tokenInput(ctx, request, deps,
+		"a URL and a token are both needed to tell whether credentials survive the hop")
+	if instead != nil {
+		return *instead
 	}
 	if deps.HTTP == nil {
 		return inconclusive("no HTTP client is available to this agent")

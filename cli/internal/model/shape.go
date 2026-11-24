@@ -272,8 +272,11 @@ var formatPatterns = []struct {
 	{FormatUUID, regexp.MustCompile(
 		`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)},
 	{FormatEmail, regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)},
-	{FormatBooleanish, regexp.MustCompile(`(?i)^(true|false|yes|no|on|off|1|0)$`)},
-	{FormatPort, regexp.MustCompile(`^(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2})$`)},
+	// A format class is lexical (F44-011): it never depends on a number's
+	// size. booleanish is words only, and no bare number is a port - digits
+	// alone are numeric, so a counter keeps one class whatever it counts.
+	// FormatPort stays in the vocabulary; no pattern here produces it.
+	{FormatBooleanish, regexp.MustCompile(`(?i)^(true|false|yes|no|on|off)$`)},
 	{FormatDuration, regexp.MustCompile(`(?i)^\d+(?:\.\d+)?\s*(?:ms|s|m|h|d)$`)},
 	{FormatNumeric, regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)},
 	// IPv6 needs at least two colons (Q42): a single-label hex string, such

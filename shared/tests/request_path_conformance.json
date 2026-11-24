@@ -1,0 +1,109 @@
+{
+  "why": [
+    "The request path, read by both languages (F44-063, F44-064 c; ruled",
+    "2026-11-23). Go's severity (cli/internal/severity BuildGraph) asks which",
+    "components a request from an entry point can reach; Python's",
+    "SystemGraph.upstream_connections (shared/culprit_model/graph.py, which the",
+    "dashboard's request path uses) asks which connections a request from a",
+    "component can cross. Both walk the same edges: on_request_path and unknown",
+    "are followed, background is not.",
+    "",
+    "An edge of unknown criticality (criticality omitted is unknown) does not",
+    "say whether a request waits on it. Following it as if it did overstates;",
+    "dropping it understates. So a component reachable from an entry point",
+    "only through such an edge is 'unknown', naming the first unknown edge on",
+    "the way, and its divergences have severity unknown. A component with a",
+    "route of classified edges is on_request_path whatever else reaches it.",
+    "",
+    "Each case gives the entries (Go derives them: a frontend or gateway, or a",
+    "component nothing connects to that connects to something) and every",
+    "component's state. Go checks the states and the severity each gives;",
+    "Python walks upstream_connections from every entry and checks that what",
+    "it reaches is exactly the components that are not not_on_path, and that",
+    "each 'via' edge is on its path with criticality unknown."
+  ],
+  "cases": [
+    {
+      "name": "every edge classified",
+      "components": [
+        {"name": "web", "kind": "frontend"},
+        {"name": "orders", "kind": "service"},
+        {"name": "payments", "kind": "service"},
+        {"name": "recon", "kind": "service"}
+      ],
+      "connections": [
+        {"from": "web", "to": "orders", "criticality": "on_request_path"},
+        {"from": "orders", "to": "payments", "criticality": "on_request_path"},
+        {"from": "orders", "to": "recon", "criticality": "background"}
+      ],
+      "entries": ["web"],
+      "reach": {
+        "web": {"state": "on_request_path"},
+        "orders": {"state": "on_request_path"},
+        "payments": {"state": "on_request_path"},
+        "recon": {"state": "not_on_path"}
+      }
+    },
+    {
+      "name": "an unclassified edge, and what lies beyond it",
+      "components": [
+        {"name": "web", "kind": "frontend"},
+        {"name": "orders", "kind": "service"},
+        {"name": "payments", "kind": "service"},
+        {"name": "stripe", "kind": "external_api"}
+      ],
+      "connections": [
+        {"from": "web", "to": "orders", "criticality": "on_request_path"},
+        {"from": "orders", "to": "payments"},
+        {"from": "payments", "to": "stripe", "criticality": "on_request_path"}
+      ],
+      "entries": ["web"],
+      "reach": {
+        "web": {"state": "on_request_path"},
+        "orders": {"state": "on_request_path"},
+        "payments": {"state": "unknown", "via": {"from": "orders", "to": "payments"}},
+        "stripe": {"state": "unknown", "via": {"from": "orders", "to": "payments"}}
+      }
+    },
+    {
+      "name": "an explicit unknown edge, and a classified route to the same component",
+      "components": [
+        {"name": "web", "kind": "frontend"},
+        {"name": "orders", "kind": "service"},
+        {"name": "inventory", "kind": "service"},
+        {"name": "audit", "kind": "service"}
+      ],
+      "connections": [
+        {"from": "web", "to": "inventory", "criticality": "unknown"},
+        {"from": "web", "to": "orders", "criticality": "on_request_path"},
+        {"from": "orders", "to": "inventory", "criticality": "on_request_path"},
+        {"from": "inventory", "to": "audit", "criticality": "unknown"}
+      ],
+      "entries": ["web"],
+      "reach": {
+        "web": {"state": "on_request_path"},
+        "orders": {"state": "on_request_path"},
+        "inventory": {"state": "on_request_path"},
+        "audit": {"state": "unknown", "via": {"from": "inventory", "to": "audit"}}
+      }
+    },
+    {
+      "name": "a background edge is not followed, even into an unknown one",
+      "components": [
+        {"name": "api", "kind": "service"},
+        {"name": "jobs", "kind": "service"},
+        {"name": "mailer", "kind": "service"}
+      ],
+      "connections": [
+        {"from": "api", "to": "jobs", "criticality": "background"},
+        {"from": "jobs", "to": "mailer"}
+      ],
+      "entries": ["api"],
+      "reach": {
+        "api": {"state": "on_request_path"},
+        "jobs": {"state": "not_on_path"},
+        "mailer": {"state": "not_on_path"}
+      }
+    }
+  ]
+}

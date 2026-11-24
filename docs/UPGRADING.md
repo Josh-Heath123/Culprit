@@ -283,13 +283,70 @@ Capture again after upgrading, and diagnose again before verifying a fix
 for an investigation walked by the older binary. Captures taken by the
 same version always agree.
 
+## A capture from before Phase 44 batch 2 may shape a number differently (F44-011)
+
+Phase 44 batch 2 made the value-format classifier lexical, in the CLI and
+the control plane together. Digits alone are now `numeric` whatever the
+number: `1` and `0` are no longer `booleanish`, and no bare number from
+`1` to `65499` is `port`. Nothing in the database changes, and no
+migration runs. But a capture records shapes, not values, so a capture
+taken by an older binary still says `port` or `booleanish` for such a
+value, and the newer binary says `numeric`:
+
+- `culprit verify` across the upgrade can count that key as changed and
+  answer `changed_underneath` for a fix that did not touch it.
+- `culprit env diff` between a capture from each side of the upgrade can
+  report the same key as a shape difference.
+
+As for Q42: capture again after upgrading, and diagnose again before
+verifying a fix for an investigation walked by the older binary.
+
+## A verification can record an observation (F44-055)
+
+Since Phase 44 batch 2, a difference between the captures before and after
+a fix on an endpoint's `dns_resolves`, `port_reachable` or
+`tls_certificate` is recorded with `"observation": true`, and no longer
+makes a verdict `changed_underneath`. Nothing in the database changes and
+no migration runs; verifications stored before keep their verdicts and
+still validate.
+
+- **Upgrade the control plane before its agents.** An older control plane
+  refuses, with a 422, a verification whose difference carries the new
+  field. An older agent's verifications are accepted by the newer control
+  plane unchanged.
+- A fix verified again after the upgrade can answer `verified` where it
+  answered `changed_underneath` before, when an observation was the only
+  unexplained difference.
+
+## A finding behind an unclassified edge is now `unknown` (F44-063)
+
+Since Phase 44 batch 2, `culprit check` and `culprit diff` give severity
+`unknown` to a finding on a component reachable from an entry point only
+through a connection whose `criticality` is `unknown` or not given, and
+the reason names that connection. Before, such a finding was `degrades`
+("declared but not reachable along an on_request_path edge"). Where your
+`culprit.yaml` leaves criticality off a connection:
+
+- findings on the components behind it move from `degrades` to
+  `unknown`. `unknown` ranks below `degrades` and above `cosmetic`, so a
+  CI job on the default `--fail-on=degrades` **no longer fails on them**;
+  only `--fail-on=any` counts them. If such a job relied on them, gate it
+  with `--fail-on=any`, or classify the connection;
+- a suppression or a `severity_overrides` entry still applies first, as
+  before.
+
+To rank them, set `criticality: on_request_path` or `background` on the
+connection. Nothing stored changes, and no migration runs.
+
 ## Agent tasks stored before Phase 44 may hold a token
 
 Since Phase 44 batch 1 the control plane refuses an agent task that sets a
 probe input the catalogue declares secret — today `token`, on
 `probe.auth.token_shape` and `probe.auth.propagation` — with a 422 naming
-the field and, for `token_shape`, `token_env` instead: the name of a
-variable in the agent's own environment (`docs/SECURITY.md` §8).
+the field and `token_env` instead: the name of a variable in the agent's
+own environment (`docs/SECURITY.md` §8). `probe.auth.propagation` takes
+`token_env` since Phase 44 batch 2 (version 2); before, it could not be
+sent as a task at all.
 
 **Tasks stored before the upgrade keep what they were given.** Nothing
 rewrites or deletes them: `agent_tasks` is a record. To find any that hold

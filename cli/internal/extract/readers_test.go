@@ -156,6 +156,48 @@ func TestAlembicHeadIsTheRevisionNothingPointsAt(t *testing.T) {
 	}
 }
 
+// F44-010: `alembic merge` writes the merge's parents as a tuple. Read as
+// nothing, they were left as heads beside the merge: the audit's c09
+// fixture (a1 <- b2, a1 <- c3, d4 merges both) gave [b2 c3 d4], a false
+// divergence against a database at d4. The list form and a typed header
+// are the same claim.
+func TestAnAlembicMergeIsTheOnlyHead(t *testing.T) {
+	for name, merge := range map[string]string{
+		"tuple":       "revision = \"d4\"\ndown_revision = (\"b2\", \"c3\")\n",
+		"typed tuple": "revision: str = \"d4\"\ndown_revision: Union[str, Sequence[str], None] = ('b2', 'c3')\n",
+		"list":        "revision = \"d4\"\ndown_revision = [\"b2\", \"c3\"]\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			versions := filepath.Join(root, "svc", "migrations", "versions")
+			if err := os.MkdirAll(versions, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			files := map[string]string{
+				"a1_base.py":  "revision = \"a1\"\ndown_revision = None\n",
+				"b2_left.py":  "revision = \"b2\"\ndown_revision = \"a1\"\n",
+				"c3_right.py": "revision = \"c3\"\ndown_revision = \"a1\"\n",
+				"d4_merge.py": merge,
+			}
+			for file, body := range files {
+				if err := os.WriteFile(filepath.Join(versions, file), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx := captureContext{Component: "svc", Root: root, CapturedAt: time.Now(),
+				CaptureID: "00000000-0000-5000-8000-000000000000", Extractor: "test"}
+			facts, _ := readMigrationHead(ctx)
+			if len(facts) != 1 {
+				t.Fatalf("got %d facts, want 1", len(facts))
+			}
+			heads, _ := facts[0].Value.([]string)
+			if len(heads) != 1 || heads[0] != "d4" {
+				t.Fatalf("heads = %v, want [d4]", facts[0].Value)
+			}
+		})
+	}
+}
+
 func TestAlembicBranchedHeadsAreBothReported(t *testing.T) {
 	// Alembic genuinely supports branched heads. Picking one silently
 	// would hide a real problem — two heads where a project expects one

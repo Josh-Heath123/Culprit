@@ -90,7 +90,7 @@ from is the next section.
 | `probe.http.route_conformance` (v2) | `url`, or an `http:` target + `base_url`; `method` | interrogate | `net.http.outbound` | INTENT (`exists`) | a **declared** route answers 404, or 405 for its declared method |
 | `probe.http.schema_conformance` | `url`, `expect_fields` | interrogate | `net.http.outbound` | INTENT | a declared response field is absent |
 | `probe.auth.token_shape` | `token` (secret) or `token_env`, `expect_audience`, `expect_issuer` | inspect | *none*; `config.inspect.values` for the key, when it reads `token_env` | INTENT | the token is expired, not yet valid, or carries the wrong audience or issuer |
-| `probe.auth.propagation` | `url`, `token` (secret) | interrogate | `net.http.outbound` | INTENT | the downstream answers 401 or 403 |
+| `probe.auth.propagation` (v2) | `url`; `token` (secret) or `token_env` | interrogate | `net.http.outbound`; `config.inspect.values` for the key, when it reads `token_env` | INTENT | the downstream answers 401 or 403 |
 | `probe.db.connect` (v2) | *none* — the target names the database | inspect | `db.metadata.read` | CONFIGURED | a read-only connection is refused |
 | `probe.db.schema_conformance` (v2) | a `schema:` target, or `table`, `schema`; optional `expect_columns` | inspect | `db.metadata.read` | INTENT (`columns`) | the live table lacks a column the declaration maps, or does not exist |
 | `probe.db.statement_budget` | *none* — the target names the database | inspect | `db.stats.read`; `db.plan.read` to judge by a table's budget | INTENT (`query_mean_ms_max`) | a statement's time over a 30-second window, against its calls, is over its budget (below) |

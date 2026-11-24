@@ -11,8 +11,8 @@ its branch and whether the gates are green; §3 is the open-questions inbox; §4
 the phase ledger; §5 the last run report. This file describes the repository;
 the handoff describes where the work is. If they disagree, the handoff wins.
 
-- **Current phase:** 44, batch 1 (secrets stay in) — on branch
-  `phase-44-b1`, from `6f64f69`; not started. Brief: the field-readiness
+- **Current phase:** 44, batch 2 (facts that hold) — on branch
+  `phase-44-b2`, from `f694cb6`; not started. Brief: the field-readiness
   plan's §6.
 - **Plan of record:** `docs/FIELD_READINESS_PLAN.md` (Phase 44), after
   `docs/DELIVERY_PLAN.md` (40–43), `docs/PERFORMANCE_PLAN.md` (36–39) and

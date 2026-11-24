@@ -872,7 +872,10 @@ column list will be missing whatever those did.
 
 It also **declines entirely** rather than guessing when the revision
 chain does not form a single line — a merge revision, two roots, a cycle,
-or an unreachable file. A partially replayed chain would produce a
+or an unreachable file — and when a file in `versions/` does not parse
+under the extractor's interpreter (F44-058): the skip names the file, and
+no `schema:` fact comes from the chain, so no column is reported "not
+migrated" because a file was unreadable. A partially replayed chain would produce a
 confident column list that is simply wrong, and every difference against
 it would be a false positive.
 
@@ -891,6 +894,41 @@ created by `op.execute("CREATE INDEX ...")`, or a constraint dropped by a
 name the reader never saw, is invisible to it, and the report will say
 the database has an index the migrations do not declare. The ORM's models
 are not read for indexes.
+
+## What a scan cannot read is named, by path (F44-057)
+
+The built-in readers in the binary look at most 6 directories below a
+component's root, the Python extractor's static scan 6, and the Node
+extractor 8; all three leave out third-party code, build output and
+caches (`node_modules`, `.venv`, `dist` and the like) by design. A
+directory below that depth, or one that could not be listed (a
+permission, a vanished mount), is a skip naming its path relative to the
+root, with want `*` in the binary and under each scanning want in the
+extractors, so a clean report never hides a part of the tree nothing
+looked at. The binary names at most 20 such directories one by one and
+counts the rest in one more line. A file inside a readable directory
+that does not parse is still left out by the static scans without a
+line of its own; a migration that does not parse is not (below).
+
+## A `.env.example` key that is not UTF-8 is named, not read (F44-090)
+
+A key whose bytes are not valid UTF-8 cannot be a name any environment
+matches, and encoded it would become U+FFFD. The binary's `.env.example`
+reader records it as a skip naming the file, the line and the key's bytes
+escaped (`"\xff\xfeBADKEY"`), and makes no subject of it; the file's
+other keys are read as before. Values are not affected: a value is shaped,
+never stored, whatever its encoding.
+
+## The binary's migration head is read from the revision headers alone
+
+`culprit intent` and `check` read each Alembic `versions/` file's
+`revision` and `down_revision` lines, with no Alembic installed and
+nothing run, and the head is every revision no other names as its
+`down_revision`. A merge's parents, written by `alembic merge` as a tuple
+(`down_revision = ("b2", "c3")`) or as a list, are read, so a merge is the
+one head (F44-010). Not read: a header split across lines, a computed
+value, `branch_labels` and `depends_on`. A file whose header is not read
+contributes no revision, so its parent can be reported as a second head.
 
 ## A test assertion says a route is exercised, not what it returns
 
@@ -928,6 +966,22 @@ the classifier nothing to work with, and it says so — findings come back
 `unknown` deliberately ranks *above* `cosmetic`, so `--fail-on=any`
 includes it. "We could not work out how bad this is" must not be quieter
 than "we worked it out and it is trivial".
+
+### An edge that does not say is `unknown`, not followed or dropped (F44-063)
+
+A connection whose `criticality` is `unknown`, or not given, does not say
+whether a request waits on it. A component reachable from an entry point
+only through such an edge — and anything beyond it — gets severity
+`unknown`, and the reason names the edge (`orders -> payments`). A
+component that also has a route of `on_request_path` edges is on the
+request path; a `background` edge is never followed. The dashboard's
+request path (`GET /model/graph?symptom=`) follows the same edges, so the
+two agree, held by `shared/tests/request_path_conformance.json`. What that
+costs: a manifest that leaves criticality off most edges gets mostly
+`unknown` findings, and `unknown` ranks below `degrades`, so the default
+`--fail-on=degrades` does not fail on them; only `--fail-on=any` does.
+Set `criticality` on the edges you know, and the findings behind them are
+ranked.
 
 ## The fault corpus evaluates the engine, not extraction
 
@@ -1036,6 +1090,18 @@ missing from it** — including one that genuinely is. "I could not see
 all of it" must never become "it is not there". A variable set by
 `valueFrom` is known to exist but has an unknown shape, and an unknown
 shape compares on presence alone.
+
+**A Kubernetes capture is never complete (F44-013).** It reads the
+Deployment's template, and the container's environment is more than that:
+the image's own `ENV` and anything a mutating admission webhook injects
+are added after it, and neither is in the spec. So every Kubernetes
+capture records that its environment was not enumerated completely,
+naming what it could not read — the image's `ENV` and webhooks always,
+and each `envFrom` ConfigMap or Secret by name when `kubectl` could not
+read it — and no key is ever reported missing from a Kubernetes
+environment. A key the code reads that the cluster really lacks is found
+by a probe, or by a Compose or process capture, not by this one. Keys the
+template does set are still compared by kind.
 
 A Secret loaded with `envFrom` contributes its key names only: Culprit
 lists them through a `kubectl` template that never prints the data, so
@@ -1611,11 +1677,13 @@ a `culprit.yaml` you have not reviewed).
 The probe catalogue declares on an input that it carries a secret
 (`"secret": true` in its JSON Schema, mirrored to the API), and the control
 plane refuses an agent task that sets one, with a 422 naming the field
-(Phase 44 batch 1, F44-005). For `probe.auth.token_shape` it names
-`token_env` instead: the agent reads the token from its own environment,
-under `config.inspect.values`. **`probe.auth.propagation` has no `_env`
-alternative**, so it cannot be sent as a task at all: run it where the
-token is, with `culprit probe` or through `culprit mcp`. The refusal looks
+(Phase 44 batch 1, F44-005), and names `token_env` instead: the agent
+reads the token from its own environment, under `config.inspect.values`
+for that variable, and it never leaves the agent's memory except on the
+wire `probe.auth.propagation` sends it on. Both auth probes take it,
+`probe.auth.propagation` since Phase 44 batch 2 (Q46, version 2). The
+token is read from the environment of the *caller*, the `from` component
+of the `auth:` target. The refusal looks
 only at the probes the catalogue knows: a task naming a probe id it does
 not know is not checked here. Tasks stored before this keep what they were
 given (`docs/UPGRADING.md`).
@@ -2202,6 +2270,22 @@ A value changed to another of the same shape (one URL for another, one
 neither a difference the fix explains nor a change underneath. A key
 added, removed, or changed in shape is seen.
 
+### A process capture records the environment it was launched in (F44-012)
+
+With `adapter: process`, a capture reads the environment `culprit` itself
+runs in, and that includes what the launcher added: a shell's `SHLVL`,
+`OLDPWD`, `TERM` and `_`, an SSH session's `SSH_*`, systemd's
+`INVOCATION_ID`. `diagnose` and `verify` are two separate launches, so
+launch them the same way — the same kind of shell, from the same script or
+service unit. Two things a launcher changes are not counted as a change:
+the working directory (above), and a counter such as `SHLVL`, which is
+digits at any depth and so one kind of value (F44-011). Anything else the
+launcher adds or drops — `OLDPWD` after a `cd`, `TERM` in an interactive
+shell and not in a script, `_` when it holds a different program — is a
+different environment, and `verify` counts it as a change underneath. To
+capture only what you set, start from a clean environment:
+`env -i PATH="$PATH" HOME="$HOME" … culprit env capture <env>`.
+
 ### A process capture sees one component's environment
 
 With `adapter: process`, a capture reads the environment `culprit` runs in,
@@ -2235,11 +2319,37 @@ treated this way, never their values. What that leaves:
   container's random id — and a `verify` across a recreation can count it
   as a change underneath. Use the process adapter inside the workload, or
   compose, for a workload your fix recreates.
+- The working directory is the rule's second OS fact (F44-012): a
+  variable whose value equals the directory the OS reports for the process
+  — a shell's `PWD`, and anything set from it — is treated as the hostname
+  is, and counted in the same meta line. A variable you configured that
+  happens to hold the directory culprit was started in loses its shape the
+  same way.
 - Across an upgrade to a version with Q42's classifier fix, a capture from
   the older binary may call a hex value `ip_address` where the newer calls
   it `opaque`, so one `verify` or `env diff` spanning the upgrade can show
   a change no one made (`docs/UPGRADING.md`). Capture again after
   upgrading.
+
+### A value's format class is lexical (F44-011)
+
+A value's format class says what the value looks like, never what its
+size suggests. Digits alone are `numeric` whatever the number, so
+`WORKERS=1` and `WORKERS=4`, or a shell's `SHLVL=1` and `SHLVL=2`, are one
+kind of value and a change between them is not a shape difference.
+`booleanish` is the words `true`, `false`, `yes`, `no`, `on` and `off`, in
+any case. What that leaves:
+
+- No bare value is classed `port`. A port number is `numeric`, like any
+  other count; the class stays in the vocabulary for an extractor that
+  knows a value is a port.
+- `1` and `0` are `numeric`, not `booleanish`, so a flag moved from
+  `DEBUG=true` to `DEBUG=1` between two environments is reported as a
+  different kind of value. It is one, written down.
+- A change of number inside one class is never seen: the shape records the
+  class and a length bucket, not the value.
+- A capture from before this rule may say `port` or `booleanish` for a
+  number; capture again after upgrading (`docs/UPGRADING.md`).
 
 ### What a named change explains
 
@@ -2256,6 +2366,44 @@ rule removed, a process restarted, an injected fault cleared — in words, at
 most 500 characters. It too explains nothing a capture records, and its
 words are the operator's: Culprit records them and checks nothing in them.
 The fault library names its three runtime fixes this way.
+
+### An observation that changed is not a change underneath (F44-055)
+
+A capture records an endpoint's `dns_resolves`, `port_reachable` and
+`tls_certificate`: readings of a live network it made at one moment. They
+live in the CONFIGURED capture, and no fact moves plane, but they are
+observations, not configuration, and each predicate declares which it is
+(`model.ConfiguredPredicateKinds` and `CONFIGURED_PREDICATE_KINDS`, held to
+one fixture). So `culprit verify` counts only changes of configuration
+against the changes you name. A name that stopped resolving for a moment, a
+port that was closed while the fixed service restarted, or a certificate
+that crossed the 30-day line between `diagnose` and `verify` is recorded in
+the verification's `differences` with `observation: true`, and the reason
+counts it, but it never makes the verdict `changed_underneath`. What that
+leaves:
+
+- A real network change — a DNS record repointed, a firewall rule added —
+  is not counted either. The readings are what notice it: a probe that
+  needs the endpoint fails, and the verdict is `not_resolved` or
+  `regressed`, not `verified`.
+- A verification recorded before this rule holds no flag and is judged as
+  it was, so stored records still validate. A control plane from before it
+  refuses a verification that carries the flag: upgrade the control plane
+  before its agents (`docs/UPGRADING.md`).
+
+### The control plane's diff does not know what a capture could not see
+
+`GET /captures/diff` and `culprit verify` list the same differences for
+the same two captures, held to one fixture
+(`shared/tests/capture_diff_conformance.json`, F44-064 a): a key on one
+side only is listed on its existence and on every other question it
+answers there, its shape included. One difference remains. `verify`
+honours a capture's own record that it could not enumerate an
+environment completely, and does not count a key missing from such a
+capture; the stored diff reads facts only, so it lists that key as
+`only_in_a` or `only_in_b`. Every Kubernetes capture records that
+(F44-013), so between two Kubernetes captures `verify` sees no key added
+or removed in the Deployment's template, and the stored diff does.
 
 ### Two runs is a floor, not a proof
 
@@ -2506,10 +2654,18 @@ config value or a reading's content.
 
 ### Read-only means the system under test
 
-Every tool is offered with `readOnlyHint`. `culprit_diagnose` and
-`culprit_verify` still write to the server's own state directory — the
-investigation, its record, the capture before and each verification — as the
-commands do; nothing else.
+No tool changes the system under test, and none is offered as destructive.
+But `readOnlyHint` says a tool runs nothing, and a tool that can run a
+command `culprit.yaml` declares runs your code: every tool resolves INTENT,
+which runs the declared extractors, and `culprit_probe`, `culprit_diagnose`
+and `culprit_verify` also read the environment, which can run its declared
+commands (an `exec` adapter, a package listing). So `culprit_system_model`,
+`culprit_check` and `culprit_explain_connection` are offered with
+`readOnlyHint` only when the server was started with `--no-plugins`, and
+the other three never are. An agent host that auto-approves read-only tools
+will ask before those. `culprit_diagnose` and `culprit_verify` also write
+to the server's own state directory — the investigation, its record, the
+capture before and each verification — as the commands do; nothing else.
 
 ### Refused before anything is sent is per capability
 

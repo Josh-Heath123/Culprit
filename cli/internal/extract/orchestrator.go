@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -160,6 +161,18 @@ func Run(parent context.Context, options Options) (model.CaptureBundle, error) {
 			CaptureID:  captureID,
 			CapturedAt: now,
 			Extractor:  orchestrator,
+		}
+
+		// What the built-in readers could not look inside is said, by path
+		// (F44-057), before what they read.
+		for _, builtin := range builtinReaders() {
+			if wanted[builtin.want] {
+				for _, skip := range unscanned(os.DirFS(target.Root)) {
+					skip.Component, skip.Extractor = target.Component, orchestrator
+					skipped = append(skipped, skip)
+				}
+				break
+			}
 		}
 
 		for _, builtin := range builtinReaders() {

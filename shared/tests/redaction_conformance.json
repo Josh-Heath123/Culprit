@@ -309,6 +309,11 @@
       "why": "any word:word@ in free text reads as user:pass@host",
       "text": "see me:later@home",
       "redacted": "see [redacted]home"
+    },
+    {
+      "why": "a variable's name after token_env= is not a secret, but the key has a credential word, so its value goes: token_env names where a token is (a probe's input, a capture's reason), never the token",
+      "text": "token_env=INVENTORY_TOKEN",
+      "redacted": "token_env=[redacted]"
     }
   ]
 }

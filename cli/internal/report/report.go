@@ -399,7 +399,10 @@ func renderValue(fact model.Fact) string {
 		}
 		return fmt.Sprintf("%s/%s/%s", shape.Type, format, shape.LengthClass)
 	}
-	if kind, _, err := model.ParseSubject(fact.Subject); err == nil && kind == model.KindConfig {
+	// A subject that does not parse is treated as a config one (F44-064 b,
+	// as render_value does): the safe direction for a renderer whose one
+	// job is not to print a value.
+	if kind, _, err := model.ParseSubject(fact.Subject); err != nil || kind == model.KindConfig {
 		// A bool is the one value a config fact may legitimately carry
 		// (`read_by`, `required`) — two inhabitants, so it cannot hide a
 		// credential. Everything else is described, never printed.

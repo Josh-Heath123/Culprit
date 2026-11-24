@@ -168,7 +168,7 @@
       "value_shape": {
         "type": "string",
         "length_class": "short",
-        "format": "port",
+        "format": "numeric",
         "present": true,
         "scheme": "not_applicable"
       },

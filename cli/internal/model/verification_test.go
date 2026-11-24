@@ -27,6 +27,25 @@ type verificationFixture struct {
 	Touches               []touchCase        `json:"touches"`
 	VerificationsAccepted []verificationCase `json:"verifications_accepted"`
 	VerificationsRejected []verificationCase `json:"verifications_rejected"`
+	ConfiguredPredicates  map[string]string  `json:"configured_predicates"`
+}
+
+// F44-055: which CONFIGURED predicates are observations, declared once per
+// language and held together by the fixture.
+func TestConfiguredPredicateKindsMatchTheSharedFixture(t *testing.T) {
+	fixture := readFixture[verificationFixture](t, "verification_conformance.json")
+	got := map[string]string{}
+	for predicate, kind := range ConfiguredPredicateKinds {
+		got[predicate] = string(kind)
+	}
+	if len(got) != len(fixture.ConfiguredPredicates) {
+		t.Errorf("Go declares %d predicates, the fixture %d", len(got), len(fixture.ConfiguredPredicates))
+	}
+	for predicate, kind := range fixture.ConfiguredPredicates {
+		if got[predicate] != kind {
+			t.Errorf("%s: fixture says %s, Go says %q", predicate, kind, got[predicate])
+		}
+	}
 }
 
 func TestVerificationVocabularyMatchesTheSharedFixture(t *testing.T) {

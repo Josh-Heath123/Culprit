@@ -61,6 +61,9 @@ type Sources struct {
 	// Hostname is the process adapter's runtime-identity rule (Q42); nil
 	// is os.Hostname.
 	Hostname func() (string, error)
+	// WorkingDir is the identity rule's second OS fact (F44-012); nil is
+	// os.Getwd.
+	WorkingDir func() (string, error)
 
 	once    sync.Once
 	adapter capture.Adapter
@@ -129,7 +132,7 @@ func (s *Sources) workloadOf(ctx context.Context, component string) (capture.Wor
 		}
 	}
 	s.once.Do(func() {
-		s.adapter, s.err = capture.NewAdapter(s.Spec, s.ManifestDir, s.Runner, s.Environ, s.Hostname)
+		s.adapter, s.err = capture.NewAdapter(s.Spec, s.ManifestDir, s.Runner, s.Environ, s.Hostname, s.WorkingDir)
 	})
 	if s.err != nil {
 		return capture.Workload{}, errors.New(capture.SafeReason(s.err))

@@ -468,8 +468,15 @@ environments:
 	if digest, _ := find(bundle, "image:orders-api", PredicateDigest); digest.Value != "sha256:bbbb" {
 		t.Errorf("digest = %v", digest.Value)
 	}
-	if len(bundle.Skipped) != 0 {
-		t.Errorf("a complete enumeration recorded skips: %+v", bundle.Skipped)
+	// F44-013: every envFrom source was read, and the capture still says
+	// it did not see the whole environment. The image's own ENV and what
+	// a mutating admission webhook adds are not in the Deployment's
+	// template, so no key is judged missing.
+	if len(bundle.Skipped) != 1 || bundle.Skipped[0].Want != string(model.WantConfigKeys) ||
+		!strings.Contains(bundle.Skipped[0].Reason, "no key is judged missing") ||
+		!strings.Contains(bundle.Skipped[0].Reason, "image's own ENV") ||
+		!strings.Contains(bundle.Skipped[0].Reason, "admission webhook") {
+		t.Errorf("a template read whole was taken for the whole environment: %+v", bundle.Skipped)
 	}
 }
 
@@ -494,8 +501,9 @@ environments:
 	}}
 	bundle := runCapture(t, manifest, "production", Options{Runner: runner})
 	if len(bundle.Skipped) != 1 || bundle.Skipped[0].Want != string(model.WantConfigKeys) ||
-		!strings.Contains(bundle.Skipped[0].Reason, "no key is judged missing") {
-		t.Errorf("an incomplete enumeration was not recorded: %+v", bundle.Skipped)
+		!strings.Contains(bundle.Skipped[0].Reason, "no key is judged missing") ||
+		!strings.Contains(bundle.Skipped[0].Reason, "Secret locked") {
+		t.Errorf("an incomplete enumeration was not recorded, naming the source: %+v", bundle.Skipped)
 	}
 }
 
@@ -1004,6 +1012,54 @@ environments:
 	for _, text := range bundle.Meta {
 		if strings.Contains(text, "123456789012") {
 			t.Errorf("the meta records the hostname's value: %q", text)
+		}
+	}
+}
+
+// F44-012: the working directory joins the hostname. A variable whose
+// value is the directory the OS reports for the process is the launcher's,
+// not the workload's configuration: recorded present, its value not
+// shaped, and counted in the meta. A path that is not the directory is
+// shaped as before.
+func TestTheWorkingDirectoryIsIdentityNotConfiguration(t *testing.T) {
+	manifest := loadManifest(t, `
+version: 1
+components:
+  - name: order-service
+environments:
+  local:
+    adapter: process
+    grants: {config.read.names: true}
+    components:
+      order-service: {}
+`)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	own, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := runCapture(t, manifest, "local", Options{
+		Environ:  func() []string { return []string{"PWD=" + own, "APP_DIR=/srv/app"} },
+		Hostname: func() (string, error) { return "orders-host", nil },
+	})
+	if _, ok := find(bundle, "config:order-service/PWD", model.PredicateExists); !ok {
+		t.Error("PWD's existence was not recorded")
+	}
+	shape, ok := find(bundle, "config:order-service/PWD", model.PredicateValueShape)
+	if !ok || shape.ValueShape == nil || shape.ValueShape.Type != model.TypeUnknown {
+		t.Errorf("PWD's shape = %+v, want unknown", shape.ValueShape)
+	}
+	app, ok := find(bundle, "config:order-service/APP_DIR", model.PredicateValueShape)
+	if !ok || app.ValueShape == nil || app.ValueShape.Format != model.FormatPath {
+		t.Errorf("APP_DIR's shape = %+v, want a path", app.ValueShape)
+	}
+	if !strings.Contains(bundle.Meta["identity.order-service"], "1 variable") {
+		t.Errorf("the capture does not count the directory: %v", bundle.Meta)
+	}
+	for _, text := range bundle.Meta {
+		if strings.Contains(text, own) {
+			t.Errorf("the meta records the directory: %q", text)
 		}
 	}
 }

@@ -208,6 +208,16 @@ def run(
                         )
                     )
 
+        static = [want for want in wants if want in (Want.CONFIG_KEYS, Want.TEST_ASSERTIONS)]
+        if static:
+            # What the static scan could not look inside, by path (F44-057),
+            # under each want that scans.
+            from culprit_extract_python.static_scan import unscanned
+
+            for reason in unscanned(root):
+                for want in static:
+                    skipped.append(Skip(want=str(want), reason=reason, extractor=EXTRACTOR_ID))
+
         for want in wants:
             produced, problem = _extract_one(want, root, app, builder)
             facts.extend(produced)
