@@ -2093,7 +2093,12 @@ it had been serving an API from before Phase 14 since August. Nothing in the
 repository deploys on a push any more. The `deploy` job in
 `.github/workflows/ci-cd.yml` runs only when started by hand on `main`, with
 its **deploy** box ticked, after every other job has passed; a push to
-`main` builds, scans and publishes the images and skips the deploy. If you
+`main` builds, scans and publishes the images and skips the deploy. The
+images are published only after `gate` has passed (F44-008): a push whose
+tests fail publishes nothing. They are the images that were scanned, kept
+as artifacts for a day and pushed by a later job; a publish that fails after
+`gate` passed (a registry outage) leaves `gate` green and `main`'s images
+unmoved, and is started again by rerunning that job. If you
 run your own instance from a fork (`docs/INSTALL.md`), the same applies to
 you: a merge does not reach your server until you start the deploy.
 
