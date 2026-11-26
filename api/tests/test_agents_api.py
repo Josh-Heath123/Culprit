@@ -1181,3 +1181,45 @@ def test_a_task_naming_the_env_alternative_is_accepted(client: TestClient) -> No
         },
     )
     assert response.status_code == 201, response.text
+
+
+# ---- the request-size cap (F44-043, as Q49 ruled) ---------------------------------------
+
+
+@pytest.mark.parametrize("framing", ["content-length", "chunked"])
+def test_a_signed_route_reads_no_more_than_its_cap_before_checking_the_signature(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, framing: str
+) -> None:
+    """A signed route read the whole body before it authenticated, however
+    large. Now the dependency reads the route-class table: one byte over
+    the route's cap is a 413 naming the limit (and, on a bulk route, the
+    setting) before the signature is checked, declared or chunked; a body
+    at the cap is read, and answered for what it is."""
+    from app import body_limits
+
+    monkeypatch.setattr(body_limits, "BULK_BODY_BYTES", 70_000)
+    agent = paired(client)
+    for route in _signed_routes():
+        method, template = route.split(" ", 1)
+        path = template.replace("{task_id}", "task-unknown").replace(
+            "{investigation_id}", "inv-0000000000000000"
+        )
+        # A signed GET (the audit head) is in no class, so small.
+        bulk = body_limits.ROUTE_CLASSES.get(route) == "bulk"
+        limit = 70_000 if bulk else 64 * 1024
+        for size in (limit, limit + 1):
+            body = b"x" * size
+            headers = agent.headers(method, path, body)
+            content = body if framing == "content-length" else iter([body[:1000], body[1000:]])
+            response = client.request(method, path, content=content, headers=headers)
+            if size == limit:
+                assert response.status_code != 413, (route, response.text[:200])
+                continue
+            assert response.status_code == 413, (route, response.status_code, response.text)
+            expected = f"the request body is over this route's limit of {limit} bytes"
+            expected += (
+                " (bulk); CULPRIT_MAX_BULK_BODY_BYTES on the control plane raises it"
+                if bulk
+                else " (small)"
+            )
+            assert response.json() == {"detail": expected}, route

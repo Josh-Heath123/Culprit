@@ -1043,6 +1043,52 @@ envelope `culprit env capture` writes, verbatim:
       -H "Authorization: Bearer $CULPRIT_PROJECT_TOKEN" \
       -H "Content-Type: application/json" --data @production.capture.json
 
+## A request body has a cap, one per kind of route (F44-043)
+
+Every `/api/*` route that takes a body is in one of two classes, named in
+one table (`api/app/body_limits.py`); a route added without a class fails
+a test.
+
+- **Bulk, 16 MiB** (16,777,216 bytes): bundles and batches. An INTENT
+  bundle (`POST /facts/captures`; this repository's is about 515 KB), a
+  capture envelope (`POST /captures`, the curl above), `model/apply`,
+  divergences, readings, investigations, verifications, an agent's task
+  results and its audit chain. **`CULPRIT_MAX_BULK_BODY_BYTES`** on the
+  control plane raises it, a whole number of bytes, at least 65536: a much
+  larger repository, whose INTENT bundle nears 16 MiB, needs it raised.
+  Caddy's ceiling on `/api/*` is the same setting, read from the same
+  `.env.prod`, so the two stay equal; set it once.
+- **Small, 64 KiB** (65,536 bytes): everything else, from signing in to
+  creating a task. The largest such body measured in CI's e2e and
+  fault-library runs was 14,214 bytes; 64 KiB is four times that, rounded
+  up. It is not a setting.
+
+A body over its route's cap is refused with a **413** that names the
+limit, and on a bulk route the setting: before it is read, when its size
+is declared, and the moment it passes the cap, when it is chunked. A
+signed route checks the size before the signature. Through Caddy, a body
+over the bulk cap is refused by Caddy itself, with the same message. A
+route in neither class (a `GET`, a `DELETE`) is held to the small cap.
+
+**What the agent does under the cap.** It posts its audit backlog and its
+readings in batches sized by bytes, under half the bulk cap, never by
+entry count alone. It assumes the default cap: if
+`CULPRIT_MAX_BULK_BODY_BYTES` is set lower, the first 413 halves its
+batches, and a refused request is never sent again unchanged.
+
+- **An audit entry that alone is over the cap is kept and not sent.** It
+  stays in the agent's local audit log, and the agent's log says which
+  entry and why, once. The chain is in order, so the entries after it are
+  not shipped either: the control plane's copy stops before it, `culprit
+  agent verify` shows where, and the agent carries on with its tasks.
+  Raise the cap to ship it. (An entry is one task or one probe's record:
+  reaching 16 MiB would take a reason of that size.)
+- **An investigation or a verification over the cap is not sent**, since
+  one document cannot be split: the agent stops with an error naming its
+  size and the setting, and the task is failed when the agent next claims
+  one (above). The same holds for one reading the control plane refuses
+  alone.
+
 ## Findings are never closed automatically
 
 A divergence that stops appearing is not marked resolved. This run may

@@ -128,6 +128,11 @@ async def client(
     # rejected bundle, credentials and all, which is what this test app
     # needs to be able to assert.
     install_error_handlers(app)
+    # The size cap app/main.py installs (F44-043), so a bundle of a real
+    # repository's size is tested against it.
+    from app.body_limits import BodyLimitMiddleware
+
+    app.add_middleware(BodyLimitMiddleware)
     app.include_router(facts_router_module.router)
 
     with TestClient(app) as test_client:
@@ -145,9 +150,7 @@ def _post(client: TestClient, bundle: CaptureBundle, token: str | None = PROJECT
     headers = {"Content-Type": "application/json"}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-    return client.post(
-        "/facts/captures", content=bundle.model_dump_json(), headers=headers
-    )
+    return client.post("/facts/captures", content=bundle.model_dump_json(), headers=headers)
 
 
 # --- authentication -----------------------------------------------------
@@ -237,8 +240,7 @@ async def test_no_config_value_reaches_the_database(
         blob = (
             await conn.execute(
                 text(
-                    "SELECT string_agg(value::text, ' ') FROM intent_facts "
-                    "WHERE capture_id = :id"
+                    "SELECT string_agg(value::text, ' ') FROM intent_facts WHERE capture_id = :id"
                 ),
                 {"id": bundle.capture_id},
             )
@@ -355,14 +357,12 @@ async def test_an_empty_bundle_is_accepted_and_recorded(
 
 
 def test_skips_are_echoed_back(client: TestClient) -> None:
-    """"Stored 214 facts, skipped client_calls because the extractor is
+    """ "Stored 214 facts, skipped client_calls because the extractor is
     not installed" is the line that gets an extractor installed."""
     from culprit_model.protocol import Skip
 
     bundle = _bundle(
-        skipped=(
-            Skip(want="client_calls", reason="culprit-extract-node is not installed"),
-        )
+        skipped=(Skip(want="client_calls", reason="culprit-extract-node is not installed"),)
     )
     response = _post(client, bundle)
     assert response.status_code == 201
@@ -396,9 +396,7 @@ async def test_fact_writer_cannot_touch_the_other_planes_tables(
     from sqlalchemy.exc import ProgrammingError
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    engine = create_async_engine(
-        role_database_url("fact-writer", "FACT_WRITER_DB_PASSWORD")
-    )
+    engine = create_async_engine(role_database_url("fact-writer", "FACT_WRITER_DB_PASSWORD"))
     try:
         # The other two planes. Phase 30 and Phase 31 each get their own
         # decision about who writes them; this role is not it.
@@ -586,6 +584,7 @@ async def test_intent_facts_refuses_an_ungranted_config_literal_at_the_db(
     from sqlalchemy.exc import IntegrityError
 
     capture_id = uuid.uuid4()
+
     async def insert(**columns: object) -> None:
         async with db_engine.begin() as conn:
             await conn.execute(
@@ -694,11 +693,7 @@ def test_reposting_the_same_capture_is_a_409_not_a_500(client: TestClient) -> No
     "golden",
     sorted(
         (
-            pathlib.Path(__file__).resolve().parents[2]
-            / "cli"
-            / "testdata"
-            / "fixtures"
-            / "golden"
+            pathlib.Path(__file__).resolve().parents[2] / "cli" / "testdata" / "fixtures" / "golden"
         ).rglob("*.json")
     ),
     ids=lambda p: p.stem,
@@ -737,8 +732,7 @@ async def test_a_real_capture_from_the_cli_is_accepted(
         stored, shapes = (
             await conn.execute(
                 text(
-                    "SELECT count(*), count(value_shape) FROM intent_facts "
-                    "WHERE capture_id = :id"
+                    "SELECT count(*), count(value_shape) FROM intent_facts WHERE capture_id = :id"
                 ),
                 {"id": bundle.capture_id},
             )
@@ -886,3 +880,30 @@ def test_a_mismatched_capture_id_names_the_index_not_the_subject(
     assert response.status_code == 422
     assert "facts.2" in response.text
     assert "healthz" not in response.text
+
+
+# --- size (F44-043, as Q49 ruled) ---------------------------------------
+
+
+def test_a_bundle_of_this_repositorys_intent_size_is_accepted(client: TestClient) -> None:
+    """This repository's INTENT bundle is 515,054 bytes and grows with it.
+    One of about 600 KB is stored: POST /facts/captures is a bulk route,
+    and the single cap the first ruling measured from CI (about 56 KiB)
+    would have refused it."""
+    capture_id = uuid.uuid4()
+    facts = []
+    while sum(len(fact.model_dump_json()) for fact in facts) < 600_000:
+        n = len(facts)
+        facts.append(
+            _fact(
+                capture_id,
+                build("http", component="orders-api", method="GET", path=f"/api/v1/items/{n}"),
+                "exists",
+                value={"path": f"/api/v1/items/{n}", "method": "GET"},
+            )
+        )
+    bundle = _bundle(capture_id=capture_id, facts=tuple(facts))
+    size = len(bundle.model_dump_json())
+    assert 600_000 <= size < 700_000, size
+    response = _post(client, bundle)
+    assert response.status_code == 201, (size, response.status_code, response.text[:300])

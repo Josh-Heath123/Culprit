@@ -1484,11 +1484,24 @@ F44-092  The quickstart prints the admin password, and pulls an unpinned
          curlimages/curl:latest
   Area: security · Severity: S4 · Evidence: VERIFIED (static) · Where: justfile (quickstart) ·
   Shown by: 4.7-4.9 notes ("also noted").
+
+F44-093  Every image build depends on sum.golang.org being up
+  Added by batch 3's step 0 (2026-11-24); batch 4's to rule (Q49's ruling,
+  2026-11-26). Nothing changed for it in batch 3.
+  Area: readiness · Severity: S4 · Evidence: VERIFIED · Where: frontend/Dockerfile
+  (xcaddy build) ·
+  Shown by: main's push run 45425513632 on 760cdfd, e2e (none)'s quickstart:
+  "verifying module: github.com/caddyserver/caddy/v2@v2.11.7: ... reading
+  https://sum.golang.org/tile/8/0/x281/715: stream error: stream ID 3;
+  INTERNAL_ERROR; received from peer". No input moved; attempt 2 green. An
+  outage of the Go checksum database fails the quickstart, e2e and the image
+  build. Proposed (for the review): vendor or cache Caddy's module graph, or
+  a sum-database policy; not a retry.
 ```
 
-Every number from F44-001 to F44-092 is used once; numbers follow the
+Every number from F44-001 to F44-093 is used once; numbers follow the
 order the findings were drafted, so a few S3 and S4 entries sit out of
-numeric order in their block.
+numeric order in their block. F44-093 was added in batch 3.
 
 ### Coverage record
 

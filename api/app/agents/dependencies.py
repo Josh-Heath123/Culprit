@@ -29,6 +29,7 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app import body_limits
 from app.agents import signing, tables
 from app.facts import dependencies as facts_dependencies
 
@@ -107,7 +108,9 @@ async def authenticate_agent(request: Request, session: AsyncSession) -> AgentPr
     signed = signing.SignedRequest(
         method=request.method,
         path=_signed_path(request),
-        body=await request.body(),
+        # Read under its route's cap (F44-043): a body over it is a 413
+        # before the signature over it is checked.
+        body=await body_limits.capped_body(request),
         timestamp=stamped,
         nonce=nonce,
         agent_id=agent_id,

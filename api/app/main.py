@@ -37,6 +37,7 @@ from app.auth.config import AUTH_SERVICE_DATABASE_URL  # noqa: E402
 from app.auth.dependencies import require_admin, require_auth  # noqa: E402
 from app.auth.router import router as auth_router  # noqa: E402
 from app.auth.users_router import router as users_router  # noqa: E402
+from app.body_limits import BodyLimitMiddleware  # noqa: E402
 from app.divergences.config import DIVERGENCE_WRITER_DATABASE_URL  # noqa: E402
 from app.divergences.router import router as divergences_router  # noqa: E402
 from app.errors import install as install_error_handlers  # noqa: E402
@@ -66,6 +67,7 @@ configure_observability("culprit-api")
 
 tracer = trace.get_tracer("culprit.api")
 access_logger = structlog.get_logger("api.access")
+
 
 def cors_origins(raw: str) -> list[str]:
     """Origins from a comma-separated list, each trimmed, empties dropped
@@ -225,6 +227,10 @@ app.state.limiter = limiter
 # write the credential it was refused for into this API's access log and
 # the caller's CI log. See app/errors.py.
 install_error_handlers(app)
+# Every request body held to its route's cap, bulk or small (F44-043, as
+# Q49 ruled): see app/body_limits.py. Added first, so it is the innermost
+# middleware and its 413 is still logged and traced by the outer ones.
+app.add_middleware(BodyLimitMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
