@@ -447,7 +447,7 @@ environments:
 	base := "kubectl --context prod -n shop "
 	runner := &fakeRunner{outputs: map[string]string{
 		base + "get deployment orders-api -o json":                                                           deployment,
-		base + "get configmap orders-config -o json":                                                         `{"data":{"LOG_LEVEL":"info","STRIPE_URL":"https://api.stripe.com"}}`,
+		base + "get configmap orders-config -o json":                                                         `{"data":{"LOG_LEVEL":"info","PORT":"9000","STRIPE_URL":"https://api.stripe.com"}}`,
 		base + `get secret orders-secrets -o go-template={{range $key, $_ := .data}}{{$key}}{{"\n"}}{{end}}`: "JWT_SECRET_KEY\nSTRIPE_API_KEY\n",
 		base + "get pods -l app=orders -o json": `{"items":[{"metadata":{"name":"orders-1"},"status":{"containerStatuses":[
 		  {"name":"api","imageID":"docker-pullable://ghcr.io/acme/orders@sha256:bbbb"}]}}]}`,
@@ -463,6 +463,22 @@ environments:
 		fact, ok := find(bundle, "config:orders-api/"+key, model.PredicateValueShape)
 		if !ok || fact.ValueShape.Type != wantType || !fact.ValueShape.Present {
 			t.Errorf("%s: %+v", key, fact.ValueShape)
+		}
+	}
+	// Q47: each key names the source it was read from, so two captures
+	// can compare what both read. `env` wins over `envFrom`, as in
+	// Kubernetes, so PORT, in both, is the template's.
+	for key, wantSource := range map[string]string{
+		"PORT":           "kubernetes:deployment/orders-api",
+		"DATABASE_URL":   "kubernetes:deployment/orders-api",
+		"LOG_LEVEL":      "kubernetes:configmap/orders-config",
+		"JWT_SECRET_KEY": "kubernetes:secret/orders-secrets",
+	} {
+		for _, predicate := range []string{model.PredicateExists, model.PredicateValueShape} {
+			fact, _ := find(bundle, "config:orders-api/"+key, predicate)
+			if fact.Provenance.Artefact != wantSource {
+				t.Errorf("%s %s was read from %q, want %q", key, predicate, fact.Provenance.Artefact, wantSource)
+			}
 		}
 	}
 	if digest, _ := find(bundle, "image:orders-api", PredicateDigest); digest.Value != "sha256:bbbb" {

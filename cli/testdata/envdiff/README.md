@@ -29,5 +29,6 @@ are written to match what those produce — same predicates, same
 | `image-digest-mismatch` | criterion 3: one tag, two digests |
 | `clean-environments` | the one that matters: two correct environments that differ in URL length, in a secret read by reference, and in variables the code never mentions — and must produce nothing |
 | `incomplete-enumeration` | a capture that could not see all of an environment never proves a key is missing from it |
+| `template-key-removed` | Q47: what two incomplete Kubernetes captures both read is still compared — a key one Deployment template lists and the other does not is found; a key from a Secret the other could not list is not |
 | `scheme-mismatch` | Q7's own example: a `postgresql` URL against a `mysql` one |
 | `unreferenced-key-differs` | a key set in one environment only, that nothing reads — reported, and `cosmetic` |

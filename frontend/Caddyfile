@@ -20,8 +20,27 @@
 	# root (/incidents, /auth/login, ...), not under /api — handle_path
 	# removes the /api prefix before proxying, so the app code needs no
 	# change for this routing choice.
+	#
+	# Phase 44 batch 3 (F44-043, as Q49 ruled): the outer ceiling on an
+	# /api/* body is the API's bulk cap, the same setting with the same
+	# default (api/app/body_limits.py; api/tests/test_body_limits.py reads
+	# both). The API holds each route to its own class inside it: 16 MiB
+	# for bundles and batches, 64 KiB for everything else.
 	handle_path /api/* {
+		request_body {
+			max_size {$CULPRIT_MAX_BULK_BODY_BYTES:16777216}
+		}
 		reverse_proxy api:8000
+	}
+
+	# Caddy's own 413 is an empty body. On /api/* it is answered in the
+	# API's one error shape (F44-044), naming the ceiling and the setting
+	# that raises it. Checked against Caddy 2.11, declared and chunked
+	# (Phase 44 batch 3's run report). /ingest/* keeps Caddy's default.
+	handle_errors 413 {
+		@api path /api/*
+		header @api Content-Type application/json
+		respond @api `{"detail": "the request body is over this API's limit of {$CULPRIT_MAX_BULK_BODY_BYTES:16777216} bytes (bulk); CULPRIT_MAX_BULK_BODY_BYTES on the control plane raises it"}` 413
 	}
 
 	# Phase 15: the public ingest path — a third party's own services,

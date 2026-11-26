@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/josh-heath123/culprit/cli/internal/extract"
+	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
 // Adapters: how to find one component's running workload in one kind of
@@ -64,6 +65,11 @@ type EnvValue struct {
 	// `valueFrom` or a Secret's key — so the key exists but its value was
 	// not visible to this adapter. Shaped as UnknownShape, not guessed.
 	Known bool
+	// Source names where the key was read when that is not the workload's
+	// own Artefact: a ConfigMap or Secret a Kubernetes template loads with
+	// envFrom (model.ArtefactKubernetesConfigMap, ...Secret). Empty means
+	// the Artefact. A comparison of two captures reads it (Q47).
+	Source string
 }
 
 // Image is what an adapter found out about a workload's image.
@@ -335,7 +341,7 @@ func (a kubernetesAdapter) Workload(
 			"the image's own ENV and anything a mutating admission webhook adds are not in the " +
 				"Deployment's template",
 		},
-		Artefact: "kubernetes:deployment/" + settings.WorkloadFor(component),
+		Artefact: model.ArtefactKubernetesTemplate + settings.WorkloadFor(component),
 		Replicas: 1,
 	}
 
@@ -357,7 +363,8 @@ func (a kubernetesAdapter) Workload(
 				continue
 			}
 			for key, value := range configMap.Data {
-				workload.Env[source.Prefix+key] = EnvValue{Value: value, Known: true}
+				workload.Env[source.Prefix+key] = EnvValue{Value: value, Known: true,
+					Source: model.ArtefactKubernetesConfigMap + source.ConfigMapRef.Name}
 			}
 		case source.SecretRef != nil:
 			// Keys only, never data. The template prints each key name on
@@ -374,7 +381,8 @@ func (a kubernetesAdapter) Workload(
 				continue
 			}
 			for _, key := range strings.Fields(string(out)) {
-				workload.Env[source.Prefix+key] = EnvValue{Known: false}
+				workload.Env[source.Prefix+key] = EnvValue{Known: false,
+					Source: model.ArtefactKubernetesSecret + source.SecretRef.Name}
 			}
 		}
 	}

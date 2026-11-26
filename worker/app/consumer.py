@@ -23,18 +23,21 @@ parse/write pair instead of forcing one write shape to fit both.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 from collections import Counter
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import NamedTuple
 
 import redis.asyncio as redis
 from culprit_shared.raw_event import RawEventIn
 from culprit_shared.service_edge import ServiceEdgeObservation
+from redis.exceptions import LockError
 from sqlalchemy import func, insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.db import observed_service_edges, raw_events
@@ -57,6 +60,12 @@ BATCH_SIZE = 200
 # insert them twice — not the crash-recovery duplication a real crash can
 # cause, but a second, avoidable duplication path on top of it. The TTL
 # ensures a crash while holding the lock doesn't deadlock the job forever.
+#
+# F44-040 (Phase 44 batch 3): the lock is redis-py's, which holds a random
+# token and is released only by its holder (a compare-and-delete in Lua),
+# and it is renewed every third of its TTL while a drain holds it. Before,
+# a drain slower than the TTL lost the lock to the next tick, then deleted
+# that tick's lock when it finished, unconditionally.
 LOCK_KEY = "raw-events-drain:lock"
 EDGES_LOCK_KEY = "service-edges-drain:lock"
 LOCK_TTL_S = 30
@@ -196,7 +205,8 @@ async def _drain_batch(
         logger.info("DRAIN_SIMULATED_DELAY_S=%s: sleeping before insert", crash_test_delay)
         await asyncio.sleep(crash_test_delay)
 
-    rows, quarantined = await _parse_or_quarantine(client, stream, group, entries, parse)
+    parsed, quarantined = await _parse_or_quarantine(client, stream, group, entries, parse)
+    rows = [row for _entry_id, _fields, row in parsed]
 
     if not rows and len(entries) > 1:
         # Every entry in the batch failed. That is not "a corrupt
@@ -219,8 +229,12 @@ async def _drain_batch(
             f"message -- fix the cause and the batch will drain."
         )
 
-    if rows:
-        await write(engine, rows)
+    written = 0
+    if parsed:
+        written, refused = await _write_or_quarantine(
+            client, engine, stream, group, parsed, write
+        )
+        quarantined += refused
 
     # Acked only after both the write and the quarantine writes have
     # committed. A crash before this point redelivers the whole batch,
@@ -228,10 +242,85 @@ async def _drain_batch(
     # quarantine xadd but before this ack re-quarantines the same entry,
     # which is a harmless duplicate in a diagnostic stream.
     await client.xack(stream, group, *entry_ids)
-    logger.info(
-        "wrote + acked %d rows from %s (%d quarantined)", len(rows), stream, quarantined
+    logger.info("wrote + acked %d rows from %s (%d quarantined)", written, stream, quarantined)
+    return DrainResult(written=written, quarantined=quarantined)
+
+
+#: What Postgres refuses one row for: a value it will not store (a NUL byte
+#: in text, an out-of-range number) or a constraint the row breaks. Anything
+#: else - the database unreachable, a role without the grant - is not the
+#: row's fault, and is raised with nothing acked.
+_REFUSED_BY_POSTGRES = (DataError, IntegrityError)
+
+
+async def _write_or_quarantine(
+    client: redis.Redis,
+    engine: AsyncEngine,
+    stream: str,
+    group: str,
+    parsed: list[tuple[str, dict, dict]],
+    write: Callable[[AsyncEngine, list[dict]], Awaitable[None]],
+) -> tuple[int, int]:
+    """Write the batch; if Postgres refuses it, write its entries one at a
+    time and quarantine each one Postgres refuses, with its reason
+    (F44-039). Returns (written, quarantined).
+
+    Before, one such entry made the batch's write raise: nothing was acked,
+    and the same batch was reclaimed and refused on every tick, everything
+    behind it stuck - the wedge the parse quarantine (Phase 26) removed for
+    unparseable entries. Every entry refused is systemic, as for parsing,
+    and raises instead.
+    """
+    try:
+        await write(engine, [row for _entry_id, _fields, row in parsed])
+        return len(parsed), 0
+    except _REFUSED_BY_POSTGRES:
+        logger.warning(
+            "Postgres refused a %d-entry batch from %s; writing it one at a time",
+            len(parsed),
+            stream,
+        )
+    written = 0
+    refused: list[tuple[str, dict, Exception]] = []
+    for entry_id, fields, row in parsed:
+        try:
+            await write(engine, [row])
+            written += 1
+        except _REFUSED_BY_POSTGRES as exc:
+            refused.append((entry_id, fields, exc))
+    if not written and len(parsed) > 1:
+        raise RuntimeError(
+            f"Postgres refused every entry in a {len(parsed)}-entry batch from {stream}; "
+            "refusing to ack. This looks systemic (a schema or version skew), not a bad "
+            "entry -- fix the cause and the batch will drain."
+        )
+    for entry_id, fields, exc in refused:
+        sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
+        reason = f"Postgres refused it: {type(exc).__name__}" + (
+            f" (SQLSTATE {sqlstate})" if sqlstate else ""
+        )
+        logger.warning("quarantining entry %s from %s: %s", entry_id, stream, reason)
+        await _quarantine(client, stream, group, entry_id, fields, reason)
+    return written, len(refused)
+
+
+async def _quarantine(
+    client: redis.Redis, stream: str, group: str, entry_id: str, fields: dict, reason: str
+) -> None:
+    await client.xadd(
+        DEAD_LETTER_STREAM,
+        {
+            "source_stream": stream,
+            "source_group": group,
+            "source_entry_id": entry_id,
+            "error": reason,
+            # The original payload, verbatim — a quarantined entry is only
+            # useful if you can see what it was.
+            "data": fields.get("data", ""),
+        },
+        maxlen=DEAD_LETTER_MAXLEN,
+        approximate=True,
     )
-    return DrainResult(written=len(rows), quarantined=quarantined)
 
 
 async def _parse_or_quarantine(
@@ -240,7 +329,7 @@ async def _parse_or_quarantine(
     group: str,
     entries: list,
     parse: Callable[[dict], dict],
-) -> tuple[list[dict], int]:
+) -> tuple[list[tuple[str, dict, dict]], int]:
     """Parses each entry independently, sending the failures to
     DEAD_LETTER_STREAM rather than letting one of them take the batch
     down.
@@ -252,31 +341,53 @@ async def _parse_or_quarantine(
     this one entry is not processable and the other 199 in the batch
     should not be held hostage to it.
     """
-    rows: list[dict] = []
+    parsed: list[tuple[str, dict, dict]] = []
     quarantined = 0
     for entry_id, fields in entries:
         try:
-            rows.append(parse(fields))
+            parsed.append((entry_id, fields, parse(fields)))
         except Exception as exc:
             quarantined += 1
             logger.warning(
                 "quarantining unparseable entry %s from %s: %s", entry_id, stream, exc
             )
-            await client.xadd(
-                DEAD_LETTER_STREAM,
-                {
-                    "source_stream": stream,
-                    "source_group": group,
-                    "source_entry_id": entry_id,
-                    "error": f"{type(exc).__name__}: {exc}",
-                    # The original payload, verbatim — a quarantined
-                    # entry is only useful if you can see what it was.
-                    "data": fields.get("data", ""),
-                },
-                maxlen=DEAD_LETTER_MAXLEN,
-                approximate=True,
+            await _quarantine(
+                client, stream, group, entry_id, fields, f"{type(exc).__name__}: {exc}"
             )
-    return rows, quarantined
+    return parsed, quarantined
+
+
+async def _renew(lock, key: str) -> None:
+    """Keep the lock while the drain runs: every third of its TTL."""
+    while True:
+        await asyncio.sleep(LOCK_TTL_S / 3)
+        try:
+            await lock.reacquire()
+        except LockError:
+            logger.warning("the drain lock %s was lost while held; another drain may run", key)
+            return
+
+
+@contextlib.asynccontextmanager
+async def _held(client: redis.Redis, key: str) -> AsyncIterator[bool]:
+    """The drain lock (F44-040): yields whether it was taken. Held under a
+    token of its own, renewed while held, and released only if it is still
+    this holder's."""
+    lock = client.lock(key, timeout=LOCK_TTL_S, blocking=False)
+    if not await lock.acquire():
+        yield False
+        return
+    renewing = asyncio.create_task(_renew(lock, key))
+    try:
+        yield True
+    finally:
+        renewing.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await renewing
+        try:
+            await lock.release()
+        except LockError:
+            logger.warning("the drain lock %s was no longer this drain's; left as it is", key)
 
 
 @instrument_job("drain_streams")
@@ -284,12 +395,10 @@ async def drain_streams(ctx: dict) -> dict[str, int]:
     client: redis.Redis = ctx["redis"]
     engine: AsyncEngine = ctx["engine"]
 
-    got_lock = await client.set(LOCK_KEY, CONSUMER_NAME, nx=True, ex=LOCK_TTL_S)
-    if not got_lock:
-        logger.info("skipping tick: a previous drain is still running")
-        return {}
-
-    try:
+    async with _held(client, LOCK_KEY) as got_lock:
+        if not got_lock:
+            logger.info("skipping tick: a previous drain is still running")
+            return {}
         totals: dict[str, int] = {}
         quarantined = 0
         for stream in STREAMS:
@@ -309,8 +418,6 @@ async def drain_streams(ctx: dict) -> dict[str, int]:
         if quarantined:
             totals["quarantined"] = quarantined
         return totals
-    finally:
-        await client.delete(LOCK_KEY)
 
 
 @instrument_job("drain_edges")
@@ -322,12 +429,10 @@ async def drain_edges(ctx: dict) -> dict[str, int]:
     client: redis.Redis = ctx["redis"]
     engine: AsyncEngine = ctx["engine"]
 
-    got_lock = await client.set(EDGES_LOCK_KEY, CONSUMER_NAME, nx=True, ex=LOCK_TTL_S)
-    if not got_lock:
-        logger.info("skipping tick: a previous edges drain is still running")
-        return {}
-
-    try:
+    async with _held(client, EDGES_LOCK_KEY) as got_lock:
+        if not got_lock:
+            logger.info("skipping tick: a previous edges drain is still running")
+            return {}
         recovered = await _drain_batch(
             client, engine, EDGES_STREAM, EDGES_GROUP_NAME, "0", _parse_edge, _write_edges
         )
@@ -339,5 +444,3 @@ async def drain_edges(ctx: dict) -> dict[str, int]:
         if result.quarantined:
             totals["quarantined"] = result.quarantined
         return totals
-    finally:
-        await client.delete(EDGES_LOCK_KEY)

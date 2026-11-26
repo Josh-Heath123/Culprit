@@ -40,6 +40,8 @@ import structlog
 from culprit_model.redaction import redact_credentials
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
 
 logger = structlog.get_logger("api.validation")
@@ -101,8 +103,60 @@ async def redacting_validation_handler(
         error_count=len(errors),
         fields=[".".join(str(part) for part in error.get("loc", ())) for error in errors],
     )
-    return JSONResponse({"detail": errors}, status_code=422)
+    return JSONResponse(error_body(errors), status_code=422)
+
+
+# ---- one error shape (F44-044, Phase 44 batch 3) -------------------------------------
+#
+# Every error this API answers is {"detail": a sentence}, or, for a 422,
+# {"detail": [the scrubbed validation errors]} - the shape FastAPI's own
+# HTTPException already gave most routes. The dashboard reads that and
+# nothing else (frontend/src/lib/errors.ts). Two routes answered otherwise:
+# the rate limit ({"error": ...}) and the audit chain's 409 ({"detail":
+# {message, seq, hash}}). Both now pass through here, and a detail that is
+# not a sentence is made one rather than sent as it came.
+
+
+def error_body(detail: str | list[Any]) -> dict[str, Any]:
+    """The one error body."""
+    return {"detail": detail}
+
+
+def _sentence(detail: Any) -> str | list[Any]:
+    if isinstance(detail, str | list):
+        return detail
+    if isinstance(detail, dict):
+        message = str(detail.get("message", ""))
+        rest = ", ".join(f"{key}: {value}" for key, value in detail.items() if key != "message")
+        return f"{message} ({rest})" if message and rest else message or rest
+    return str(detail)
+
+
+async def http_error(request: Request, exc: Exception) -> Response:
+    """Every HTTPException, in the one shape, its headers kept."""
+    if not isinstance(exc, StarletteHTTPException):
+        raise exc
+    return JSONResponse(
+        error_body(_sentence(exc.detail)), status_code=exc.status_code, headers=exc.headers
+    )
+
+
+async def rate_limited(request: Request, exc: Exception) -> Response:
+    """A 429, in the one shape, logged (Phase 10: no silent 429s), with
+    slowapi's Retry-After and X-RateLimit headers."""
+    detail = str(getattr(exc, "detail", ""))
+    logger.warning(
+        "rate_limit_exceeded", path=request.url.path, method=request.method, detail=detail
+    )
+    response = JSONResponse(error_body(f"Rate limit exceeded: {detail}"), status_code=429)
+    limiter = getattr(request.app.state, "limiter", None)
+    view_limit = getattr(request.state, "view_rate_limit", None)
+    if limiter is not None and view_limit is not None:
+        response = limiter._inject_headers(response, view_limit)
+    return response
 
 
 def install(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, redacting_validation_handler)
+    app.add_exception_handler(StarletteHTTPException, http_error)
+    app.add_exception_handler(RateLimitExceeded, rate_limited)

@@ -305,6 +305,59 @@ def test_one_investigations_fault_is_planted_or_real_not_both(client: TestClient
     assert "cannot also be real" in relabelled.json()["detail"]
 
 
+@pytest.mark.asyncio
+async def test_two_verifications_at_once_cannot_record_one_fault_both_ways(
+    client: TestClient, role_database_url, db_engine: AsyncEngine
+) -> None:
+    """F44-041. The route checks the investigation's earlier source, then
+    stores: two verifications posted at once both passed the check, and one
+    investigation was counted planted and real. The database holds it now.
+    The first insert, uncommitted, is the first request part-way; the
+    second, labelled the other way, waits on it and is then refused."""
+    import asyncio
+
+    from app.verifications import service
+    from culprit_model.verifications import Verification
+
+    investigation = store(client, "auth-audience")
+    writer = create_async_engine(
+        role_database_url("verification-writer", "VERIFICATION_WRITER_DB_PASSWORD")
+    )
+    factory = async_sessionmaker(writer, expire_on_commit=False)
+    outcome: object = None
+    try:
+        async with factory() as first, factory() as second:
+            await first.execute(
+                text(
+                    "INSERT INTO verifications (id, investigation_id, environment, verdict, "
+                    "failing_now_passes, no_regressions, changes_explained, verified_at, "
+                    "source, submitted_by, verification, ingested_at) VALUES "
+                    "('ver-00000000000000a1', :inv, 'e', 'not_resolved', false, true, true, "
+                    "now(), 'planted', 'project-token', '{}', now())"
+                ),
+                {"inv": investigation["id"]},
+            )
+            relabelled = Verification.model_validate(verification_of(investigation, number=2))
+            pending = asyncio.ensure_future(
+                service.store(second, relabelled, "real", "project-token")
+            )
+            await asyncio.sleep(1.0)
+            await first.commit()
+            try:
+                await pending
+            except Exception as exc:
+                outcome = exc
+    finally:
+        await writer.dispose()
+    assert type(outcome).__name__ == "ConflictingSource", repr(outcome)
+    async with db_engine.connect() as conn:
+        sources = await conn.execute(
+            text("SELECT DISTINCT source FROM verifications WHERE investigation_id = :inv"),
+            {"inv": investigation["id"]},
+        )
+        assert set(sources.scalars()) == {"planted"}
+
+
 def test_a_verification_whose_was_disagrees_with_the_stored_reading_is_refused(
     client: TestClient,
 ) -> None:

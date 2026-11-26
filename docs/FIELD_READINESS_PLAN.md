@@ -1484,11 +1484,24 @@ F44-092  The quickstart prints the admin password, and pulls an unpinned
          curlimages/curl:latest
   Area: security · Severity: S4 · Evidence: VERIFIED (static) · Where: justfile (quickstart) ·
   Shown by: 4.7-4.9 notes ("also noted").
+
+F44-093  Every image build depends on sum.golang.org being up
+  Added by batch 3's step 0 (2026-11-24); batch 4's to rule (Q49's ruling,
+  2026-11-26). Nothing changed for it in batch 3.
+  Area: readiness · Severity: S4 · Evidence: VERIFIED · Where: frontend/Dockerfile
+  (xcaddy build) ·
+  Shown by: main's push run 45425513632 on 760cdfd, e2e (none)'s quickstart:
+  "verifying module: github.com/caddyserver/caddy/v2@v2.11.7: ... reading
+  https://sum.golang.org/tile/8/0/x281/715: stream error: stream ID 3;
+  INTERNAL_ERROR; received from peer". No input moved; attempt 2 green. An
+  outage of the Go checksum database fails the quickstart, e2e and the image
+  build. Proposed (for the review): vendor or cache Caddy's module graph, or
+  a sum-database policy; not a retry.
 ```
 
-Every number from F44-001 to F44-092 is used once; numbers follow the
+Every number from F44-001 to F44-093 is used once; numbers follow the
 order the findings were drafted, so a few S3 and S4 entries sit out of
-numeric order in their block.
+numeric order in their block. F44-093 was added in batch 3.
 
 ### Coverage record
 
@@ -1879,6 +1892,162 @@ its first commit is this review.
 - change the fault library's expectations: if an outcome in `results.json`
   changes, stop and raise it;
 - publish, release or deploy anything, or touch the ruleset.
+
+### Review of batch 2 — facts that hold, merged as `760cdfd` (PR #73), 2026-11-24
+
+**Signed off, subject to batch 3's step 0** attributing `main`'s red `e2e
+(none)` (below), and with Q47's correction first in batch 3. The fault
+library's expectations and results did not move, and every new rule is a gate
+a mutation turns red.
+
+**CI.** Read by id from GitHub's API:
+- 45232041694 on `5ed4057` (the merge result) and 45234466757 on the report,
+  `0f55a43`: success on every job; `publish` and `deploy` skipped, as on every
+  pull request.
+- 45229026168 on `6d9c8c8` was red on `kind-capture` only: it still asserted
+  that a readable cluster gives no skip, the claim F44-013 withdrew. Fixed in
+  `5ed4057` to expect the template's one skip and its reason. Attributed; not
+  a flake.
+- `main`'s push run 45425513632 on `760cdfd`: **failure.** `e2e (none)` failed
+  at "Quickstart, under a pseudo-terminal", two and a half minutes into
+  building the images, so `narration-parity` was skipped and `gate` failed,
+  while the same tree (`0f55a43`, `eb39f47`) passed that job on 45234466757
+  the day before. Every `build` job passed, and all five `publish` jobs pushed
+  and attested anyway: F44-008 again. Not attributed here: job logs need a
+  token. Batch 3's step 0 reads the log, reruns, and fixes it first if it is
+  ambient.
+- **Every commit is Verified,** `bc4e833` to `0f55a43` and the merge
+  `760cdfd`. `bc4e833`'s tree is exactly the review patch's.
+  `cli/testdata/faultlib/` and `demo-services/faults/` are unchanged from
+  `f694cb6`.
+
+**Verified here,** on `760cdfd` (Go 1.27.0):
+- `go test` in `model`, `capture`, `verify`, `severity` and `diverge`: ok. The
+  shared shape, capture-diff, request-path, verification and render tests in
+  Python: 215 passed.
+- **Four mutations of its own, each red and restored:** severity following an
+  edge of unknown criticality as on the request path (the request-path fixture
+  red); the identity rule keyed on the names `PWD` and `HOSTNAME` (the
+  identity test red, as the rule must be an OS fact); `dns_resolves` declared
+  configuration (three tests red, among them "an observation that changed is
+  not a change underneath"); Python's `booleanish` taking `1` and `0` again
+  (the `formats` fixture red).
+
+**The run's decisions, accepted:**
+- The brief's `verify` test for F44-012 was not red before the change, as the
+  run said: paths are one class at any length, and F44-011 had already fixed
+  `SHLVL`. The capture test holds the rule; the `verify` test holds the
+  comparison. Accepted.
+- An unflagged, older verification is judged as before, so stored records
+  still validate; UPGRADING upgrades the control plane first. Accepted.
+- Go disagreed with Python on two capture-diff cases and moved to Python's
+  safe side (a one-sided key keeps its other questions; an unparseable subject
+  is never printed). No verdict moved. Accepted.
+- `readOnlyHint` is true for `system_model`, `check` and `explain_connection`
+  only under `--no-plugins`; `probe`, `diagnose` and `verify` are never
+  read-only. Accepted.
+
+**Rulings:**
+- **Q47, what an incomplete capture may still say.** Incompleteness is about
+  what Culprit could not see; it must never hide what it did see. When both
+  captures read a Deployment's template, a key one template lists and the
+  other does not is a difference, worded as a change to the template ("no
+  longer listed; it may now come from a source Culprit cannot read"), and it
+  counts in `verify` and `env diff`. A key from a source neither capture read
+  is never compared, and absence is still never evidence against INTENT. My
+  F44-013 ruling over-reached; this corrects it. The CLI and the stored diff
+  (`GET /captures/diff`) agree, from rows in `capture_diff_conformance.json`.
+- **Q48, `unknown` and the gate.** A finding Culprit cannot classify must not
+  pass the default gate silently, and must not be guessed as breaking either.
+  For `--fail-on`, `unknown` counts as `degrades`: the default fails on it,
+  `--fail-on=breaks_request_path` does not. The output says why. UPGRADING and
+  LIMITS correct batch 2's note.
+- **F44-014, a claim's deadline.** A claimed task not completed within its
+  deadline is failed with a reason naming the claim's time and the deadline;
+  it is never re-queued, since a probe may have run part-way. The deadline is
+  the task kind's own timeout plus a margin, 15 minutes by default, set on the
+  server. Expiry is applied when tasks are read, with an injected clock: no
+  new background service. An agent that restarts fails its own unfinished
+  claims instead of skipping them.
+- **F44-042, sessions after a password reset.** LIMITS states the windows now;
+  a token version is deferred past the field trial, whose control plane is a
+  local quickstart with one user.
+- **F44-043, request size.** Measure the largest body a legitimate client
+  sends in the e2e and fault-library runs, and cap `/api/*` in Caddy and in
+  the signed-route dependency with a margin of four times that. LIMITS names
+  the number; a 413 names the limit.
+- **F44-008** needs no ruleset change: `gate` stays the one required check,
+  and the new publish job needs `gate` on pushes and tags only.
+
+### Batch 3 — reliable under strain (brief, 2026-11-24)
+
+**Findings:** Q47 and Q48 first, then F44-008, -009, -014, -015, -039, -040,
+-041, -042, -043, -044, -047 and -050. Branch `phase-44-b3`, from
+`origin/main`; its first commit is this review.
+
+**Decided:**
+1. **Step 0: attribute `main`'s red push run first.** Run 45425513632 on
+   `760cdfd` failed `e2e (none)` at "Quickstart, under a pseudo-terminal", two
+   and a half minutes into building the images, while the same tree passed
+   that job on 45234466757 the day before. Read the failed log (`gh run view
+   45425513632 --log-failed`), attribute the cause, then rerun the failed jobs
+   (`gh run rerun 45425513632 --failed`) and record both by id.
+   - **If an input outside the repository moved** (a base image, an unpinned
+     package, a registry), it is ambient: fix it first in this batch, in its
+     own commit, and never by weakening the job. **If it was the runner,** it
+     becomes a finding with its cause (D6). **If the cause is in the code,**
+     stop and raise it.
+2. **Q47,** as ruled: rows in `capture_diff_conformance.json` first (a key in
+   one template and not the other is a difference; a key from an unread
+   `envFrom` source is not compared), read by `verify.Differences`, `env diff`
+   and the stored diff. Test: two Kubernetes captures whose templates differ
+   by a key are not `verified` past it. Update `kind-capture` only if its
+   expectation changes, and say why.
+3. **Q48,** as ruled, with the CLI's `--fail-on` tests shown red first.
+4. **Publish waits for `gate` (F44-008).** Images are built and scanned as
+   now, passed as artifacts, and pushed, attested and verified in a job that
+   needs `gate`, on pushes to `main` and tags only. `gate` never needs it.
+   `test_ci_workflow.py` asserts "publish needs gate" first. Proof: `main`'s
+   push run after the merge.
+5. **The quickstart over an older env file (F44-009).** Backfill every key
+   `bootstrap_env.py` generates that the file lacks; never overwrite or
+   regenerate a key that is there. A script test over an env file without
+   `NARRATOR_DB_PASSWORD` fails first.
+6. **A claim's deadline (F44-014),** as ruled, tested in `api/tests` with a
+   claim and an injected clock.
+7. **The API under strain.**
+   - **F44-015:** trust `X-Forwarded-For` from the one Caddy hop the compose
+     files declare, never from any address; the per-address limit shown per
+     address.
+   - **F44-041:** "planted or real, never both" becomes a constraint in a new
+     migration, round-trip tested. If existing rows would violate it, the
+     migration stops and says how many and what to do; it never alters or
+     deletes a row.
+   - **F44-043:** the measured cap, as ruled.
+   - **F44-044:** one error shape, the one most routers already use, defined
+     once; every router's errors pass through it; `frontend/src/lib/api.ts`
+     reads that shape only; a test fails first on a route that answers in
+     another.
+   - **F44-047:** a unique violation on a create is a 409, tested with two
+     concurrent sessions.
+   - **F44-050:** CORS origins are trimmed.
+8. **The worker under strain.**
+   - **F44-039:** an entry Postgres refuses is quarantined with its reason, as
+     LIMITS already says of poison messages, and the drain carries on.
+   - **F44-040:** the drain lock is released only by its holder,
+     compare-and-delete with a token, and renewed while held.
+9. **F44-042:** the LIMITS entry, as ruled.
+
+**Do NOT:**
+- delete, alter or re-label a stored row, or drop anything; new migrations
+  only, each round-trip tested;
+- re-queue a task automatically, or add a background service;
+- change the ruleset or `gate`'s needs; a tag cannot be cut to prove the tag
+  path;
+- change the fault library's expectations: if an outcome changes, stop and
+  raise it;
+- publish, release or deploy anything beyond what `main`'s push run already
+  does.
 
 ---
 

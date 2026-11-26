@@ -23,10 +23,9 @@ from fastapi import Depends, FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from opentelemetry import trace  # noqa: E402
 from opentelemetry.trace import Status, StatusCode  # noqa: E402
-from slowapi.errors import RateLimitExceeded  # noqa: E402
 from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
-from starlette.responses import JSONResponse, Response  # noqa: E402
+from starlette.responses import Response  # noqa: E402
 
 from app.agents.config import (  # noqa: E402
     AGENT_ADMIN_DATABASE_URL,
@@ -38,6 +37,7 @@ from app.auth.config import AUTH_SERVICE_DATABASE_URL  # noqa: E402
 from app.auth.dependencies import require_admin, require_auth  # noqa: E402
 from app.auth.router import router as auth_router  # noqa: E402
 from app.auth.users_router import router as users_router  # noqa: E402
+from app.body_limits import BodyLimitMiddleware  # noqa: E402
 from app.divergences.config import DIVERGENCE_WRITER_DATABASE_URL  # noqa: E402
 from app.divergences.router import router as divergences_router  # noqa: E402
 from app.errors import install as install_error_handlers  # noqa: E402
@@ -68,10 +68,18 @@ configure_observability("culprit-api")
 tracer = trace.get_tracer("culprit.api")
 access_logger = structlog.get_logger("api.access")
 
+
+def cors_origins(raw: str) -> list[str]:
+    """Origins from a comma-separated list, each trimmed, empties dropped
+    (F44-050): "https://a.example, https://b.example" names two origins,
+    not one and " https://b.example", which no browser sends."""
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 #: Comma-separated list of origins allowed to call this API — the Vite
 #: dev server's default port locally, overridable for any other frontend
 #: origin (a deployed dashboard, a different local port).
-CORS_ALLOW_ORIGINS = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:5173").split(",")
+CORS_ALLOW_ORIGINS = cors_origins(os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:5173"))
 
 
 @asynccontextmanager
@@ -213,28 +221,16 @@ app = FastAPI(title="Culprit API", lifespan=lifespan)
 app.state.limiter = limiter
 
 
-async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> Response:
-    """Replaces slowapi's default handler only to add the explicit
-    structured log (Phase 10: no silent 429s) — the response it builds
-    is otherwise identical to slowapi's own _rate_limit_exceeded_handler."""
-    access_logger.warning(
-        "rate_limit_exceeded",
-        path=request.url.path,
-        method=request.method,
-        detail=str(exc.detail),
-    )
-    response = JSONResponse({"error": f"Rate limit exceeded: {exc.detail}"}, status_code=429)
-    return request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
-
-
-app.add_exception_handler(
-    RateLimitExceeded,
-    _rate_limit_exceeded_handler,  # pyright: ignore[reportArgumentType]
-)
-# A 422 must not echo the request body: a rejected capture bundle
-# would otherwise write the credential it was refused for into this
-# API's access log and the caller's CI log. See app/errors.py.
+# Every error in one shape, {"detail": ...}, the 429 included (F44-044),
+# logged where it is answered (Phase 10: no silent 429s); and a 422 must
+# not echo the request body: a rejected capture bundle would otherwise
+# write the credential it was refused for into this API's access log and
+# the caller's CI log. See app/errors.py.
 install_error_handlers(app)
+# Every request body held to its route's cap, bulk or small (F44-043, as
+# Q49 ruled): see app/body_limits.py. Added first, so it is the innermost
+# middleware and its 413 is still logged and traced by the outer ones.
+app.add_middleware(BodyLimitMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -271,12 +267,17 @@ async def observability_middleware(
         span.set_attribute("http.status_code", response.status_code)
         if response.status_code >= 400:
             span.set_status(Status(StatusCode.ERROR))
+        # request_bytes: the body's declared size (Content-Length; 0 when
+        # none), which scripts/request_sizes.py reads in CI to measure the
+        # largest body a legitimate client sends (F44-043).
+        declared = request.headers.get("content-length", "")
         access_logger.info(
             "http_request",
             method=request.method,
             path=request.url.path,
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2),
+            request_bytes=int(declared) if declared.isdigit() else 0,
         )
         return response
 

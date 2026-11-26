@@ -19,6 +19,7 @@ the caller: a forger learns nothing from the answer.
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import Depends, Header, HTTPException, Request
@@ -28,6 +29,7 @@ from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app import body_limits
 from app.agents import signing, tables
 from app.facts import dependencies as facts_dependencies
 
@@ -54,6 +56,12 @@ class Submitter:
     @property
     def label(self) -> str:
         return f"agent:{self.agent.id}" if self.agent else "project-token"
+
+
+def get_clock() -> Callable[[], datetime]:
+    """The clock a task's deadline is judged by (F44-014): the wall clock,
+    replaced by a test's."""
+    return lambda: datetime.now(UTC)
 
 
 def _session(state_name: str):
@@ -100,7 +108,9 @@ async def authenticate_agent(request: Request, session: AsyncSession) -> AgentPr
     signed = signing.SignedRequest(
         method=request.method,
         path=_signed_path(request),
-        body=await request.body(),
+        # Read under its route's cap (F44-043): a body over it is a 413
+        # before the signature over it is checked.
+        body=await body_limits.capped_body(request),
         timestamp=stamped,
         nonce=nonce,
         agent_id=agent_id,

@@ -25,6 +25,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/josh-heath123/culprit/cli/internal/check"
+	"github.com/josh-heath123/culprit/cli/internal/diverge"
 	"github.com/josh-heath123/culprit/cli/internal/extract"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 	"github.com/josh-heath123/culprit/cli/internal/render"
@@ -102,10 +104,45 @@ func errorLine(err error) string {
 type findingsError struct {
 	count     int
 	threshold model.Severity
+	// unknown is how many of count Culprit could not classify, counted as
+	// degrades (Q48); the message says why.
+	unknown int
 }
 
 func (e *findingsError) Error() string {
-	return fmt.Sprintf("%d divergence(s) at or above %s", e.count, e.threshold)
+	message := fmt.Sprintf("%d divergence(s) at or above %s", e.count, e.threshold)
+	if e.unknown > 0 {
+		message += fmt.Sprintf("; %d of them unknown, counted as degrades: Culprit could not classify "+
+			"them, so they fail the gate rather than pass it unseen. Set criticality on the connections "+
+			"they name, or use --fail-on=breaks_request_path", e.unknown)
+	}
+	return message
+}
+
+// newFindingsError is nil when nothing reaches the threshold.
+func newFindingsError(result diverge.Result, threshold model.Severity) *findingsError {
+	count := check.CountFailing(result, threshold)
+	if count == 0 {
+		return nil
+	}
+	unknown := check.CountFailing(onlyUnknown(result), threshold)
+	return &findingsError{count: count, threshold: threshold, unknown: unknown}
+}
+
+// onlyUnknown keeps a result's findings of severity unknown.
+func onlyUnknown(result diverge.Result) diverge.Result {
+	kept := diverge.Result{}
+	for _, finding := range result.Divergences {
+		if finding.Severity == model.SeverityUnknown {
+			kept.Divergences = append(kept.Divergences, finding)
+		}
+	}
+	for _, finding := range result.Bundles {
+		if finding.Severity == model.SeverityUnknown {
+			kept.Bundles = append(kept.Bundles, finding)
+		}
+	}
+	return kept
 }
 
 func newRootCommand() *cobra.Command {

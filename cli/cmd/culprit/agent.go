@@ -111,7 +111,9 @@ the audit log go to the control plane, and only to it.`,
 				if err != nil {
 					return err
 				}
-				source = &transport.Source{Client: client, Audit: audit}
+				source = &transport.Source{Client: client, Audit: audit, Logf: func(format string, args ...any) {
+					fmt.Fprintf(command.ErrOrStderr(), format+"\n", args...)
+				}}
 			default:
 				return fmt.Errorf("no task source: give --tasks, or name control_plane.url in %s", configPath)
 			}

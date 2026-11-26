@@ -20,7 +20,7 @@ import secrets
 import time
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -363,6 +363,88 @@ def test_a_result_is_recorded_once_and_only_by_its_agent(client: TestClient) -> 
     assert stored["outcome"] == "refused" and stored["allowance"] == []
 
 
+# ---- a claim's deadline (F44-014) ----------------------------------------------------------
+#
+# A claimed task not completed within its deadline is failed, with a reason
+# naming when it was claimed and the deadline, and never re-queued: a probe
+# may have run part-way. Applied when the task is read, with the clock
+# injected; no background service. An agent that asks for its next task has
+# stopped working on any it claimed before (it runs one at a time), so its
+# claim fails them too.
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+@pytest.fixture
+def clock(client: TestClient) -> Clock:
+    from app.agents import dependencies as agents_dependencies
+
+    fake = Clock()
+    app = client.app
+    assert isinstance(app, FastAPI)
+    app.dependency_overrides[agents_dependencies.get_clock] = lambda: fake
+    return fake
+
+
+def test_a_claim_past_its_deadline_is_failed_naming_both_times(
+    client: TestClient, clock: Clock
+) -> None:
+    agent = paired(client)
+    task = _task(client, agent)
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["id"] == task
+
+    clock.now += timedelta(minutes=14)
+    open_task = client.get(f"/agents/{agent.id}/tasks/{task}").json()
+    assert open_task["outcome"] is None and open_task["completed_at"] is None
+
+    clock.now += timedelta(minutes=2)
+    failed = client.get(f"/agents/{agent.id}/tasks/{task}").json()
+    assert failed["outcome"] == "error"
+    assert "2026-11-24T12:00:00" in failed["reason"], failed["reason"]  # claimed
+    assert "2026-11-24T12:15:00" in failed["reason"], failed["reason"]  # the deadline
+    assert "never re-queued" in failed["reason"]
+    assert failed["completed_at"] is not None
+    # Never re-queued: nothing to claim.
+    assert agent.send("POST", "/agents/me/tasks/claim").status_code == 204
+
+
+def test_a_result_after_the_deadline_is_kept_and_the_task_stays_failed(
+    client: TestClient, clock: Clock
+) -> None:
+    agent = paired(client)
+    task = _task(client, agent)
+    agent.send("POST", "/agents/me/tasks/claim")
+    clock.now += timedelta(minutes=20)
+    late = {"outcome": "completed", "readings": 1}
+    assert agent.send("POST", f"/agents/me/tasks/{task}/result", late).status_code == 204
+    stored = client.get(f"/agents/{agent.id}/tasks/{task}").json()
+    assert stored["outcome"] == "error"
+    assert "after it" in stored["reason"] and "completed" in stored["reason"], stored["reason"]
+    assert stored["result"]["outcome"] == "completed"
+    assert agent.send("POST", f"/agents/me/tasks/{task}/result", late).status_code == 404
+
+
+def test_claiming_again_fails_the_agents_unfinished_claim(client: TestClient, clock: Clock) -> None:
+    agent = paired(client)
+    first, second = _task(client, agent), _task(client, agent)
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["id"] == first
+    clock.now += timedelta(minutes=1)
+    # The agent restarted mid-task, and asks for its next one.
+    assert agent.send("POST", "/agents/me/tasks/claim").json()["id"] == second
+    failed = client.get(f"/agents/{agent.id}/tasks/{first}").json()
+    assert failed["outcome"] == "error"
+    assert "2026-11-24T12:00:00" in failed["reason"] and "never re-queued" in failed["reason"]
+    result = {"outcome": "completed", "readings": 1}
+    assert agent.send("POST", f"/agents/me/tasks/{first}/result", result).status_code == 404
+    assert agent.send("POST", f"/agents/me/tasks/{second}/result", result).status_code == 204
+
+
 # ---- the signature -----------------------------------------------------------------------
 
 
@@ -491,7 +573,11 @@ def test_an_entry_that_does_not_extend_the_stored_chain_is_refused(client: TestC
     assert agent.send("POST", "/agents/me/audit", {"entries": [first]}).status_code == 200
     refused = agent.send("POST", "/agents/me/audit", {"entries": [third]})
     assert refused.status_code == 409
-    assert refused.json()["detail"]["seq"] == 1
+    # F44-044: the one error shape, {"detail": a sentence}; the control
+    # plane's head is named in it.
+    assert set(refused.json()) == {"detail"}
+    assert isinstance(refused.json()["detail"], str)
+    assert "seq 1" in refused.json()["detail"], refused.json()
     # Sent again, the same entry is no longer an extension either.
     assert agent.send("POST", "/agents/me/audit", {"entries": [first]}).status_code == 409
 
@@ -1095,3 +1181,45 @@ def test_a_task_naming_the_env_alternative_is_accepted(client: TestClient) -> No
         },
     )
     assert response.status_code == 201, response.text
+
+
+# ---- the request-size cap (F44-043, as Q49 ruled) ---------------------------------------
+
+
+@pytest.mark.parametrize("framing", ["content-length", "chunked"])
+def test_a_signed_route_reads_no_more_than_its_cap_before_checking_the_signature(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, framing: str
+) -> None:
+    """A signed route read the whole body before it authenticated, however
+    large. Now the dependency reads the route-class table: one byte over
+    the route's cap is a 413 naming the limit (and, on a bulk route, the
+    setting) before the signature is checked, declared or chunked; a body
+    at the cap is read, and answered for what it is."""
+    from app import body_limits
+
+    monkeypatch.setattr(body_limits, "BULK_BODY_BYTES", 70_000)
+    agent = paired(client)
+    for route in _signed_routes():
+        method, template = route.split(" ", 1)
+        path = template.replace("{task_id}", "task-unknown").replace(
+            "{investigation_id}", "inv-0000000000000000"
+        )
+        # A signed GET (the audit head) is in no class, so small.
+        bulk = body_limits.ROUTE_CLASSES.get(route) == "bulk"
+        limit = 70_000 if bulk else 64 * 1024
+        for size in (limit, limit + 1):
+            body = b"x" * size
+            headers = agent.headers(method, path, body)
+            content = body if framing == "content-length" else iter([body[:1000], body[1000:]])
+            response = client.request(method, path, content=content, headers=headers)
+            if size == limit:
+                assert response.status_code != 413, (route, response.text[:200])
+                continue
+            assert response.status_code == 413, (route, response.status_code, response.text)
+            expected = f"the request body is over this route's limit of {limit} bytes"
+            expected += (
+                " (bulk); CULPRIT_MAX_BULK_BODY_BYTES on the control plane raises it"
+                if bulk
+                else " (small)"
+            )
+            assert response.json() == {"detail": expected}, route

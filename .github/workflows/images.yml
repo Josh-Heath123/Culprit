@@ -3,11 +3,16 @@
 
 name: Images
 
-# Build every image and Trivy-scan it (CRITICAL/HIGH, blocking).
+# Build every image and Trivy-scan it (CRITICAL/HIGH, blocking); publish
+# the scanned images in a second call, once every check has passed.
 #
 # Three ways in:
-#   - called by ci-cd.yml on every pull request and push, which passes
-#     `publish: true` only for a push to main or a vX.Y.Z tag;
+#   - called twice by ci-cd.yml. Its `build` job calls the build stage on
+#     every pull request and push, passing `publish: true`, which keeps the
+#     scanned images as artifacts, only for a push to main or a vX.Y.Z tag.
+#     Its `publish` job calls the publish stage (`stage: publish`) after
+#     `gate` has passed, on those runs only (F44-008); that stage runs the
+#     publish job alone, from those artifacts;
 #   - weekly, on main, so an advisory published against a pinned dependency
 #     is found on main and fixed in its own small pull request, instead of
 #     turning a waiting phase's CI red (docs/HANDOFF.md, the standing task
@@ -15,16 +20,20 @@ name: Images
 #   - by hand (Actions -> Images -> Run workflow).
 #
 # A scheduled or hand-started run publishes nothing and deploys nothing:
-# `publish` is false unless a caller sets it, only the `publish` job can
-# push and it runs only when `publish` is set, the build-and-scan job holds
-# a read-only token, and this workflow has no deploy job at all.
+# only the `publish` job can push, it runs only at the publish stage, which
+# only a caller can ask for, the build-and-scan job holds a read-only
+# token, and this workflow has no deploy job at all.
 on:
   workflow_call:
     inputs:
       publish:
-        description: Push the scanned images to ghcr.io (main and version tags only).
+        description: Keep the scanned images for a later publish stage (main and version tags only).
         type: boolean
         default: false
+      stage:
+        description: "build (build and scan) or publish (push, attest and verify what build kept)."
+        type: string
+        default: build
   schedule:
     - cron: "17 4 * * 1" # Mondays, 04:17 UTC
   workflow_dispatch:
@@ -37,6 +46,7 @@ jobs:
   # runs, and every pull request, execute third-party actions (setup-uv,
   # build-push-action, trivy-action) with nothing that can write a package.
   build:
+    if: inputs.stage != 'publish'
     runs-on: ubuntu-latest
     # Twice the slowest of the last ten green CI/CD runs before Phase 41
     # (44321940704 to 44390448565): frontend, 5.3 minutes in 44321940704,
@@ -195,8 +205,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Only on a push to main or a vX.Y.Z tag (and a hand-started deploy of
-  # main) — the caller sets `publish`. The one job holding packages: write,
+  # Only at the publish stage, which ci-cd.yml's `publish` job calls after
+  # `gate`, on a push to main or a vX.Y.Z tag (and a hand-started deploy of
+  # main). It needs no job here: `build` ran in the build stage's call of
+  # this workflow, in the same run, and left the images as artifacts. The
+  # one job holding packages: write,
   # and it runs no build or scan action. GITHUB_TOKEN (built-in, scoped to
   # this repo) is all ghcr.io needs; no separate registry credential.
   #
@@ -208,8 +221,7 @@ jobs:
   # two attestation permissions are this job's alone
   # (scripts/tests/test_ci_workflow.py holds every job's).
   publish:
-    needs: build
-    if: inputs.publish
+    if: inputs.stage == 'publish'
     runs-on: ubuntu-latest
     # The floor: its slowest of the last ten green runs took 0.5 minutes.
     timeout-minutes: 10

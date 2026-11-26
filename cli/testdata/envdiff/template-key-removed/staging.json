@@ -1,0 +1,226 @@
+{
+  "protocol": 1,
+  "plane": "CONFIGURED",
+  "environment": "staging",
+  "extractor": "culprit@dev",
+  "capture_id": "staging-fixture",
+  "started_at": "2026-01-01T00:00:00Z",
+  "facts": [
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/DATABASE_URL",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "dsn",
+        "present": true,
+        "scheme": "postgresql"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PORT",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PORT",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "port",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PATH",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/PATH",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "medium",
+        "format": "path",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/FEATURE_BETA_CHECKOUT",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/FEATURE_BETA_CHECKOUT",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:deployment/orders-api"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "string",
+        "length_class": "short",
+        "format": "booleanish",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/STRIPE_KEY",
+      "predicate": "exists",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:secret/orders-secrets"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value": true,
+      "grant_ref": "config.read.names"
+    },
+    {
+      "plane": "CONFIGURED",
+      "subject": "config:orders-api/STRIPE_KEY",
+      "predicate": "value_shape",
+      "environment": "staging",
+      "provenance": {
+        "source_kind": "introspection",
+        "extractor": "culprit@dev",
+        "confidence_rank": 90,
+        "artefact": "kubernetes:secret/orders-secrets"
+      },
+      "captured_at": "2026-01-01T00:00:00Z",
+      "capture_id": "staging-fixture",
+      "value_shape": {
+        "type": "unknown",
+        "length_class": "not_applicable",
+        "format": "not_applicable",
+        "present": true,
+        "scheme": "not_applicable"
+      },
+      "grant_ref": "config.read.names"
+    }
+  ],
+  "skipped": [
+    {
+      "want": "config_keys",
+      "component": "orders-api",
+      "extractor": "culprit@dev",
+      "reason": "orders-api's environment could not be enumerated completely (the image's own ENV and anything a mutating admission webhook adds are not in the Deployment's template), so no key is judged missing from it"
+    }
+  ],
+  "meta": {
+    "adapter": "kubernetes"
+  },
+  "grants": [
+    {
+      "capability": "config.read.names",
+      "used": true
+    },
+    {
+      "capability": "db.metadata.read",
+      "used": true
+    },
+    {
+      "capability": "deploy.metadata.read",
+      "used": true
+    }
+  ],
+  "refused": []
+}

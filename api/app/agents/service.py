@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents import tables
+from app.agents import config, tables
 from app.agents.schemas import RegisterAgent, TaskCreate, TaskResult
 
 #: A pairing code is good for this long, and once (the plan's default).
@@ -244,7 +244,47 @@ async def create_task(
     return task_id
 
 
-async def load_task(session: AsyncSession, agent_id: str, task_id: str) -> dict[str, Any]:
+# ---- a claim's deadline (F44-014) ------------------------------------------------------
+#
+# A claimed task not completed within config.TASK_DEADLINE is failed, with a
+# reason naming when it was claimed and the deadline. It is never re-queued:
+# a probe may have run part-way, and running it again is the operator's
+# decision. Applied where a task is read and where its agent next speaks,
+# with the clock passed in; nothing runs in the background.
+
+_NOT_REQUEUED = "failed, and never re-queued, since a probe may have run part-way"
+
+
+def deadline_of(claimed_at: datetime) -> datetime:
+    return claimed_at + config.TASK_DEADLINE
+
+
+def _past_deadline(claimed_at: datetime) -> str:
+    return (
+        f"claimed at {claimed_at.isoformat()} and not completed by its deadline, "
+        f"{deadline_of(claimed_at).isoformat()}: {_NOT_REQUEUED}"
+    )
+
+
+def expire(task: dict[str, Any], now: datetime) -> dict[str, Any]:
+    """The task as it stands at `now`: an open claim past its deadline is
+    failed. Pure. What a reader is shown and what the store comes to say
+    agree, because complete() and claim() write the same failure."""
+    claimed_at = task.get("claimed_at")
+    if claimed_at is None or task.get("completed_at") is not None:
+        return task
+    if now < deadline_of(claimed_at):
+        return task
+    return task | {
+        "completed_at": deadline_of(claimed_at),
+        "outcome": "error",
+        "reason": _past_deadline(claimed_at),
+    }
+
+
+async def load_task(
+    session: AsyncSession, agent_id: str, task_id: str, now: datetime | None = None
+) -> dict[str, Any]:
     row = (
         await session.execute(
             select(tables.agent_tasks).where(
@@ -254,23 +294,58 @@ async def load_task(session: AsyncSession, agent_id: str, task_id: str) -> dict[
     ).first()
     if row is None:
         raise NotFound
-    return dict(row._mapping)
+    return expire(dict(row._mapping), now or _now())
 
 
 # ---- what an agent does -------------------------------------------------------------
 
 
-async def claim(session: AsyncSession, agent_id: str) -> dict[str, Any] | None:
+async def claim(
+    session: AsyncSession, agent_id: str, now: datetime | None = None
+) -> dict[str, Any] | None:
     """The agent's oldest unclaimed task, claimed atomically — two claims
     never get one task, and an agent can claim only its own. The allowance
     is stamped as it stands now, so a grant removed from it takes effect on
-    the next task claimed."""
+    the next task claimed.
+
+    An agent runs one task at a time, so one that asks for its next task
+    has stopped working on any it claimed before: it restarted, or stopped
+    mid-task. Those are failed first (F44-014), never handed out again."""
+    now = now or _now()
+    abandoned = (
+        await session.execute(
+            select(tables.agent_tasks.c.id, tables.agent_tasks.c.claimed_at)
+            .where(
+                and_(
+                    tables.agent_tasks.c.agent_id == agent_id,
+                    tables.agent_tasks.c.claimed_at.is_not(None),
+                    tables.agent_tasks.c.completed_at.is_(None),
+                )
+            )
+            .with_for_update()
+        )
+    ).all()
+    for task_id, claimed_at in abandoned:
+        if now >= deadline_of(claimed_at):
+            completed_at, reason = deadline_of(claimed_at), _past_deadline(claimed_at)
+        else:
+            completed_at = now
+            reason = (
+                f"claimed at {claimed_at.isoformat()} and not completed; the agent asked for "
+                f"its next task at {now.isoformat()}, so it had stopped working on this one "
+                f"(it restarted, or stopped mid-task): {_NOT_REQUEUED}"
+            )
+        await session.execute(
+            update(tables.agent_tasks)
+            .where(tables.agent_tasks.c.id == task_id)
+            .values(completed_at=completed_at, outcome="error", reason=reason)
+        )
     row = (
         await session.execute(
             text(
                 """
                 UPDATE agent_tasks t SET
-                    claimed_at = now(),
+                    claimed_at = :now,
                     allowance = coalesce(
                         (SELECT a.grants FROM agent_allowances a
                          WHERE a.agent_id = t.agent_id AND a.environment = t.environment),
@@ -284,7 +359,7 @@ async def claim(session: AsyncSession, agent_id: str) -> dict[str, Any] | None:
                 RETURNING t.id, t.environment, t.kind, t.spec, t.allowance
                 """
             ),
-            {"agent_id": agent_id},
+            {"agent_id": agent_id, "now": now},
         )
     ).first()
     await session.commit()
@@ -300,31 +375,50 @@ async def claim(session: AsyncSession, agent_id: str) -> dict[str, Any] | None:
     return task
 
 
-async def complete(session: AsyncSession, agent_id: str, task_id: str, result: TaskResult) -> None:
-    done = (
+async def complete(
+    session: AsyncSession,
+    agent_id: str,
+    task_id: str,
+    result: TaskResult,
+    now: datetime | None = None,
+) -> None:
+    """Record an open claim's result. One that arrives after the claim's
+    deadline is kept and the task stays failed (F44-014): what a reader was
+    shown at the deadline is not taken back, and the agent, which did its
+    work, is not told to stop."""
+    now = now or _now()
+    open_claim = and_(
+        tables.agent_tasks.c.id == task_id,
+        tables.agent_tasks.c.agent_id == agent_id,
+        tables.agent_tasks.c.claimed_at.is_not(None),
+        tables.agent_tasks.c.completed_at.is_(None),
+    )
+    claimed_at = (
         await session.execute(
-            update(tables.agent_tasks)
-            .where(
-                and_(
-                    tables.agent_tasks.c.id == task_id,
-                    tables.agent_tasks.c.agent_id == agent_id,
-                    tables.agent_tasks.c.claimed_at.is_not(None),
-                    tables.agent_tasks.c.completed_at.is_(None),
-                )
-            )
-            .values(
-                completed_at=func.now(),
-                outcome=result.outcome,
-                reason=result.reason,
-                result=result.model_dump(mode="json"),
-                investigation_id=result.investigation_id,
-            )
-            .returning(tables.agent_tasks.c.id)
+            select(tables.agent_tasks.c.claimed_at).where(open_claim).with_for_update()
         )
-    ).first()
-    if done is None:
+    ).scalar_one_or_none()
+    if claimed_at is None:
         await session.rollback()
         raise NotFound
+    values: dict[str, Any] = {
+        "completed_at": now,
+        "outcome": result.outcome,
+        "reason": result.reason,
+        "result": result.model_dump(mode="json"),
+        "investigation_id": result.investigation_id,
+    }
+    if now >= deadline_of(claimed_at):
+        said = result.outcome + (f": {result.reason}" if result.reason else "")
+        values |= {
+            "completed_at": deadline_of(claimed_at),
+            "outcome": "error",
+            "reason": (
+                f"{_past_deadline(claimed_at)}. The agent's result arrived at "
+                f"{now.isoformat()}, after it, and is kept: {said}"
+            )[:4096],
+        }
+    await session.execute(update(tables.agent_tasks).where(open_claim).values(**values))
     await session.commit()
 
 

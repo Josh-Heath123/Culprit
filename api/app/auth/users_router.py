@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.responses import Response
 
@@ -32,6 +33,9 @@ from app.auth.schemas import (
     UsersOut,
 )
 from app.auth.security import WeakPassword, hash_password, validate_password
+
+#: Postgres SQLSTATE for a unique violation.
+_UNIQUE_VIOLATION = "23505"
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -56,15 +60,29 @@ async def list_users_endpoint(session: AsyncSession = Depends(get_write_session)
 async def create_user_endpoint(
     body: CreateUserRequest, session: AsyncSession = Depends(get_write_session)
 ) -> UserOut:
+    taken = HTTPException(status_code=409, detail=f"username {body.username!r} already exists")
     if await get_user_by_username(session, body.username) is not None:
-        raise HTTPException(status_code=409, detail=f"username {body.username!r} already exists")
+        raise taken
     try:
         validate_password(body.password, body.username)
     except WeakPassword as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    user = await create_user(
-        session, username=body.username, password_hash=hash_password(body.password), role=body.role
-    )
+    try:
+        user = await create_user(
+            session,
+            username=body.username,
+            password_hash=hash_password(body.password),
+            role=body.role,
+        )
+    except IntegrityError as exc:
+        # F44-047: two requests for one name both pass the check above; the
+        # unique index refuses the second insert. A 409, as the check says.
+        await session.rollback()
+        if getattr(getattr(exc, "orig", None), "sqlstate", None) == _UNIQUE_VIOLATION or (
+            "users_username_key" in str(exc)
+        ):
+            raise taken from exc
+        raise
     return _user_out(user)
 
 

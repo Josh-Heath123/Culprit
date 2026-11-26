@@ -77,6 +77,10 @@ services:
       # The narration provider's key is the worker's alone (as in
       # docker-compose.prod.yml): the api never calls a provider.
       ANTHROPIC_API_KEY: ""
+      # F44-015: the one proxy whose X-Forwarded-For the sign-in limit
+      # believes, by service name (app/incidents/limiter.py). From any
+      # other address the header is ignored.
+      TRUSTED_PROXY_HOST: frontend
     depends_on:
       postgres:
         condition: service_healthy

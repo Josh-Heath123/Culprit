@@ -42,7 +42,8 @@ WORKFLOW = WORKFLOWS / "ci-cd.yml"
 #: Jobs `gate` does not need, and why.
 NOT_GATED = {
     "gate": "the gate itself",
-    "deploy": "runs only on a hand-started run of main, after build and e2e",
+    "deploy": "runs only on a hand-started run of main, after publish and e2e",
+    "publish": "needs gate: an image is pushed only once every check passed (F44-008)",
 }
 
 GROUP = (
@@ -277,6 +278,63 @@ def test_every_go_test_times_out_before_its_job(workflow, justfile):
         if go_tests("\n".join(str(s.get("run", "")) for s in job.get("steps", [])), justfile)
     }
     assert {"cli", "kind-capture", "fault-library", "e2e"} <= seen, seen
+
+
+# F44-008 (Phase 44 batch 3): an image is pushed, attested and verified
+# only after `gate`. ci-cd.yml's `publish` calls images.yml at its publish
+# stage, needs `gate` alone and is never forced past it; `build` calls the
+# build stage, which only builds, scans and keeps the scanned images.
+
+PUBLISH_STAGE = "publish"
+
+
+def check_publish_after_gate(workflow: dict, images: dict) -> list[str]:
+    """Why an image could be pushed before `gate` passed, or []."""
+    problems = []
+    callers = {
+        name: job
+        for name, job in workflow["jobs"].items()
+        if str(job.get("uses", "")).endswith("/images.yml")
+    }
+    publishers = sorted(
+        name for name, job in callers.items()
+        if job.get("with", {}).get("stage") == PUBLISH_STAGE
+    )
+    if publishers != ["publish"]:
+        problems.append(f"images.yml's publish stage is called by {publishers}, want ['publish']")
+    publish = workflow["jobs"].get("publish", {})
+    if needs_of(publish) != ["gate"]:
+        problems.append(f"publish needs {needs_of(publish)}, want ['gate']")
+    condition = str(publish.get("if", ""))
+    if any(word in condition for word in ("always()", "!cancelled()", "failure()")):
+        problems.append(f"publish runs if {condition!r}, which does not wait for gate to pass")
+    if "github.event_name == 'push'" not in condition:
+        problems.append(f"publish runs if {condition!r}, not on a push")
+    stage = "inputs.stage == 'publish'"
+    if images["jobs"].get("publish", {}).get("if") != stage:
+        problems.append(f"images.yml's publish job does not run only if {stage}")
+    if images["jobs"].get("build", {}).get("if") != "inputs.stage != 'publish'":
+        problems.append("images.yml's build job also runs at the publish stage")
+    if needs_of(images["jobs"].get("publish", {})):
+        problems.append("images.yml's publish job needs a job of its own call, which never runs")
+    return problems
+
+
+def test_publish_needs_gate(workflow):
+    assert check_publish_after_gate(workflow, load(WORKFLOWS / "images.yml")) == []
+
+
+def test_a_publish_that_does_not_wait_for_gate_is_named(workflow):
+    images = load(WORKFLOWS / "images.yml")
+    publish = {**workflow["jobs"]["publish"], "needs": ["build"], "if": "always()"}
+    build = {**workflow["jobs"]["build"], "with": {"stage": PUBLISH_STAGE}}
+    jobs = {**workflow["jobs"], "publish": publish, "build": build}
+    assert check_publish_after_gate({**workflow, "jobs": jobs}, images) == [
+        "images.yml's publish stage is called by ['build', 'publish'], want ['publish']",
+        "publish needs ['build'], want ['gate']",
+        "publish runs if 'always()', which does not wait for gate to pass",
+        "publish runs if 'always()', not on a push",
+    ]
 
 
 def test_the_fault_library_needs_lint_alone(workflow):
@@ -589,8 +647,9 @@ PERMISSIONS = {
             "migration-round-trip": READ,
             "e2e": READ,
             "narration-parity": READ,
-            # It calls images.yml, whose jobs cannot hold more than this.
+            # Both call images.yml, whose jobs cannot hold more than this.
             "build": {**READ, "packages": "write", **ATTEST},
+            "publish": {**READ, "packages": "write", **ATTEST},
             "deploy": READ,
             "gate": READ,
         },
@@ -648,8 +707,10 @@ def test_only_the_attesting_jobs_hold_the_attestation_permissions():
         # for trusted publishing; they attest nothing.
         if granted.get("attestations") or (granted.get("id-token") and "publish-" not in job)
     )
-    # ci-cd.yml's build only passes them on to images.yml's publish.
-    assert holders == ["ci-cd.yml/build", "cli-release.yml/release", "images.yml/publish"]
+    # ci-cd.yml's build and publish only pass them on to images.yml's publish.
+    assert holders == [
+        "ci-cd.yml/build", "ci-cd.yml/publish", "cli-release.yml/release", "images.yml/publish"
+    ]
 
 
 def test_a_widened_or_new_job_is_named(workflow):

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/josh-heath123/culprit/cli/internal/check"
+	"github.com/josh-heath123/culprit/cli/internal/diverge"
 	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
@@ -83,9 +84,9 @@ func TestExitCodeContract(t *testing.T) {
 // Asserted against `check.CountAtOrAbove` rather than by running the
 // command four times: the flag's whole job is to turn a severity set into
 // a count, and testing that directly says what is meant. The `unknown`
-// row is the one worth reading — it is above `cosmetic` on purpose, so
-// "we could not work out how bad this is" is never quieter than "we
-// worked it out and it is trivial".
+// row is the one worth reading. Q48 (Phase 44 batch 3): for the gate it
+// counts as `degrades`, so a finding Culprit cannot classify never passes
+// the default silently, and is not guessed as breaking either.
 func TestFailOnThreshold(t *testing.T) {
 	findings := []model.Divergence{
 		{Severity: model.SeverityBreaksRequestPath},
@@ -100,7 +101,7 @@ func TestFailOnThreshold(t *testing.T) {
 		count int
 	}{
 		{"breaks_request_path", 1},
-		{"degrades", 2},
+		{"degrades", 3},
 		{"any", 4},
 	} {
 		t.Run(testCase.flag, func(t *testing.T) {
@@ -126,6 +127,39 @@ func TestFailOnThreshold(t *testing.T) {
 			t.Errorf("a suppression did not suppress: counted %d", count)
 		}
 	})
+}
+
+// TestTheGateSaysWhyAnUnknownFindingFailedIt: Q48. When the default gate
+// fails on a finding Culprit could not classify, the message says so and
+// why, rather than leaving a reader to wonder how an `unknown` reached
+// `degrades`.
+func TestTheGateSaysWhyAnUnknownFindingFailedIt(t *testing.T) {
+	result := diverge.Result{Divergences: []model.Divergence{
+		{Severity: model.SeverityUnknown}, {Severity: model.SeverityDegrades},
+	}}
+	threshold, _ := parseFailOn("degrades")
+	failed := newFindingsError(result, threshold)
+	if failed == nil || failed.count != 2 {
+		t.Fatalf("the default gate did not count the unknown finding: %+v", failed)
+	}
+	message := failed.Error()
+	for _, words := range []string{"2 divergence(s) at or above degrades", "1 of them unknown",
+		"counted as degrades", "could not classify"} {
+		if !strings.Contains(message, words) {
+			t.Errorf("the message does not say %q: %s", words, message)
+		}
+	}
+
+	threshold, _ = parseFailOn("breaks_request_path")
+	if failed := newFindingsError(diverge.Result{Divergences: []model.Divergence{
+		{Severity: model.SeverityUnknown}}}, threshold); failed != nil {
+		t.Errorf("--fail-on=breaks_request_path failed on an unknown finding: %s", failed.Error())
+	}
+	threshold, _ = parseFailOn("degrades")
+	if message := newFindingsError(diverge.Result{Divergences: []model.Divergence{
+		{Severity: model.SeverityDegrades}}}, threshold).Error(); strings.Contains(message, "unknown") {
+		t.Errorf("a gate with no unknown finding mentions one: %s", message)
+	}
 }
 
 func TestOutputFileIsWrittenAndStdoutStaysQuiet(t *testing.T) {

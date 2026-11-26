@@ -55,6 +55,11 @@ class AlreadyStored(Exception):
     pass
 
 
+class ConflictingSource(Exception):
+    """The investigation's verifications already record its fault the other
+    way: refused by the database (F44-041, migration d1e5b9c3a7f2)."""
+
+
 def check_against(investigation: Investigation, verification: Verification) -> None:
     """Refuse a verification its investigation does not support."""
     if verification.investigation_id != investigation.id:
@@ -186,8 +191,11 @@ async def store(
         await session.rollback()
         orig = getattr(exc, "orig", None)
         driver = getattr(orig, "__cause__", None) or orig
-        if str(getattr(driver, "constraint_name", "")) == "verifications_pkey":
+        constraint = str(getattr(driver, "constraint_name", ""))
+        if constraint == "verifications_pkey":
             raise AlreadyStored from exc
+        if constraint == "ex_verifications_one_source":
+            raise ConflictingSource from exc
         raise
 
 

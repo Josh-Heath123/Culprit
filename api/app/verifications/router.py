@@ -81,13 +81,16 @@ async def create_verification(
     except service.Refused as exc:
         logger.warning("verification_refused", investigation=investigation_id)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    earlier = await service.source_of(reader, investigation_id)
-    if earlier is not None and earlier != body.source:
-        raise HTTPException(
+    def other_way(earlier: str) -> HTTPException:
+        return HTTPException(
             status_code=409,
             detail=f"{investigation_id}'s verifications record its fault as {earlier}; "
             f"one investigation's fault cannot also be {body.source}",
         )
+
+    earlier = await service.source_of(reader, investigation_id)
+    if earlier is not None and earlier != body.source:
+        raise other_way(earlier)
     clean = service.sanitised(verification)
     try:
         await service.store(writer, clean, body.source, submitter.label)
@@ -95,6 +98,10 @@ async def create_verification(
         raise HTTPException(
             status_code=409, detail=f"verification {clean.id} is already stored"
         ) from exc
+    except service.ConflictingSource as exc:
+        # Another verification, labelled the other way, was stored between
+        # the check above and this insert; the database refused this one.
+        raise other_way("planted" if body.source == "real" else "real") from exc
     logger.info(
         "verification_stored",
         investigation=investigation_id,

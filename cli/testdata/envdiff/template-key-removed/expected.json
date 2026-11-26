@@ -1,0 +1,13 @@
+{
+  "description": "Q47. Both environments are Kubernetes, so neither capture is complete. Staging's Deployment template lists FEATURE_BETA_CHECKOUT and production's does not: that is seen, and reported, cosmetic since nothing reads it. Staging also reads STRIPE_KEY from Secret orders-secrets, whose keys production could not list: never compared.",
+  "expected": [
+    {
+      "subject": "config:orders-api/FEATURE_BETA_CHECKOUT",
+      "predicate": "exists",
+      "kind": "env_vs_env",
+      "environment": "production",
+      "severity": "cosmetic"
+    }
+  ],
+  "false_positives": 0
+}

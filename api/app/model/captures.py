@@ -186,6 +186,7 @@ def _stored(row: ConfiguredFact) -> StoredFact:
         predicate=row.predicate,
         value=row.value,
         value_shape=ValueShape.model_validate(row.value_shape) if row.value_shape else None,
+        artefact=row.artefact,
     )
 
 

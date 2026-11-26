@@ -4,12 +4,12 @@
 name: CI/CD
 
 # PRs: lint -> typecheck -> test -> build+scan (no push, no deploy).
-# Pushes to main: the same, then push to ghcr.io (:sha + :latest). Pushes
-# of a `vX.Y.Z` tag (Phase 20, docs/UPGRADING.md): the same, then push to
-# ghcr.io (:vX.Y.Z only — never :latest, so cutting a release tag against
-# an older commit than main's current tip can't move :latest backward).
-# Build+scan lives in images.yml, which also runs weekly on main and by
-# hand, publishing nothing.
+# Pushes to main: the same, then, once `gate` has passed, push to ghcr.io
+# (:sha + :latest). Pushes of a `vX.Y.Z` tag (Phase 20, docs/UPGRADING.md):
+# the same, then push to ghcr.io (:vX.Y.Z only — never :latest, so cutting
+# a release tag against an older commit than main's current tip can't move
+# :latest backward). Build+scan and publish live in images.yml, which also
+# runs weekly on main and by hand, publishing nothing.
 #
 # Deploy runs only when started by hand (Actions -> CI/CD -> Run workflow
 # on main, with "deploy" ticked) — never on a push. The hosted server was
@@ -763,6 +763,12 @@ jobs:
           QUICKSTART_HTTP_PORT: "8088"
           KIND_CLUSTER: culprit-agent
         run: just agent-recipes
+      # F44-043 (Phase 44 batch 3): the largest body any client sent the
+      # api in every journey above, from its access log (request_bytes).
+      - name: The largest request bodies the journeys sent
+        run: |
+          docker compose -f infra/docker-compose.quickstart.yml --env-file infra/.env.prod logs --no-color api \
+            | python3 scripts/request_sizes.py
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -800,14 +806,17 @@ jobs:
 
   build:
     needs: [test, migration-round-trip, cli]
-    # Build and Trivy-scan every image; publish only on a push to main or a
-    # vX.Y.Z tag. The same workflow runs weekly on main and by hand,
-    # publishing nothing (images.yml). A job that calls a workflow cannot
-    # set timeout-minutes; images.yml's jobs carry theirs.
+    # Build and Trivy-scan every image (images.yml's build stage); on a push
+    # to main or a vX.Y.Z tag, keep each scanned image as an artifact for
+    # `publish`, which pushes it only after `gate` (F44-008). The same
+    # workflow runs weekly on main and by hand, publishing nothing. A job
+    # that calls a workflow cannot set timeout-minutes; images.yml's jobs
+    # carry theirs.
     uses: ./.github/workflows/images.yml
-    # A called workflow's jobs hold no more than this. images.yml's build
-    # holds contents: read alone; only its publish, which runs on main and
-    # tags, takes packages: write and the two attestation permissions
+    # A called workflow's jobs hold no more than this, and the caller must
+    # grant what every job of the called workflow declares, so this grants
+    # what images.yml's publish job takes although that job does not run at
+    # the build stage. images.yml's build holds contents: read alone
     # (Phase 43). test_ci_workflow.py holds both workflows' tables.
     permissions:
       contents: read
@@ -815,14 +824,31 @@ jobs:
       id-token: write
       attestations: write
     with:
-      # A push to main or a version tag publishes. So does a hand-started
-      # deploy of main: it publishes this commit as :sha and :latest first,
-      # so the VM pulls the commit whose deploy files it was just sent,
-      # never an older :latest.
+      # Keep the scanned images for `publish`, on the runs that publish.
       publish: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main') }}
 
+  # F44-008 (Phase 44 batch 3): push, attest and verify the images `build`
+  # scanned only once `gate` has passed, so no image whose checks failed is
+  # published. images.yml's publish stage, so the attestations are still
+  # signed by images.yml. A push to main or a version tag publishes; so does
+  # a hand-started deploy of main, which publishes this commit as :sha and
+  # :latest first, so the VM pulls the commit whose deploy files it was
+  # just sent, never an older :latest. Never on a pull request. `gate` does
+  # not need this job, so the ruleset's one required check is unchanged.
+  publish:
+    needs: gate
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/images.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      stage: publish
+
   deploy:
-    needs: [build, e2e]
+    needs: [publish, e2e]
     # By hand only, from main: never on a push (see the header).
     if: github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -863,8 +889,9 @@ jobs:
             ./deploy.sh
 
   # Phase 41 (D1): the one check the ruleset requires. It needs every job
-  # but deploy, which runs only on a hand-started run of main, after build
-  # and e2e, and is skipped on every pull request. It runs always: GitHub
+  # but deploy, which runs only on a hand-started run of main, after publish
+  # and e2e, and is skipped on every pull request; and but publish, which
+  # needs it (F44-008). It runs always: GitHub
   # counts a skipped required check as passed, so a gate skipped because
   # lint failed would let the pull request merge. Run always, it fails on
   # the skip instead. The decision is scripts/ci_gate.py's, tested in

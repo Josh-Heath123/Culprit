@@ -12,7 +12,17 @@
     "Each case gives the facts of capture a and capture b (only the fields a",
     "diff reads) and every (subject, predicate) that differs, sorted. Shapes",
     "compare by the shape fixture's equivalence: a length class only as",
-    "empty-or-not."
+    "empty-or-not.",
+    "",
+    "Q47 (Phase 44 batch 3): incompleteness is about what Culprit could not see;",
+    "it never hides what it did see. A fact's `artefact` names the source a",
+    "Kubernetes capture read it from: the Deployment's template",
+    "(kubernetes:deployment/NAME), or a ConfigMap or Secret the template loads",
+    "with envFrom (kubernetes:configmap/NAME, kubernetes:secret/NAME). A key one",
+    "template lists and the other does not is a difference, even though no",
+    "Kubernetes capture is complete. A key on one side only that came from a",
+    "source loaded by reference is compared only when the other capture shows a",
+    "reading of that same source: from one it did not read, it is never compared."
   ],
   "cases": [
     {
@@ -378,6 +388,290 @@
         }
       ],
       "differs": []
+    },
+    {
+      "name": "a key the other Deployment's template no longer lists",
+      "a": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "booleanish",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/API_TOKEN",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:secret/orders-secrets"
+        },
+        {
+          "subject": "config:orders/API_TOKEN",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:secret/orders-secrets",
+          "value_shape": {
+            "type": "unknown",
+            "length_class": "not_applicable",
+            "format": "not_applicable",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": [
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "exists"
+        },
+        {
+          "subject": "config:orders/FEATURE_FLAG",
+          "predicate": "value_shape"
+        }
+      ]
+    },
+    {
+      "name": "a key from a Secret the other capture shows no reading of",
+      "a": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/API_TOKEN",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:secret/orders-secrets"
+        },
+        {
+          "subject": "config:orders/API_TOKEN",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:secret/orders-secrets",
+          "value_shape": {
+            "type": "unknown",
+            "length_class": "not_applicable",
+            "format": "not_applicable",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": []
+    },
+    {
+      "name": "a key only in b, from a ConfigMap a shows no reading of",
+      "a": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:deployment/orders"
+        },
+        {
+          "subject": "config:orders/PORT",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:deployment/orders",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "numeric",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/LOG_LEVEL",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:configmap/orders-config"
+        },
+        {
+          "subject": "config:orders/LOG_LEVEL",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:configmap/orders-config",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "opaque",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": []
+    },
+    {
+      "name": "a key from a ConfigMap both captures read",
+      "a": [
+        {
+          "subject": "config:orders/LOG_LEVEL",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:configmap/orders-config"
+        },
+        {
+          "subject": "config:orders/LOG_LEVEL",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:configmap/orders-config",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "opaque",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        },
+        {
+          "subject": "config:orders/STRIPE_URL",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:configmap/orders-config"
+        },
+        {
+          "subject": "config:orders/STRIPE_URL",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:configmap/orders-config",
+          "value_shape": {
+            "type": "string",
+            "length_class": "medium",
+            "format": "url",
+            "present": true,
+            "scheme": "https"
+          }
+        }
+      ],
+      "b": [
+        {
+          "subject": "config:orders/LOG_LEVEL",
+          "predicate": "exists",
+          "value": true,
+          "artefact": "kubernetes:configmap/orders-config"
+        },
+        {
+          "subject": "config:orders/LOG_LEVEL",
+          "predicate": "value_shape",
+          "artefact": "kubernetes:configmap/orders-config",
+          "value_shape": {
+            "type": "string",
+            "length_class": "short",
+            "format": "opaque",
+            "present": true,
+            "scheme": "not_applicable"
+          }
+        }
+      ],
+      "differs": [
+        {
+          "subject": "config:orders/STRIPE_URL",
+          "predicate": "exists"
+        },
+        {
+          "subject": "config:orders/STRIPE_URL",
+          "predicate": "value_shape"
+        }
+      ]
     }
   ]
 }

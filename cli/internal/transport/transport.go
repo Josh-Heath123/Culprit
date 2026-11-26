@@ -41,6 +41,7 @@ import (
 
 	"github.com/josh-heath123/culprit/cli/internal/agent"
 	"github.com/josh-heath123/culprit/cli/internal/agentauth"
+	"github.com/josh-heath123/culprit/cli/internal/model"
 )
 
 // ErrRedirect is what a 3xx becomes.
@@ -230,15 +231,109 @@ type claimed struct {
 	Allowance   []string            `json:"allowance"`
 }
 
+// BulkBodyBytes is the control plane's default cap on a body posted to
+// one of its bulk routes, the only routes this agent posts batches to:
+// readings, investigations, verifications, results and its audit chain
+// (api/app/body_limits.py, F44-043). If CULPRIT_MAX_BULK_BODY_BYTES on the
+// control plane is set lower, its 413 says so and the batch shrinks.
+const BulkBodyBytes = 16 << 20
+
+// maxAuditEntries is POST /agents/me/audit's own limit on entries.
+const maxAuditEntries = 1000
+
 // Source is agent.Source over the control plane.
 type Source struct {
 	Client *Client
 	// Audit is the agent's local log; each result is preceded by shipping
 	// every entry the control plane does not yet hold.
 	Audit *agent.AuditLog
+	// BodyBytes is the cap this agent assumes on a bulk route; 0 is
+	// BulkBodyBytes. Batches are sized under half of it, by bytes.
+	BodyBytes int
+	// Logf is the agent's own log; nil logs nothing.
+	Logf func(format string, args ...any)
 	// shipped is the control plane's head, once known.
 	shipped   int64
 	headKnown bool
+	// budget is the batch size in bytes, under half the cap; a 413 lowers
+	// it for every later batch, so a refused batch is never sent again.
+	budget int
+	// held is the seq of an audit entry that alone is over the cap: kept
+	// in the local log and never sent, so nothing after it can be either
+	// (the chain is in order). 0 is none.
+	held int64
+}
+
+func (s *Source) capBytes() int {
+	if s.BodyBytes > 0 {
+		return s.BodyBytes
+	}
+	return BulkBodyBytes
+}
+
+func (s *Source) batchBudget() int {
+	if s.budget <= 0 || s.budget > s.capBytes()/2 {
+		s.budget = s.capBytes() / 2
+	}
+	return s.budget
+}
+
+func (s *Source) logf(format string, args ...any) {
+	if s.Logf != nil {
+		s.Logf(format, args...)
+	}
+}
+
+// TooLarge is a body this agent will not send, or the control plane
+// refused, for its size. It is never sent again unchanged.
+type TooLarge struct {
+	What  string
+	Bytes int
+	Limit int
+}
+
+func (e *TooLarge) Error() string {
+	return fmt.Sprintf("%s is %d bytes, %s; it is not sent again "+
+		"(CULPRIT_MAX_BULK_BODY_BYTES on the control plane raises the limit)",
+		e.What, e.Bytes, overWhat(e.Limit))
+}
+
+// overWhat says what a body was over: the cap this agent knows, or, when
+// the control plane refused it alone (413), the control plane's own.
+func overWhat(limit int) string {
+	if limit > 0 {
+		return fmt.Sprintf("over the control plane's limit of %d bytes for it", limit)
+	}
+	return "and the control plane refused it alone as too large (413)"
+}
+
+// encodedLen is the bytes value adds to a JSON array: itself, encoded,
+// and a comma.
+func encodedLen(value any) int {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return 0
+	}
+	return len(encoded) + 1
+}
+
+// firstBatch is how many of items, from the first, fit one request: a
+// JSON array wrapped in an object of overhead bytes, within budget, and at
+// most most items. One item always goes alone if it fits limit; an item
+// that alone is over limit gives 0.
+func firstBatch(items []any, overhead, budget, limit, most int) (count int, size int) {
+	total := overhead
+	for index, item := range items {
+		length := encodedLen(item)
+		if index == 0 && overhead+length > limit {
+			return 0, overhead + length
+		}
+		if index > 0 && (total+length > budget || index == most) {
+			return index, total
+		}
+		total += length
+	}
+	return len(items), total
 }
 
 // Next claims the agent's oldest waiting task, or returns nil.
@@ -289,18 +384,14 @@ func (s *Source) Complete(ctx context.Context, incoming *agent.Incoming, result 
 	if err := s.ShipAudit(ctx); err != nil {
 		return err
 	}
-	if len(result.Readings) > 0 {
-		response, err := s.Client.send(ctx, http.MethodPost, "/readings",
-			map[string]any{"readings": result.Readings}, true)
-		if err != nil {
-			return err
-		}
-		if err := expect(response, "/readings", http.StatusCreated); err != nil {
-			return err
-		}
+	if err := s.shipReadings(ctx, result.Readings); err != nil {
+		return err
 	}
 	investigation := ""
 	if result.Investigation != nil {
+		if err := s.fits("the investigation "+result.Investigation.ID, result.Investigation); err != nil {
+			return err
+		}
 		response, err := s.Client.send(ctx, http.MethodPost, "/investigations", result.Investigation, true)
 		if err != nil {
 			return err
@@ -315,9 +406,11 @@ func (s *Source) Complete(ctx context.Context, incoming *agent.Incoming, result 
 		// The verification, before the result that names it: by the time
 		// the control plane hears the task ended, it holds what it measured.
 		path := "/investigations/" + url.PathEscape(result.Verification.InvestigationID) + "/verifications"
-		response, err := s.Client.send(ctx, http.MethodPost, path, map[string]any{
-			"source": incoming.Task.Verify.Source, "verification": result.Verification,
-		}, true)
+		body := map[string]any{"source": incoming.Task.Verify.Source, "verification": result.Verification}
+		if err := s.fits("the verification "+result.Verification.ID, body); err != nil {
+			return err
+		}
+		response, err := s.Client.send(ctx, http.MethodPost, path, body, true)
 		if err != nil {
 			return err
 		}
@@ -347,6 +440,51 @@ func (s *Source) Complete(ctx context.Context, incoming *agent.Incoming, result 
 	return expect(response, path, http.StatusNoContent)
 }
 
+// fits refuses, before sending, one document over the cap: it cannot be
+// split, and a 413 is never met by sending the same body again.
+func (s *Source) fits(what string, payload any) error {
+	if size := encodedLen(payload) - 1; size > s.capBytes() {
+		return &TooLarge{What: what, Bytes: size, Limit: s.capBytes()}
+	}
+	return nil
+}
+
+// shipReadings posts a task's readings in batches sized by bytes, under
+// half the cap (F44-043). A 413 halves the batch and sends a smaller one,
+// never the same one again; one reading over the cap, or refused alone,
+// is an error and is not sent again.
+func (s *Source) shipReadings(ctx context.Context, readings []model.Reading) error {
+	items := make([]any, len(readings))
+	for index := range readings {
+		items[index] = readings[index]
+	}
+	const overhead = len(`{"readings":[]}`)
+	for start := 0; start < len(items); {
+		count, size := firstBatch(items[start:], overhead, s.batchBudget(), s.capBytes(), len(items))
+		what := fmt.Sprintf("reading %d of %d", start+1, len(items))
+		if count == 0 {
+			return &TooLarge{What: what, Bytes: size, Limit: s.capBytes()}
+		}
+		response, err := s.Client.send(ctx, http.MethodPost, "/readings",
+			map[string]any{"readings": readings[start : start+count]}, true)
+		if err != nil {
+			return err
+		}
+		if response.Status == http.StatusRequestEntityTooLarge {
+			if count == 1 {
+				return &TooLarge{What: what, Bytes: size}
+			}
+			s.budget = size / 2
+			continue
+		}
+		if err := expect(response, "/readings", http.StatusCreated); err != nil {
+			return err
+		}
+		start += count
+	}
+	return nil
+}
+
 func nonNil(values []string) []string {
 	if values == nil {
 		return []string{}
@@ -367,8 +505,17 @@ type head struct {
 }
 
 // ShipAudit sends every local entry the control plane does not hold yet,
-// in order. The control plane refuses anything that does not extend its
-// stored chain; on that refusal the head is read again, once.
+// in order, in batches sized by bytes under half the cap (F44-043, as Q49
+// ruled), never by entry count alone. The control plane refuses anything
+// that does not extend its stored chain; on that refusal the head is read
+// again, once.
+//
+// A 413 is never met with the same request: the batch is halved and the
+// smaller one sent. An entry that alone is over the cap, found here or by
+// a 413 on it alone, is held: kept in the local log, logged with its
+// reason, and never sent. The chain is in order, so nothing after it is
+// sent either; the agent carries on with its tasks, and `culprit agent
+// verify` shows where the control plane's copy stops.
 func (s *Source) ShipAudit(ctx context.Context) error {
 	if s.Audit == nil {
 		return nil
@@ -392,29 +539,62 @@ func (s *Source) ShipAudit(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if len(lines) == 0 {
-			return nil
+		if s.held > s.shipped {
+			// Only what comes before the held entry can be shipped.
+			lines = lines[:min(len(lines), int(s.held-s.shipped-1))]
+			last = s.held - 1
 		}
-		for start := 0; start < len(lines); start += 500 {
-			end := min(start+500, len(lines))
+		items := make([]any, len(lines))
+		for index, line := range lines {
+			items[index] = line
+		}
+		const overhead = len(`{"entries":[]}`)
+		conflict := false
+		for start := 0; start < len(lines); {
+			count, size := firstBatch(items[start:], overhead, s.batchBudget(), s.capBytes(), maxAuditEntries)
+			if count == 0 {
+				s.hold(s.shipped+1, size, s.capBytes())
+				return nil
+			}
 			response, err := s.Client.send(ctx, http.MethodPost, "/agents/me/audit",
-				map[string]any{"entries": lines[start:end]}, true)
+				map[string]any{"entries": lines[start : start+count]}, true)
 			if err != nil {
 				return err
 			}
+			if response.Status == http.StatusRequestEntityTooLarge {
+				if count == 1 {
+					s.hold(s.shipped+1, size, 0)
+					return nil
+				}
+				s.budget = size / 2
+				continue
+			}
 			if response.Status == http.StatusConflict {
-				s.headKnown = false
+				s.headKnown, conflict = false, true
 				break
 			}
 			if err := expect(response, "/agents/me/audit", http.StatusOK); err != nil {
 				return err
 			}
-			s.shipped = s.shipped + int64(end-start)
+			s.shipped += int64(count)
+			start += count
 		}
-		if s.headKnown && s.shipped == last {
+		if !conflict && s.shipped == last {
 			return nil
 		}
 	}
 	return fmt.Errorf("the control plane's audit chain and this agent's do not agree; " +
 		"compare them with `culprit agent verify` before going on")
+}
+
+// hold records the audit entry at seq as one this agent keeps and never
+// sends, and says why in its log, once.
+func (s *Source) hold(seq int64, size, limit int) {
+	if s.held == seq {
+		return
+	}
+	s.held = seq
+	s.logf("audit entry %d is %d bytes, %s: kept in the local audit log and not sent; "+
+		"the entries after it are not shipped "+
+		"(CULPRIT_MAX_BULK_BODY_BYTES on the control plane raises the limit)", seq, size, overWhat(limit))
 }

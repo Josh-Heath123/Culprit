@@ -64,11 +64,11 @@ wrong architectural turn gets caught before it is built on.
 | | |
 |---|---|
 | Plan of record | `docs/FIELD_READINESS_PLAN.md` (Phase 44), from 2026-11-21: the audit and optimisation of the whole application before the first field trial. `docs/DELIVERY_PLAN.md` (40–43), `docs/PERFORMANCE_PLAN.md` (36–39) and `docs/DIAGNOSTIC_PLAN.md` (26–35) are complete; D1–D8, the standing invariants and P1–P8 still bind. |
-| Current phase | **44, batch 2 — facts that hold** — `awaiting review` (PR #73; §5). Brief: `docs/FIELD_READINESS_PLAN.md` §6, "Batch 2 — facts that hold", under §2's rules: lexical format classes, the working directory in the identity rule, observations not counted as configuration, severity's third state, honest absence, two readers on one fixture, Q46. Step 0: `main`'s push run 45216449983 on `f694cb6`. |
-| Previous phase | **44, batch 1 — secrets stay in — merged as `f694cb6` (PR #72) and signed off 2026-11-23.** Runs 45169821500 and 45171911160 (the report) green on every job, read from GitHub; the six S1 reproductions clean against the merged binary; three mutations by the architecture session, all red. Recorded in `FIELD_READINESS_PLAN.md` §6, "Review of batch 1". |
+| Current phase | **44, batch 3 — reliable under strain** — `in progress`: every decision done, F44-043 finished as Q49 ruled (2026-11-26), in `502f76a`; PR #74 marked ready only when `/ci` is green on the merge result. See §5. Brief: `docs/FIELD_READINESS_PLAN.md` §6, "Batch 3 — reliable under strain", under §2's rules: Q47's correction and Q48 first, then publish after `gate`, the quickstart's env file, a claim's deadline, and the API and worker under strain. Step 0: attribute `main`'s push run 45425513632 on `760cdfd`, red on `e2e (none)`'s quickstart where the same tree passed on the pull request; read the log, rerun, record both; fix it first if it is ambient. |
+| Previous phase | **44, batch 2 — facts that hold — merged as `760cdfd` (PR #73) and signed off 2026-11-24.** Runs 45232041694 and 45234466757 (the report) green on every job, read from GitHub; the fault library unchanged; four mutations by the architecture session, all red. Q47 and Q48 ruled. Recorded in `FIELD_READINESS_PLAN.md` §6, "Review of batch 2". |
 | Deploy | **Paused, 2026-11-05 — Joshua's decision.** `culprit-vm` is taken offline: it had served an unpatched, pre-Phase-14 API publicly since August. From Phase 32.2, `deploy` runs only when started by hand. Phase 33 builds against a local control plane; "deploy must be green by Phase 33" (2026-09-12) is superseded (`DIAGNOSTIC_PLAN.md`, Phase 33, "Added 2026-11-05"). |
-| Branch | `phase-44-b2`, to be cut from `origin/main` = `f694cb6`. Its first commit is the review, signed: `git apply ../phase-44-b2-review.patch`, then `git commit -F ../phase-44-b2-review.txt` (`docs/FIELD_READINESS_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Scratch work goes to `../audit-44/`, never into the repository. Open a draft pull request and mark it ready when the run report is committed; if the run stops on a question, it stays a draft. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
-| Blocking questions | None. |
+| Branch | `phase-44-b3`, to be cut from `origin/main` = `760cdfd`. Its first commit is the review, signed: `git apply ../phase-44-b3-review.patch`, then `git commit -F ../phase-44-b3-review.txt` (`docs/FIELD_READINESS_PLAN.md`, `docs/HANDOFF.md`, `CLAUDE.md`). Scratch work goes to `../audit-44/`, never into the repository. Open a draft pull request and mark it ready when the run report is committed; if the run stops on a question, it stays a draft. Run `just lint` before every push and the local gates one at a time, in the foreground. Do not stage `shared/uv.lock`. Do not run the fault library locally. |
+| Blocking questions | None. Q49 ruled 2026-11-26 (§5). |
 
 ---
 
@@ -79,8 +79,7 @@ is never reused.
 
 | # | Question | Raised | Blocks |
 |---|---|---|---|
-| 47 | **Kubernetes `verify` no longer sees a template key change.** F44-013 made every Kubernetes capture incomplete, as briefed. `verify` (through the engine's env_vs_env rule) and `env diff` honour that skip, so between two Kubernetes captures a key added to or removed from the Deployment's template is no longer a difference, and a fix that changed one can be `verified`. `GET /captures/diff` still lists it (LIMITS says so). Should a key both templates enumerate count, the image's ENV and webhooks aside? | 2026-11-23, batch 2 (§5) | nothing; not blocking |
-| 48 | **`unknown` ranks below `degrades`.** F44-063 moves findings behind an unclassified edge from `degrades` to `unknown`, so the default `--fail-on=degrades` no longer fails CI on them (UPGRADING and LIMITS say so). Is that the intent, or should `unknown` be counted at `degrades`? | 2026-11-23, batch 2 (§5) | nothing; not blocking |
+| — | *None open.* Q49 was ruled 2026-11-26 (architecture session); the ruling is recorded in §5, and the architecture session records it in `FIELD_READINESS_PLAN.md` §6 with batch 3's review. | | |
 
 ---
 
@@ -135,7 +134,8 @@ Status values: `not started` · `in progress` · `gates red` · `awaiting decisi
 | — | Housekeeping, part 2: the last alerts | **complete** (PR #70, `ddb275e`) | **Signed off 2026-11-21** (architecture session): runs 44879138798 and 44880245200 (the report) green on every job, read from GitHub; #67, #68 and #69 closed as merged; alert #9 dismissed under Q45; every commit Verified. `main`'s push run 44881325932: red on `e2e (stub)` (the agent's Kubernetes and systemd recipes), where the same tree passed on the pull request; Phase 44 part 1's step 0 attributes it. Recorded in `DELIVERY_PLAN.md`, Phase 43, "Review of the housekeeping, part 2". |
 | 44, part 1 | The audit | **complete** (PR #71, `6f64f69`) | **Accepted 2026-11-23** (architecture session): runs 44887167519 and 44888134489 (the report) green on every job, read from GitHub; 92 findings (6 S1, 15 S2), every S1 reproduced; `main`'s push run 45125493937: green on every job. The dashboard's screens move to CI (batch 5). Recorded in `FIELD_READINESS_PLAN.md` §6. |
 | 44, batch 1 | Secrets stay in | **complete** (PR #72, `f694cb6`) | **Signed off 2026-11-23** (architecture session): runs 45169821500 and 45171911160 (the report) green on every job, read from GitHub; every S1 reproduction clean against the merged binary; three mutations of its own red. `main`'s push run 45216449983: green on every job. Recorded in `FIELD_READINESS_PLAN.md` §6. |
-| 44, batch 2 | Facts that hold | **awaiting review** (PR #73; run 45232041694 green) | **Brief (2026-11-23):** `docs/FIELD_READINESS_PLAN.md` §6, "Batch 2 — facts that hold": F44-010 to -013, -055, -057, -058, -063, -064, -090 and Q46; format classes lexical; the working directory in the identity rule; `verify` counting configuration, not observations; severity `unknown` behind an edge that does not say; fixtures for every value two languages compute. Branch `phase-44-b2` from `origin/main` = `f694cb6`; its first commit is the review (`../phase-44-b2-review.patch`, message `../phase-44-b2-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
+| 44, batch 2 | Facts that hold | **complete** (PR #73, `760cdfd`) | **Signed off 2026-11-24** (architecture session): runs 45232041694 and 45234466757 (the report) green on every job, read from GitHub; the fault library unchanged; four mutations of its own red. `main`'s push run 45425513632: red on `e2e (none)`'s quickstart, where the same tree passed on the pull request, and every image published anyway (F44-008); batch 3's step 0 attributes it. Q47 and Q48 ruled. Recorded in `FIELD_READINESS_PLAN.md` §6. |
+| 44, batch 3 | Reliable under strain | **in progress** (Q49 ruled 2026-11-26; F44-043 done in `502f76a`; `/ci` on the merge result to come) | **Brief (2026-11-24):** `docs/FIELD_READINESS_PLAN.md` §6, "Batch 3 — reliable under strain": Q47 (a template's key change counts again) and Q48 (`unknown` fails the default gate) first; then F44-008, -009, -014, -015, -039 to -044, -047 and -050. Branch `phase-44-b3` from `origin/main` = `760cdfd`; its first commit is the review (`../phase-44-b3-review.patch`, message `../phase-44-b3-review.txt`). Open a draft pull request and mark it ready when the run report is committed. Replace §5 with this run's report. Do not stage `shared/uv.lock`. |
 
 **Standing task, not a phase — new advisories should be found on `main`, not
 mid-phase.** *(Folded into Phase 32.2, 2026-11-05.)* Three times now — OpenSSL in September, then PyJWT, certifi and
@@ -167,91 +167,237 @@ Claude Code overwrites this section at the end of every `/next`. Earlier
 reports are in `git log -p docs/HANDOFF.md`.
 
 ```
-Phase:        44, batch 2 — facts that hold (docs/FIELD_READINESS_PLAN.md §6)
-Branch:       phase-44-b2, cut from origin/main = f694cb6. bc4e833 the review
-              (../phase-44-b2-review.patch, .txt; git apply --check clean;
-              signed, %G? = G), then one commit per decision. Pull request
-              #73, draft until this report.
-Run:          2026-11-23, by the owner's instruction (the brief).
-Status:       AWAITING REVIEW. Step 0 and decisions 2-9 done; every fix with
-              a test shown red first, every new fixture's mutation red. The
-              fault library's results.json unchanged (CI's git diff
-              --exit-code passed). Q47, Q48 raised, not blocking. Nothing
-              published, released or deployed; the ruleset untouched;
-              shared/uv.lock not staged (once swept in by `git add shared`
-              in decision 4, removed by amending before any push).
+Phase:        44, batch 3 — reliable under strain (FIELD_READINESS_PLAN.md §6)
+Branch:       phase-44-b3, cut from origin/main = 760cdfd. b405ffb the review
+              (../phase-44-b3-review.patch, .txt; git apply --check clean;
+              signed, %G? = G), then one commit per decision. Draft PR #74.
+Run:          2026-11-24, by the owner's instruction (the brief); resumed
+              2026-11-26 on Q49's ruling (../q49-ruling.md, read in full).
+Status:       EVERY DECISION DONE. Step 0, decisions 2-9, and F44-043 as
+              Q49 ruled (502f76a); every fix with a test shown red first.
+              The fault library's results.json unchanged (CI's git diff
+              --exit-code passed, run 45454853674); not run locally. One new
+              migration, d1e5b9c3a7f2, round-trip tested, altering and
+              deleting no row. Nothing published, released or deployed; the
+              ruleset untouched; shared/uv.lock never staged. PR #74 is
+              marked ready only when /ci is green on the merge result.
 
-STEP 0 — main's push run 45216449983 on f694cb6: success, 26 jobs (the
-  review said 25), deploy skipped (read from GitHub).
+Q49 — RULED 2026-11-26 (architecture session), amending F44-043's ruling.
+  The architecture session records it in FIELD_READINESS_PLAN.md §6 with
+  batch 3's review. The first ruling (cap /api/* at four times the largest
+  body CI sent) was wrong: CI never sends an INTENT bundle (515,054 bytes
+  here), a capture envelope posted with curl, or an agent's backlog.
+  Ruled: one cap per kind of route, declared at the route.
+  1. Two classes in one table, which the signed-route dependency and the
+     tests read: bulk, 16 MiB (facts, captures, model/apply, divergences,
+     both readings routes, verifications, investigations, task results,
+     agents/me/audit); small, 64 KiB (14,214 x 4, rounded up), for
+     everything else that takes a body. A route the table does not name
+     fails a test.
+  2. CULPRIT_MAX_BULK_BODY_BYTES raises the bulk cap; LIMITS gives both.
+  3. Caddy's max_size on /api/* equals the bulk cap, held by a test that
+     reads both.
+  4. A 413 in F44-044's shape names the limit, and on bulk the setting.
+  5. The agent batches by bytes under half the cap, keeps an entry that
+     alone exceeds it locally with a reason in its log, and never retries
+     a 413 unchanged.
+  6. The five tests below, each red first. 7. The draft patch may be used.
+  F44-093 is batch 4's to rule: recorded in the register, nothing changed.
 
-DECISIONS (red logs and mutations in ../audit-44/b2/)
-2 b55f9ae  F44-011. Format classes lexical: booleanish words only, no bare
-           number is port (the class stays in the vocabulary). Readers of
-           port/booleanish grepped first: none is a rule. Fixture rows 1 0 4
-           22 8080 65500 numeric, Off yes booleanish; 5432 port -> numeric.
-           Red: Go 6, Python 6. Golden fastapi-orders: PORT "8000" numeric.
-3 d578256  F44-012. The working directory joins the hostname as the
-           identity rule's OS fact (os.Getwd, injected; meta counts it).
-           Red: capture test, 2. Mutation (directory dropped): red. The
-           brief's verify test (SHLVL 1->12, PWD in two dirs) was NOT red
-           before: paths are one class at any length, SHLVL fixed by 2. It
-           holds the comparison; the capture test holds the rule. GUIDE's
-           tour captures from env -i PATH HOME.
-4 57d5705  F44-055. model.ConfiguredPredicateKinds / CONFIGURED_PREDICATE_
-           KINDS, held to verification_conformance.json: dns_resolves,
-           port_reachable, tls_certificate are observations. Difference
-           gains observation (omitempty in Go); Judge needs no change to
-           explain one; a flag on a configuration predicate is refused; an
-           unflagged (older) record is judged as before, so stored
-           verifications validate. Red: Python 2, Go 2, the brief's verify
-           test (DNS only -> changed_underneath). Mutations (the refusal
-           removed), Go and Python: red. UPGRADING: control plane first.
-5 a5516f8  F44-063, -064 c. Severity unknown behind an unknown-criticality
-           edge, naming it; request_path_conformance.json read by Go's
-           severity and Python's upstream_connections. Red: Go 6 lines;
-           Python already agreed, its mutation red (2). Go mutation red (6).
-           This repo's and the demo's edges are all classified. Q48.
-6 e1f39fa  F44-010 merge head (tuple/list; red: [b2 c3 d4] x3). F44-013
-           Kubernetes never complete, naming unreadable envFrom sources
-           (red 2). F44-057 unread/too-deep dirs named, Go (fs.FS, want *,
-           20 named + a count), Node, Python (red 3, 2, 2). F44-058 an
-           unparseable migration declines the chain, named (red; the old
-           "is ignored" test was the finding). F44-090 a non-UTF-8 key is a
-           skip, bytes escaped, never a subject (red).
-  6d9c8c8  ruff RUF043 in the new migration test.
-  5ed4057  kind-capture (CI only) asserted no skip against a readable
-           cluster: the claim F44-013 withdrew. Now exactly the template's
-           one skip, its exact reason. Red in run 45229026168, green after.
-7 35bd5c9  F44-064 a, b. capture_diff_conformance.json (9 cases) read by
-           verify.Differences and diff_captures; render_value_conformance.
-           json (13) read by renderValue and render_value. Go disagreed on
-           two, red first: a one-sided key (Go listed exists only; now also
-           its other questions, no verdict moves) and an unparseable subject
-           (Go printed the value; now Python's safe direction). Python
-           mutations red. LIMITS: the stored diff ignores skips (Q47).
-8 c224192  Q46. propagation takes token_env (tokenInput shared with
-           token_shape), version 2, catalogue mirror regenerated. Red: Go 2,
-           API 1.
-9 0d79414  token_env=NAME an over_redacted row (mutation: "token" out of the
-           credential words, Go and Python red). readOnlyHint: system_model,
-           check, explain_connection true only under --no-plugins; probe,
-           diagnose, verify never. Red 9; mutation red 3.
+STEP 0 — main's push run 45425513632 on 760cdfd. Failed log read (gh run
+  view --log-failed): e2e (none)'s quickstart died building the frontend
+  image, in `xcaddy build v2.11.7`: "verifying module: github.com/
+  caddyserver/caddy/v2@v2.11.7: ... reading https://sum.golang.org/tile/8/
+  0/x281/715: stream error: stream ID 3; INTERNAL_ERROR; received from
+  peer". A transient HTTP/2 error from the Go checksum database, a
+  third-party service: no input moved (the same pins built on the pull
+  request the day before), and not the code. Rerun (gh run rerun
+  --failed): attempt 2 success, 25 jobs success and deploy skipped;
+  e2e (none) 138571286627, gate 138577977057. Attributed to the build's
+  network: a finding with its cause, not a fix (D6), F44-093 below. No
+  ambient commit.
+  F44-093 (S4, VERIFIED): every image build fetches Caddy's modules and
+  checks them against sum.golang.org (frontend/Dockerfile, xcaddy), so an
+  outage of that service fails the quickstart, e2e and the image build.
+  For the review: vendor or cache Caddy's module graph, or a sum-database
+  policy; not a retry.
 
-LOCAL GATES (Windows, one at a time, foreground) on 0d79414/6d9c8c8: just
-  lint, typecheck (5 x 0 errors), lint-imports (6 kept),
-  check-no-llm-imports, check-invariants; api 2082 passed 6 skipped;
-  worker 96; mcp_server 21; go test ./... ok; extractors python 42, node 24.
-  The fault library not run locally.
+DECISIONS (red logs and mutations in ../audit-44/b3/)
+2 c99d20a  Q47. A Kubernetes key names its source in its provenance: the
+           template (kubernetes:deployment/), or the envFrom ConfigMap or
+           Secret by name (model.ArtefactKubernetes*; Python's twin in
+           capture_diff.py). Between environments a key one template lists
+           and the other does not is a difference, worded "lists X in the
+           Deployment's template, and <env>'s template does not; there it
+           may come from a source Culprit cannot read", however incomplete
+           either capture is; a key from a ConfigMap or Secret is compared
+           only when the other capture shows a reading of that source;
+           against INTENT an incomplete capture still proves no absence.
+           Red: the fixture Go 3, Python 3 (4 new rows); verify's
+           two-template test (verified, want changed_underneath); the
+           env-diff corpus's new template-key-removed (missed); the capture
+           test's sources (4). Two mutations of the engine's rules: red.
+           kind-capture's expectation does not change (it asserts types and
+           the one skip). Decision: keys only; an envFrom source renamed,
+           dropped or emptied is not compared (LIMITS).
+3 4534b8a  Q48. Severity.AtLeast counts unknown as degrades; Rank (report
+           order) unchanged. The findings error says how many were unknown
+           and why. Red: TestFailOnThreshold (2, want 3) and the message
+           test. Mutation red. This repository's self-check: no
+           divergences.
+4 8106f7b  F44-008. ci-cd.yml's new `publish` job needs gate and calls
+           images.yml at its publish stage (stage: publish), which runs the
+           publish job alone, from the artifacts build kept; images.yml
+           still signs, so every verify is unchanged. On a push (and a
+           hand-started deploy of main, as before), never on a pull
+           request; gate does not need it; deploy needs publish. Red:
+           test_ci_workflow's "publish needs gate" (8). UNTESTED until
+           main's push run after the merge (a tag cannot be cut).
+5 724908e  F44-009. bootstrap_env.py --backfill adds every generated key a
+           file lacks and touches none that is there; a URL is built from
+           the password the file holds. The recipe runs it over a reused
+           file. Red: 5 script tests. The laptop's infra/.env.prod untouched.
+6 59ce3c0  F44-014. The deadline is 15 minutes (AGENT_TASK_DEADLINE_MINUTES):
+           no task kind declares a timeout of its own, so the ruling's
+           "kind's timeout plus a margin" is the margin alone. Applied at
+           read (service.expire, an injected clock) and when the agent next
+           speaks; a late result is kept and the task stays failed (the
+           agent is answered 204 and carries on); the agent's next claim
+           fails its own unfinished claim, since it runs one at a time — on
+           the control plane, under agent-gateway's existing grants; the
+           binary is unchanged. Red: 3 api tests. Mutation red.
+7 bcea82a  F44-015 (X-Forwarded-For believed only from TRUSTED_PROXY_HOST,
+           the compose files' `frontend`, re-resolved every 30 s), F44-041
+           (migration d1e5b9c3a7f2: EXCLUDE USING gist (investigation_id
+           WITH =, source WITH <>), with btree_gist; over rows recorded both
+           ways it stops, naming the count and the query, changing nothing;
+           the route answers the race 409), F44-044 (one shape, defined in
+           app/errors.py; the 429 and the audit chain's 409 brought into it;
+           frontend/src/lib/errors.ts reads it only), F44-047 (409),
+           F44-050 (trimmed). Red: 8 api tests, the migration tests (no
+           such revision), the race (both labels stored), the dashboard's
+           errorMessage. Round trip clean. The ingest gateway's own 429
+           still says {"error"}: not /api/*.
+  86cb376  F44-043, the measurement, as ruled: request_bytes in the access
+           line; scripts/request_sizes.py (tested); e2e reports the largest
+           bodies; the fault library logs each case's. Run 45454853674: e2e
+           11,019 and 11,015 bytes, the fault library 14,214 (19 cases).
+           The cap itself: Q49, ruled 2026-11-26; 502f76a below.
+  c9a5af5  ruff RUF100 in a decision-7 test, found by just lint.
+8 fe392dd  F44-039 (a refused batch written one entry at a time; each entry
+           Postgres refuses quarantined with "Postgres refused it: <class>
+           (SQLSTATE ...)"; every entry refused raises; a database that
+           cannot be reached acks nothing) and F44-040 (redis-py's Lock: a
+           token, a Lua compare-and-delete, renewed every third of its TTL).
+           Red: 4, the lock's against a real Redis. Mutations (no renewal;
+           no per-entry fallback): red.
+9 35c6b10  F44-042. LIMITS: a demotion or disabling takes effect within
+           30 s; a password reset ends no session (up to 60 min); a token
+           version is deferred.
+  b5ea2d5  CI's self-check (run 45441945846) found AGENT_TASK_DEADLINE_
+           MINUTES undescribed in api/.env.example (degrades; gate red):
+           Culprit finding its own gap. Both new settings described; and
+           pyright on the deadline tests' fixture. The local self-check,
+           with the dashboard built: no divergences.
+
+7 502f76a  F44-043 as Q49 ruled. api/app/body_limits.py holds the table
+           (the ten bulk routes as ruled; 24 small), CULPRIT_MAX_BULK_
+           BODY_BYTES (default 16,777,216, at least 65,536),
+           BodyLimitMiddleware on every request (a declared Content-Length
+           over the cap refused before reading; a chunked body the moment
+           it passes it) and capped_body, which the signed-route dependency
+           now reads before the signature (from the draft patch). A route
+           in no class (a GET, a DELETE) is held to small. The 413:
+           {"detail": "the request body is over this route's limit of N
+           bytes (bulk); CULPRIT_MAX_BULK_BODY_BYTES on the control plane
+           raises it"}, or "(small)" without the setting. Caddyfile:
+           request_body max_size {$CULPRIT_MAX_BULK_BODY_BYTES:16777216} on
+           /api/*, plus handle_errors 413 answering /api/* in the same
+           shape (Caddy's own 413 has an empty body). Checked against
+           caddy:2.11 in Docker with the cap set to 1000: 1000 bytes were
+           proxied; 1001 bytes, declared and chunked, got the 413 with the
+           JSON. `caddy validate` on the real file: valid.
+           The agent (internal/transport) sends its audit backlog and
+           readings in batches sized by bytes, under half the cap (and at
+           most 1000 entries, the route's own limit). A 413 lowers the
+           batch budget for every later batch, so no refused body is sent
+           again. An audit entry that alone is over the cap is held and
+           logged once ("audit entry N is B bytes, ...: kept in the local
+           audit log and not sent"). The chain is in order, so nothing
+           after that entry ships, and the agent carries on. An
+           investigation or verification over the cap is refused before it
+           is sent (one document cannot be split). The setting is described
+           in both env examples; LIMITS: "A request body has a cap, one per
+           kind of route". The self-check moves with the new setting: 1,768
+           facts across 634 subjects, 536 unverifiable (README, GUIDE;
+           check_readme true against a local --unverifiable self-check,
+           with the dashboard built).
+           Decisions for the review: (a) the cap is enforced on every route
+           by middleware as well as in the signed dependency (the ruling
+           names the dependency; a project-token or session route has
+           none). (b) Caddy's 413 is given the API's shape, since through
+           Caddy a body over the bulk cap never reaches the API. (c) The
+           agent assumes the default cap and learns a lower one from the
+           413. (d) POST /probes/{id}/run is bulk as ruled, though it takes
+           no body today (it answers 503).
+           RED FIRST (../audit-44/b3/q49/):
+           - red-A*.log, the api tree without the implementation: the cap
+             cases answered 401 where 413 was wanted (16,777,217 and
+             65,537 bytes, declared and chunked); the table, Caddy and
+             signed-route tests failed with no module.
+           - red-go.log, the old transport with only BodyBytes and Logf
+             added: 500 entries of 10 KB, an oversized entry, a lowered
+             cap and 200 readings each got a 413, and the agent stopped.
+           - The INTENT-size test (a 601,896-byte bundle stored, 201) is
+             not red on the old tree, which had no cap. It is red against
+             the single cap the first ruling would have built
+             (mutations.log: facts as small, 413 at 65,536).
+           - mutations.log, ten mutations, all red: a route dropped from
+             the table (named in the failure); facts as small; the
+             dependency back to request.body() (200 where 413 was
+             wanted); Caddy's default at 16777215; the chunked count off by
+             one; the setting dropped from the 413; Caddy's 413 without
+             the setting; the agent's batch not sized by bytes, and a 413
+             not lowering it (both loop, resending the refused body, until
+             go test's timeout); an oversized entry made an error (the
+             agent stopped).
+           Tests: api/tests/test_body_limits.py (13: the table covers every
+           route that takes a body and names no stale one; the bulk set is
+           the ruling's; the numbers; Caddy reads the same value; Caddy's
+           413; the middleware is installed; six cap cases at N and N+1);
+           test_agents_api's signed-route cap (every signed route, declared
+           and chunked); test_facts_api's INTENT-size bundle;
+           cli/internal/transport/size_test.go (4).
+  F44-093  Recorded in the register (S4, batch 4's to rule); nothing changed.
+
+LOCAL GATES (Windows, one at a time, foreground) on 502f76a: just lint;
+  typecheck (5 x 0 errors); lint-imports (6 kept); check-no-llm-imports;
+  check-invariants; check-schema-drift; check-scan-coverage; just test:
+  api, scripts and shared 2135 passed 6 skipped, worker 102, mcp_server
+  21, 42; cli-test (19 packages ok); cli-lint; just self-check (no
+  divergences). Not run, as nothing they cover changed: the migration
+  round trip, extractors-test, the frontend's tests. The fault library was
+  not run locally.
+
+LOCAL GATES (Windows, one at a time, foreground) on b5ea2d5: just lint;
+  typecheck (5 x 0 errors); lint-imports (6 kept); check-no-llm-imports;
+  check-invariants; check-schema-drift; check-migration-round-trip (clean);
+  just test: api, scripts and shared 2117 passed 6 skipped, worker 102,
+  mcp_server 21, 42; cli-test (19 packages ok); cli-lint; extractors
+  python 42, node 24; frontend 22. The fault library not run locally.
 
 CI
-  Run 45229026168 on 6d9c8c8: red on kind-capture only (above), and gate.
-  Run 45232041694 on 5ed4057: conclusion success, 20 jobs success,
-  build/publish and deploy skipped; fault-library 1-4 success (results.json
-  unchanged). gh pr checks 73: 26 pass, 2 skipping. Open alerts: none
-  (code scanning by pr=73, refs/pull/73/merge, refs/pull/73/head and
-  repo-wide; secret scanning repo-wide). origin/main = f694cb6 is in the
-  branch, so the branch is the merge result. Verdict: green on the merge
-  result. This report's own commit runs CI again; the review reads it.
+  45433574819 on 4534b8a: success. 45440048763 on 8106f7b: cancelled by the
+  next push. 45441945846 on 59ce3c0: red on typecheck and self-check, both
+  fixed in b5ea2d5. 45454853674 on c9a5af5: e2e twice and fault-library
+  1-4 success, results.json unchanged; typecheck and self-check red as
+  above. 45459301798 on 63a671d (the report): red on self-check alone,
+  "The README's self-check figures are this run's": README and GUIDE
+  quoted 1,754 facts and 631 subjects, and the two settings b5ea2d5
+  described make 1,766 and 633. Figures corrected in the next commit;
+  check_readme true against a local --unverifiable self-check; committed
+  as 35a42fc. 502f76a and this report: /ci's verdict on the merge result,
+  in the PR.
 ```
 
 ## §6. Escalate to the architecture session when

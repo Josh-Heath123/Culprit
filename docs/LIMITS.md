@@ -186,6 +186,25 @@ Three things this means in practice:
   error in the worker log is the intended behaviour for that case, not a
   regression.
 
+**An entry Postgres refuses is quarantined the same way (F44-039).** An
+entry that parses but that Postgres will not store — a NUL byte in a text
+column, a value out of range, a broken constraint — made its whole batch's
+write fail until Phase 44 batch 3, and the batch was refused on every tick.
+Now the batch is written one entry at a time, each entry Postgres refuses
+goes to `dead-letter` with `Postgres refused it: <error class> (SQLSTATE
+...)`, and the rest are written and acked. Writing one at a time can store
+part of a batch before a crash, which redelivers it whole: the at-least-once
+duplicates a crash already allowed. **If Postgres refuses every entry of a
+batch, or cannot be reached at all, nothing is quarantined or acked** — the
+drain raises and stalls, as for a batch that fails to parse.
+
+**The drain lock is its holder's (F44-040).** A drain holds a lock with a
+30-second expiry so two never write one batch twice. It is renewed every
+10 seconds while the drain runs, and released only by the drain that holds
+it, by its token. Before, a drain slower than 30 seconds lost the lock to
+the next tick and then deleted that tick's lock when it finished. A worker
+that stops without releasing it holds the drain for up to 30 seconds.
+
 ## A historic narrative's citations were checked for existence, not relevance
 
 Incident narratives written before Phase 32 had every citation verified
@@ -235,20 +254,24 @@ will now crash on boot rather than start in a broken state. Compare against
 `infra/.env.prod.example`, which lists every variable, or regenerate with
 `just bootstrap-env`. See `docs/UPGRADING.md`.
 
-**The local quickstart hits the same wall, and re-running it does not
-help.** `just quickstart` generates `infra/.env.prod` only if the file does
-not exist, and `just quickstart-down` keeps it (and the database volume).
-So a quickstart first run before Phase 28 keeps an `.env.prod` without the
-`fact-writer`, `capture-writer` and `probe-writer` passwords or
-`CULPRIT_PROJECT_TOKEN`. On the next run the bootstrap migration aborts
-with `FACT_WRITER_DB_PASSWORD must be set in the environment to run this
-migration`, and `api` and `worker` restart in a loop. Found running Phase
-31.1 on a machine that had last run the quickstart in September. Add the
-missing lines by hand, with names from `infra/.env.prod.example`. Do not
-regenerate the file with `--force` while the volume still exists: the
-Postgres superuser password is fixed when the volume is first created, so
-a regenerated file no longer matches it. Removing the volume and the file
-together starts clean, at the cost of the local data.
+**The local quickstart adds what an older file lacks (F44-009).** `just
+quickstart` generates `infra/.env.prod` only if the file does not exist,
+and `just quickstart-down` keeps it (and the database volume). Since Phase
+44 batch 3, when it reuses a file it first runs `bootstrap_env.py
+--backfill`, which adds every key the generator writes that the file lacks
+— a role password a later migration needs, with its URL built from it —
+names them, and prints no value. It never overwrites or regenerates a key
+that is there, so the Postgres superuser password, fixed when the volume
+was first created, still matches. Until then a file from before a phase
+that added a role made the bootstrap migration abort with a traceback
+(`NARRATOR_DB_PASSWORD must be set in the environment to run this
+migration`). What it cannot repair: a key that is there with a wrong
+value, and a backfilled `QUICKSTART_ADMIN_PASSWORD` (a file from before
+Phase 17's quickstart) is new and is not the existing admin's password. Do
+not regenerate the file with `--force` while the volume still exists;
+removing the volume and the file together starts clean, at the cost of the
+local data. A real install's `.env.prod` is not backfilled: add its keys by
+hand from `docs/UPGRADING.md`.
 
 **`infra/.env.prod` holds every secret in plain text, on purpose** — Docker
 Compose reads nothing else — so `just bootstrap-env` creates it readable by
@@ -963,9 +986,12 @@ you marked `on_request_path`". A manifest with no `connections:` gives
 the classifier nothing to work with, and it says so — findings come back
 `unknown` rather than being quietly filed as trivial.
 
-`unknown` deliberately ranks *above* `cosmetic`, so `--fail-on=any`
-includes it. "We could not work out how bad this is" must not be quieter
-than "we worked it out and it is trivial".
+`unknown` deliberately ranks *above* `cosmetic`: "we could not work out
+how bad this is" must not be quieter than "we worked it out and it is
+trivial". For the gate it counts as `degrades` (Q48): the default
+`--fail-on=degrades` fails on it, and says how many of the findings were
+`unknown` and why; `--fail-on=breaks_request_path` does not. A report still
+lists it as `unknown`, after `degrades`.
 
 ### An edge that does not say is `unknown`, not followed or dropped (F44-063)
 
@@ -978,10 +1004,9 @@ request path; a `background` edge is never followed. The dashboard's
 request path (`GET /model/graph?symptom=`) follows the same edges, so the
 two agree, held by `shared/tests/request_path_conformance.json`. What that
 costs: a manifest that leaves criticality off most edges gets mostly
-`unknown` findings, and `unknown` ranks below `degrades`, so the default
-`--fail-on=degrades` does not fail on them; only `--fail-on=any` does.
-Set `criticality` on the edges you know, and the findings behind them are
-ranked.
+`unknown` findings, and the default `--fail-on=degrades` fails on every
+one of them (Q48), naming why. Set `criticality` on the edges you know,
+and the findings behind them are ranked.
 
 ## The fault corpus evaluates the engine, not extraction
 
@@ -1017,6 +1042,52 @@ envelope `culprit env capture` writes, verbatim:
     curl -X POST https://culprit.example.com/api/captures \
       -H "Authorization: Bearer $CULPRIT_PROJECT_TOKEN" \
       -H "Content-Type: application/json" --data @production.capture.json
+
+## A request body has a cap, one per kind of route (F44-043)
+
+Every `/api/*` route that takes a body is in one of two classes, named in
+one table (`api/app/body_limits.py`); a route added without a class fails
+a test.
+
+- **Bulk, 16 MiB** (16,777,216 bytes): bundles and batches. An INTENT
+  bundle (`POST /facts/captures`; this repository's is about 515 KB), a
+  capture envelope (`POST /captures`, the curl above), `model/apply`,
+  divergences, readings, investigations, verifications, an agent's task
+  results and its audit chain. **`CULPRIT_MAX_BULK_BODY_BYTES`** on the
+  control plane raises it, a whole number of bytes, at least 65536: a much
+  larger repository, whose INTENT bundle nears 16 MiB, needs it raised.
+  Caddy's ceiling on `/api/*` is the same setting, read from the same
+  `.env.prod`, so the two stay equal; set it once.
+- **Small, 64 KiB** (65,536 bytes): everything else, from signing in to
+  creating a task. The largest such body measured in CI's e2e and
+  fault-library runs was 14,214 bytes; 64 KiB is four times that, rounded
+  up. It is not a setting.
+
+A body over its route's cap is refused with a **413** that names the
+limit, and on a bulk route the setting: before it is read, when its size
+is declared, and the moment it passes the cap, when it is chunked. A
+signed route checks the size before the signature. Through Caddy, a body
+over the bulk cap is refused by Caddy itself, with the same message. A
+route in neither class (a `GET`, a `DELETE`) is held to the small cap.
+
+**What the agent does under the cap.** It posts its audit backlog and its
+readings in batches sized by bytes, under half the bulk cap, never by
+entry count alone. It assumes the default cap: if
+`CULPRIT_MAX_BULK_BODY_BYTES` is set lower, the first 413 halves its
+batches, and a refused request is never sent again unchanged.
+
+- **An audit entry that alone is over the cap is kept and not sent.** It
+  stays in the agent's local audit log, and the agent's log says which
+  entry and why, once. The chain is in order, so the entries after it are
+  not shipped either: the control plane's copy stops before it, `culprit
+  agent verify` shows where, and the agent carries on with its tasks.
+  Raise the cap to ship it. (An entry is one task or one probe's record:
+  reaching 16 MiB would take a reason of that size.)
+- **An investigation or a verification over the cap is not sent**, since
+  one document cannot be split: the agent stops with an error naming its
+  size and the setting, and the task is failed when the agent next claims
+  one (above). The same holds for one reading the control plane refuses
+  alone.
 
 ## Findings are never closed automatically
 
@@ -1098,10 +1169,32 @@ are added after it, and neither is in the spec. So every Kubernetes
 capture records that its environment was not enumerated completely,
 naming what it could not read — the image's `ENV` and webhooks always,
 and each `envFrom` ConfigMap or Secret by name when `kubectl` could not
-read it — and no key is ever reported missing from a Kubernetes
-environment. A key the code reads that the cluster really lacks is found
-by a probe, or by a Compose or process capture, not by this one. Keys the
-template does set are still compared by kind.
+read it — and no key the code reads is ever reported missing from a
+Kubernetes environment. A key the code reads that the cluster really
+lacks is found by a probe, or by a Compose or process capture, not by
+this one. Keys the template does set are still compared by kind.
+
+**What two Kubernetes captures both read is still compared (Q47).**
+Incompleteness is about what Culprit could not see; it never hides what
+it did see. Each key records the source it was read from — the
+Deployment's template, or a ConfigMap or Secret by name — and between two
+environments, or two captures in `culprit verify`:
+- a key one template lists and the other does not is a difference, said
+  as a change to the template: the other environment may still have it,
+  from a source Culprit cannot read. `verify` is not `verified` past it.
+- a key from a ConfigMap or Secret is compared only when the other
+  capture shows a reading of that same source, by name. From one it
+  could not read, it is never compared. So a ConfigMap whose name differs
+  between environments, one the other template stopped loading, or one
+  read whole but now empty, is not compared either: only keys are.
+- a key from a source neither capture read is in neither, and is never
+  compared.
+
+A capture made before this rule names the template as every key's
+source, envFrom keys included. Compared with a newer capture that could
+not read that ConfigMap or Secret, such a key reads as one the template
+no longer lists. Capture before and after with the same release: after
+an upgrade, take a new capture before diagnosing (`docs/UPGRADING.md`).
 
 A Secret loaded with `envFrom` contributes its key names only: Culprit
 lists them through a `kubectl` template that never prints the data, so
@@ -1780,7 +1873,8 @@ of its own (`inventory`, in the same Postgres, owned by an `inventory`
 role) and fills a table with a million generated products, which adds
 roughly ten to thirty seconds. Its role's password is generated into
 `infra/.env.prod` with the others (`INVENTORY_DB_PASSWORD`); a file made
-before Phase 37's close-out gets one added by the next `just quickstart`,
+before Phase 37's close-out gets one added by the next `just quickstart`
+(its backfill, above),
 and the setup job sets the role's password to it on every run. Until then
 the demo's database had a fixed password written in the compose file. The same Postgres now starts with `pg_stat_statements` preloaded —
 the recipe checks the running value and stops if it is not — which keeps
@@ -2023,12 +2117,70 @@ if they shrank further, so the chart keeps that width and scrolls inside its
 card on a phone; the page itself never scrolls sideways. Every other page
 reflows to one column instead.
 
+## Sign-in is limited per caller, as Caddy saw it (F44-015)
+
+Behind Caddy every request reaches the api from Caddy's own address, so
+until Phase 44 batch 3 the sign-in limit was one bucket for everyone: ten
+failed sign-ins a minute from anyone locked the whole team out. Now the
+limit is kept per caller: the address in `X-Forwarded-For`, believed only
+from the one proxy the compose files name (`TRUSTED_PROXY_HOST: frontend`,
+resolved to its addresses every 30 seconds). From any other address the
+header is ignored and the peer is the key, so a caller cannot choose its
+own bucket by sending one.
+
+- **A deployment without the shipped compose files** sets
+  `TRUSTED_PROXY_HOST` to its own proxy's host name, or leaves it unset:
+  then every caller behind the proxy shares one bucket, as before.
+- **Callers behind one NAT share a bucket,** and the limit is kept in each
+  api process's memory: two api replicas count apart.
+- **Only sign-in is limited.** The ingest gateway has its own limits.
+
+## Every API error is one shape (F44-044)
+
+Every error `/api/*` answers is `{"detail": "a sentence"}`, or for a 422
+`{"detail": [{"loc", "msg", "type"}]}`; the 429 said `{"error": ...}` and
+an agent's broken audit chain a nested object until Phase 44 batch 3. The
+dashboard shows the sentence (or, for a 422, each field and what is wrong
+with it), never the raw body; a body in any other shape, such as a
+proxy's error page, is shown as its status alone. The ingest gateway
+(`/ingest/*`), a separate service, still answers a 429 as `{"error": ...}`.
+
+## Two creates of one user at once: one is a 409 (F44-047)
+
+`POST /users` checks the name is free, then inserts; two requests for one
+name at once both passed the check, and the second insert's violation of
+the unique index was a 500. It is a 409 now, as the check's is. No write is
+idempotent by key: a task or a postmortem posted twice is two.
+
+## A demoted, disabled or re-passworded user's session does not end at once (F44-042)
+
+A signed-in session is a token that lasts `JWT_EXPIRY_MINUTES` (60 by
+default), and nothing on the server can revoke one: there is no session
+store and no sign-out on the server. What that means for an admin acting
+on another user:
+
+- **Demoting or disabling a user** (or deleting one, which disables it)
+  takes effect within **30 seconds**: each api process caches a user's
+  role and disabled state for that long. Until then, a demoted admin's
+  requests still pass admin checks, and a disabled user's token still
+  works, on any api process that read them in the last 30 seconds.
+- **Resetting a user's password** (`POST /users/{id}/reset-password`), or a
+  user changing their own, ends no session: every token issued before it
+  keeps working until it expires, **up to 60 minutes**. If a password is
+  reset because it leaked, disable the user as well — that ends their
+  sessions within 30 seconds — and enable them once they have the new one.
+
+A token version that a password reset would bump, ending every older
+token at once, is deferred past the field trial, whose control plane is a
+local quickstart with one user (Phase 44, F44-042).
+
 ## The browser tests need the whole stack, and sign-in is rate limited
 
 `just e2e` runs against a stack `just quickstart` has started; nothing in
 it mocks the API. CI builds that stack on every pull request, which makes
 the `e2e` job the slowest in the pipeline. Sign-in is limited to 10 attempts
-a minute per address (`api/app/auth/router.py`) and the session lives only in
+a minute per address (`api/app/auth/router.py`; the address is the caller's,
+as Caddy saw it, below) and the session lives only in
 memory, so the suite signs in six times per run and moves between pages
 inside the app; running it twice inside a minute fails with a 429 on sign-in.
 The tour of every route is one test per route (Phase 32.2) sharing one
@@ -2069,7 +2221,12 @@ it had been serving an API from before Phase 14 since August. Nothing in the
 repository deploys on a push any more. The `deploy` job in
 `.github/workflows/ci-cd.yml` runs only when started by hand on `main`, with
 its **deploy** box ticked, after every other job has passed; a push to
-`main` builds, scans and publishes the images and skips the deploy. If you
+`main` builds, scans and publishes the images and skips the deploy. The
+images are published only after `gate` has passed (F44-008): a push whose
+tests fail publishes nothing. They are the images that were scanned, kept
+as artifacts for a day and pushed by a later job; a publish that fails after
+`gate` passed (a registry outage) leaves `gate` green and `main`'s images
+unmoved, and is started again by rerunning that job. If you
 run your own instance from a fork (`docs/INSTALL.md`), the same applies to
 you: a merge does not reach your server until you start the deploy.
 
@@ -2147,8 +2304,35 @@ runs without it.
 Revoking an agent refuses its very next request. A task it had already
 claimed runs to its end on the agent's host — the probes are local — but
 its readings, its investigation and its result are then refused, so the
-control plane keeps the task as claimed and never completed, and the
-agent's local audit log is the only record of what that task did.
+control plane keeps the task as claimed until its deadline (below) fails
+it, and the agent's local audit log is the only record of what that task
+did.
+
+## A claimed task has a deadline, and is never re-queued (F44-014)
+
+A task claimed and not completed within **15 minutes** of its claim is
+failed (`error`), with a reason naming when it was claimed and the
+deadline. Set it with `AGENT_TASK_DEADLINE_MINUTES` on the control plane,
+a whole number above 0; one deadline holds every kind of task, since none
+declares a timeout of its own. It is applied when the task is read and
+when its agent next speaks, by the control plane's clock; nothing runs in
+the background, so until someone reads it, the row says what it said.
+
+- **Never re-queued.** A probe may have run part-way; address the task
+  again if it should run again.
+- **A result after the deadline is kept, and the task stays failed.** The
+  reason says when the result arrived and what it said; the agent is
+  answered as usual and carries on. Its readings and investigation, sent
+  before the result, are stored as they always are.
+- **An agent's next claim fails its unfinished one.** An agent runs one
+  task at a time, so an agent that asks for its next task has stopped
+  working on any it claimed before (it restarted, or stopped mid-task):
+  that one is failed then, with a reason that says so. Two processes
+  sharing one agent's key would fail each other's tasks; the recipes never
+  run two (below).
+- **A walk longer than the deadline is failed** though it was still
+  running. Raise the deadline for an environment whose walks take that
+  long.
 
 ## Agents poll for tasks
 
@@ -2391,19 +2575,23 @@ leaves:
   refuses a verification that carries the flag: upgrade the control plane
   before its agents (`docs/UPGRADING.md`).
 
-### The control plane's diff does not know what a capture could not see
+### The control plane's diff does not store what a capture could not see
 
 `GET /captures/diff` and `culprit verify` list the same differences for
 the same two captures, held to one fixture
-(`shared/tests/capture_diff_conformance.json`, F44-064 a): a key on one
-side only is listed on its existence and on every other question it
-answers there, its shape included. One difference remains. `verify`
-honours a capture's own record that it could not enumerate an
-environment completely, and does not count a key missing from such a
-capture; the stored diff reads facts only, so it lists that key as
-`only_in_a` or `only_in_b`. Every Kubernetes capture records that
-(F44-013), so between two Kubernetes captures `verify` sees no key added
-or removed in the Deployment's template, and the stored diff does.
+(`shared/tests/capture_diff_conformance.json`, F44-064 a, Q47): a key on
+one side only is listed on its existence and on every other question it
+answers there, its shape included; a key one Kubernetes template lists
+and the other does not is listed by both; and a key from a ConfigMap or
+Secret the other capture shows no reading of is listed by neither. The
+stored diff says `only_in_a` or `only_in_b`; only `culprit diff` words
+it as a change to the template.
+
+One difference remains. The control plane does not store a capture's
+skips, so where a `process` or `exec` capture recorded that it could not
+read some entries of an environment, `verify` does not count a key
+missing from it and the stored diff lists that key as `only_in_a` or
+`only_in_b`.
 
 ### Two runs is a floor, not a proof
 
@@ -2520,7 +2708,12 @@ the task or CI gave when asking for the verification — required, never
 defaulted, and never checked. A drill posted as `real` is counted as real.
 The first verification of an investigation fixes its label: a later one
 that says otherwise is refused, so one investigation is never counted both
-ways.
+ways. Since Phase 44 batch 3 the database holds it (F44-041, migration
+`d1e5b9c3a7f2`, an exclusion constraint), so two verifications posted at
+once with different labels cannot both be stored: the second waits for
+the first and is refused with the same 409. A database that already holds
+an investigation recorded both ways does not upgrade: the migration stops,
+says how many and how to list them, and changes no row (`docs/UPGRADING.md`).
 
 ### Accuracy is counted per investigation, from its newest verification
 

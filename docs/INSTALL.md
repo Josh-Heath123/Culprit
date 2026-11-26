@@ -103,7 +103,8 @@ during Phase 11).
 
 ## 6. Push to `main`, then deploy by hand
 
-A push to `main` builds, scans and publishes the images. Then start the
+A push to `main` builds, scans and, once every check has passed (`gate`),
+publishes the images. Then start the
 deploy (step 5): CI SSHes into the VM and runs
 `deploy.sh`: pull → `alembic upgrade head` → restart containers → health
 check (`https://your-domain.com/api/incidents` and

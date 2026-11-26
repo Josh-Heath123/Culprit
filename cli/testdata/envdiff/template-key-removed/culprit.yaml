@@ -1,0 +1,22 @@
+version: 1
+
+# A Phase 30 fault fixture. `culprit diff` is not run over live
+# environments here: the INTENT bundle and one CONFIGURED capture per
+# environment are committed alongside, so the eval exercises the
+# comparator on a known input. See ../README.md.
+
+components:
+  - name: web
+    kind: frontend
+    connections:
+      - to: orders-api
+        kind: http
+        criticality: on_request_path
+  - name: orders-api
+    kind: service
+    connections:
+      - to: orders-db
+        kind: sql
+        criticality: on_request_path
+  - name: orders-db
+    kind: database

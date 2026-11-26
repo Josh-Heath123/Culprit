@@ -328,15 +328,77 @@ the reason names that connection. Before, such a finding was `degrades`
 `culprit.yaml` leaves criticality off a connection:
 
 - findings on the components behind it move from `degrades` to
-  `unknown`. `unknown` ranks below `degrades` and above `cosmetic`, so a
-  CI job on the default `--fail-on=degrades` **no longer fails on them**;
-  only `--fail-on=any` counts them. If such a job relied on them, gate it
-  with `--fail-on=any`, or classify the connection;
+  `unknown`. Since Phase 44 batch 3 (Q48), `--fail-on` counts `unknown` as
+  `degrades`, so a CI job on the default `--fail-on=degrades` still fails
+  on them, and says why; `--fail-on=breaks_request_path` does not. (Batch
+  2's note here said the default no longer failed on them. That was true
+  of batch 2 alone, and is corrected below.)
 - a suppression or a `severity_overrides` entry still applies first, as
   before.
 
 To rank them, set `criticality: on_request_path` or `background` on the
 connection. Nothing stored changes, and no migration runs.
+
+## `unknown` fails the default gate (Q48)
+
+Since Phase 44 batch 3, `culprit check` and `culprit diff` count a finding
+of severity `unknown` as `degrades` for `--fail-on`. A finding Culprit
+cannot classify must not pass the default gate silently, and must not be
+guessed as breaking either:
+
+- `--fail-on=degrades`, the default, fails on it, and the message says how
+  many of the findings were `unknown` and why they counted.
+- `--fail-on=breaks_request_path` does not fail on it; `--fail-on=any`
+  does, as before.
+- A report's order and every stored severity are unchanged: an `unknown`
+  finding is still listed as `unknown`, below `degrades`.
+
+If a job on the default now fails, set `criticality` on the connections
+the reasons name, or suppress the finding with a reason.
+
+## Two Kubernetes captures compare what both read (Q47)
+
+Since Phase 44 batch 3, a Kubernetes capture names, for each key, the
+source it was read from: the Deployment's template, or the ConfigMap or
+Secret it loads with `envFrom`. Between two Kubernetes captures, a key one
+template lists and the other does not is a difference again in
+`culprit env diff` and `culprit verify` (it was not, since batch 2), as it
+always was in `GET /captures/diff`. And `GET /captures/diff` no longer
+lists a key from a ConfigMap or Secret the other capture shows no reading
+of. Nothing in the database changes and no migration runs.
+
+- `culprit verify` can answer `changed_underneath` where it answered
+  `verified`, when a key was added to or removed from the template.
+- A capture taken by an older binary names the template as the source of
+  every key, `envFrom` keys included. Compared with a newer capture that
+  could not read that ConfigMap or Secret, such a key reads as one the
+  template no longer lists. As for Q42: capture again after upgrading,
+  and diagnose again before verifying a fix for an investigation walked by
+  the older binary.
+
+## Phase 44 batch 3: one migration, one setting, one error shape
+
+- **Migration `d1e5b9c3a7f2`** adds an exclusion constraint to
+  `verifications`: one investigation's fault is planted or real, never
+  both (F44-041), and creates the `btree_gist` extension, which the
+  timescaledb-ha image ships. It changes no row. If an investigation's
+  verifications already record both, `alembic upgrade head` stops with the
+  count and a query that lists them; nothing is changed, and the choice is
+  yours, since `verifications` is append-only. Stay on the previous
+  release until it is made.
+- **`TRUSTED_PROXY_HOST`** (F44-015): the shipped compose files set it to
+  `frontend`, the Caddy service, so the sign-in limit is kept per caller.
+  A deployment of your own sets it to its proxy's host name, or leaves it
+  unset (one bucket for everyone behind the proxy, as before). Never set it
+  to a host that is not the one proxy in front of the api.
+- **Error bodies** (F44-044): a 429 from `/api/*` is
+  `{"detail": "Rate limit exceeded: ..."}` (was `{"error": ...}`), and an
+  agent's broken audit chain answers its 409 with a sentence naming the
+  head (was `{"detail": {"message", "seq", "hash"}}`). `culprit agent`
+  reads neither body. A client of your own that parsed `error` reads
+  `detail`.
+- **`AGENT_TASK_DEADLINE_MINUTES`** (F44-014), optional: a claimed agent
+  task open longer than this (15 minutes) is failed, never re-queued.
 
 ## Agent tasks stored before Phase 44 may hold a token
 

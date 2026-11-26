@@ -18,6 +18,7 @@ this file happens to be named after.
 import os
 from collections.abc import AsyncIterator
 
+import pytest
 import pytest_asyncio
 from app.incidents.limiter import limiter
 from fastapi import Depends, FastAPI
@@ -412,3 +413,82 @@ def test_two_admins_demoting_each_other_at_once_leave_one_admin(client: TestClie
         u for u in _users(client, headers).values() if u["role"] == "admin" and not u["disabled"]
     ]
     assert len(remaining) == 1
+
+
+# ---- the API under strain (Phase 44 batch 3, decision 7) --------------------
+
+
+def test_sign_in_is_limited_per_address_behind_caddy(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F44-015. Behind Caddy every request comes from Caddy's address, so the
+    limit keyed on it was one bucket for the whole team. X-Forwarded-For is
+    trusted from the one Caddy hop the compose files declare
+    (TRUSTED_PROXY_HOST), and from no other address."""
+    from app.incidents import limiter as limiting
+
+    caddy, stranger = "172.18.0.5", "172.18.0.9"
+    monkeypatch.setattr(limiting, "TRUSTED_PROXY_HOST", "frontend", raising=False)
+    monkeypatch.setattr(limiting, "proxy_addresses", lambda: frozenset({caddy}), raising=False)
+    wrong = {"username": "nonexistent-user", "password": "wrong"}
+    # The peer address a request arrives from, set on the one client the
+    # app's engines were started with (a second TestClient runs on another
+    # event loop).
+    transport = client._transport  # TestClient keeps the peer there
+    via_caddy, direct = (caddy, 41000), (stranger, 41000)
+
+    def login(peer: tuple[str, int], forwarded: str) -> int:
+        monkeypatch.setattr(transport, "client", peer)
+        return client.post(
+            "/auth/login", json=wrong, headers={"X-Forwarded-For": forwarded}
+        ).status_code
+
+    for _ in range(10):
+        assert login(via_caddy, "203.0.113.1") == 401
+    assert login(via_caddy, "203.0.113.1") == 429
+    # Another address behind the same Caddy has its own bucket.
+    assert login(via_caddy, "203.0.113.2") == 401
+    # A caller that is not Caddy cannot pick a bucket with the header.
+    for index in range(10):
+        assert login(direct, f"198.51.100.{index}") == 401
+    assert login(direct, "198.51.100.99") == 429
+
+
+def test_two_creates_of_one_username_at_once_answer_201_and_409(client: TestClient) -> None:
+    """F44-047. Both requests pass the check for an existing name before
+    either inserts; the second insert then violates the unique index. It is
+    a 409 naming the conflict, not a 500."""
+    import asyncio
+
+    from app.auth.schemas import CreateUserRequest
+    from app.auth.users_router import create_user_endpoint
+    from app.db.models import User
+    from fastapi import HTTPException
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    async def race() -> object:
+        engine = create_async_engine(os.environ["AUTH_SERVICE_DATABASE_URL"])
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with factory() as first, factory() as second:
+                # The first request's insert, not yet committed: it holds
+                # the name's place in the unique index.
+                first.add(User(username="twice", password_hash="x", role="member"))
+                await first.flush()
+                body = CreateUserRequest(
+                    username="twice", password="a-decent-password-9", role="member"
+                )
+                pending = asyncio.ensure_future(create_user_endpoint(body, session=second))
+                await asyncio.sleep(1.5)  # the second has checked, and waits on the index
+                await first.commit()
+                try:
+                    return await pending
+                except HTTPException as exc:
+                    return exc
+        finally:
+            await engine.dispose()
+
+    outcome = asyncio.run(race())
+    assert isinstance(outcome, HTTPException), outcome
+    assert outcome.status_code == 409
+    assert "already exists" in str(outcome.detail)

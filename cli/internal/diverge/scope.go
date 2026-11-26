@@ -147,7 +147,20 @@ func crossScopeAbsences(
 			if reference == nil || reference.subjects[claim.Subject] {
 				continue
 			}
-			if _, skipped := cover.skipped[componentWant{component: owner, want: want}]; skipped {
+			// Q47. Between two environments, a key the other capture read
+			// from a source loaded by reference is compared only when
+			// this one shows a reading of that same source; and a key one
+			// Deployment's template lists is compared with the other's
+			// template, which both captures read, however incomplete each
+			// is otherwise. Against INTENT, an incomplete capture is never
+			// the evidence that a key is absent.
+			artefact := claim.Provenance.Artefact
+			betweenEnvironments := claim.Plane == model.PlaneConfigured
+			if betweenEnvironments && model.LoadedByReference(artefact) && !cover.artefacts[artefact] {
+				continue
+			}
+			templateChanged := betweenEnvironments && model.ListedByTemplate(artefact) && cover.kubernetes[owner]
+			if _, skipped := cover.skipped[componentWant{component: owner, want: want}]; skipped && !templateChanged {
 				continue
 			}
 			absent := absentFrom(reference, claim)
@@ -155,15 +168,21 @@ func crossScopeAbsences(
 			if !ok {
 				continue
 			}
+			explanation := fmt.Sprintf("%s refers to %s, which %s does not have",
+				sourceLabel(claim), describeSubject(kind, parts), sourceLabel(reference.sample))
+			if templateChanged {
+				explanation = fmt.Sprintf("%s lists %s in the Deployment's template, and %s's template "+
+					"does not; there it may come from a source Culprit cannot read",
+					sourceLabel(claim), describeSubject(kind, parts), absent.Environment)
+			}
 			found = append(found, model.Divergence{
-				Kind:      kindOfFinding,
-				Subject:   claim.Subject,
-				Predicate: claim.Predicate,
-				Left:      claim,
-				Right:     absent,
-				Severity:  model.SeverityUnknown,
-				Explanation: fmt.Sprintf("%s refers to %s, which %s does not have",
-					sourceLabel(claim), describeSubject(kind, parts), sourceLabel(reference.sample)),
+				Kind:        kindOfFinding,
+				Subject:     claim.Subject,
+				Predicate:   claim.Predicate,
+				Left:        claim,
+				Right:       absent,
+				Severity:    model.SeverityUnknown,
+				Explanation: explanation,
 				Status:      model.StatusOpen,
 				FirstSeenAt: now,
 			})
@@ -229,12 +248,22 @@ func bestClaims(facts []model.Fact) []model.Fact {
 // asked this phase for.
 func buildScopedCoverage(bundle model.CaptureBundle) coverage {
 	result := coverage{
-		reference: map[componentKind]*referenceSet{},
-		skipped:   map[componentWant]string{},
+		reference:  map[componentKind]*referenceSet{},
+		skipped:    map[componentWant]string{},
+		artefacts:  map[string]bool{},
+		kubernetes: map[string]bool{},
 	}
 	for _, skip := range bundle.Skipped {
 		if skip.Component != "" {
 			result.skipped[componentWant{component: skip.Component, want: skip.Want}] = skip.Reason
+		}
+	}
+	for _, fact := range bundle.Facts {
+		result.artefacts[fact.Provenance.Artefact] = true
+		if model.ReadFromKubernetes(fact.Provenance.Artefact) {
+			if kind, parts, err := model.ParseSubject(fact.Subject); err == nil {
+				result.kubernetes[ownerOf(kind, parts)] = true
+			}
 		}
 	}
 	for _, fact := range bundle.Facts {
